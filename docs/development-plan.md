@@ -1,6 +1,6 @@
 # 瓦力分期开发计划
 
-依据 [需求基线](../requirements.md) 和 [总体设计与关键决策](design.md)。设计修订等待独立复核，通过后进入待用户确认，确认后再进入实现。[PR #2 独立验收文档](https://github.com/WeiXinChan/little-buddy/blob/c22e96e7ce40dc733fba0e8f39842f3013f7c3b9/docs/acceptance.md) 为配套用例。后续任务按可体验成果验收，语音风险验证与 V0 交互开发并行规划，服务器重任务串行执行。
+依据 [需求基线](../requirements.md) 和 [总体设计与关键决策](design.md)。设计修订等待独立复核，通过后进入待用户确认，确认后再进入实现。[PR #2 独立验收文档](https://github.com/WeiXinChan/little-buddy/blob/3812ff68746e7b3ad453283add03a127feafbbe0/docs/acceptance.md) 为配套用例。后续任务按可体验成果验收，语音风险验证与 V0 交互开发并行规划，服务器重任务串行执行。
 
 ## 当前环境与访问
 
