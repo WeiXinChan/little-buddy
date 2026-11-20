@@ -38,7 +38,7 @@ internal class AndroidAudio(
         val samples = ShortArray(MIC_RATE / 50)
         try {
             check(recorder.state == AudioRecord.STATE_INITIALIZED)
-            if (operation.cancelled) return
+            if (!operation.commitStart()) return
             recorder.startRecording()
             check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING)
             var opening = true
@@ -96,7 +96,7 @@ internal class AndroidAudio(
         try {
             if (operation.cancelled) return
             check(track.write(samples, 0, samples.size) == samples.size)
-            if (operation.cancelled) return
+            if (!operation.commitStart()) return
             track.play()
             while (!operation.cancelled && track.playbackHeadPosition < samples.size) {
                 Thread.sleep(10)
