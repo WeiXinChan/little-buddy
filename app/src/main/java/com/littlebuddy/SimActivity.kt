@@ -18,10 +18,10 @@ import com.littlebuddy.voice.SimulatedReply
 import com.littlebuddy.voice.VoiceRound
 import com.littlebuddy.voice.VoiceRound.Phase
 
-class SimActivity : Activity() {
+open class SimActivity : Activity() {
     private val dispatcher = Handler(Looper.getMainLooper())
     private lateinit var round: VoiceRound
-    private lateinit var audio: AndroidAudio
+    private var audio: AndroidAudio? = null
     private lateinit var status: TextView
     private lateinit var start: Button
     private lateinit var finish: Button
@@ -83,6 +83,11 @@ class SimActivity : Activity() {
         content.addView(controls, LinearLayout.LayoutParams(-1, -2))
         setContentView(scroll)
 
+        round = createRound(::render)
+        render(round.phase, round.completed)
+    }
+
+    protected open fun createRound(changed: (Phase, Int) -> Unit): VoiceRound {
         val deadline = Deadline { milliseconds, action -> dispatcher.postDelayed({ action() }, milliseconds) }
         audio = AndroidAudio(
             dispatcher,
@@ -99,8 +104,7 @@ class SimActivity : Activity() {
         )
         val reply = SimulatedReply(deadline, { id, segment -> round.segment(id, segment) },
             { id, last -> round.endReply(id, last) })
-        round = VoiceRound(audio, reply, deadline, ::render)
-        render(round.phase, round.completed)
+        return VoiceRound(checkNotNull(audio), reply, deadline, changed)
     }
 
     override fun onResume() {
@@ -118,7 +122,7 @@ class SimActivity : Activity() {
 
     override fun onDestroy() {
         dispatcher.removeCallbacksAndMessages(null)
-        audio.close()
+        audio?.close()
         super.onDestroy()
     }
 

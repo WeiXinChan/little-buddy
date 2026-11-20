@@ -14,6 +14,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0-sim"
+        testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -27,4 +28,7 @@ android {
 
 kotlin { jvmToolchain(17) }
 
-dependencies { testImplementation("junit:junit:4.13.2") }
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+}
