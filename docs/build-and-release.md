@@ -52,3 +52,31 @@ OPPO 型号 / Android 与 ColorOS / ABI（如相关）/ 首装或升级 / 原版
 ```
 
 V0 记录安装、升级和模拟互动。V1 按验收方案补充个人 Mac 离线后手机独立运行、成人 OPPO 验证及获准后的童声验收。模拟和成人结果只支持对应阶段的工程判断。童声云测按总体设计的数据关卡放行，反馈仅附指标和脱敏事件，最终真机验收由用户完成。
+
+## 首个本地模拟调试包
+
+- 应用 ID `com.littlebuddy.sim`，版本 `0.1.0-sim`，versionCode `1`，minSdk 26，compileSdk 和 targetSdk 36，Build Tools 35.0.0。AGP 8.13.2、Kotlin 2.2.21、Gradle 8.13、Ubuntu OpenJDK `17.0.21.1+2-1-24.04.1-Ubuntu`。调试包使用 Android Gradle Plugin 的 debug 签名。
+- Wrapper 发行包 SHA-256 写入 `gradle-wrapper.properties`，Wrapper JAR SHA-256 为 `81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f`。[Gradle 官方校验和](https://gradle.org/release-checksums/)
+- Linux SDK 命令行工具计划采用 `commandlinetools-linux-15859902_latest.zip`，官方 SHA-256 为 `4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583`。有权接受许可的主体确认后，持锁安装 `platforms;android-36` 和 `build-tools;35.0.0`，记录命令行工具和平台包的实际修订号。[下载及校验](https://developer.android.com/studio) · [SDK 许可](https://developer.android.com/studio/terms)
+
+服务器入口为 `scripts/with-build-lock`。先确认 SDK、Gradle 缓存、临时目录、产物和日志路径的容量满足前文门槛，再在入口内复查容量和内存。首构建期间需监控各卷余量及 cgroup 的 `memory.peak`。
+
+```bash
+# ANDROID_HOME 指向已获许可且完成安装的 SDK。
+scripts/with-build-lock bash -eu -c '
+  free -h
+  mkdir -p "${GRADLE_USER_HOME:-$HOME/.gradle}"
+  df -h . "${TMPDIR:-/tmp}" "${GRADLE_USER_HOME:-$HOME/.gradle}" "$ANDROID_HOME"
+  awk "/^MemAvailable:/ {exit !(\$2 >= 2621440)}" /proc/meminfo
+  ./gradlew --no-daemon --max-workers=2 :app:testDebugUnitTest
+  ./gradlew --no-daemon --max-workers=2 :app:assembleDebug
+  cgroup=/sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup)
+  cat "$cgroup/memory.peak"
+  df -h . "${TMPDIR:-/tmp}" "${GRADLE_USER_HOME:-$HOME/.gradle}" "$ANDROID_HOME"
+'
+"$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
+"$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk
+sha256sum app/build/outputs/apk/debug/app-debug.apk
+```
+
+安装后横屏打开「瓦力 · 本地模拟」。点「开始说话」并允许麦克风，点「结束说话」或说完后停顿，听到短提示音后应用进入下一轮，完整播完三次后回到待机。点「停止」或离开前台会取消当前轮。ASR、LLM、TTS 和唤醒均为模拟。麦克风音量门限固定为 PCM RMS 600，检测到声音后连续约 0.9 秒低于门限即结束本轮。不同设备上的收声、静音和提示音效果待实测。

@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+lock=/var/lock/little-buddy/heavy.lock
+directory=${lock%/*}
+if [[ -L "$directory" || ! -d "$directory" || -L "$lock" || ! -f "$lock" ||
+    $(stat -c '%u:%g:%a' "$directory") != 0:0:755 ||
+    $(stat -c '%u:%g:%a' "$lock") != 0:0:644 ]]; then
+    echo "管理员构建锁缺失或权限异常：$lock" >&2
+    exit 1
+fi
+exec 9<"$lock"
+flock -n 9 || { echo "构建锁已占用：$lock" >&2; exit 75; }
+
+if (( $# == 0 )); then
+    echo "用法：$0 命令 [参数...]" >&2
+    exit 2
+fi
+if [[ ${ANDROID_HOME:-} && ${ANDROID_SDK_ROOT:-} && $ANDROID_HOME != "$ANDROID_SDK_ROOT" ]]; then
+    echo "ANDROID_HOME 与 ANDROID_SDK_ROOT 必须指向同一 SDK" >&2
+    exit 2
+fi
+
+unit="little-buddy-build-$(cat /proc/sys/kernel/random/uuid).service"
+cleanup() {
+    sudo -n systemctl stop "$unit" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+
+env_args=(--setenv="HOME=$HOME" --setenv="PATH=$PATH")
+for name in JAVA_HOME ANDROID_HOME ANDROID_SDK_ROOT GRADLE_USER_HOME TMPDIR; do
+    if [[ -v $name ]]; then env_args+=(--setenv="$name=${!name}"); fi
+done
+exec 8<&0
+sudo -n systemd-run --unit="$unit" --wait --pipe --quiet \
+    --uid="$(id -un)" --gid="$(id -gn)" --working-directory="$PWD" \
+    --property=MemoryMax=2G --property=MemorySwapMax=0 --property=OOMPolicy=kill \
+    --property=KillMode=control-group --property=ExitType=cgroup \
+    --property=TimeoutStopSec=10s "${env_args[@]}" -- "$@" <&8 &
+runner=$!
+wait "$runner"
