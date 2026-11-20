@@ -8,69 +8,27 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.os.Handler
 import com.littlebuddy.voice.AudioPort
-import java.util.concurrent.Executors
 
 internal class AndroidAudio(
     private val dispatcher: Handler,
     private val frame: (Long, Boolean, Boolean) -> Unit,
-    private val failed: (Long) -> Unit,
-    private val played: (Long) -> Unit,
-    private val released: (Long) -> Unit,
+    failed: (Long) -> Unit,
+    played: (Long) -> Unit,
+    released: (Long) -> Unit,
 ) : AudioPort {
-    private class Operation(val id: Long) {
-        @Volatile var cancelled = false
-        var track: AudioTrack? = null
-    }
+    private val worker = AudioWorker({ action -> dispatcher.post { action() } }, failed, played, released)
 
-    private val worker = Executors.newSingleThreadExecutor()
-    private var active: Operation? = null
-    private var closed = false
-
-    override fun capture(operation: Long) = submit(operation, ::record)
+    override fun capture(operation: Long) = worker.submit(operation, ::record)
 
     override fun play(operation: Long, samples: ShortArray) =
-        submit(operation) { playTone(it, samples) }
+        worker.submit(operation) { playTone(it, samples) }
 
-    override fun stop(operation: Long) {
-        val current = active ?: return
-        if (current.id != operation) return
-        synchronized(current) {
-            current.cancelled = true
-            current.track?.let { track -> runCatching { track.setVolume(0f) } }
-        }
-    }
+    override fun stop(operation: Long) = worker.stop(operation)
 
-    fun close() {
-        closed = true
-        active?.let { stop(it.id) }
-        worker.shutdown()
-    }
-
-    private fun submit(id: Long, task: (Operation) -> Unit) {
-        check(active == null && !closed)
-        val current = Operation(id)
-        active = current
-        worker.execute {
-            val success = try {
-                if (!current.cancelled) task(current)
-                true
-            } catch (_: RuntimeException) {
-                false
-            }
-            dispatcher.post {
-                if (!closed) {
-                    if (!current.cancelled) {
-                        if (success) played(id) else failed(id)
-                    }
-                    active = null
-                    released(id)
-                }
-            }
-        }
-    }
+    fun close() = worker.close()
 
     @SuppressLint("MissingPermission")
-    private fun record(operation: Operation) {
+    private fun record(operation: AudioWorker.Operation) {
         val minimum = AudioRecord.getMinBufferSize(MIC_RATE, AudioFormat.CHANNEL_IN_MONO, PCM)
         check(minimum > 0)
         val recorder = AudioRecord(
@@ -101,7 +59,7 @@ internal class AndroidAudio(
                 val endpoint = heardSpeech && silentSamples >= MIC_RATE * 9 / 10
                 if (opening || (speech && !heardSpeech) || endpoint) {
                     dispatcher.post {
-                        if (!closed && !operation.cancelled) frame(operation.id, speech, endpoint)
+                        if (!worker.closed && !operation.cancelled) frame(operation.id, speech, endpoint)
                     }
                 }
                 opening = false
@@ -121,7 +79,7 @@ internal class AndroidAudio(
         }
     }
 
-    private fun playTone(operation: Operation, samples: ShortArray) {
+    private fun playTone(operation: AudioWorker.Operation, samples: ShortArray) {
         val track = AudioTrack.Builder()
             .setAudioAttributes(AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -136,23 +94,18 @@ internal class AndroidAudio(
             .setTransferMode(AudioTrack.MODE_STATIC)
             .build()
         try {
+            if (operation.cancelled) return
             check(track.write(samples, 0, samples.size) == samples.size)
-            synchronized(operation) {
-                if (operation.cancelled) return
-                operation.track = track
-                track.play()
-            }
+            if (operation.cancelled) return
+            track.play()
             while (!operation.cancelled && track.playbackHeadPosition < samples.size) {
                 Thread.sleep(10)
             }
         } finally {
-            synchronized(operation) {
-                operation.track = null
-                try {
-                    if (track.playState == AudioTrack.PLAYSTATE_PLAYING) track.stop()
-                } finally {
-                    track.release()
-                }
+            try {
+                if (track.playState == AudioTrack.PLAYSTATE_PLAYING) track.stop()
+            } finally {
+                track.release()
             }
         }
     }

@@ -37,10 +37,17 @@ class SimUiRunner : AndroidJUnitRunner() {
 
 class ScriptedSimActivity : SimActivity() {
     internal val ports = ScriptedPorts()
+    private val deadlines = mutableListOf<Pair<Long, () -> Unit>>()
     internal lateinit var coordinator: VoiceRound
 
     override fun createRound(changed: (VoiceRound.Phase, Int) -> Unit): VoiceRound =
-        VoiceRound(ports, ports, Deadline { _, _ -> }, changed).also { coordinator = it }
+        VoiceRound(ports, ports, Deadline { ms, action -> deadlines += ms to action }, changed)
+            .also { coordinator = it }
+
+    internal fun fireDeadline(milliseconds: Long) {
+        val index = deadlines.indexOfFirst { it.first == milliseconds }
+        deadlines.removeAt(index).second()
+    }
 }
 
 internal class ScriptedPorts : AudioPort, ReplyPort {
@@ -161,6 +168,29 @@ class SimActivityTest {
             round.captureFrame(capture, true)
             status("正在听 · 0 / 3")
             assertEquals(listOf(old), ports.cancels)
+        }
+    }
+
+    @Test fun replyTimeoutsShowDistinctStatusAndRestartClearsIt() {
+        startCapture()
+        val old = endWithSpeech()
+        onMain {
+            activity.fireDeadline(8_000)
+            status("等待回复超时，请再试一次 · 0 / 3")
+        }
+        startCapture()
+        val current = endWithSpeech()
+        onMain {
+            round.segment(old, reply)
+            status("正在等待模拟回复 · 0 / 3")
+            round.segment(current, reply)
+            val playback = ports.plays.single()
+            round.played(playback)
+            round.released(playback)
+            activity.fireDeadline(4_000)
+            status("回复中断超时，请再试一次 · 0 / 3")
+            round.endReply(current, 1)
+            status("回复中断超时，请再试一次 · 0 / 3")
         }
     }
 

@@ -17,6 +17,7 @@ import com.littlebuddy.voice.Deadline
 import com.littlebuddy.voice.SimulatedReply
 import com.littlebuddy.voice.VoiceRound
 import com.littlebuddy.voice.VoiceRound.Phase
+import com.littlebuddy.voice.VoiceRound.ReplyTimeout
 
 open class SimActivity : Activity() {
     private val dispatcher = Handler(Looper.getMainLooper())
@@ -161,6 +162,8 @@ open class SimActivity : Activity() {
             Phase.INACTIVE -> "已暂停"
             Phase.IDLE -> when {
                 audioError -> "录音或播放失败，请检查麦克风权限及音频设备"
+                round.replyTimeout == ReplyTimeout.FIRST_SEGMENT -> "等待回复超时，请再试一次"
+                round.replyTimeout == ReplyTimeout.INCOMPLETE_REPLY -> "回复中断超时，请再试一次"
                 completed == 3 -> "三轮完成"
                 else -> "点按开始，模拟唤醒"
             }

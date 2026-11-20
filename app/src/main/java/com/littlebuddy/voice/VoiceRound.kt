@@ -31,6 +31,11 @@ class VoiceRound(
     private val changed: (Phase, Int) -> Unit,
 ) {
     enum class Phase { INACTIVE, IDLE, OPENING, LISTENING, WAITING, PLAYING, CLEANING, UNAVAILABLE }
+    enum class ReplyTimeout { FIRST_SEGMENT, INCOMPLETE_REPLY }
+
+    var replyTimeout: ReplyTimeout? = null
+        private set
+
     private enum class Release { SUBMIT, ADVANCE, IDLE }
     var phase = Phase.INACTIVE
         private set
@@ -65,7 +70,10 @@ class VoiceRound(
         if (operation == null) openCapture() else restart = true
     }
 
-    fun stop() {
+    fun stop() = stop(null)
+
+    private fun stop(timeout: ReplyTimeout?) {
+        replyTimeout = timeout
         val old = turn
         turn = null
         restart = false
@@ -187,10 +195,10 @@ class VoiceRound(
         update(Phase.WAITING)
         replies.request(id)
         deadline.after(8_000) {
-            if (turn == id && nextSegment == 1) stop()
+            if (turn == id && nextSegment == 1) stop(ReplyTimeout.FIRST_SEGMENT)
         }
         deadline.after(45_000) {
-            if (turn == id) stop()
+            if (turn == id) stop(ReplyTimeout.INCOMPLETE_REPLY)
         }
     }
 
@@ -217,7 +225,7 @@ class VoiceRound(
             deadline.after(4_000) {
                 if (turn == id && nextSegment == expected && finalSegment == null &&
                     phase == Phase.WAITING
-                ) stop()
+                ) stop(ReplyTimeout.INCOMPLETE_REPLY)
             }
         }
     }

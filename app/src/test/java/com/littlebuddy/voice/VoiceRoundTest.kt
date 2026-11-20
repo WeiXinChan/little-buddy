@@ -103,6 +103,7 @@ class VoiceRoundTest {
         val id = submit()
         advance(8_000)
         round.segment(id, first)
+        assertEquals(VoiceRound.ReplyTimeout.FIRST_SEGMENT, round.replyTimeout)
         assertEquals(listOf(id), cancels)
         assertEquals(0, plays.size)
         assertEquals(VoiceRound.Phase.IDLE, phase)
@@ -114,9 +115,47 @@ class VoiceRoundTest {
         round.segment(id, first)
         drain()
         advance(4_000)
+        assertEquals(VoiceRound.ReplyTimeout.INCOMPLETE_REPLY, round.replyTimeout)
         round.endReply(id, 1)
         assertEquals(listOf(id), cancels)
         assertEquals(0, round.completed)
+    }
+
+    @Test fun cancelledRoundDeadlinesCannotChangeNewWaitingRound() = with(Fixture()) {
+        round.start()
+        val old = submit()
+        round.segment(old, first)
+        drain()
+        advance(1_000)
+        round.stop()
+        assertEquals(null, round.replyTimeout)
+        advance(1_000)
+        round.start()
+        val current = submit()
+        advance(6_000)
+        assertEquals(null, round.replyTimeout)
+        assertEquals(VoiceRound.Phase.WAITING, phase)
+        assertEquals(listOf(old), cancels)
+        round.segment(current, first)
+        round.endReply(current, 1)
+        drain()
+        assertEquals(null, round.replyTimeout)
+        assertEquals(VoiceRound.Phase.OPENING, phase)
+    }
+
+    @Test fun startClearsTimeoutAndManualEndOfSilenceDoesNotSetIt() = with(Fixture()) {
+        round.start()
+        submit()
+        advance(8_000)
+        assertEquals(VoiceRound.ReplyTimeout.FIRST_SEGMENT, round.replyTimeout)
+        round.start()
+        assertEquals(null, round.replyTimeout)
+        val capture = captures.last()
+        round.captureFrame(capture, false)
+        round.endCapture(capture)
+        round.released(capture)
+        assertEquals(VoiceRound.Phase.IDLE, phase)
+        assertEquals(null, round.replyTimeout)
     }
 
     @Test fun countRequiresFinalDeclarationAndEverySegmentToDrain() = with(Fixture()) {
