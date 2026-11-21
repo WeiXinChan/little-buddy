@@ -15,6 +15,46 @@ class SpeechDetectorTest {
         }.filter { it != Event.NONE }
     }
 
+    private fun feedEnvelope(vararg levelsPerFiveMs: Int): List<Event> {
+        // Split the stream at a cadence that also crosses detector windows.
+        val pcm = ShortArray(levelsPerFiveMs.size * 80) { index ->
+            val level = levelsPerFiveMs[index / 80]
+            (if (index % 2 == 0) level else -level).toShort()
+        }
+        return pcm.asList().chunked(137).map {
+            detector.accept(it.toShortArray(), it.size)
+        }.filter { it != Event.NONE }
+    }
+
+    @Test fun fiftyMsPulseCrossingFourWindowsDoesNotStartSpeech() {
+        feed(8, 35)
+        assertEquals(emptyList<Event>(), feedEnvelope(
+            35, 35, 35, 2_000, 2_000, 2_000, 2_000, 2_000,
+            2_000, 2_000, 2_000, 2_000, 2_000, 35, 35, 35,
+        ))
+        assertEquals(emptyList<Event>(), feed(80, 35))
+    }
+
+    @Test fun impulseWithDecayingReverberationDoesNotStartSpeech() {
+        feed(8, 35)
+        val decay = listOf(2_000, 950, 450, 220, 165, 130, 100)
+        assertEquals(emptyList<Event>(), feedEnvelope(
+            *decay.flatMap { level -> List(4) { level } }.toIntArray(),
+        ))
+        assertEquals(emptyList<Event>(), feed(80, 35))
+        assertEquals(listOf(Event.SPEECH), feed(4, 105))
+    }
+
+    @Test fun quietShortAnswerConfirmsWithinFourWindows() {
+        feed(8, 35)
+        assertEquals(listOf(Event.SPEECH), feedEnvelope(
+            100, 110, 125, 100, 125, 140, 135, 115,
+            112, 130, 100, 110, 100, 102, 105, 98,
+        ))
+        assertEquals(emptyList<Event>(), feed(74, 35))
+        assertEquals(listOf(Event.END), feed(1, 35))
+    }
+
     @Test fun quieterSpeechContinuesAfterOnsetAndEndsAfterTailSilence() {
         assertEquals(emptyList<Event>(), feed(50, 35))
         assertEquals(listOf(Event.SPEECH), feed(4, 140))

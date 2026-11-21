@@ -12,8 +12,8 @@ android {
         applicationId = "com.littlebuddy.sim"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.1-sim"
+        versionCode = 3
+        versionName = "0.1.2-sim"
         testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
     compileOptions {
