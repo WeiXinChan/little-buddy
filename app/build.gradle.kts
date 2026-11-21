@@ -12,8 +12,8 @@ android {
         applicationId = "com.littlebuddy.sim"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.1.2-sim"
+        versionCode = 4
+        versionName = "0.1.3-voice-lab"
         testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
     compileOptions {
@@ -29,6 +29,7 @@ android {
 kotlin { jvmToolchain(17) }
 
 dependencies {
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.6.2")
 }
