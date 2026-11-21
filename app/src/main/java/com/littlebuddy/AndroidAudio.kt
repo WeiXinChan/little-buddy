@@ -17,6 +17,7 @@ internal class AndroidAudio(
     played: (Long) -> Unit,
     released: (Long) -> Unit,
     private val diagnostics: ((Int, String) -> Unit)?,
+    private val pcm: ((Long, ShortArray, Int) -> Unit)? = null,
 ) : AudioPort {
     private val worker = AudioWorker({ action -> dispatcher.post { action() } }, failed, played, released)
 
@@ -53,6 +54,7 @@ internal class AndroidAudio(
                     Thread.sleep(10)
                     continue
                 }
+                pcm?.invoke(operation.id, samples, count)
                 val event = detector.accept(samples, count)
                 val speech = event == SpeechDetector.Event.SPEECH
                 val endpoint = event == SpeechDetector.Event.END

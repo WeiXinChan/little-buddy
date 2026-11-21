@@ -1,7 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <application android:label="瓦力 · 本地模拟" android:allowBackup="false"
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:usesCleartextTraffic="false" android:label="瓦力 · 本地模拟" android:allowBackup="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".CloudActivity" android:exported="false"
+            android:screenOrientation="sensorLandscape" />
         <activity android:name=".SimActivity" android:exported="true"
             android:screenOrientation="sensorLandscape">
             <intent-filter>

@@ -5,11 +5,12 @@ data class Turn(val session: Long, val number: Long)
 
 interface AudioPort {
     // Completions must be posted to the coordinator's serial dispatcher.
-    // Capture signals only metadata. No microphone samples are sent to the simulated service.
+    // The coordinator receives capture metadata.
     fun capture(operation: Long)
     fun play(operation: Long, samples: ShortArray)
     // Immediately mute playback. Report released only when the matching operation
     // has no active or pending handle, including a cancelled asynchronous open.
+    fun discardCapture(operation: Long) {}
     fun stop(operation: Long)
 }
 
@@ -28,8 +29,12 @@ class VoiceRound(
     private val audio: AudioPort,
     private val replies: ReplyPort,
     private val deadline: Deadline,
+    private val singleTurn: Boolean,
     private val changed: (Phase, Int) -> Unit,
 ) {
+    constructor(audio: AudioPort, replies: ReplyPort, deadline: Deadline, changed: (Phase, Int) -> Unit) :
+        this(audio, replies, deadline, false, changed)
+
     enum class Phase { INACTIVE, IDLE, OPENING, LISTENING, WAITING, PLAYING, CLEANING, UNAVAILABLE }
     enum class ReplyTimeout { FIRST_SEGMENT, INCOMPLETE_REPLY }
 
@@ -102,7 +107,10 @@ class VoiceRound(
     fun captureFrame(id: Long, hasSpeech: Boolean) {
         if (operation != id || phase !in setOf(Phase.OPENING, Phase.LISTENING)) return
         speech = speech || hasSpeech
-        if (phase == Phase.OPENING) update(Phase.LISTENING)
+        if (phase == Phase.OPENING) {
+            update(Phase.LISTENING)
+            if (singleTurn) scheduleCaptureLimit(id)
+        }
     }
 
     fun endCapture(id: Long? = operation, reason: CaptureEnd = CaptureEnd.MANUAL) {
@@ -120,6 +128,10 @@ class VoiceRound(
             }
             else -> Unit
         }
+    }
+
+    fun replyFailed(id: Turn) {
+        if (receives(id)) stop()
     }
 
     fun audioFailed(id: Long) {
@@ -186,9 +198,13 @@ class VoiceRound(
         operation = id
         update(Phase.OPENING)
         audio.capture(id)
-        deadline.after(3_000) {
+        deadline.after(if (singleTurn) 8_000 else 3_000) {
             if (operation == id && phase == Phase.OPENING) endCapture(id, CaptureEnd.NO_FRAME_TIMEOUT)
         }
+        if (!singleTurn) scheduleCaptureLimit(id)
+    }
+
+    private fun scheduleCaptureLimit(id: Long) {
         deadline.after(20_000) {
             if (operation == id && phase == Phase.LISTENING) endCapture(id, CaptureEnd.MAX_DURATION)
         }
@@ -196,6 +212,7 @@ class VoiceRound(
 
     private fun releaseAudio(next: Release) {
         val id = checkNotNull(operation)
+        if (next == Release.IDLE) audio.discardCapture(id)
         if (release != null) {
             release = next
             return
@@ -238,7 +255,7 @@ class VoiceRound(
         } else if (finalSegment != null) {
             turn = null
             if (game) completed++
-            if (game && completed == 3) {
+            if (singleTurn || (game && completed == 3)) {
                 game = false
                 update(Phase.IDLE)
             } else openCapture()

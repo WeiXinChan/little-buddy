@@ -5,10 +5,10 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 class VoiceRoundTest {
-    private class Fixture : AudioPort, ReplyPort, Deadline {
+    private class Fixture(singleTurn: Boolean = false) : AudioPort, ReplyPort, Deadline {
         private var now = 0L
         private val timers = mutableListOf<Pair<Long, () -> Unit>>()
-        val round = VoiceRound(this, this, this) { _, _ -> }
+        val round = VoiceRound(this, this, this, singleTurn) { _, _ -> }
         val captures = mutableListOf<Long>()
         val plays = mutableListOf<Long>()
         val stops = mutableListOf<Long>()
@@ -53,6 +53,24 @@ class VoiceRoundTest {
             round.played(id)
             round.released(id)
         }
+    }
+
+    @Test fun singleTurnPlaysSegmentsInOrderThenWaitsForAnotherClick() = with(Fixture(singleTurn = true)) {
+        round.start()
+        val id = submit()
+        round.segment(id, first)
+        round.segment(id, first.copy(number = 2))
+        round.endReply(id, 2)
+        assertEquals(1, plays.size)
+        drain()
+        assertEquals(2, plays.size)
+        drain()
+        assertEquals(VoiceRound.Phase.IDLE, phase)
+        assertEquals(1, captures.size)
+        round.start()
+        round.replyFailed(id)
+        assertEquals(VoiceRound.Phase.OPENING, phase)
+        assertEquals(2, captures.size)
     }
 
     @Test fun pendingOpenKeepsItsSlotAndBackgroundDiscardsQueuedStart() = with(Fixture()) {
