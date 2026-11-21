@@ -7,6 +7,7 @@ import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.os.Handler
+import android.os.SystemClock
 import com.littlebuddy.voice.AudioPort
 
 internal class AndroidAudio(
@@ -15,6 +16,7 @@ internal class AndroidAudio(
     failed: (Long) -> Unit,
     played: (Long) -> Unit,
     released: (Long) -> Unit,
+    private val diagnostics: ((Int, String) -> Unit)?,
 ) : AudioPort {
     private val worker = AudioWorker({ action -> dispatcher.post { action() } }, failed, played, released)
 
@@ -42,8 +44,8 @@ internal class AndroidAudio(
             recorder.startRecording()
             check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING)
             var opening = true
-            var heardSpeech = false
-            var silentSamples = 0
+            var nextDiagnostic = 0L
+            val detector = SpeechDetector(samples.size)
             while (!operation.cancelled) {
                 val count = recorder.read(samples, 0, samples.size, AudioRecord.READ_NON_BLOCKING)
                 check(count >= 0)
@@ -51,19 +53,23 @@ internal class AndroidAudio(
                     Thread.sleep(10)
                     continue
                 }
-                var power = 0L
-                for (i in 0 until count) power += samples[i].toLong() * samples[i]
-                // Fixed RMS gate for this local simulation. Device behavior needs calibration.
-                val speech = power >= 600L * 600 * count
-                silentSamples = if (speech) 0 else silentSamples + count
-                val endpoint = heardSpeech && silentSamples >= MIC_RATE * 9 / 10
-                if (opening || (speech && !heardSpeech) || endpoint) {
+                val event = detector.accept(samples, count)
+                val speech = event == SpeechDetector.Event.SPEECH
+                val endpoint = event == SpeechDetector.Event.END
+                val now = if (diagnostics != null) SystemClock.elapsedRealtime() else 0L
+                val showDiagnostics = diagnostics != null && (now >= nextDiagnostic || speech || endpoint)
+                if (showDiagnostics) nextDiagnostic = now + 200
+                if (opening || speech || endpoint || showDiagnostics) {
+                    val energy = detector.energy
+                    val decision = detector.decision
                     dispatcher.post {
-                        if (!worker.closed && !operation.cancelled) frame(operation.id, speech, endpoint)
+                        if (!worker.closed && !operation.cancelled) {
+                            if (showDiagnostics) diagnostics?.invoke(energy, decision)
+                            frame(operation.id, speech, endpoint)
+                        }
                     }
                 }
                 opening = false
-                heardSpeech = heardSpeech || speech
                 if (endpoint) {
                     // Keep ownership until the dispatcher requests release.
                     while (!operation.cancelled) Thread.sleep(10)

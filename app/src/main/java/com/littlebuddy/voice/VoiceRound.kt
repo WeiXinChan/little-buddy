@@ -33,6 +33,15 @@ class VoiceRound(
     enum class Phase { INACTIVE, IDLE, OPENING, LISTENING, WAITING, PLAYING, CLEANING, UNAVAILABLE }
     enum class ReplyTimeout { FIRST_SEGMENT, INCOMPLETE_REPLY }
 
+    enum class CaptureEnd { MANUAL, TAIL_SILENCE, NO_FRAME_TIMEOUT, MAX_DURATION }
+    enum class EmptyCapture { NO_FRAMES, NO_SPEECH }
+
+    var captureEnd: CaptureEnd? = null
+        private set
+
+    var emptyCapture: EmptyCapture? = null
+        private set
+
     var replyTimeout: ReplyTimeout? = null
         private set
 
@@ -73,6 +82,8 @@ class VoiceRound(
     fun stop() = stop(null)
 
     private fun stop(timeout: ReplyTimeout?) {
+        captureEnd = null
+        emptyCapture = null
         replyTimeout = timeout
         val old = turn
         turn = null
@@ -94,9 +105,21 @@ class VoiceRound(
         if (phase == Phase.OPENING) update(Phase.LISTENING)
     }
 
-    fun endCapture(id: Long? = operation) {
-        if (id != operation || phase != Phase.LISTENING) return
-        releaseAudio(if (speech) Release.SUBMIT else Release.IDLE)
+    fun endCapture(id: Long? = operation, reason: CaptureEnd = CaptureEnd.MANUAL) {
+        if (id == null || id != operation) return
+        when (phase) {
+            Phase.OPENING -> {
+                captureEnd = reason
+                emptyCapture = EmptyCapture.NO_FRAMES
+                releaseAudio(Release.IDLE)
+            }
+            Phase.LISTENING -> {
+                captureEnd = reason
+                if (!speech) emptyCapture = EmptyCapture.NO_SPEECH
+                releaseAudio(if (speech) Release.SUBMIT else Release.IDLE)
+            }
+            else -> Unit
+        }
     }
 
     fun audioFailed(id: Long) {
@@ -157,16 +180,17 @@ class VoiceRound(
     private fun receives(id: Turn) = turn == id && release != Release.IDLE
 
     private fun openCapture() {
+        captureEnd = null
         speech = false
         val id = ++nextOperation
         operation = id
         update(Phase.OPENING)
         audio.capture(id)
         deadline.after(3_000) {
-            if (operation == id && phase == Phase.OPENING) stop()
+            if (operation == id && phase == Phase.OPENING) endCapture(id, CaptureEnd.NO_FRAME_TIMEOUT)
         }
         deadline.after(20_000) {
-            if (operation == id && phase == Phase.LISTENING) endCapture(id)
+            if (operation == id && phase == Phase.LISTENING) endCapture(id, CaptureEnd.MAX_DURATION)
         }
     }
 

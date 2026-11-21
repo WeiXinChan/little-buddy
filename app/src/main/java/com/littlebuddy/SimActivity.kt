@@ -2,10 +2,12 @@ package com.littlebuddy
 
 import android.Manifest
 import android.app.Activity
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -16,6 +18,7 @@ import android.widget.TextView
 import com.littlebuddy.voice.Deadline
 import com.littlebuddy.voice.SimulatedReply
 import com.littlebuddy.voice.VoiceRound
+import com.littlebuddy.voice.VoiceRound.CaptureEnd
 import com.littlebuddy.voice.VoiceRound.Phase
 import com.littlebuddy.voice.VoiceRound.ReplyTimeout
 
@@ -24,6 +27,10 @@ open class SimActivity : Activity() {
     private lateinit var round: VoiceRound
     private var audio: AndroidAudio? = null
     private lateinit var status: TextView
+    private var diagnostics: TextView? = null
+    private var captureStartedAt = 0L
+    private var currentDiagnostic = ""
+    private var lastCaptureEnd = ""
     private lateinit var start: Button
     private lateinit var finish: Button
     private lateinit var stop: Button
@@ -70,6 +77,10 @@ open class SimActivity : Activity() {
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         content.addView(status)
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            diagnostics = TextView(this).apply { gravity = Gravity.CENTER }
+            content.addView(diagnostics)
+        }
 
         val controls = LinearLayout(this)
         fun button(label: String, action: () -> Unit) = Button(this).apply {
@@ -94,7 +105,7 @@ open class SimActivity : Activity() {
             dispatcher,
             frame = { operation, speech, endpoint ->
                 round.captureFrame(operation, speech)
-                if (endpoint) round.endCapture(operation)
+                if (endpoint) round.endCapture(operation, CaptureEnd.TAIL_SILENCE)
             },
             failed = {
                 audioError = true
@@ -102,6 +113,11 @@ open class SimActivity : Activity() {
             },
             played = { round.played(it) },
             released = { round.released(it) },
+            diagnostics = if (diagnostics == null) null else { energy, decision ->
+                val elapsed = SystemClock.elapsedRealtime() - captureStartedAt
+                currentDiagnostic = "RMS $energy · $decision · ${elapsed} ms"
+                renderDiagnostics()
+            },
         )
         val reply = SimulatedReply(deadline, { id, segment -> round.segment(id, segment) },
             { id, last -> round.endReply(id, last) })
@@ -158,12 +174,38 @@ open class SimActivity : Activity() {
     }
 
     private fun render(phase: Phase, completed: Int) {
+        if (diagnostics != null) {
+            when (phase) {
+                Phase.OPENING -> {
+                    captureStartedAt = SystemClock.elapsedRealtime()
+                    currentDiagnostic = "等待音频帧"
+                }
+                Phase.CLEANING -> round.captureEnd?.let { reason ->
+                    val label = when (reason) {
+                        CaptureEnd.MANUAL -> "手动结束"
+                        CaptureEnd.TAIL_SILENCE -> "句末静音"
+                        CaptureEnd.NO_FRAME_TIMEOUT -> "无帧超时"
+                        CaptureEnd.MAX_DURATION -> "录音达到时限"
+                    }
+                    val elapsed = SystemClock.elapsedRealtime() - captureStartedAt
+                    lastCaptureEnd = "$label · ${elapsed} ms"
+                }
+                Phase.INACTIVE -> {
+                    currentDiagnostic = ""
+                    lastCaptureEnd = ""
+                }
+                else -> Unit
+            }
+            renderDiagnostics()
+        }
         val label = when (phase) {
             Phase.INACTIVE -> "已暂停"
             Phase.IDLE -> when {
                 audioError -> "录音或播放失败，请检查麦克风权限及音频设备"
                 round.replyTimeout == ReplyTimeout.FIRST_SEGMENT -> "等待回复超时，请再试一次"
                 round.replyTimeout == ReplyTimeout.INCOMPLETE_REPLY -> "回复中断超时，请再试一次"
+                round.emptyCapture == VoiceRound.EmptyCapture.NO_FRAMES -> "没收到麦克风声音，请再试一次"
+                round.emptyCapture == VoiceRound.EmptyCapture.NO_SPEECH -> "没听清，请再说一次"
                 completed == 3 -> "三轮完成"
                 else -> "点按开始，模拟唤醒"
             }
@@ -176,8 +218,13 @@ open class SimActivity : Activity() {
         }
         status.text = "$label · $completed / 3"
         start.isEnabled = !permissionPending && phase != Phase.INACTIVE && phase != Phase.UNAVAILABLE
-        finish.isEnabled = phase == Phase.LISTENING
+        finish.isEnabled = phase == Phase.LISTENING || phase == Phase.OPENING
         stop.isEnabled = phase != Phase.INACTIVE && phase != Phase.IDLE
+    }
+
+    private fun renderDiagnostics() {
+        diagnostics?.text = listOf(currentDiagnostic, lastCaptureEnd)
+            .filter { it.isNotEmpty() }.joinToString("\n")
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density + 0.5f).toInt()

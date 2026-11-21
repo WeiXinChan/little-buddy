@@ -200,7 +200,50 @@ class VoiceRoundTest {
         round.endCapture(id)
         round.released(id)
         assertEquals(emptyList<Turn>(), requests)
+        assertEquals(VoiceRound.EmptyCapture.NO_SPEECH, round.emptyCapture)
+        assertEquals(VoiceRound.CaptureEnd.MANUAL, round.captureEnd)
         assertEquals(VoiceRound.Phase.IDLE, phase)
+    }
+
+    @Test fun missingFramesAndFramesWithoutSpeechUseDifferentDeadlines() = with(Fixture()) {
+        round.start()
+        val missing = captures.last()
+        advance(2_999)
+        assertEquals(VoiceRound.Phase.OPENING, phase)
+        advance(1)
+        round.captureFrame(missing, true)
+        round.released(missing)
+        assertEquals(VoiceRound.EmptyCapture.NO_FRAMES, round.emptyCapture)
+        assertEquals(VoiceRound.CaptureEnd.NO_FRAME_TIMEOUT, round.captureEnd)
+
+        round.start()
+        val quiet = captures.last()
+        round.captureFrame(quiet, false)
+        advance(3_000)
+        assertEquals(VoiceRound.Phase.LISTENING, phase)
+        advance(17_000)
+        round.released(quiet)
+        assertEquals(VoiceRound.EmptyCapture.NO_SPEECH, round.emptyCapture)
+        assertEquals(VoiceRound.CaptureEnd.MAX_DURATION, round.captureEnd)
+        assertEquals(emptyList<Turn>(), requests)
+    }
+
+    @Test fun oldDeadlineCannotEndNewCaptureAndMaximumDurationSubmitsSpeech() = with(Fixture()) {
+        round.start()
+        val old = captures.last()
+        round.captureFrame(old, true)
+        advance(1_000)
+        round.start()
+        round.released(old)
+        val current = captures.last()
+        round.captureFrame(current, true)
+        advance(19_000)
+        assertEquals(VoiceRound.Phase.LISTENING, phase)
+        advance(1_000)
+        assertEquals(VoiceRound.CaptureEnd.MAX_DURATION, round.captureEnd)
+        assertEquals(emptyList<Turn>(), requests)
+        round.released(current)
+        assertEquals(1, requests.size)
     }
 
     @Test fun simulatedServiceCompletesOneRoundOnTheProductionCoordinator() = with(Fixture()) {
