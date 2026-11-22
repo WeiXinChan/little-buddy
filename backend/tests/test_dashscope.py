@@ -133,7 +133,7 @@ class AdapterTest(unittest.IsolatedAsyncioTestCase):
             "DASHSCOPE_WORKSPACE": "test-workspace",
             "DASHSCOPE_REGION": "cn-beijing",
             "DASHSCOPE_ASR_MODEL": "fun-asr-realtime",
-            "DASHSCOPE_LLM_MODEL": "qwen-flash-2025-07-28",
+            "DASHSCOPE_LLM_MODEL": "qwen3.8-flash",
             "DASHSCOPE_TTS_MODEL": "cosyvoice-v3-flash",
             "DASHSCOPE_TTS_VOICE": "longanyang",
         }, clear=True):
@@ -142,6 +142,7 @@ class AdapterTest(unittest.IsolatedAsyncioTestCase):
             (Path(folder) / "dashscope-api-key").write_text("dummy-offline-key\n", encoding="ascii")
             adapter = DashScope.from_environment(None)
             self.assertEqual(adapter.headers["Authorization"], "Bearer dummy-offline-key")
+            self.assertEqual(adapter.llm, "qwen3.8-flash")
             self.assertEqual(adapter.ws_url,
                              "wss://test-workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference")
 

@@ -17,7 +17,7 @@
 | 阶段 | 建议首测配置 | 官方文档确认的接口 |
 | --- | --- | --- |
 | ASR | `DASHSCOPE_ASR_MODEL=fun-asr-realtime` | 双工 WSS，`run-task`→`task-started`→16 kHz 单声道 PCM16→`finish-task`；取最终句 [Fun-ASR WebSocket](https://help.aliyun.com/en/model-studio/fun-asr-realtime-websocket-api) |
-| 文本 LLM | `DASHSCOPE_LLM_MODEL=qwen-flash-2025-07-28` | HTTPS Chat Completions SSE，`stream=true` 且关闭思考；使用公开快照固定首测版本 [模型](https://help.aliyun.com/zh/model-studio/qwen-flash) · [请求格式](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions) |
+| 文本 LLM | `DASHSCOPE_LLM_MODEL=qwen3.8-flash` | HTTPS Chat Completions SSE，顶层 `stream=true`、`enable_thinking=false` [模型](https://help.aliyun.com/zh/model-studio/qwen3-8-flash) · [请求格式](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions) |
 | TTS | `DASHSCOPE_TTS_MODEL=cosyvoice-v3-flash`，`DASHSCOPE_TTS_VOICE=longanyang`（龙安洋，普通话） | 双工 WSS，`continue-task` 送文本，接收二进制 PCM 24 kHz [CosyVoice WebSocket](https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api/) · [音色](https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list) · [采样率](https://help.aliyun.com/zh/model-studio/multimodal-timbre-list) |
 
 设置 `DASHSCOPE_REGION=cn-beijing`，`DASHSCOPE_WORKSPACE` 填实际业务空间 ID。ASR 和 TTS 使用该空间域名的 `/api-ws/v1/inference`，LLM 使用同一域名的 `/compatible-mode/v1/chat/completions`。 [百炼 Base URL](https://help.aliyun.com/zh/model-studio/base-url)
@@ -122,3 +122,7 @@ LoadCredential=dashscope-api-key:/etc/little-buddy/voice/dashscope-api-key
 三次均完成鉴权握手与 `run-task` 初始化，等待 `task-started` 后才尝试发文本。均在发文本这一调用返回前观察到对端关闭，未执行 `finish-task`，无音频。无法判断对端是否收到文本。结果排除了握手失败、提前发送文本及 `finish-task` 顺序作为本次复现的原因。官方音色、参数和另一北京标准端点也能复现，证据指向供应商侧额度检查。单个错误关键词无法确认节省计划抵扣范围、额度余额或账号开关。请账号持有人核对该模型、北京账号/业务空间与计划的生效和抵扣情况，必要时请百炼支持按时间与关闭阶段排查。 [百炼错误码](https://help.aliyun.com/en/model-studio/error-code)
 
 本轮只发 TTS。测试音频未落盘，临时任务已退出。正式请求参数沿用原实现，补充 `quota` 等固定诊断片段和就绪前禁止发文本的离线回归。
+
+## 普通北京端点文本模型复查
+
+已按用户指定将 `DASHSCOPE_LLM_MODEL` 更新为 `qwen3.8-flash`。原北京业务空间标准 Chat Completions 和原 DashScope 凭证完成一次短文本请求，`stream=true`、`enable_thinking=false`、`max_tokens=64`。首个完整文本段 615 ms，流结束 647 ms，两段内容通过预期顺序校验。此结果验证当前账号可用普通端点完成该请求。三个 TTS 对照仍阻塞，因此未启动完整合成轮次。 [模型](https://help.aliyun.com/zh/model-studio/qwen3-8-flash) · [思考参数](https://help.aliyun.com/zh/model-studio/deep-thinking/)
