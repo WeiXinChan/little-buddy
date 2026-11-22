@@ -14,11 +14,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from websockets.asyncio.client import connect
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 
 from backend.dashscope import DashScope, GreetingPolicy, http_client
 from backend.server import voice_server
-from backend.wire import HEADER
+from backend.voice import MAX_FRAME_SAMPLES, PLAYBACK_RATE
+from backend.wire import HEADER, MAX_CONTROL_BYTES, PLAYBACK, UPLOAD, VERSION
 
 PORT = 8444
 FRAME_BYTES = 640  # 20 ms mono PCM s16le at 16 kHz.
@@ -33,27 +34,64 @@ def rss_kib():
                 if line.startswith("VmRSS:"))
 
 
+def control_matches(message, kind, **fields):
+    if not isinstance(message, str) or len(message.encode("utf-8")) > MAX_CONTROL_BYTES:
+        return False
+    try:
+        control = json.loads(message)
+    except (ValueError, RecursionError):
+        return False
+    expected = {"v": VERSION, "type": kind, **fields}
+    return (isinstance(control, dict) and control == expected
+            and all(type(control[key]) is int for key in ("v", *fields)))
+
+
+async def receive_reply(socket):
+    for number in (1, 2):
+        if not control_matches(await socket.recv(), "segment.start", number=number):
+            return "invalid_segment_start"
+        samples = 0
+        nonzero = False
+        while isinstance(message := await socket.recv(), bytes):
+            size = len(message) - HEADER.size
+            if (not 0 < size <= MAX_FRAME_SAMPLES * 2 or size % 2
+                    or HEADER.unpack_from(message) != (VERSION, PLAYBACK, samples)):
+                return "invalid_pcm_frame"
+            samples += size // 2
+            if samples > PLAYBACK_RATE * 10:
+                return "invalid_segment_samples"
+            nonzero = nonzero or any(memoryview(message)[HEADER.size:])
+        if not control_matches(message, "segment.end", number=number, samples=samples):
+            return "invalid_segment_end"
+        if not nonzero:
+            return "empty_pcm"
+    if not control_matches(await socket.recv(), "reply.end", count=2):
+        return "invalid_reply_end"
+    try:
+        await socket.recv()
+    except ConnectionClosedOK as error:
+        if error.rcvd is not None and error.rcvd.code == 1000:
+            return "ok"
+        raise
+    return "data_after_reply"
+
+
 async def trial(audio, token, trust, turn):
     headers = {"Authorization": "Bearer " + token, "X-Voice-Turn-ID": turn}
-    async with connect(f"wss://localhost:{PORT}/v1/turn", host="127.0.0.1",
-                       additional_headers=headers, ssl=trust, proxy=None) as socket:
-        if json.loads(await socket.recv()) != {"v": 1, "type": "turn.ready"}:
-            return "invalid_ready"
-        for offset in range(0, len(audio), FRAME_BYTES):
-            chunk = audio[offset:offset + FRAME_BYTES]
-            await socket.send(HEADER.pack(1, 1, offset // 2) + chunk)
-            await asyncio.sleep(len(chunk) / 32000)
-        await socket.send(json.dumps({"v": 1, "type": "turn.end", "samples": len(audio) // 2}))
-        segments = 0
-        async for message in socket:
-            if isinstance(message, str):
-                control = json.loads(message)
-                if control["type"] == "segment.end":
-                    segments += 1
-                if control["type"] == "reply.end":
-                    await socket.wait_closed()
-                    return "ok" if segments == control["count"] == 2 else "unexpected_segment_count"
-        return "closed_before_reply"
+    try:
+        async with connect(f"wss://localhost:{PORT}/v1/turn", host="127.0.0.1",
+                           additional_headers=headers, ssl=trust, proxy=None) as socket:
+            if not control_matches(await socket.recv(), "turn.ready"):
+                return "invalid_ready"
+            for offset in range(0, len(audio), FRAME_BYTES):
+                chunk = audio[offset:offset + FRAME_BYTES]
+                await socket.send(HEADER.pack(VERSION, UPLOAD, offset // 2) + chunk)
+                await asyncio.sleep(len(chunk) / 32000)
+            await socket.send(json.dumps({"v": VERSION, "type": "turn.end", "samples": len(audio) // 2}))
+            return await receive_reply(socket)
+    except ConnectionClosed as error:
+        code = error.rcvd.code if error.rcvd is not None else 1006
+        return "closed_before_reply" if code == 1000 else f"ws_{code}"
 
 
 def timings(output, turn):
@@ -137,8 +175,6 @@ async def worker(arm, input_path):
                         try:
                             async with asyncio.timeout(55):
                                 result = await trial(audio, token, trust, turn)
-                        except ConnectionClosed as error:
-                            result = f"ws_{error.code}"
                         except TimeoutError:
                             result = "client_timeout"
                         except Exception:

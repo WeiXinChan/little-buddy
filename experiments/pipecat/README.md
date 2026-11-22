@@ -23,7 +23,7 @@ python3 -m pip --python ../pipecat-venv/bin/python check
 HF_HUB_OFFLINE=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   ../pipecat-venv/bin/python -B -m unittest discover -s backend/tests
 HF_HUB_OFFLINE=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  ../pipecat-venv/bin/python -B -m unittest -v experiments.pipecat.test_pipeline
+  ../pipecat-venv/bin/python -B -m unittest -v experiments.pipecat.test_pipeline experiments.pipecat.test_ab
 ```
 
 实验套件把既有假服务语音和 WSS 测试接到 Pipecat 入口，并在 ASR、LLM、TTS 注入取消后的迟到异常和 PCM。无需 APK、模拟器、录音文件或云密钥。
@@ -40,7 +40,7 @@ experiments/pipecat/private.sh ab ../pipecat-venv ../synthetic.pcm
 
 若本地合成样本在两组均无法通过问候门，可显式使用 `experiments/pipecat/private.sh ab-seed ../pipecat-venv`。该方式先用既有 CosyVoice 生成同一输入，额外计一次 TTS 请求。样本以匿名内存文件传入两组，并在进程退出时回收。
 
-单次命令最多六轮，失败计入本次总预算。若首对同遭问候门拒绝，提前结束。命令也可在任一组启动失败时提前停止。按轮输出关联 ID、单调时钟事件、端点到首 PCM、分段间隔、CPU 时间及进程累计峰值 RSS。分段间隔定义为上一段 `segment.end` 发完到下一段第一帧 PCM 发出。暖轮样本只对成功轮汇总中位数和范围。服务端发包与手机播放时间各自计量。
+单次命令最多六轮，失败计入本次总预算。若首对同遭问候门拒绝，提前结束。命令也可在任一组启动失败时提前停止。按轮输出关联 ID、单调时钟事件、端点到首 PCM、分段间隔、CPU 时间及进程累计峰值 RSS。分段间隔定义为上一段 `segment.end` 发完到下一段第一帧 PCM 发出。新版只有在两个按序分段均收到完整非空 PCM、位置和样本声明有效、终态正确且连接以 1000 关闭时计为成功。暖轮只对通过该校验的轮次汇总中位数和范围。历史报告的计时样本另按服务端事件归类。服务端发包与手机播放时间各自计量。
 
 ## OPPO 待人工验收
 

@@ -58,23 +58,23 @@ class Stage(FrameProcessor):
 
 async def run_pipeline(channel, providers, policy, limits=Limits(), *, timing=None):
     loop = asyncio.get_running_loop()
+    turn_deadline = loop.time() + limits.turn
     result = loop.create_future()
     failure = None
     delivered = None
 
     async def capture(frame, emit):
         try:
-            async with asyncio.timeout(limits.turn):
-                async with recognize(channel, providers, limits) as (transcript, asr_cleanup):
-                    approved = policy.input(transcript)
-                    if not approved:
-                        raise GreetingMismatch()
-                    await emit(Transcript(approved))
-                    if failure is not None:
-                        raise failure
-                    _, deadline = delivered
-                    async with asyncio.timeout_at(deadline):
-                        await asyncio.shield(asr_cleanup)
+            async with recognize(channel, providers, limits) as (transcript, asr_cleanup):
+                approved = policy.input(transcript)
+                if not approved:
+                    raise GreetingMismatch()
+                await emit(Transcript(approved))
+                if failure is not None:
+                    raise failure
+                _, deadline = delivered
+                async with asyncio.timeout_at(deadline):
+                    await asyncio.shield(asr_cleanup)
         except Exception as error:
             result.set_result(error)
         else:
@@ -122,20 +122,23 @@ async def run_pipeline(channel, providers, policy, limits=Limits(), *, timing=No
     try:
         running = asyncio.create_task(runner.run(task))
         try:
-            await task.queue_frame(Capture())
-            ready, _ = await asyncio.wait((result, running), return_when=asyncio.FIRST_COMPLETED)
-            if result not in ready:
-                running.result()
-                raise ProviderError("pipeline exited before reply")
-            await task.queue_frame(EndFrame())
-            await asyncio.shield(running)
-            if (error := result.result()) is not None:
-                raise error
-            count, deadline = delivered
-            async with asyncio.timeout_at(deadline):
-                await channel.reply_ended(count)
-            mark("reply_sent")
+            async with asyncio.timeout_at(turn_deadline):
+                await task.queue_frame(Capture())
+                ready, _ = await asyncio.wait((result, running), return_when=asyncio.FIRST_COMPLETED)
+                if result not in ready:
+                    running.result()
+                    raise ProviderError("pipeline exited before reply")
+                await task.queue_frame(EndFrame())
+                await asyncio.shield(running)
+                if (error := result.result()) is not None:
+                    raise error
+                count, deadline = delivered
+                async with asyncio.timeout_at(deadline):
+                    await channel.reply_ended(count)
+                mark("reply_sent")
         finally:
+            # The deadline stops the reply. Join the cancelled pipeline so
+            # providers finish cleanup before the connection releases its slot.
             if not running.done():
                 await task.cancel()
                 await join_closures([running])
