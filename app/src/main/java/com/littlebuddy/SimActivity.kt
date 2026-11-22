@@ -9,7 +9,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.util.Log
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -130,7 +129,8 @@ open class SimActivity : Activity() {
         val deadline = Deadline { milliseconds, action -> dispatcher.postDelayed({ action() }, milliseconds) }
         audio = AndroidAudio(
             dispatcher,
-            tracePlayback = cloudMode && diagnostics != null,
+            captureStarted = { cloud?.captureStarted(it) },
+            speechDetected = { cloud?.speechDetected(it) },
             frame = { operation, speech, endpoint ->
                 round.captureFrame(operation, speech)
                 if (endpoint) round.endCapture(operation, CaptureEnd.TAIL_SILENCE)
@@ -157,15 +157,19 @@ open class SimActivity : Activity() {
                     if (turn != null) round.replyFailed(turn) else round.audioFailed(operation)
                 },
                 released = { round.released(it) },
-                segment = { id, segment -> round.segment(id, segment) },
+                segment = { id, number, source -> round.stream(id, number, source) },
                 ended = { id, count -> round.endReply(id, count) },
             )
             cloud = voice
-            return VoiceRound(voice, voice, deadline, true, changed)
+            return VoiceRound(voice, voice, deadline, true, captureSealed = { operation, reason ->
+                voice.captureSealed(operation)
+                describeCaptureEnd(reason)
+            }, changed = changed)
         }
         val reply = SimulatedReply(deadline, { id, segment -> round.segment(id, segment) },
             { id, last -> round.endReply(id, last) })
-        return VoiceRound(checkNotNull(audio), reply, deadline, changed)
+        return VoiceRound(checkNotNull(audio), reply, deadline, false,
+            captureSealed = { _, reason -> describeCaptureEnd(reason) }, changed = changed)
     }
 
     override fun onResume() {
@@ -227,18 +231,6 @@ open class SimActivity : Activity() {
                     captureStartedAt = SystemClock.elapsedRealtime()
                     currentDiagnostic = "等待音频帧"
                 }
-                Phase.CLEANING -> round.captureEnd?.let { reason ->
-                    val label = when (reason) {
-                        CaptureEnd.MANUAL -> "手动结束"
-                        CaptureEnd.TAIL_SILENCE -> "句末静音"
-                        CaptureEnd.NO_FRAME_TIMEOUT -> "无帧超时"
-                        CaptureEnd.MAX_DURATION -> "录音达到时限"
-                    }
-                    val elapsed = SystemClock.elapsedRealtime() - captureStartedAt
-                    lastCaptureEnd = "$label · ${elapsed} ms"
-                    if (cloudMode) Log.d("LittleBuddyVoice",
-                        "endpoint t_ms=${SystemClock.elapsedRealtime()} reason=${reason.name}")
-                }
                 Phase.INACTIVE -> {
                     currentDiagnostic = ""
                     lastCaptureEnd = ""
@@ -270,6 +262,18 @@ open class SimActivity : Activity() {
         start.isEnabled = !permissionPending && phase != Phase.INACTIVE && phase != Phase.UNAVAILABLE
         finish.isEnabled = phase == Phase.LISTENING || phase == Phase.OPENING
         stop.isEnabled = phase != Phase.INACTIVE && phase != Phase.IDLE
+    }
+
+    private fun describeCaptureEnd(reason: CaptureEnd) {
+        if (diagnostics == null) return
+        val label = when (reason) {
+            CaptureEnd.MANUAL -> "手动结束"
+            CaptureEnd.TAIL_SILENCE -> "句末静音"
+            CaptureEnd.NO_FRAME_TIMEOUT -> "无帧超时"
+            CaptureEnd.MAX_DURATION -> "录音达到时限"
+        }
+        val elapsed = SystemClock.elapsedRealtime() - captureStartedAt
+        lastCaptureEnd = "$label · ${elapsed} ms"
     }
 
     private fun renderDiagnostics() {

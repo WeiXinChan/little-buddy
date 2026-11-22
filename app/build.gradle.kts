@@ -12,8 +12,8 @@ android {
         applicationId = "com.littlebuddy.sim"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.1.4-voice-lab"
+        versionCode = 6
+        versionName = "0.1.5-voice-lab"
         testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
     compileOptions {

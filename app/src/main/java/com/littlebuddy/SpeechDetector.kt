@@ -23,6 +23,8 @@ internal class SpeechDetector(private val windowSamples: Int) {
     private var reverberating = false
     private var quietWindows = 0
     private var heardSpeech = false
+    var detectedSpeechInRead = false
+        private set
     var energy = 0
         private set
     var decision = "校准"
@@ -34,6 +36,7 @@ internal class SpeechDetector(private val windowSamples: Int) {
 
     // Each read is at most one window, so it can complete at most one window.
     fun accept(samples: ShortArray, count: Int): Event {
+        detectedSpeechInRead = false
         var event = Event.NONE
         for (index in 0 until count) {
             val sample = samples[index].toLong()
@@ -85,6 +88,7 @@ internal class SpeechDetector(private val windowSamples: Int) {
             else -> "低于门限"
         }
 
+        detectedSpeechInRead = voicedWindows >= 4
         if (!heardSpeech && voicedWindows >= 4) {
             heardSpeech = true
             return Event.SPEECH

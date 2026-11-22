@@ -1,6 +1,14 @@
 package com.littlebuddy.voice
 
 data class Segment(val number: Int, val samples: ShortArray)
+
+interface PcmStream {
+    val ended: Boolean
+    val aborted: Boolean
+    fun poll(): ShortArray?
+    fun playbackRequested(operation: Long)
+    fun playbackHeadAdvanced(operation: Long)
+}
 data class Turn(val session: Long, val number: Long)
 
 interface AudioPort {
@@ -8,6 +16,7 @@ interface AudioPort {
     // The coordinator receives capture metadata.
     fun capture(operation: Long)
     fun play(operation: Long, samples: ShortArray)
+    fun playStream(operation: Long, stream: PcmStream): Unit = error("Streaming audio unavailable")
     // Immediately mute playback. Report released only when the matching operation
     // has no active or pending handle, including a cancelled asynchronous open.
     fun discardCapture(operation: Long) {}
@@ -16,6 +25,7 @@ interface AudioPort {
 
 interface ReplyPort {
     fun request(turn: Turn)
+    fun finished(turn: Turn) {}
     fun cancel(turn: Turn)
 }
 
@@ -30,10 +40,11 @@ class VoiceRound(
     private val replies: ReplyPort,
     private val deadline: Deadline,
     private val singleTurn: Boolean,
+    private val captureSealed: (Long, CaptureEnd) -> Unit = { _, _ -> },
     private val changed: (Phase, Int) -> Unit,
 ) {
     constructor(audio: AudioPort, replies: ReplyPort, deadline: Deadline, changed: (Phase, Int) -> Unit) :
-        this(audio, replies, deadline, false, changed)
+        this(audio, replies, deadline, false, changed = changed)
 
     enum class Phase { INACTIVE, IDLE, OPENING, LISTENING, WAITING, PLAYING, CLEANING, UNAVAILABLE }
     enum class ReplyTimeout { FIRST_SEGMENT, INCOMPLETE_REPLY }
@@ -66,7 +77,7 @@ class VoiceRound(
     private var release: Release? = null
     private var nextSegment = 1
     private var finalSegment: Int? = null
-    private val pending = ArrayDeque<Segment>()
+    private val pending = ArrayDeque<(Long) -> Unit>()
     private var playing = false
     private var game = false
 
@@ -118,11 +129,13 @@ class VoiceRound(
         when (phase) {
             Phase.OPENING -> {
                 captureEnd = reason
+                captureSealed(id, reason)
                 emptyCapture = EmptyCapture.NO_FRAMES
                 releaseAudio(Release.IDLE)
             }
             Phase.LISTENING -> {
                 captureEnd = reason
+                captureSealed(id, reason)
                 if (!speech) emptyCapture = EmptyCapture.NO_SPEECH
                 releaseAudio(if (speech) Release.SUBMIT else Release.IDLE)
             }
@@ -163,15 +176,24 @@ class VoiceRound(
 
     fun segment(id: Turn, segment: Segment) {
         if (!receives(id)) return
-        if (finalSegment != null || segment.number != nextSegment ||
-            segment.samples.isEmpty() || segment.samples.size > 240_000 ||
-            nextSegment > 8
-        ) {
+        if (segment.samples.isEmpty() || segment.samples.size > 240_000) {
+            stop()
+            return
+        }
+        enqueue(segment.number) { audio.play(it, segment.samples) }
+    }
+
+    fun stream(id: Turn, number: Int, source: PcmStream) {
+        if (receives(id)) enqueue(number) { audio.playStream(it, source) }
+    }
+
+    private fun enqueue(number: Int, play: (Long) -> Unit) {
+        if (finalSegment != null || number != nextSegment || nextSegment > 8) {
             stop()
             return
         }
         nextSegment++
-        pending.addLast(segment)
+        pending.addLast(play)
         advance()
     }
 
@@ -251,8 +273,9 @@ class VoiceRound(
             operation = id
             playing = true
             update(Phase.PLAYING)
-            audio.play(id, segment.samples)
+            segment(id)
         } else if (finalSegment != null) {
+            replies.finished(checkNotNull(turn))
             turn = null
             if (game) completed++
             if (singleTurn || (game && completed == 3)) {

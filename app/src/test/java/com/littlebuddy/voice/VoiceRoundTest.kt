@@ -8,7 +8,9 @@ class VoiceRoundTest {
     private class Fixture(singleTurn: Boolean = false) : AudioPort, ReplyPort, Deadline {
         private var now = 0L
         private val timers = mutableListOf<Pair<Long, () -> Unit>>()
-        val round = VoiceRound(this, this, this, singleTurn) { _, _ -> }
+        val endpoints = mutableListOf<Long>()
+        val round = VoiceRound(this, this, this, singleTurn,
+            captureSealed = { id, _ -> endpoints += id }) { _, _ -> }
         val captures = mutableListOf<Long>()
         val plays = mutableListOf<Long>()
         val stops = mutableListOf<Long>()
@@ -21,6 +23,7 @@ class VoiceRoundTest {
 
         override fun capture(operation: Long) { captures += operation }
         override fun play(operation: Long, samples: ShortArray) { plays += operation }
+        override fun playStream(operation: Long, stream: PcmStream) { plays += operation }
         override fun stop(operation: Long) { stops += operation }
         override fun request(turn: Turn) { requests += turn }
         override fun cancel(turn: Turn) { cancels += turn }
@@ -70,6 +73,32 @@ class VoiceRoundTest {
         round.start()
         round.replyFailed(id)
         assertEquals(VoiceRound.Phase.OPENING, phase)
+        assertEquals(2, captures.size)
+    }
+
+    @Test fun streamCleanupAndLateCaptureCallbacksDoNotEmitAnotherEndpoint() = with(Fixture(true)) {
+        val source = object : PcmStream {
+            override val ended = false
+            override val aborted = false
+            override fun poll(): ShortArray? = null
+            override fun playbackRequested(operation: Long) = Unit
+            override fun playbackHeadAdvanced(operation: Long) = Unit
+        }
+        round.start()
+        val turn = submit()
+        val capture = captures.single()
+        round.endCapture(capture)
+        round.stream(turn, 1, source)
+        round.stream(turn, 2, source)
+        assertEquals(1, plays.size)
+        round.foreground(false)
+        round.foreground(true)
+        round.start()
+        round.released(plays.single())
+        round.stream(turn, 2, source)
+        round.endReply(turn, 2)
+        assertEquals(listOf(capture), endpoints)
+        assertEquals(1, plays.size)
         assertEquals(2, captures.size)
     }
 
