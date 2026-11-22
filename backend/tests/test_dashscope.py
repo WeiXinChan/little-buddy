@@ -1,5 +1,8 @@
 import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 from contextlib import asynccontextmanager
 
 import httpx
@@ -36,11 +39,30 @@ class SpeechSocket:
 
 
 class AdapterTest(unittest.IsolatedAsyncioTestCase):
+    def test_uses_systemd_credential_file(self):
+        with TemporaryDirectory() as folder, patch.dict("os.environ", {
+            "CREDENTIALS_DIRECTORY": folder,
+            "DASHSCOPE_WORKSPACE": "test-workspace",
+            "DASHSCOPE_REGION": "cn-beijing",
+            "DASHSCOPE_ASR_MODEL": "fun-asr-realtime",
+            "DASHSCOPE_LLM_MODEL": "qwen-flash-2025-07-28",
+            "DASHSCOPE_TTS_MODEL": "cosyvoice-v3-flash",
+            "DASHSCOPE_TTS_VOICE": "longanyang",
+        }, clear=True):
+            with self.assertRaisesRegex(ValueError, "credential is unavailable"):
+                DashScope.from_environment(None)
+            (Path(folder) / "dashscope-api-key").write_text("dummy-offline-key\n", encoding="ascii")
+            adapter = DashScope.from_environment(None)
+            self.assertEqual(adapter.headers["Authorization"], "Bearer dummy-offline-key")
+            self.assertEqual(adapter.ws_url,
+                             "wss://test-workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference")
+
     async def test_synthetic_pipeline_uses_final_transcript_and_pcm_formats(self):
         async def chat(request):
             body = json.loads(request.content)
             self.assertEqual(body["messages"][-1]["content"], "你好，瓦力。")
             self.assertTrue(body["stream"])
+            self.assertFalse(body["enable_thinking"])
             chunks = ["你好！我", "是瓦力。"]
             content = "".join("data: " + json.dumps({"choices": [{"delta": {"content": chunk}}]})
                               + "\n\n" for chunk in chunks)

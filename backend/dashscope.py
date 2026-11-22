@@ -5,6 +5,7 @@ import json
 import os
 import re
 from contextlib import asynccontextmanager
+from pathlib import Path
 from uuid import uuid4
 
 import httpx
@@ -108,9 +109,19 @@ class DashScope:
 
     @classmethod
     def from_environment(cls, http):
-        return cls(http, **{
+        directory = os.environ.get("CREDENTIALS_DIRECTORY")
+        if not directory:
+            raise ValueError("DashScope systemd credential directory is missing")
+        try:
+            with (Path(directory) / "dashscope-api-key").open(encoding="ascii") as credential:
+                key = credential.read(4097).rstrip("\r\n")
+        except (OSError, UnicodeError):
+            raise ValueError("DashScope systemd credential is unavailable") from None
+        if not 1 <= len(key) <= 4096:
+            raise ValueError("DashScope systemd credential has an invalid length")
+        return cls(http, key=key, **{
             name: os.environ.get("DASHSCOPE_" + variable, "") for name, variable in {
-                "workspace": "WORKSPACE", "region": "REGION", "key": "API_KEY",
+                "workspace": "WORKSPACE", "region": "REGION",
                 "asr": "ASR_MODEL", "llm": "LLM_MODEL", "tts": "TTS_MODEL", "voice": "TTS_VOICE",
             }.items()
         })
@@ -140,6 +151,7 @@ class DashScope:
                 {"role": "user", "content": transcript},
             ],
             "stream": True,
+            "enable_thinking": False,
             "max_tokens": 64,
         }) as response:
             response.raise_for_status()
