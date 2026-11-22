@@ -1,0 +1,10 @@
+{
+  "version": "0.1.12",
+  "version_code": 13,
+  "fixture_sha": "487a18af13b02d4070632fc731e88a2ac693bdd8",
+  "signer_sha256": "7705f543347ae9ec1de4ae4b0dc24f73b0a472fb32ecc06cca0d112a8fe75e10",
+  "apk": {
+    "little-buddy-0.1.12-animal-private.apk": "5735e33a17c4db1d713f3375024eb3a692f4caac02b915002a7573996d0adfe4",
+    "little-buddy-0.1.12-animal-private-test.apk": "453f0ae76374979ca6d7d103edf077891636323a2d7e163a5048849f690a4325"
+  }
+}
