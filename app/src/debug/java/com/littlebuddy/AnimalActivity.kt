@@ -27,7 +27,25 @@ import org.json.JSONObject
 import kotlin.math.PI
 import kotlin.math.sin
 
+internal enum class AnimalEvent {
+    REPLY_END, FINAL_ACK, SEGMENT_CONFIRMATION, TURN_COMMIT, PLAYBACK_RELEASE,
+    CAPTURE_FRAME, TONE, TONE_DISPATCH, TAIL_TIMER, IMAGE_TIMER, CAPTURE_DISPATCH, IMAGE_SHOWN,
+}
+
+/** Debug instrumentation can pause delivery at the same boundaries used by the real adapters. */
+internal interface AnimalProbe {
+    fun deliver(event: AnimalEvent, action: () -> Unit)
+    fun observe(event: AnimalEvent)
+}
+
 class AnimalActivity : Activity() {
+    internal var probe: AnimalProbe? = null
+
+    private fun deliver(event: AnimalEvent, action: () -> Unit) {
+        val inspector = probe
+        if (inspector == null) action() else inspector.deliver(event, action)
+    }
+
     private data class Segment(val text: String, val image: Int?)
     private data class Receipt(val action: String, val permit: String, val completed: Int)
     private class Reply(val key: JSONObject, val segments: List<Segment>) {
@@ -75,7 +93,6 @@ class AnimalActivity : Activity() {
     private lateinit var silence: Button
     private lateinit var fault: Button
     private lateinit var permutations: CheckBox
-    private lateinit var delayRelease: CheckBox
     private lateinit var suppressRevealReceipt: CheckBox
 
     override fun onCreate(state: Bundle?) {
@@ -129,40 +146,48 @@ class AnimalActivity : Activity() {
             text = "末 ACK 先到并重复回执"
             layout.addView(this)
         }
-        delayRelease = CheckBox(this).apply {
-            text = "延迟播放释放通知"
-            layout.addView(this)
-        }
         suppressRevealReceipt = CheckBox(this).apply {
             text = "故障注入：扣留揭晓段确认"
             layout.addView(this)
         }
         setContentView(ScrollView(this).apply { addView(layout) })
         audio = AndroidAudio(handler, frame = { id, _, endpoint ->
-            if (id == slot && slotGeneration == generation && capturing && answer == null) {
-                if (!frames) {
-                    frames = true
-                    render("正在听 · 等待模拟输入")
-                    timeout(12_000) { seal(null) }
-                }
-                if (endpoint && input.text.isNotBlank()) seal(input.text.toString())
-            }
+            deliver(AnimalEvent.CAPTURE_FRAME) { captureFrame(id, endpoint) }
         }, failed = { id ->
             if (id == slot && slotGeneration == generation) reset("音频失败，请重新开始")
-        }, played = { id ->
-            if (id == slot && slotGeneration == generation && !capturing) {
-                val current = checkNotNull(reply)
-                current.played++
-                send(event("playback.segment_completed", current).put("number", current.played))
-            }
-        }, released = { id ->
-            if (delayRelease.isChecked && !capturing) {
-                handler.postDelayed({ released(id) }, 550)
+        }, played = ::played, released = { id ->
+            val current = reply
+            if (!capturing && current != null && current.played == current.segments.size) {
+                deliver(AnimalEvent.PLAYBACK_RELEASE) { released(id) }
             } else {
                 released(id)
             }
         }, diagnostics = null)
         render()
+    }
+
+    private fun captureFrame(id: Long, endpoint: Boolean) {
+        if (id != slot || slotGeneration != generation || !capturing || answer != null) return
+        if (!frames) {
+            frames = true
+            render("正在听 · 等待模拟输入")
+            timeout(12_000) { seal(null) }
+        }
+        if (endpoint && input.text.isNotBlank()) seal(input.text.toString())
+    }
+
+    private fun played(id: Long) {
+        val current = reply ?: return
+        if (id != slot || slotGeneration != generation || capturing) return
+        val number = ++current.played
+        val acknowledge = {
+            if (current === reply) {
+                send(event("playback.segment_completed", current).put("number", number))
+            }
+            Unit
+        }
+        if (number == current.segments.size) deliver(AnimalEvent.FINAL_ACK, acknowledge)
+        else acknowledge()
     }
 
     override fun onResume() {
@@ -228,13 +253,22 @@ class AnimalActivity : Activity() {
                         .put("duplicate", regression).put("hold_reveal", suppressRevealReceipt.isChecked))
                 }
                 override fun onMessage(webSocket: WebSocket, text: String) = dispatch(webSocket) {
-                    try {
-                        receive(JSONObject(text))
+                    val message = try {
+                        JSONObject(text)
                     } catch (_: org.json.JSONException) {
                         reset("模拟协议错误，请重新开始")
-                    } catch (_: IllegalArgumentException) {
-                        reset("模拟题库或协议不匹配")
+                        return@dispatch
                     }
+                    val event = when (message.optString("event")) {
+                        "reply.end" -> AnimalEvent.REPLY_END
+                        "playback.segment_committed" -> AnimalEvent.SEGMENT_CONFIRMATION
+                        "turn.committed" -> AnimalEvent.TURN_COMMIT
+                        else -> null
+                    }
+                    val receiveCurrent = {
+                        if (webSocket === socket) receiveSafely(message)
+                    }
+                    if (event == null) receiveCurrent() else deliver(event, receiveCurrent)
                 }
                 override fun onClosing(webSocket: WebSocket, code: Int, reason: String) =
                     dispatch(webSocket) { reset("模拟服务已断开") }
@@ -247,6 +281,16 @@ class AnimalActivity : Activity() {
 
     private fun dispatch(source: WebSocket, action: () -> Unit) {
         handler.post { if (source === socket) action() }
+    }
+
+    private fun receiveSafely(message: JSONObject) {
+        try {
+            receive(message)
+        } catch (_: org.json.JSONException) {
+            reset("模拟协议错误，请重新开始")
+        } catch (_: IllegalArgumentException) {
+            reset("模拟题库或协议不匹配")
+        }
     }
 
     private fun receive(message: JSONObject) {
@@ -287,6 +331,7 @@ class AnimalActivity : Activity() {
                     current.segments[number - 1].image?.let {
                         picture.setImageResource(it)
                         picture.visibility = View.VISIBLE
+                        probe?.observe(AnimalEvent.IMAGE_SHOWN)
                     }
                 }
             }
@@ -307,7 +352,12 @@ class AnimalActivity : Activity() {
             val envelope = minOf(index, 29_999 - index, 480) / 480.0
             (sin(2 * PI * 440 * index / 24_000) * envelope * 1800).toInt().toShort()
         }
-        audio.play(occupy(), samples)
+        deliver(AnimalEvent.TONE) {
+            if (current === reply && slot == null) {
+                audio.play(occupy(), samples)
+                probe?.observe(AnimalEvent.TONE_DISPATCH)
+            }
+        }
     }
 
     private fun occupy(): Long {
@@ -334,6 +384,7 @@ class AnimalActivity : Activity() {
         } else if (current.played < current.segments.size) {
             playNext(current)
         } else {
+            render("正在等待播放回执")
             proceed(current)
         }
     }
@@ -344,30 +395,38 @@ class AnimalActivity : Activity() {
         current.scheduled = true
         count.text = "完成 ${receipt.completed} / 3"
         val delay = if (receipt.action == "advance") 1100L else 250L
-        handler.postDelayed({
-            if (current !== reply) return@postDelayed
-            if (!eligible() || slot != null) {
-                reset("音频条件变化，请重新开始")
-                return@postDelayed
-            }
-            current.claimed = true
-            when (receipt.action) {
-                "listen" -> {
-                    capturing = true
-                    frames = false
-                    audio.capture(occupy())
-                    render("正在打开麦克风")
-                    timeout(3_000) { reset("麦克风没有返回采集帧") }
-                }
-                "advance" -> {
-                    picture.visibility = View.GONE
-                    if (send(event("turn.advance", current))) timeout(5_000) { reset("等待下一题超时") }
-                }
-                "end" -> reset("本局已结束", keepCaption = true)
-                else -> reset("模拟协议错误")
-            }
-        }, delay)
+        val advance = {
+            completeAction(current, receipt)
+        }
+        val timer = if (receipt.action == "advance") AnimalEvent.IMAGE_TIMER else AnimalEvent.TAIL_TIMER
+        if (probe == null) handler.postDelayed(advance, delay) else deliver(timer, advance)
     }
+
+    private fun completeAction(current: Reply, receipt: Receipt) {
+        if (current !== reply || current.claimed) return
+        if (!eligible() || slot != null) {
+            reset("音频条件变化，请重新开始")
+            return
+        }
+        current.claimed = true
+        when (receipt.action) {
+            "listen" -> {
+                capturing = true
+                frames = false
+                audio.capture(occupy())
+                probe?.observe(AnimalEvent.CAPTURE_DISPATCH)
+                render("正在打开麦克风")
+                timeout(3_000) { reset("麦克风没有返回采集帧") }
+            }
+            "advance" -> {
+                picture.visibility = View.GONE
+                if (send(event("turn.advance", current))) timeout(5_000) { reset("等待下一题超时") }
+            }
+            "end" -> reset("本局已结束", keepCaption = true)
+            else -> reset("模拟协议错误")
+        }
+    }
+
 
     private fun seal(text: String?) {
         val current = reply ?: return
@@ -426,7 +485,6 @@ class AnimalActivity : Activity() {
         fault.isEnabled = active
         permutations.isEnabled = !active && slot == null
         suppressRevealReceipt.isEnabled = permutations.isEnabled
-        delayRelease.isEnabled = permutations.isEnabled
     }
 
     private companion object {
