@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Run an SSH-owned, loopback-only development service for up to 20 minutes.
+set -euo pipefail
+case "${1:-}" in
+  fake|dashscope) provider=$1 ;;
+  *) echo "Usage: $0 fake|dashscope" >&2; exit 2 ;;
+esac
+cd "$(dirname "$0")/.."
+directory=/etc/little-buddy/voice
+staging=$(sudo -n mktemp -d /run/little-buddy-voice.XXXXXXXX)
+unit="${staging##*/}.service"
+cleanup() {
+  sudo -n systemctl stop "$unit" 2>/dev/null || true
+  sudo -n rm -rf -- "$staging"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' HUP TERM
+sudo -n chmod 755 "$staging"
+sudo -n cp -r backend "$staging/"
+credentials=(
+  -p "LoadCredential=voice-device-token:$directory/device-token"
+  -p "LoadCredential=voice-cert:$directory/loopback-cert.pem"
+  -p "LoadCredential=voice-key:$directory/loopback-key.pem"
+)
+if [[ "$provider" == dashscope ]]; then
+  credentials+=(
+    -p "EnvironmentFile=$directory/dashscope.env"
+    -p "LoadCredential=dashscope-api-key:$directory/dashscope-api-key"
+  )
+fi
+sudo -n systemd-run --unit="$unit" --quiet --wait --pipe --collect \
+  -p DynamicUser=yes -p NoNewPrivileges=yes -p ProtectSystem=strict \
+  -p RuntimeMaxSec=20min -p TimeoutStopSec=3 -p MemoryMax=256M -p LimitCORE=0 \
+  "${credentials[@]}" --working-directory="$staging" \
+  /usr/bin/python3 -B -m backend.demo --host 127.0.0.1 --port 8443 \
+  --provider "$provider" --timings --cert '${CREDENTIALS_DIRECTORY}/voice-cert' \
+  --key '${CREDENTIALS_DIRECTORY}/voice-key'

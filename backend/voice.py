@@ -1,8 +1,8 @@
 """Transport-independent one-turn contract for the private voice backend."""
 
 import asyncio
-from collections.abc import AsyncIterator
-from contextlib import AsyncExitStack
+from collections.abc import AsyncIterator, Callable
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from typing import AsyncContextManager
 from typing import Protocol
@@ -62,8 +62,37 @@ class Limits:
     turn: float = 45
 
 
+@asynccontextmanager
+async def prefetch_segments(segments: AsyncIterator[str]):
+    """Read ahead while TTS is busy, with one queue slot and turn-owned cleanup."""
+    queue: asyncio.Queue[str | Exception | None] = asyncio.Queue(maxsize=1)
+
+    async def produce():
+        try:
+            async for segment in segments:
+                await queue.put(segment)
+        except Exception as exc:
+            await queue.put(exc)
+        else:
+            await queue.put(None)
+
+    async def consume():
+        while (item := await queue.get()) is not None:
+            if isinstance(item, Exception):
+                raise item
+            yield item
+
+    producer = asyncio.create_task(produce())
+    try:
+        yield consume()
+    finally:
+        producer.cancel()
+        await asyncio.gather(producer, return_exceptions=True)
+
+
 async def run_turn(
-    channel: Channel, providers: Providers, policy: ContentPolicy, limits: Limits = Limits()
+    channel: Channel, providers: Providers, policy: ContentPolicy, limits: Limits = Limits(),
+    *, mark: Callable[[str], None] = lambda _: None,
 ) -> None:
     """Run inside an authenticated connection-owned task.
 
@@ -71,7 +100,8 @@ async def run_turn(
     another turn. Provider contexts own resource cleanup on every exit path.
     """
     async with asyncio.timeout(limits.turn):
-        transcript = await recognize(channel, providers, limits)
+        transcript = await recognize(channel, providers, limits, mark)
+        mark("asr_final")
         approved = policy.input(transcript)
         if not approved:
             raise ProtocolError("input rejected")
@@ -79,14 +109,16 @@ async def run_turn(
         async with AsyncExitStack() as resources:
             async with asyncio.timeout_at(deadline):
                 segments = await resources.enter_async_context(providers.answer(approved))
-            count, deadline = await deliver(channel, providers, policy, segments, limits, deadline)
+            async with prefetch_segments(segments) as buffered:
+                count, deadline = await deliver(channel, providers, policy, buffered, limits, deadline, mark)
         if count == 0:
             raise ProtocolError("empty reply")
         async with asyncio.timeout_at(deadline):
             await channel.reply_ended(count)
 
 
-async def recognize(channel: Channel, providers: Providers, limits: Limits) -> str:
+async def recognize(channel: Channel, providers: Providers, limits: Limits,
+                    mark: Callable[[str], None]) -> str:
     async with AsyncExitStack() as resources:
         async with asyncio.timeout(limits.ready):
             asr = await resources.enter_async_context(providers.recognize(UPLOAD_RATE))
@@ -98,6 +130,7 @@ async def recognize(channel: Channel, providers: Providers, limits: Limits) -> s
                 if isinstance(event, End):
                     if position == 0 or event.samples != position:
                         raise ProtocolError("invalid end position")
+                    mark("capture_sealed")
                     transcript = (await asr.finish()).strip()
                     if not transcript or len(transcript) > 1024:
                         raise ProtocolError("invalid transcript")
@@ -117,6 +150,7 @@ async def deliver(
     segments: AsyncIterator[str],
     limits: Limits,
     deadline: float,
+    mark: Callable[[str], None],
 ) -> tuple[int, float]:
     count = 0
     clock = asyncio.get_running_loop().time
@@ -129,6 +163,8 @@ async def deliver(
         approved = policy.segment(text)
         if count > 8 or not approved or len(approved) > 240:
             raise ProtocolError("invalid reply segment")
+        if count == 1:
+            mark("llm_first_approved_segment")
         async with AsyncExitStack() as resources:
             async with asyncio.timeout_at(deadline):
                 frames = await resources.enter_async_context(providers.synthesize(approved, PLAYBACK_RATE))
@@ -140,9 +176,12 @@ async def deliver(
                     if frame is None:
                         break
                     frame_samples, extra_byte = divmod(len(frame), 2)
+                    first_pcm = count == 1 and samples == 0
                     samples += frame_samples
                     if extra_byte or not frame_samples or samples > PLAYBACK_RATE * 10:
                         raise ProtocolError("invalid synthesized audio")
+                    if first_pcm:
+                        mark("tts_first_pcm")
                     await channel.audio(frame)
                 deadline = clock() + limits.io
             if samples == 0:

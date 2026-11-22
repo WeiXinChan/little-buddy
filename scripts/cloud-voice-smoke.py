@@ -14,6 +14,8 @@ from websockets.exceptions import ConnectionClosed, InvalidStatus
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend.dashscope import ChatStatusError, DashScope, GreetingPolicy, SpeechTaskError, http_client, upstream_details
 
+from backend.voice import prefetch_segments
+
 
 def report(stage, **fields):
     print(json.dumps({"stage": stage, **fields}, ensure_ascii=True), flush=True)
@@ -39,29 +41,34 @@ async def synthesize(adapter, text):
     return pcm, first_pcm_ms
 
 
-async def answer(adapter, policy, prompt):
+async def checked_segments(adapter, policy, prompt):
     start = monotonic()
-    segments = []
+    expected = ("你好。", "我是瓦力。")
+    count = 0
     first_text_ms = None
 
     def first_text():
         nonlocal first_text_ms
         first_text_ms = elapsed(start)
 
-    async with asyncio.timeout(8):
-        async with adapter.answer(prompt, on_first_text=first_text) as answer:
-            async for text in answer:
-                if not segments:
-                    first_ms = elapsed(start)
-                approved_segment = policy.segment(text)
-                if not approved_segment or len(segments) == 2:
-                    raise ValueError("unexpected reply")
-                segments.append(approved_segment)
-    if segments != ["你好。", "我是瓦力。"]:
+    async with adapter.answer(prompt, on_first_text=first_text) as answer:
+        async for text in answer:
+            approved = policy.segment(text)
+            if count >= len(expected) or approved != expected[count]:
+                raise ValueError("unexpected reply")
+            if not count:
+                first_segment_ms = elapsed(start)
+            count += 1
+            yield approved
+    if count != len(expected):
         raise ValueError("unexpected segment count")
     report("llm", result="ok", ms=elapsed(start), first_text_ms=first_text_ms,
-           first_segment_ms=first_ms, segments=len(segments))
-    return segments
+           first_segment_ms=first_segment_ms, segments=count)
+
+
+async def answer(adapter, policy, prompt):
+    async with asyncio.timeout(8):
+        return [text async for text in checked_segments(adapter, policy, prompt)]
 
 
 async def probe(mode, shared_speech):
@@ -132,15 +139,22 @@ async def probe(mode, shared_speech):
                 return 1
 
             stage, start = "llm", monotonic()
-            segments = await answer(adapter, policy, approved)
-            for number, segment in enumerate(segments, 1):
-                stage, start = f"tts_reply_{number}", monotonic()
-                async with asyncio.timeout(10):
-                    result, first_pcm_ms = await synthesize(adapter, segment)
-                metrics = {"seal_to_playable_ms": elapsed(seal)} if number == 1 else {}
-                report(stage, result="ok", ms=elapsed(start), first_pcm_ms=first_pcm_ms, bytes=len(result),
-                       duration_ms=round(len(result) / 48), format="pcm_s16le/24000/mono", **metrics)
-                del result
+            async with prefetch_segments(checked_segments(adapter, policy, approved)) as segments:
+                number = 0
+                while True:
+                    stage, start = "llm_next_segment", monotonic()
+                    async with asyncio.timeout(4):
+                        segment = await anext(segments, None)
+                    if segment is None:
+                        break
+                    number += 1
+                    stage, start = f"tts_reply_{number}", monotonic()
+                    async with asyncio.timeout(10):
+                        result, first_pcm_ms = await synthesize(adapter, segment)
+                    metrics = {"seal_to_playable_ms": elapsed(seal)} if number == 1 else {}
+                    report(stage, result="ok", ms=elapsed(start), first_pcm_ms=first_pcm_ms, bytes=len(result),
+                           duration_ms=round(len(result) / 48), format="pcm_s16le/24000/mono", **metrics)
+                    del result
             report("turn", result="ok", ms=elapsed(turn_start), seal_to_done_ms=elapsed(seal))
             return 0
     except Exception as exc:

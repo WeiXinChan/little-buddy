@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -129,6 +130,7 @@ open class SimActivity : Activity() {
         val deadline = Deadline { milliseconds, action -> dispatcher.postDelayed({ action() }, milliseconds) }
         audio = AndroidAudio(
             dispatcher,
+            tracePlayback = cloudMode && diagnostics != null,
             frame = { operation, speech, endpoint ->
                 round.captureFrame(operation, speech)
                 if (endpoint) round.endCapture(operation, CaptureEnd.TAIL_SILENCE)
@@ -234,6 +236,8 @@ open class SimActivity : Activity() {
                     }
                     val elapsed = SystemClock.elapsedRealtime() - captureStartedAt
                     lastCaptureEnd = "$label · ${elapsed} ms"
+                    if (cloudMode) Log.d("LittleBuddyVoice",
+                        "endpoint t_ms=${SystemClock.elapsedRealtime()} reason=${reason.name}")
                 }
                 Phase.INACTIVE -> {
                     currentDiagnostic = ""

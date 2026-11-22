@@ -237,3 +237,36 @@ class VoiceTest(unittest.IsolatedAsyncioTestCase):
                     await asyncio.gather(task, return_exceptions=True)
                 self.assertEqual(fake.trace[-2:], ["send blocked", "send cancelled"])
                 self.assertNotIn(("reply", 2), fake.trace)
+
+    async def test_llm_read_ahead_overlaps_tts_and_preserves_playback_order(self):
+        first_synthesis = asyncio.Event()
+        later_text_read = asyncio.Event()
+
+        class Overlap(Fake):
+            @asynccontextmanager
+            async def answer(self, transcript):
+                async def parts():
+                    yield "first"
+                    await first_synthesis.wait()
+                    later_text_read.set()
+                    yield "second"
+                yield parts()
+
+            def segment(self, text):
+                return text
+
+            @asynccontextmanager
+            async def synthesize(self, text, rate):
+                if text == "first":
+                    first_synthesis.set()
+                    await later_text_read.wait()
+                yield values(b"\x01\x00" if text == "first" else b"\x02\x00")
+
+        fake = Overlap()
+        fake.events.put_nowait(Audio(0, b"\x00\x00"))
+        fake.events.put_nowait(End(1))
+        await run_turn(fake, fake, fake, Limits(io=0.5, turn=2))
+        self.assertEqual(fake.trace[-7:], [
+            ("start", 1), ("audio", b"\x01\x00"), ("end", 1, 1),
+            ("start", 2), ("audio", b"\x02\x00"), ("end", 2, 1), ("reply", 2),
+        ])

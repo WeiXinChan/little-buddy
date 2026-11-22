@@ -8,6 +8,7 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.os.Handler
 import android.os.SystemClock
+import android.util.Log
 import com.littlebuddy.voice.AudioPort
 
 internal class AndroidAudio(
@@ -18,6 +19,7 @@ internal class AndroidAudio(
     released: (Long) -> Unit,
     private val diagnostics: ((Int, String) -> Unit)?,
     private val pcm: ((Long, ShortArray, Int) -> Unit)? = null,
+    private val tracePlayback: Boolean = false,
 ) : AudioPort {
     private val worker = AudioWorker({ action -> dispatcher.post { action() } }, failed, played, released)
 
@@ -106,7 +108,14 @@ internal class AndroidAudio(
             check(track.write(samples, 0, samples.size) == samples.size)
             if (!operation.commitStart()) return
             track.play()
-            while (!operation.cancelled && track.playbackHeadPosition < samples.size) {
+            var reportHead = tracePlayback
+            while (!operation.cancelled) {
+                val position = track.playbackHeadPosition
+                if (reportHead && position > 0) {
+                    Log.d("LittleBuddyVoice", "playback_head t_ms=${SystemClock.elapsedRealtime()} op=${operation.id}")
+                    reportHead = false
+                }
+                if (position >= samples.size) break
                 Thread.sleep(10)
             }
         } finally {
