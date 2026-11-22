@@ -76,3 +76,15 @@ LoadCredential=dashscope-api-key:/etc/little-buddy/voice/dashscope-api-key
 | Qwen 文本 SSE | 北京业务空间域名 | HTTP 403，未取得回复 | 277 ms |
 
 真实请求共四次，使用本页表格中的候选模型和音色。没有生成可供验证的 PCM，合成闭环、真实取消及成人 OPPO 待测。这些结果只能定位到上游访问被拒或异常断开，无法判断单个音色是否可用。由账号持有人核对北京业务空间成员权限、Key 对应的计费方案及对三项模型的授权范围。确认后再选择是否重试；当前没有证据支持改模型、音色或地域。 [百炼错误码](https://help.aliyun.com/en/model-studio/error-code)
+
+## 北京候选模型复试
+
+临时 systemd 单元逐项各调用一次。北京共享语音端点显式发送业务空间头，以取得结构化任务错误。LLM 使用北京业务空间域名。探针仅保留结构化错误码、匹配诊断白名单的消息片段和格式有效的请求 ID。
+
+| 阶段 | 实际候选 | 结果 | 请求 ID | 耗时 |
+| --- | --- | --- | --- | ---: |
+| ASR 就绪 | `fun-asr-realtime` | WSS 任务错误 `AllocationQuota.FreeTierOnly`，消息已脱敏，无 PCM 上行 | 未提取到 | 1317 ms |
+| 文本 LLM | `qwen-flash-2025-07-28` | HTTP 403，`insufficient_quota`，消息已脱敏 | `5d3b0708-07eb-991e-80ff-763a8730705e` | 285 ms |
+| TTS 合成输入 | `cosyvoice-v3-flash` / `longanyang` | WSS 任务错误 `AllocationQuota.FreeTierOnly`，消息已脱敏，无 PCM 输出 | 未提取到 | 1299 ms |
+
+百炼文档将 `AllocationQuota.FreeTierOnly` 归为免费额度耗尽且无法转为付费调用的场景。文本也返回额度错误。三个结果均未报模型不存在或音色不兼容，因此未尝试替代或发起完整轮次。Key 的具体模型授权范围仍需账号持有人在控制台核对。 [百炼错误码](https://help.aliyun.com/en/model-studio/error-code)

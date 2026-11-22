@@ -9,11 +9,10 @@ import sys
 from pathlib import Path
 from time import monotonic
 
-import httpx
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from backend.dashscope import DashScope, GreetingPolicy, SpeechTaskError, http_client
+from backend.dashscope import ChatStatusError, DashScope, GreetingPolicy, SpeechTaskError, http_client, upstream_details
 
 
 def report(stage, **fields):
@@ -48,7 +47,7 @@ async def answer(adapter, policy, prompt):
                 if not approved_segment or len(segments) == 2:
                     raise ValueError("unexpected reply")
                 segments.append(approved_segment)
-    if len(segments) != 2:
+    if segments != ["你好。", "我是瓦力。"]:
         raise ValueError("unexpected segment count")
     report("llm", result="ok", ms=elapsed(start), first_ms=first_ms, segments=len(segments))
     return segments
@@ -84,6 +83,8 @@ async def probe(mode, shared_speech):
             async with asyncio.timeout(10):
                 fixture = await synthesize(adapter, "你好，瓦力。")
             report(stage, result="ok", ms=elapsed(start), bytes=len(fixture), format="pcm_s16le/24000/mono")
+            if mode == "tts-fixture":
+                return 0
             stage, start = "resample", monotonic()
             converted = subprocess.run(
                 ["/usr/bin/ffmpeg", "-v", "error", "-f", "s16le", "-ar", "24000",
@@ -120,20 +121,22 @@ async def probe(mode, shared_speech):
     except Exception as exc:
         details = {}
         if isinstance(exc, SpeechTaskError):
-            details["code"] = exc.code
-        elif isinstance(exc, httpx.HTTPStatusError):
-            details["http_status"] = exc.response.status_code
+            details.update(exc.details)
+        elif isinstance(exc, ChatStatusError):
+            details.update(exc.details, http_status=exc.status)
         elif isinstance(exc, InvalidStatus):
             details["http_status"] = exc.response.status_code
         elif isinstance(exc, ConnectionClosed):
             details["ws_code"] = exc.rcvd.code if exc.rcvd else 1006
+            if exc.rcvd and exc.rcvd.reason:
+                details.update(upstream_details(None, exc.rcvd.reason, None))
         report(stage, result="failed", ms=elapsed(start), error=type(exc).__name__, **details)
         return 1
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("turn", "asr-ready", "llm-only"), default="turn")
+    parser.add_argument("--mode", choices=("turn", "asr-ready", "llm-only", "tts-fixture"), default="turn")
     parser.add_argument("--shared-speech", action="store_true")
     args = parser.parse_args()
     sys.exit(asyncio.run(probe(args.mode, args.shared_speech)))

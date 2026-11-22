@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 
-from backend.dashscope import DashScope, GreetingPolicy, SpeechTask, SpeechTaskError
+from backend.dashscope import ChatStatusError, DashScope, GreetingPolicy, SpeechTask, SpeechTaskError
 
 
 class SpeechSocket:
@@ -50,6 +50,26 @@ class AdapterTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(failure.exception.code, "AccessDenied")
         self.assertEqual(str(failure.exception), "speech task failed")
 
+
+    async def test_chat_failure_extracts_diagnostics_without_echoing_error_body(self):
+        async def denied(request):
+            return httpx.Response(403, json={
+                "error": {"code": "insufficient_quota", "message": "private upstream detail"},
+                "request_id": "abcdef00-1111-2222-3333-444444444444",
+            })
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(denied)) as http:
+            adapter = DashScope(http, workspace="workspace", region="cn-beijing", key="synthetic",
+                                asr="asr", llm="llm", tts="tts", voice="voice")
+            with self.assertRaises(ChatStatusError) as error:
+                async with adapter.answer("你好，瓦力。"):
+                    self.fail("unexpected successful stream")
+
+        self.assertEqual(error.exception.status, 403)
+        self.assertEqual(error.exception.details, {
+            "code": "insufficient_quota", "request_id": "abcdef00-1111-2222-3333-444444444444",
+            "message": "[redacted upstream message]",
+        })
 
     def test_uses_systemd_credential_file(self):
         with TemporaryDirectory() as folder, patch.dict("os.environ", {

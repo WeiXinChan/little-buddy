@@ -119,3 +119,30 @@ class VoiceTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ProtocolError):
             await run_turn(fake, fake, Reject())
         self.assertEqual(fake.trace[-1], ("answer", "你好"))
+
+    async def test_second_tts_initialization_uses_progress_deadline_and_cleans_up(self):
+        class Stalled(Fake):
+            @asynccontextmanager
+            async def synthesize(self, text, rate):
+                if ("end", 1, 2) not in self.trace:
+                    yield values(b"\x00\x00", b"\x01\x00")
+                    return
+                try:
+                    await asyncio.Future()
+                    yield
+                finally:
+                    self.trace.append("second tts closed")
+
+        fake = Stalled()
+        fake.events.put_nowait(Audio(0, b"\x00\x00"))
+        fake.events.put_nowait(End(1))
+        task = asyncio.create_task(run_turn(fake, fake, fake, Limits(io=0.02, turn=5)))
+        try:
+            done, _ = await asyncio.wait({task}, timeout=0.5)
+            self.assertEqual(done, {task})
+            with self.assertRaises(TimeoutError):
+                await task
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        self.assertEqual(fake.trace[-2:], [("end", 1, 2), "second tts closed"])

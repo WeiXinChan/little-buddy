@@ -14,12 +14,37 @@ from websockets.asyncio.client import connect
 from backend.voice import ProtocolError
 
 
+def upstream_details(code, message, request_id):
+    # Return only known diagnostic fragments. Upstream prose may echo sensitive input.
+    details = {}
+    if isinstance(code, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_.]{0,63}", code):
+        details["code"] = code
+    if isinstance(request_id, str) and re.fullmatch(r"[a-fA-F0-9-]{16,64}", request_id):
+        details["request_id"] = request_id
+    if isinstance(message, str):
+        normalized = message[:1024].casefold()
+        phrases = ("model access scope", "api-key restrictions", "model does not exist",
+                   "does not exist or you do not have access", "not authorized to access this workspace",
+                   "workspace does not exist", "invalid api key", "access denied",
+                   "not purchased", "permission denied", "no permission",
+                   "service has not been activated", "unsupported model")
+        match = next((phrase for phrase in phrases if phrase in normalized), None)
+        details["message"] = match or "[redacted upstream message]"
+    return details
+
+
 class SpeechTaskError(ProtocolError):
-    def __init__(self, code):
-        self.code = code if isinstance(code, str) and re.fullmatch(
-            r"[A-Z][A-Za-z0-9_.]{0,63}", code
-        ) else "Unknown"
+    def __init__(self, code, message=None, request_id=None):
+        self.details = upstream_details(code, message, request_id)
+        self.code = self.details.get("code", "Unknown")
         super().__init__("speech task failed")
+
+
+class ChatStatusError(ProtocolError):
+    def __init__(self, status, details):
+        self.status = status
+        self.details = details
+        super().__init__("chat request rejected")
 
 
 class GreetingPolicy:
@@ -53,7 +78,8 @@ class SpeechTask:
         if header["task_id"] != self.id:
             raise ProtocolError("speech task ID mismatch")
         if header["event"] == "task-failed":
-            raise SpeechTaskError(header.get("error_code"))
+            raise SpeechTaskError(header.get("error_code"), header.get("error_message"),
+                                  header.get("request_id") or response.get("request_id"))
         return header["event"], response.get("payload", {})
 
     async def start(self, task, function, model, parameters):
@@ -164,7 +190,17 @@ class DashScope:
             "enable_thinking": False,
             "max_tokens": 64,
         }) as response:
-            response.raise_for_status()
+            if not response.is_success:
+                body = await anext(response.aiter_bytes(chunk_size=4096), b"")
+                try:
+                    payload = json.loads(body)
+                    error = payload.get("error", payload)
+                    details = upstream_details(error.get("code"), error.get("message"),
+                                               payload.get("request_id") or error.get("request_id") or
+                                               response.headers.get("x-request-id"))
+                except (ValueError, AttributeError):
+                    details = upstream_details(None, None, response.headers.get("x-request-id"))
+                raise ChatStatusError(response.status_code, details)
             yield self.sentences(response)
 
     async def sentences(self, response):

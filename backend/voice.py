@@ -123,7 +123,9 @@ async def deliver(
         approved = policy.segment(text)
         if count > 8 or not approved or len(approved) > 240:
             raise ProtocolError("invalid reply segment")
-        async with providers.synthesize(approved, PLAYBACK_RATE) as frames:
+        async with AsyncExitStack() as resources:
+            async with asyncio.timeout(limits.io):
+                frames = await resources.enter_async_context(providers.synthesize(approved, PLAYBACK_RATE))
             await channel.segment_started(count)
             samples = 0
             while True:
