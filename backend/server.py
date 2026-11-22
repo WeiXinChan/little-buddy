@@ -13,7 +13,7 @@ from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
 from backend.timing import mark as mark_stage
-from backend.voice import ContentPolicy, End, ProtocolError, Providers, run_turn
+from backend.voice import ContentPolicy, EmptyTranscript, End, GreetingMismatch, ProtocolError, Providers, run_turn
 from backend.wire import VERSION, decode_input, playback_frame
 
 
@@ -120,20 +120,26 @@ def voice_server(host: str, port: int, tls: ssl.SSLContext, token: str,
                 extra_input.result()
         except ConnectionClosed:
             pass
+        except EmptyTranscript:
+            outcome = "empty_transcript"
+            await socket.close(4401, outcome)
+        except GreetingMismatch:
+            outcome = "greeting_mismatch"
+            await socket.close(4402, outcome)
         except ProtocolError:
             outcome = "protocol_error"
-            await socket.close(1008, "invalid turn")
+            await socket.close(1008, outcome)
         except TimeoutError:
             outcome = "timeout"
-            await socket.close(1013, "turn timed out")
+            await socket.close(1013, outcome)
         except Exception:
             outcome = "provider_error"
-            await socket.close(1011, "turn failed")
+            await socket.close(1011, outcome)
         finally:
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
-            mark(outcome)
+            mark("user_stopped" if outcome == "disconnected" and socket.close_code == 4403 else outcome)
             active = False
 
     return serve(handler, host, port, ssl=tls, process_request=handshake,

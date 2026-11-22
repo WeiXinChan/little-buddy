@@ -2,7 +2,7 @@ import asyncio
 import unittest
 from contextlib import asynccontextmanager
 
-from backend.voice import Audio, End, Limits, ProtocolError, run_turn
+from backend.voice import Audio, End, Limits, ProtocolError, ProviderError, run_turn
 
 
 async def values(*items):
@@ -133,6 +133,70 @@ class VoiceTest(unittest.IsolatedAsyncioTestCase):
                 release.set()
                 await asyncio.gather(turn, return_exceptions=True)
 
+    async def test_tts_close_overlaps_next_segment_and_is_joined_on_repeat_cancel(self):
+        for mode in ("success", "cancel", "exception", "timeout"):
+            with self.subTest(mode=mode):
+                first_close = asyncio.Event()
+                release = asyncio.Event()
+                second_audio = asyncio.Event()
+                active = set()
+
+                class SlowTts(Fake):
+                    @asynccontextmanager
+                    async def synthesize(self, text, rate):
+                        number = 2 if first_close.is_set() or ("end", 1, 2) in self.trace else 1
+                        active.add(number)
+                        try:
+                            yield values(b"\0\0", b"\1\0")
+                        finally:
+                            try:
+                                if number == 1:
+                                    first_close.set()
+                                    await release.wait()
+                                    if mode == "exception":
+                                        raise ProviderError("synthetic closing failure")
+                            finally:
+                                active.remove(number)
+
+                    async def segment_ended(self, number, samples):
+                        await super().segment_ended(number, samples)
+                        if number == 2:
+                            second_audio.set()
+
+                fake = SlowTts()
+                fake.events.put_nowait(Audio(0, b"\0\0"))
+                fake.events.put_nowait(End(1))
+                limits = Limits(io=0.1) if mode == "timeout" else Limits()
+                task = asyncio.create_task(run_turn(fake, fake, fake, limits))
+                try:
+                    await asyncio.wait_for(first_close.wait(), 1)
+                    await asyncio.wait_for(second_audio.wait(), 1)
+                    self.assertIn(1, active)
+                    self.assertNotIn(("reply", 2), fake.trace)
+                    if mode == "cancel":
+                        for _ in range(2):
+                            task.cancel()
+                            await asyncio.sleep(0)
+                            self.assertFalse(task.done())
+                    if mode != "timeout":
+                        release.set()
+                    error = {"cancel": asyncio.CancelledError, "exception": ProviderError,
+                             "timeout": TimeoutError}.get(mode)
+                    if error:
+                        with self.assertRaises(error):
+                            await asyncio.wait_for(task, 1)
+                        self.assertNotIn(("reply", 2), fake.trace)
+                    else:
+                        await asyncio.wait_for(task, 1)
+                        self.assertEqual(fake.trace[-1], ("reply", 2))
+                    self.assertFalse(active)
+                    wire = [event for event in fake.trace if isinstance(event, tuple)
+                            and event[0] in {"start", "end"}]
+                    self.assertEqual(wire, [("start", 1), ("end", 1, 2), ("start", 2), ("end", 2, 2)])
+                finally:
+                    release.set()
+                    await asyncio.gather(task, return_exceptions=True)
+
     async def test_bad_position_and_empty_end_never_reach_model(self):
         for event in (Audio(1, b"\x00\x00"), Audio(0, b"\x00"), End(0)):
             with self.subTest(event=event):
@@ -166,7 +230,7 @@ class VoiceTest(unittest.IsolatedAsyncioTestCase):
             def segment(self, text):
                 return None
 
-        with self.assertRaises(ProtocolError):
+        with self.assertRaises(ProviderError):
             await run_turn(fake, fake, Reject())
         self.assertIn(("answer", "你好"), fake.trace)
         self.assertIn("closed", fake.trace)

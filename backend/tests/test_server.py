@@ -15,6 +15,7 @@ from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from backend.demo import Demo
 from backend.server import voice_server
+from backend.voice import ProviderError
 from backend.wire import HEADER
 
 TOKEN = "test" * 8
@@ -117,6 +118,41 @@ class ServerTest(unittest.IsolatedAsyncioTestCase):
                       ("first_pcm_sent", "2"), ("completed", "0")):
             self.assertIn(event, stages)
         self.assertNotIn(TOKEN, output.getvalue())
+
+    async def test_fixed_error_codes_and_reopen(self):
+        for mode, code, reason in (
+            ("empty", 4401, "empty_transcript"),
+            ("unmatched", 4402, "greeting_mismatch"),
+            ("provider", 1011, "provider_error"),
+            ("timeout", 1013, "timeout"),
+        ):
+            class Failure(Demo):
+                async def finish(self):
+                    if mode == "provider":
+                        raise ProviderError("private-text")
+                    if mode == "timeout":
+                        raise TimeoutError()
+                    return " " if mode == "empty" else "private-text"
+
+            demo = Failure()
+            async with voice_server("127.0.0.1", 0, self.tls, TOKEN, demo, demo) as server:
+                async with self.open(server) as socket:
+                    await self.upload(socket)
+                    with self.assertRaises(ConnectionClosed) as error:
+                        await socket.recv()
+                    self.assertEqual((error.exception.rcvd.code, error.exception.rcvd.reason), (code, reason))
+                async with self.open(server) as socket:
+                    self.assertEqual(json.loads(await socket.recv())["type"], "turn.ready")
+
+    async def test_explicit_stop_is_logged_separately(self):
+        demo = Demo()
+        logs = io.StringIO()
+        with redirect_stdout(logs):
+            async with voice_server("127.0.0.1", 0, self.tls, TOKEN, demo, demo, timings=True) as server:
+                async with self.open(server) as socket:
+                    await socket.recv()
+                    await socket.close(4403)
+        self.assertIn("voice_timing user_stopped ", logs.getvalue())
 
     async def test_bad_seal_rejected(self):
         demo = Demo()

@@ -45,7 +45,7 @@ open class SimActivity : Activity() {
     private var cloud: CloudVoice? = null
     private var endpoint: EditText? = null
     private var credential: EditText? = null
-    private var cloudError = false
+    private var cloudError: VoiceFailure? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -117,7 +117,10 @@ open class SimActivity : Activity() {
         }
         start = button("开始说话") { requestStart() }
         finish = button("结束说话") { round.endCapture() }
-        stop = button("停止") { round.stop() }
+        stop = button("停止") {
+            cloud?.stopByUser()
+            round.stop()
+        }
         content.addView(controls, LinearLayout.LayoutParams(-1, -2))
         setContentView(scroll)
 
@@ -152,8 +155,8 @@ open class SimActivity : Activity() {
             val voice = CloudVoice(
                 dispatcher, checkNotNull(audio),
                 config = { endpoint!!.text.toString().trim() to credential!!.text.toString() },
-                failed = { operation, turn ->
-                    cloudError = true
+                failed = { operation, turn, code ->
+                    cloudError = code
                     if (turn != null) round.replyFailed(turn) else round.audioFailed(operation)
                 },
                 released = { round.released(it) },
@@ -195,7 +198,7 @@ open class SimActivity : Activity() {
 
     private fun requestStart() {
         audioError = false
-        cloudError = false
+        cloudError = null
         startAfterPermission = true
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             startIfAuthorized()
@@ -242,7 +245,7 @@ open class SimActivity : Activity() {
         val label = when (phase) {
             Phase.INACTIVE -> "已暂停"
             Phase.IDLE -> when {
-                cloudError -> "连接或语音回复失败，请检查私有地址和设备令牌"
+                cloudError != null -> checkNotNull(cloudError).message
                 audioError -> "录音或播放失败，请检查麦克风权限及音频设备"
                 round.replyTimeout == ReplyTimeout.FIRST_SEGMENT -> "等待回复超时，请再试一次"
                 round.replyTimeout == ReplyTimeout.INCOMPLETE_REPLY -> "回复中断超时，请再试一次"

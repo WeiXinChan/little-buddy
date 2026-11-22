@@ -4,7 +4,7 @@
 
 依赖现有 Mac SSH 访问、Android Platform Tools、支持 USB 调试的 OPPO、服务端能执行 `sudo -n` 的授权维护账号。服务端已准备 30 天 localhost 开发证书与独立设备令牌。应用调试变体只对 localhost/127.0.0.1 增加系统用户 CA 信任，仍校验证书链和主机名。
 
-1. 在 Mac 下载工单的两个 APK 和 `little-buddy-0.1.6-voice-lab-SHA256SUMS`。运行 `shasum -a 256 -c little-buddy-0.1.6-voice-lab-SHA256SUMS`。旧版已安装的同一 localhost 开发 CA 继续有效，无需重装。首次联调时，从 TITA-10 下载并核对 CA，再将 `little-buddy-loopback-ca.cer` 安装到 OPPO 的用户 CA 存储。安装菜单随 ColorOS 版本变化。只在本次测试设备安装，验收后移除。
+1. 在 Mac 下载工单的两个 APK 和 `little-buddy-0.1.7-voice-lab-SHA256SUMS`。运行 `shasum -a 256 -c little-buddy-0.1.7-voice-lab-SHA256SUMS`。旧版已安装的同一 localhost 开发 CA 继续有效，无需重装。首次联调时，从 TITA-10 下载并核对 CA，再将 `little-buddy-loopback-ca.cer` 安装到 OPPO 的用户 CA 存储。安装菜单随 ColorOS 版本变化。只在本次测试设备安装，验收后移除。
 2. 登录原服务器，切到本 PR 分支的仓库目录。约定两个终端。第一个从 Mac 启动有转发的 SSH 会话，服务器提示符内运行 `scripts/with-private-voice fake`。确认假服务后用 Ctrl+C 停止，再按同样方式运行 `scripts/with-private-voice dashscope`。每次服务只监听服务器 `127.0.0.1:8443`，20 分钟自动结束。
 
    ```bash
@@ -16,9 +16,9 @@
 
    ```bash
    adb devices
-   adb install -r -g little-buddy-0.1.6-voice-lab-debug.apk
+   adb install -r -g little-buddy-0.1.7-voice-lab-debug.apk
    adb reverse tcp:8443 tcp:8443
-   adb install -r -t little-buddy-0.1.6-voice-lab-instrumentation.apk
+   adb install -r -t little-buddy-0.1.7-voice-lab-instrumentation.apk
    adb shell am instrument -w com.littlebuddy.sim.test/com.littlebuddy.SimUiRunner
    adb logcat -T 1 -v brief 'LittleBuddyVoice:D' '*:S' | tee little-buddy-timing.log
    ```
@@ -82,3 +82,24 @@ ssh -t -o ExitOnForwardFailure=yes -L 127.0.0.1:8443:127.0.0.1:8443 <已有SSH�
 ```
 
 每个 Android `turn_id` 由本轮连接随机产生并随已鉴权 WSS 请求传递。服务器验证 UUID 格式，独立标记 `connection_id`。用 `turn_id` 配对，用段号匹配首帧与播放。服务器 `since_connect_ms` 与手机 `t_ms` 分别取差。旧客户端没有关联 ID，服务器会显示 `turn_id=-`。服务器运行期只向 SSH 输出这些时序元数据；本命令只保存指定格式的时序行。请勿贴令牌、API Key、原始临时任务输出或录音。
+
+## 0.1.7 失败分类与段间等待
+
+0.1.6 的四轮成人 OPPO 测试有三轮成功。成功轮端点至播放头平均 **1514 ms**，算法末语音至播放头平均 **3014 ms**。0.1.5 的对应平均值为 2522 ms 和 4021 ms。这是两组小样本观察。失败轮最后一个 ASR 最终事件在封口后 165 ms，约 1 秒后关闭 ASR，随后出现旧版 `protocol_error`，没有 `llm_request`。空转写或问候未匹配均符合这段时序，缺少证据区分。手机在端点后 1321 ms 结束该轮。
+
+| 固定分类 | WSS 关闭码 | 手机提示或行为 |
+| --- | ---: | --- |
+| `empty_transcript` | 4401 | 没听清，请再说一次 |
+| `greeting_mismatch` | 4402 | 可以试着说「你好，瓦力」 |
+| `protocol_error` | 1008 | 语音传输中断，请再试一次 |
+| `provider_error` | 1011 | 语音服务暂时不可用，请再试一次 |
+| `timeout` | 1013 | 语音回复超时，请再试一次 |
+| `user_stopped` | 4403（由手机发送） | 正常返回开始界面 |
+
+手机主动停止立即清空播放队列。如果关闭帧送达，服务器也会记录主动停止，连接中断时服务器可能只观察到断开。错误诊断只记固定分类和原轮 ID。输入允许「你好／您好」以及「瓦力／瓦利／瓦里」的明确组合和分隔标点，批准后统一转为「你好，瓦力。」再交给模型。缺少称呼、附加其他内容或词序颠倒仍拒绝。输出安全检查、1.5 秒停顿容忍、采集灵敏度和噪声规则沿用原实现。
+
+旧版成人样本中，每段发送结束后 TTS 关闭约需 1003–1004 ms。0.1.7 在第一段发送结束后允许第二段准备与旧段关闭重叠，同时最多保有两段 TTS 的连接资源。音频仍顺序发送，最终声明等待全部资源关闭。取消时清理仍由本轮持有，下一轮不会继承未发送数据。
+
+北京合成探针一次通过，沿用既有模型和内存夹具，无重试。首段发送结束在 3860 ms，第二段启动在 3861 ms，首段关闭在 4863 ms，第二段首 PCM 在 4425 ms。第二段启动距首段末 **1 ms**，且在首段关闭前约 **1002 ms** 已启动。上一版单次合成同口径间隔约 **1004 ms**。新版封口到首 PCM **1537 ms**，上版单次合成为 **1372 ms**，两次独立样本不足以判断首声变化。该探针没有手机或回环传输，真实可闻段间间隔待实测。
+
+复测沿用上文双端日志。先用假服务确认顺序、停止及重开，再用百炼验证成人短问候、白名单变体和一次未匹配后重开。按 `turn_id` 关联错误码，按手机播放头和服务器的首、次段阶段各自算差。请仅分享脱敏时序行。旧版失败轮的实际转写未复现。

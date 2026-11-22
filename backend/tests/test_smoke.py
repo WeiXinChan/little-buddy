@@ -24,6 +24,11 @@ class ProbeTest(unittest.IsolatedAsyncioTestCase):
                 yield segments()
 
         policy = GreetingPolicy()
+        for accepted in ("您好，瓦力！", "你好？瓦利。", "你好 瓦里"):
+            self.assertEqual(policy.input(accepted), "你好，瓦力。")
+        for rejected in ("你好", "你好，瓦力请讲故事", "您好，瓦里和小狗", "你坏瓦力", "瓦力你好"):
+            self.assertIsNone(policy.input(rejected))
+
         for response in (("你好！", "你好。"), ("我是瓦力。", "你好！")):
             with self.subTest(response=response), self.assertRaises(ValueError):
                 await probe_answer(Adapter(), policy, "你好，瓦力。")

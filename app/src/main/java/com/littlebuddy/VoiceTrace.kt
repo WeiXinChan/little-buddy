@@ -61,8 +61,9 @@ internal class VoiceTrace(
         emit(event, op, time, segment, metrics)
     }
 
-    @Synchronized fun finish(success: Boolean) {
-        emit(if (success) "turn_finished" else "turn_cancelled", capture, now())
+    @Synchronized fun finish(success: Boolean, code: VoiceFailure? = null) {
+        val metrics = code?.let { " error_code=${it.name.lowercase()}" } ?: ""
+        emit(if (success) "turn_finished" else "turn_cancelled", capture, now(), metrics = metrics)
         closed = true
     }
 

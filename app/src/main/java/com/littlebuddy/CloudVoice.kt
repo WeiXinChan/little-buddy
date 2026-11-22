@@ -26,7 +26,7 @@ internal class CloudVoice(
     private val dispatcher: Handler,
     private val audio: AudioPort,
     private val config: () -> Pair<String, String>,
-    private val failed: (Long, Turn?) -> Unit,
+    private val failed: (Long, Turn?, VoiceFailure) -> Unit,
     private val released: (Long) -> Unit,
     private val segment: (Turn, Int, PcmStream) -> Unit,
     private val ended: (Turn, Int) -> Unit,
@@ -123,6 +123,10 @@ internal class CloudVoice(
         if (active?.turn == turn) close(success = true)
     }
 
+    fun stopByUser() {
+        active?.terminate(code = VoiceFailure.USER_STOPPED)
+    }
+
     fun close(success: Boolean = false) {
         val old = active
         active = null
@@ -145,17 +149,20 @@ internal class CloudVoice(
             dispatcher.post { if (active === this && !terminated.get()) action() }
         }
 
-        fun terminate(success: Boolean = false): Boolean {
-            if (!terminated.compareAndSet(false, true)) return false
-            trace.finish(success)
+        fun terminate(success: Boolean = false, code: VoiceFailure? = null, notify: () -> Unit = {}) {
+            if (!terminated.compareAndSet(false, true)) return
+            trace.finish(success, code)
+            notify()
             streams.forEach { it.abort() }
-            socket?.cancel()
-            return true
+            val connection = socket ?: return
+            if (code == VoiceFailure.USER_STOPPED && connection.close(code.closeCode, null)) {
+                dispatcher.postDelayed({ connection.cancel() }, 350)
+            } else connection.cancel()
         }
 
-        fun fail() {
-            if (terminate()) dispatcher.post {
-                if (active === this) failed(operation, turn)
+        fun fail(code: VoiceFailure = VoiceFailure.CONNECTION_ERROR) {
+            terminate(code = code) {
+                dispatcher.post { if (active === this) failed(operation, turn, code) }
             }
         }
 
@@ -164,7 +171,7 @@ internal class CloudVoice(
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-            if (!finished) fail()
+            if (!finished) fail(VoiceFailure.fromClose(code))
             webSocket.close(1000, null)
         }
 
@@ -208,7 +215,7 @@ internal class CloudVoice(
                     else -> error("Unexpected control")
                 }
             } catch (_: Exception) {
-                fail()
+                fail(VoiceFailure.PROTOCOL_ERROR)
             }
         }
 
@@ -224,7 +231,7 @@ internal class CloudVoice(
                     dispatch { segment(id, number, source) }
                 }
             } catch (_: Exception) {
-                fail()
+                fail(VoiceFailure.PROTOCOL_ERROR)
             }
         }
     }
