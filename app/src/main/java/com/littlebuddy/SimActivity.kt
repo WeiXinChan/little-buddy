@@ -95,6 +95,7 @@ open class SimActivity : Activity() {
                 text = "私有语音验证"
                 setOnClickListener { startActivity(Intent(this@SimActivity, CloudActivity::class.java)) }
             })
+            addAnimalEntry(content)
         }
         status = TextView(this).apply {
             textSize = 22f
