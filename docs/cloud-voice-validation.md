@@ -88,3 +88,11 @@ LoadCredential=dashscope-api-key:/etc/little-buddy/voice/dashscope-api-key
 | TTS 合成输入 | `cosyvoice-v3-flash` / `longanyang` | WSS 任务错误 `AllocationQuota.FreeTierOnly`，消息已脱敏，无 PCM 输出 | 未提取到 | 1299 ms |
 
 百炼文档将 `AllocationQuota.FreeTierOnly` 归为免费额度耗尽且无法转为付费调用的场景。文本也返回额度错误。三个结果均未报模型不存在或音色不兼容，因此未尝试替代或发起完整轮次。Key 的具体模型授权范围仍需账号持有人在控制台核对。 [百炼错误码](https://help.aliyun.com/en/model-studio/error-code)
+
+## Token Plan 小样评估范围
+
+北京 Token Plan 官方个人版和团队版模型表均列出 `qwen-audio-3.0-asr-flash`（非实时）、`qwen3.8-flash`（文本候选）及 `qwen-audio-3.0-tts-plus`（合成，官方示例音色 `longanhuan_v3.6`）。语音走专属 DashScope HTTP 接口，文本走北京专属 Chat Completions。公开清单用于确认候选，席位额度与实际调用结果仍未验证。 [个人版](https://help.aliyun.com/zh/model-studio/token-plan-personal-overview) · [团队版](https://help.aliyun.com/zh/model-studio/token-plan-team-overview) · [ASR](https://help.aliyun.com/zh/model-studio/token-plan-speech-recognition) · [TTS](https://help.aliyun.com/zh/model-studio/token-plan-speech-synthesis)
+
+套餐允许受支持工具中交互式发起的扩展调用，并限制自动化脚本和自定义后端。本次要求的临时 systemd 自动串联探针未执行，Token Plan 请求数为 **0**，无延迟和音频数据。正式分段适配与 APK 沿用原链路。订阅持有人可通过厂商支持的工具交互式验证各模型。若要用脚本测完整串行链路，需要使用允许此类调用的凭证和对应端点，或取得厂商对该执行方式的明确许可。 [Token Plan 权限与使用规范](https://help.aliyun.com/zh/model-studio/token-plan-permissions-and-usage)
+
+获准后的测量口径为分别记录输入合成、含上传的非实时 ASR、LLM 首文本和流结束、TTS 返回下载地址和下载首字节及完成，再记录从 ASR 提交至首个可解码输出。初始合成单列。非实时 ASR 等完整输入，TTS 返回 URL 后还需单独下载。服务器单次数据仅能说明本次小样，OPPO 可闻延迟和分位数需另测。
