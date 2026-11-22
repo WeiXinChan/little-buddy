@@ -108,3 +108,17 @@ LoadCredential=dashscope-api-key:/etc/little-buddy/voice/dashscope-api-key
 | 文本 LLM | `qwen-flash-2025-07-28` | HTTP 403 / `insufficient_quota`，请求 ID 摘要 `e42dcab305afd17b` | 237 ms |
 
 临时非 root 任务通过 systemd 凭证加载，未产生落盘音频。本次数据只说明就绪或失败耗时，端到端、OPPO 可闻延迟与儿童测试仍待验证。TTS 1011 未提供可公开的原因，文本额度仍需账号持有人核对。
+
+## CosyVoice WSS 1011 分阶段对照
+
+使用原北京业务空间配置和 DashScope 凭证，通过非 root 临时 systemd 单元运行三个 TTS 请求，各限 10 秒，单元限 40 秒。同一模型 `cosyvoice-v3-flash`、系统音色 `longanyang` 和固定合成短句。PCM 组沿用适配器参数和握手选项；官方示例组使用 MP3 22050 Hz、`volume=50`、`rate=1`、`pitch=1`、显式启用数据合规检测头、关闭 WebSocket 压缩。共享标准端点显式发送北京业务空间头。 [官方 WSS 示例](https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api/) · [音色列表](https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list)
+
+| 对照组 | HTTP 升级 | 收到 `task-started` | 客户端观察到断开 | 总耗时 |
+| --- | ---: | ---: | --- | ---: |
+| 北京业务空间，PCM 24000 Hz | 101，251 ms | 310 ms | 发送 `continue-task` 时，1011，`quota` | 1312 ms |
+| 北京业务空间，官方 MP3 参数 | 101，183 ms | 239 ms | 发送 `continue-task` 时，1011，`quota` | 1240 ms |
+| 北京共享端点，官方 MP3 参数 | 101，172 ms | 218 ms | 发送 `continue-task` 时，1011，`quota` | 1220 ms |
+
+三次均完成鉴权握手与 `run-task` 初始化，等待 `task-started` 后才尝试发文本。均在发文本这一调用返回前观察到对端关闭，未执行 `finish-task`，无音频。无法判断对端是否收到文本。结果排除了握手失败、提前发送文本及 `finish-task` 顺序作为本次复现的原因。官方音色、参数和另一北京标准端点也能复现，证据指向供应商侧额度检查。单个错误关键词无法确认节省计划抵扣范围、额度余额或账号开关。请账号持有人核对该模型、北京账号/业务空间与计划的生效和抵扣情况，必要时请百炼支持按时间与关闭阶段排查。 [百炼错误码](https://help.aliyun.com/en/model-studio/error-code)
+
+本轮只发 TTS。测试音频未落盘，临时任务已退出。正式请求参数沿用原实现，补充 `quota` 等固定诊断片段和就绪前禁止发文本的离线回归。

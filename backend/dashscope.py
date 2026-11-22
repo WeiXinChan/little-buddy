@@ -33,7 +33,8 @@ def upstream_details(code, message, request_id):
                    "does not exist or you do not have access", "not authorized to access this workspace",
                    "workspace does not exist", "invalid api key", "access denied",
                    "not purchased", "permission denied", "no permission",
-                   "service has not been activated", "unsupported model")
+                   "service has not been activated", "unsupported model",
+                   "insufficient balance", "free tier", "quota")
         match = next((phrase for phrase in phrases if phrase in normalized), None)
         details["message"] = match or "[redacted upstream message]"
     return details

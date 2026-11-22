@@ -1,3 +1,4 @@
+import asyncio
 import json
 import unittest
 from pathlib import Path
@@ -77,6 +78,54 @@ class AdapterTest(unittest.IsolatedAsyncioTestCase):
             "code": "insufficient_quota", "request_id_sha256_prefix": "c06936b0dc5003fb",
             "message": "[redacted upstream message]",
         })
+
+    def test_close_summary_keeps_only_fixed_quota_fragment(self):
+        self.assertEqual(upstream_details(None, "private-id: quota limit", None),
+                         {"message": "quota"})
+
+    async def test_tts_waits_for_ready_before_continue_and_finish(self):
+        waiting = asyncio.Event()
+        ready = asyncio.Event()
+
+        class DelayedReady(SpeechSocket):
+            async def recv(self):
+                waiting.set()
+                await ready.wait()
+                return await super().recv()
+
+        socket = DelayedReady([b"\x01\x00", ("task-finished",)])
+
+        @asynccontextmanager
+        async def speech_socket():
+            yield socket
+
+        adapter = DashScope(None, workspace="workspace", region="cn-beijing", key="synthetic",
+                            asr="asr", llm="llm", tts="cosyvoice-v3-flash", voice="longanyang")
+        adapter.speech_socket = speech_socket
+
+        async def synthesize():
+            async with adapter.synthesize("你好。", 24_000) as frames:
+                return [frame async for frame in frames]
+
+        pending = asyncio.create_task(synthesize())
+        try:
+            await asyncio.wait_for(waiting.wait(), 1)
+            self.assertEqual([event["header"]["action"] for event in socket.actions], ["run-task"])
+            ready.set()
+            self.assertEqual(await asyncio.wait_for(pending, 1), [b"\x01\x00"])
+        finally:
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+
+        headers = [event["header"] for event in socket.actions]
+        self.assertEqual([header["action"] for header in headers],
+                         ["run-task", "continue-task", "finish-task"])
+        self.assertEqual({header["streaming"] for header in headers}, {"duplex"})
+        self.assertEqual(len({header["task_id"] for header in headers}), 1)
+        self.assertEqual(socket.actions[0]["payload"]["parameters"]["format"], "pcm")
+        self.assertEqual(socket.actions[0]["payload"]["parameters"]["sample_rate"], 24_000)
+        self.assertEqual(socket.actions[1]["payload"]["input"], {"text": "你好。"})
+        self.assertEqual(socket.actions[2]["payload"]["input"], {})
 
     def test_uses_systemd_credential_file(self):
         with TemporaryDirectory() as folder, patch.dict("os.environ", {
