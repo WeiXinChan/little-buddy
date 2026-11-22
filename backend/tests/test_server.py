@@ -90,6 +90,18 @@ class ServerTest(unittest.IsolatedAsyncioTestCase):
                     await socket.recv()
                 self.assertEqual(error.exception.rcvd.code, 1008)
 
+    async def test_audio_after_seal_closes_turn_and_releases_provider(self):
+        demo = BlockingDemo()
+        async with voice_server("127.0.0.1", 0, self.tls, TOKEN, demo, demo) as server:
+            async with self.open(server) as socket:
+                await self.upload(socket)
+                await asyncio.wait_for(demo.entered.wait(), 1)
+                await socket.send(HEADER.pack(1, 1, 4) + b"\0\0")
+                with self.assertRaises(ConnectionClosed) as error:
+                    await asyncio.wait_for(socket.recv(), 2)
+                self.assertEqual(error.exception.rcvd.code, 1008)
+            await asyncio.wait_for(demo.released.wait(), 1)
+
     async def test_disconnect_cancels_provider_and_next_turn_can_start(self):
         demo = BlockingDemo()
         async with voice_server("127.0.0.1", 0, self.tls, TOKEN, demo, demo) as server:
