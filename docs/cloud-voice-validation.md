@@ -1,0 +1,156 @@
+# 私有语音单轮验证
+
+本阶段验证点击开始后的一句交流。原有本地模拟入口可离线运行。私有语音入口在播放完本轮所有分段后回到等待点击，停止、退到后台或重新开始会隔离旧轮次。
+
+## 配置与顺序
+
+1. 先通过本地回环测试验证 TLS、设备令牌、连续 PCM16 样本及断线清理。Python 3.11+ 环境安装 `backend/requirements.txt`，运行 `python3 -B -m unittest discover -s backend/tests -v`。测试用 OpenSSL 生成临时证书和合成样本，百炼适配测试使用本地替身。
+2. 仅在获准的私有接口运行 `python3 -m backend.demo --host <私有监听地址> --cert <证书链> --key <私钥>`。默认绑定回环和使用假服务。后端从受限服务环境读取 `VOICE_DEVICE_TOKEN`，使用独立的随机令牌，例如由保管人通过秘密配置注入 48 个随机十六进制字符。手机端证书须受系统信任并匹配域名。受控网络仅开放测试设备所需的访问路径。可用 HTTPS `/healthz` 检查连通。
+3. 验证 APK 校验和并安装。在「私有语音验证」填 `wss://<私有域名>:8443/v1/turn` 和设备令牌。点击开始，等待「正在听」后输入合成音或成人测试音，等待自动封口或点结束说话。假服务应播放两段提示音并回到点击入口。分别在连接、录音、等待和播放时点停止，确认没有旧片段播放，再开始一轮。无麦克风授权时先完成授权。
+4. 按下文核对北京业务空间并注入 Key。取得云试跑放行并核实私有入口后，由后端管理员按下文配置服务并显式选择 `--provider dashscope`。
+5. 首次真实调用输入合成的「你好，瓦力」，确认收到「你好」「我是瓦力」两段短回复。再按相同流程做成人 OPPO 验证。ASR 会接收本轮输入，只有匹配这句问候时才把预定义句子交给 LLM，输出经过短句白名单后进入 TTS。记录设备系统、试跑类别、封口至首段开播的耗时、是否完整播放及停止后是否有旧回复。证据使用计数、耗时和结果码，避免保留录音、完整文本和凭证。儿童云试验另行审批。
+
+## 首期技术决策与北京配置
+
+已选阿里云百炼华北 2（北京）。后端串联流式 ASR、文本 LLM 流和逐段流式 TTS，在 TTS 前检查句段。这样能分别观测识别、首段生成和合成，同时以分段边界控制播放及取消。保留现有 `Providers` 接口和离线替身。实时端到端语音、OpenAI 服务和通用多厂商框架均留在首期范围之外。下表中的 Chat Completions 兼容格式由百炼北京域名提供。
+
+| 阶段 | 建议首测配置 | 官方文档确认的接口 |
+| --- | --- | --- |
+| ASR | `DASHSCOPE_ASR_MODEL=fun-asr-realtime` | 双工 WSS，`run-task`→`task-started`→16 kHz 单声道 PCM16→`finish-task`；取最终句 [Fun-ASR WebSocket](https://help.aliyun.com/en/model-studio/fun-asr-realtime-websocket-api) |
+| 文本 LLM | `DASHSCOPE_LLM_MODEL=qwen3.8-flash` | HTTPS Chat Completions SSE，顶层 `stream=true`、`enable_thinking=false` [模型](https://help.aliyun.com/zh/model-studio/qwen3-8-flash) · [请求格式](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions) |
+| TTS | `DASHSCOPE_TTS_MODEL=cosyvoice-v3-flash`，`DASHSCOPE_TTS_VOICE=longanyang`（龙安洋，普通话） | 双工 WSS，`continue-task` 送文本，接收二进制 PCM 24 kHz [CosyVoice WebSocket](https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api/) · [音色](https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list) · [采样率](https://help.aliyun.com/zh/model-studio/multimodal-timbre-list) |
+
+设置 `DASHSCOPE_REGION=cn-beijing`，`DASHSCOPE_WORKSPACE` 填实际业务空间 ID。ASR 和 TTS 使用该空间域名的 `/api-ws/v1/inference`，LLM 使用同一域名的 `/compatible-mode/v1/chat/completions`。 [百炼 Base URL](https://help.aliyun.com/zh/model-studio/base-url)
+
+账号持有人在百炼控制台切换到华北 2（北京）及目标业务空间，核对已持有的 Key 归属该空间且有效，逐项核对表中模型 ID 及系统音色，并确认试跑额度。工单只回报各项可用状态和不同的非秘密模型 ID。现阶段已核对公开接口和地域资料。账号内权限、模型和音色可用性以及完整接口兼容性仍待控制台与获准后的合成语音试跑确认。
+
+## 后端 Key 注入和消费
+
+主机源文件为 `/etc/little-buddy/voice/dashscope-api-key`，目录归 `root:root`，权限 `0700`，文件归 `root:root`，权限 `0600`。在服务器的可信交互 SSH 终端操作，关闭会话输入录制。凭证保管人可复制下列命令，再在隐藏输入提示出现后粘贴 Key 并回车。
+
+```bash
+sudo -v && (
+  set +x
+  set -o pipefail
+  systemd-ask-password --echo=no --timeout=90s '北京百炼 API Key' |
+    sudo -n bash -eu -c '
+      umask 077
+      dir=/etc/little-buddy/voice
+      install -d -o root -g root -m 0700 "$dir"
+      tmp=$(mktemp "$dir/.dashscope-api-key.XXXXXX")
+      cleanup() { rm -f -- "$tmp"; }
+      trap cleanup EXIT
+      IFS= read -r key
+      [[ "$key" =~ ^[[:alnum:]_-]+$ ]]
+      printf "%s\n" "$key" > "$tmp"
+      mv -fT -- "$tmp" "$dir/dashscope-api-key"
+    '
+) &&
+sudo -n test -s /etc/little-buddy/voice/dashscope-api-key &&
+  sudo -n stat -c '%a %U:%G %n' /etc/little-buddy/voice/dashscope-api-key
+```
+
+Key 从隐藏提示通过管道进入管理员进程，磁盘文件采用同目录原子替换。最后一条只检查存在、权限和属主。由管理员在获准的系统服务 `little-buddy-voice.service` 的 `[Service]` 加入：
+
+```ini
+LoadCredential=dashscope-api-key:/etc/little-buddy/voice/dashscope-api-key
+```
+
+服务使用专用非 root 账号运行。在显式启用 `--provider dashscope` 时，后端从 systemd 设定的 `$CREDENTIALS_DIRECTORY/dashscope-api-key` 读取，只用于发往百炼的鉴权。缺文件时启动失败。模型及业务空间变量单独设在服务配置，手机使用独立的设备令牌。注入 Key 本身不会启动服务或触发调用。轮换后，等获准运行时重启服务加载新 Key。 [systemd 凭证机制](https://www.freedesktop.org/software/systemd/man/252/systemd.exec.html)
+
+## 协议
+
+单个已认证 WSS 对应单轮，鉴权用 `Authorization: Bearer <设备令牌>`。服务端取得 ASR 就绪后送 `turn.ready`，手机随后打开麦克风。二进制头为版本 1、方向 1/2 和 32 位大端样本位置，负载为单声道小端 PCM16。上行为连续位置、16 kHz、最多 320,000 样本，`turn.end.samples` 为末尾后一位。下行为 24 kHz，位置每段归零，依次发送 `segment.start`、音频帧、`segment.end` 和 `reply.end`。安卓收到完整分段并核对样本数后进入顺序播放队列。任一时间仅允许一轮，断线后等待后端清理供应商连接再释放该轮名额。
+
+供应商参考 [Fun-ASR WebSocket](https://help.aliyun.com/en/model-studio/fun-asr-realtime-websocket-api) · [百炼 Base URL](https://help.aliyun.com/zh/model-studio/base-url) · [CosyVoice WebSocket](https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api/)。
+
+## 北京账号首轮真实探测
+
+使用 `scripts/cloud-voice-smoke.py`，由临时 systemd 单元以动态非 root 账号执行。单元使用 `EnvironmentFile=/etc/little-buddy/voice/dashscope.env` 和上文的 `LoadCredential`，总运行上限 50 秒。探针默认先用 TTS 生成固定普通话问候，再在内存中用 FFmpeg 转为 16 kHz。单次完整探针最多请求 1 次 ASR、1 次 LLM 和 3 次 TTS。诊断参数 `--mode asr-ready` 和 `--mode llm-only` 各只尝试一次对应接口；`--shared-speech` 仅用于北京共享语音端点诊断。探针无需监听端口。
+
+| 请求 | 端点 | 实测结果 | 耗时 |
+| --- | --- | --- | ---: |
+| TTS 合成输入 | 北京业务空间语音域名 | WebSocket 异常关闭，未取得音频 | 1341 ms |
+| TTS 合成输入 | 北京共享语音域名，显式传业务空间头 | `AccessDenied`，未取得音频 | 1308 ms |
+| Fun-ASR 就绪 | 北京共享语音域名，显式传业务空间头 | `AccessDenied`，未取得就绪信号，无音频上行 | 1277 ms |
+| Qwen 文本 SSE | 北京业务空间域名 | HTTP 403，未取得回复 | 277 ms |
+
+真实请求共四次，使用本页表格中的候选模型和音色。没有生成可供验证的 PCM，合成闭环、真实取消及成人 OPPO 待测。这些结果只能定位到上游访问被拒或异常断开，无法判断单个音色是否可用。由账号持有人核对北京业务空间成员权限、Key 对应的计费方案及对三项模型的授权范围。确认后再选择是否重试；当前没有证据支持改模型、音色或地域。 [百炼错误码](https://help.aliyun.com/en/model-studio/error-code)
+
+## 北京候选模型复试
+
+临时 systemd 单元逐项各调用一次。北京共享语音端点显式发送业务空间头，以取得结构化任务错误。LLM 使用北京业务空间域名。探针仅保留结构化错误码、匹配诊断白名单的消息片段和请求 ID 的 SHA-256 短摘要。
+
+| 阶段 | 实际候选 | 结果 | 请求 ID 摘要 | 耗时 |
+| --- | --- | --- | --- | ---: |
+| ASR 就绪 | `fun-asr-realtime` | WSS 任务错误 `AllocationQuota.FreeTierOnly`，消息已脱敏，无 PCM 上行 | 未提取到 | 1317 ms |
+| 文本 LLM | `qwen-flash-2025-07-28` | HTTP 403，`insufficient_quota`，消息已脱敏 | `a2504bb1a52e6ad6` | 285 ms |
+| TTS 合成输入 | `cosyvoice-v3-flash` / `longanyang` | WSS 任务错误 `AllocationQuota.FreeTierOnly`，消息已脱敏，无 PCM 输出 | 未提取到 | 1299 ms |
+
+百炼文档将 `AllocationQuota.FreeTierOnly` 归为免费额度耗尽且无法转为付费调用的场景。文本也返回额度错误。三个结果均未报模型不存在或音色不兼容，因此未尝试替代或发起完整轮次。Key 的具体模型授权范围仍需账号持有人在控制台核对。 [百炼错误码](https://help.aliyun.com/en/model-studio/error-code)
+
+## Token Plan 小样评估范围
+
+北京 Token Plan 官方个人版和团队版模型表均列出 `qwen-audio-3.0-asr-flash`（非实时）、`qwen3.8-flash`（文本候选）及 `qwen-audio-3.0-tts-plus`（合成，官方示例音色 `longanhuan_v3.6`）。语音走专属 DashScope HTTP 接口，文本走北京专属 Chat Completions。公开清单用于确认候选，席位额度与实际调用结果仍未验证。 [个人版](https://help.aliyun.com/zh/model-studio/token-plan-personal-overview) · [团队版](https://help.aliyun.com/zh/model-studio/token-plan-team-overview) · [ASR](https://help.aliyun.com/zh/model-studio/token-plan-speech-recognition) · [TTS](https://help.aliyun.com/zh/model-studio/token-plan-speech-synthesis)
+
+套餐允许受支持工具中交互式发起的扩展调用，并限制自动化脚本和自定义后端。本次要求的临时 systemd 自动串联探针未执行，Token Plan 请求数为 **0**，无延迟和音频数据。正式分段适配与 APK 沿用原链路。订阅持有人可通过厂商支持的工具交互式验证各模型。若要用脚本测完整串行链路，需要使用允许此类调用的凭证和对应端点，或取得厂商对该执行方式的明确许可。 [Token Plan 权限与使用规范](https://help.aliyun.com/zh/model-studio/token-plan-permissions-and-usage)
+
+获准后的测量口径为分别记录输入合成、含上传的非实时 ASR、LLM 首文本和流结束、TTS 返回下载地址和下载首字节及完成，再记录从 ASR 提交至首个可解码输出。初始合成单列。非实时 ASR 等完整输入，TTS 返回 URL 后还需单独下载。服务器单次数据仅能说明本次小样，OPPO 可闻延迟和分位数需另测。
+
+## 语音节省计划购买后复查
+
+沿用原始北京按量业务空间的标准端点和独立 DashScope 凭证。三阶段各尝试一次，未触发完整轮次。
+
+| 阶段 | 模型与音色 | 结果 | 耗时 |
+| --- | --- | --- | ---: |
+| ASR | `fun-asr-realtime` | 收到就绪信号后主动关闭，无音频上行，未测转写 | 258 ms |
+| TTS | `cosyvoice-v3-flash` / `longanyang` | WSS 1011，未取得 PCM，供应商原因未确认 | 1265 ms |
+| 文本 LLM | `qwen-flash-2025-07-28` | HTTP 403 / `insufficient_quota`，请求 ID 摘要 `e42dcab305afd17b` | 237 ms |
+
+临时非 root 任务通过 systemd 凭证加载，未产生落盘音频。本次数据只说明就绪或失败耗时，端到端、OPPO 可闻延迟与儿童测试仍待验证。TTS 1011 未提供可公开的原因，文本额度仍需账号持有人核对。
+
+## CosyVoice WSS 1011 分阶段对照
+
+使用原北京业务空间配置和 DashScope 凭证，通过非 root 临时 systemd 单元运行三个 TTS 请求，各限 10 秒，单元限 40 秒。同一模型 `cosyvoice-v3-flash`、系统音色 `longanyang` 和固定合成短句。PCM 组沿用适配器参数和握手选项；官方示例组使用 MP3 22050 Hz、`volume=50`、`rate=1`、`pitch=1`、显式启用数据合规检测头、关闭 WebSocket 压缩。共享标准端点显式发送北京业务空间头。 [官方 WSS 示例](https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api/) · [音色列表](https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list)
+
+| 对照组 | HTTP 升级 | 收到 `task-started` | 客户端观察到断开 | 总耗时 |
+| --- | ---: | ---: | --- | ---: |
+| 北京业务空间，PCM 24000 Hz | 101，251 ms | 310 ms | 发送 `continue-task` 时，1011，`quota` | 1312 ms |
+| 北京业务空间，官方 MP3 参数 | 101，183 ms | 239 ms | 发送 `continue-task` 时，1011，`quota` | 1240 ms |
+| 北京共享端点，官方 MP3 参数 | 101，172 ms | 218 ms | 发送 `continue-task` 时，1011，`quota` | 1220 ms |
+
+三次均完成鉴权握手与 `run-task` 初始化，等待 `task-started` 后才尝试发文本。均在发文本这一调用返回前观察到对端关闭，未执行 `finish-task`，无音频。无法判断对端是否收到文本。结果排除了握手失败、提前发送文本及 `finish-task` 顺序作为本次复现的原因。官方音色、参数和另一北京标准端点也能复现，证据指向供应商侧额度检查。单个错误关键词无法确认节省计划抵扣范围、额度余额或账号开关。请账号持有人核对该模型、北京账号/业务空间与计划的生效和抵扣情况，必要时请百炼支持按时间与关闭阶段排查。 [百炼错误码](https://help.aliyun.com/en/model-studio/error-code)
+
+本轮只发 TTS。测试音频未落盘，临时任务已退出。正式请求参数沿用原实现，补充 `quota` 等固定诊断片段和就绪前禁止发文本的离线回归。
+
+## 普通北京端点文本模型复查
+
+已按用户指定将 `DASHSCOPE_LLM_MODEL` 更新为 `qwen3.8-flash`。原北京业务空间标准 Chat Completions 和原 DashScope 凭证完成一次短文本请求，`stream=true`、`enable_thinking=false`、`max_tokens=64`。首个完整文本段 615 ms，流结束 647 ms，两段内容通过预期顺序校验。此结果验证当前账号可用普通端点完成该请求。三个 TTS 对照仍阻塞，因此未启动完整合成轮次。 [模型](https://help.aliyun.com/zh/model-studio/qwen3-8-flash) · [思考参数](https://help.aliyun.com/zh/model-studio/deep-thinking/)
+
+## TTS 免费额度停用开关调整后复测
+
+用户确认语音节省计划已生效，且已关闭 `cosyvoice-v3-flash` 的免费额度用完即停。使用普通北京业务空间的标准入口与现有 DashScope 凭证，临时非 root systemd 单元通过 `LoadCredential` 运行，单元限时 50 秒。
+
+| 阶段 | 实测结果 |
+| --- | --- |
+| TTS 预检 `cosyvoice-v3-flash` / `longanyang` | 一次成功，1907 ms 得到 89,280 字节、约 1860 ms 的 24 kHz 单声道 PCM16LE。FFmpeg 解码并转为非空、非静音的 16 kHz PCM，含验证共 2463 ms。 |
+| ASR `fun-asr-realtime` | 复用前一步内存样本尝试一轮，1260 ms 后收到 WSS 1011，脱敏摘要 `quota`。没有最终转写；本次探针未细分失败前是否已发送部分音频。 |
+| `qwen3.8-flash` 与回复 TTS | ASR 未取得最终文本，本轮未调用。 |
+
+共发出一次 TTS 和一次 ASR 请求，无重试。音频只在内存和 FFmpeg 管道内流转，单元已退出。完整合成链路、LLM 首段、封口至首段可播放 PCM、整体成功轮次耗时和 OPPO 可闻延迟仍无本轮数据。ASR 额度需单独核对 `fun-asr-realtime` 在北京账号的免费额度停止开关、计划抵扣范围与计费状态。
+
+## ASR 免费额度停用开关调整后整轮实测
+
+原北京业务空间与普通 DashScope 凭证。非 root 临时 systemd 单元以 `LoadCredential` 注入，50 秒总上限。一次输入 TTS 预检、一次 ASR、一次 LLM、两次回复 TTS，无重试。合成音频只在内存和 FFmpeg 管道流转，单元已退出。
+
+| 阶段 | 实测结果 |
+| --- | --- |
+| 输入 TTS 预检 | `cosyvoice-v3-flash` / `longanyang`，首 PCM 617 ms，合成收齐 1958 ms。89,280 字节、1860 ms，24 kHz 单声道 PCM16LE。重采样并校验通过共 2025 ms，单独计时。 |
+| ASR | `fun-asr-realtime` 就绪 255 ms。确认已发送 59,520 字节 16 kHz 单声道 PCM16LE，最终转写匹配预期问候，阶段共 3306 ms。调用封口到最终结果收齐并退出 ASR 上下文为 1138 ms。 |
+| LLM | `qwen3.8-flash` 首个非空文本增量 493 ms，首个完整段 533 ms，流结束 559 ms，两段顺序通过。 |
+| 回复 TTS 第一段 | 同模型与音色，首 PCM 556 ms，完整段 1810 ms。51,840 字节，1080 ms，24 kHz 单声道 PCM16LE。 |
+| 回复 TTS 第二段 | 首 PCM 565 ms，完整段 1969 ms。95,040 字节，1980 ms，格式同第一段。 |
+
+从调用 ASR 封口到首段 PCM 完整收齐且通过非空、对齐和非静音检查为 **3507 ms**。从启动 ASR 至两段完成为 **7644 ms**，封口至两段完成为 **5476 ms**。正式轮计时剔除输入预检。此次服务器探针在 LLM 流结束并校验两段后才启动回复 TTS，未经过 Android 播放或手机至后端 WSS。单次结果没有 OPPO 可闻延迟或统计分位意义。成人 OPPO 待私有入口及用户真机验收，儿童效果未验证。
+
+后端段尾与回复结束发送在 WSS 背压下沿用最后有效进展建立的绝对期限，只有实际完成发送才能续期。离线回归覆盖两类控制帧写阻塞时提前超时退出。

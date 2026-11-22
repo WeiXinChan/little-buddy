@@ -2,16 +2,19 @@ package com.littlebuddy
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -38,6 +41,11 @@ open class SimActivity : Activity() {
     private var resumed = false
     private var startAfterPermission = false
     private var audioError = false
+    protected open val cloudMode = false
+    private var cloud: CloudVoice? = null
+    private var endpoint: EditText? = null
+    private var credential: EditText? = null
+    private var cloudError = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,15 +69,33 @@ open class SimActivity : Activity() {
             }
         }
         content.addView(TextView(this).apply {
-            text = "瓦力 · 本地模拟"
+            text = if (cloudMode) "瓦力 · 一句交流验证" else "瓦力 · 本地模拟"
             textSize = 28f
             gravity = Gravity.CENTER
         })
         content.addView(TextView(this).apply {
-            text = "唤醒、ASR、LLM、TTS 均为模拟。麦克风仅在本机检测音量，扬声器播放提示音。"
+            text = if (cloudMode) "开始后，麦克风音频会发送至填写的私有服务。等待「正在听」后再说话。"
+            else "唤醒、ASR、LLM、TTS 均为模拟。麦克风仅在本机检测音量，扬声器播放提示音。"
             textSize = 16f
             gravity = Gravity.CENTER
         })
+        if (cloudMode) {
+            fun field(label: String, kind: Int) = EditText(this).apply {
+                hint = label
+                inputType = InputType.TYPE_CLASS_TEXT or kind or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                isSingleLine = true
+                isSaveEnabled = false
+                importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                content.addView(this, LinearLayout.LayoutParams(-1, -2))
+            }
+            endpoint = field("私有 WSS 地址", InputType.TYPE_TEXT_VARIATION_URI)
+            credential = field("设备令牌", InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        } else {
+            content.addView(Button(this).apply {
+                text = "私有语音验证"
+                setOnClickListener { startActivity(Intent(this@SimActivity, CloudActivity::class.java)) }
+            })
+        }
         status = TextView(this).apply {
             textSize = 22f
             gravity = Gravity.CENTER
@@ -113,12 +139,28 @@ open class SimActivity : Activity() {
             },
             played = { round.played(it) },
             released = { round.released(it) },
+            pcm = if (cloudMode) { id, samples, count -> cloud?.upload(id, samples, count) } else null,
             diagnostics = if (diagnostics == null) null else { energy, decision ->
                 val elapsed = SystemClock.elapsedRealtime() - captureStartedAt
                 currentDiagnostic = "RMS $energy · $decision · ${elapsed} ms"
                 renderDiagnostics()
             },
         )
+        if (cloudMode) {
+            val voice = CloudVoice(
+                dispatcher, checkNotNull(audio),
+                config = { endpoint!!.text.toString().trim() to credential!!.text.toString() },
+                failed = { operation, turn ->
+                    cloudError = true
+                    if (turn != null) round.replyFailed(turn) else round.audioFailed(operation)
+                },
+                released = { round.released(it) },
+                segment = { id, segment -> round.segment(id, segment) },
+                ended = { id, count -> round.endReply(id, count) },
+            )
+            cloud = voice
+            return VoiceRound(voice, voice, deadline, true, changed)
+        }
         val reply = SimulatedReply(deadline, { id, segment -> round.segment(id, segment) },
             { id, last -> round.endReply(id, last) })
         return VoiceRound(checkNotNull(audio), reply, deadline, changed)
@@ -139,12 +181,15 @@ open class SimActivity : Activity() {
 
     override fun onDestroy() {
         dispatcher.removeCallbacksAndMessages(null)
+        cloud?.close()
+        credential?.text?.clear()
         audio?.close()
         super.onDestroy()
     }
 
     private fun requestStart() {
         audioError = false
+        cloudError = false
         startAfterPermission = true
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             startIfAuthorized()
@@ -169,7 +214,7 @@ open class SimActivity : Activity() {
         if (resumed && !permissionPending && startAfterPermission &&
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             startAfterPermission = false
-            round.start(game = true)
+            round.start(game = !cloudMode)
         }
     }
 
@@ -201,22 +246,23 @@ open class SimActivity : Activity() {
         val label = when (phase) {
             Phase.INACTIVE -> "已暂停"
             Phase.IDLE -> when {
+                cloudError -> "连接或语音回复失败，请检查私有地址和设备令牌"
                 audioError -> "录音或播放失败，请检查麦克风权限及音频设备"
                 round.replyTimeout == ReplyTimeout.FIRST_SEGMENT -> "等待回复超时，请再试一次"
                 round.replyTimeout == ReplyTimeout.INCOMPLETE_REPLY -> "回复中断超时，请再试一次"
                 round.emptyCapture == VoiceRound.EmptyCapture.NO_FRAMES -> "没收到麦克风声音，请再试一次"
                 round.emptyCapture == VoiceRound.EmptyCapture.NO_SPEECH -> "没听清，请再说一次"
                 completed == 3 -> "三轮完成"
-                else -> "点按开始，模拟唤醒"
+                else -> if (cloudMode) "点按开始说话" else "点按开始，模拟唤醒"
             }
-            Phase.OPENING -> "正在打开麦克风"
+            Phase.OPENING -> if (cloudMode) "正在连接并打开麦克风" else "正在打开麦克风"
             Phase.LISTENING -> "正在听"
-            Phase.WAITING -> "正在等待模拟回复"
-            Phase.PLAYING -> "正在播放提示音"
+            Phase.WAITING -> if (cloudMode) "正在等待回复" else "正在等待模拟回复"
+            Phase.PLAYING -> if (cloudMode) "正在播放回复" else "正在播放提示音"
             Phase.CLEANING -> "正在切换音频"
             Phase.UNAVAILABLE -> "音频清理超时，请重新打开应用"
         }
-        status.text = "$label · $completed / 3"
+        status.text = if (cloudMode) label else "$label · $completed / 3"
         start.isEnabled = !permissionPending && phase != Phase.INACTIVE && phase != Phase.UNAVAILABLE
         finish.isEnabled = phase == Phase.LISTENING || phase == Phase.OPENING
         stop.isEnabled = phase != Phase.INACTIVE && phase != Phase.IDLE
@@ -232,4 +278,8 @@ open class SimActivity : Activity() {
     private companion object {
         const val MICROPHONE_REQUEST = 1
     }
+}
+
+class CloudActivity : SimActivity() {
+    override val cloudMode = true
 }
