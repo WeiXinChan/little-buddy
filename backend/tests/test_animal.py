@@ -157,6 +157,99 @@ class AnimalTest(unittest.TestCase):
             self.receipt = play(self.session, self.playback)
         self.assertEqual(self.session.summary, Summary("silence", 0))
 
+    def silence_then_continue(self, phase, question):
+        s, p = self.session, self.playback
+        old = self.receipt
+        self.assertTrue(s.consume(old.key, old.listen_id, "silence"))
+        self.assertIn("还想接着玩", s.reply.segments[0].text)
+        prompt = play(s, p)
+        before = (s.game.completed, s.game.used[:], s.game.clue_index, s.game.refused)
+        p.committed(old)
+        self.assertIsNone(p.ready(prompt.key, eligible=True))
+        self.assertFalse(s.consume(old.key, old.listen_id, "start"))
+        self.assertFalse(s.consume(prompt.key, old.listen_id, "start"))
+        self.assertIsNone(s.ack(old.key, 1))
+
+        reply = say(s, prompt, "是")
+        self.assertEqual(len(reply.segments), 1)
+        self.assertIn(question, reply.segments[0].text)
+        self.assertIsNone(reply.segments[0].image_id)
+        self.assertIsNone(s.commit)
+        self.assertFalse(s.consume(reply.key, prompt.listen_id, "start"))
+        self.assertFalse(s.consume(prompt.key, prompt.listen_id, "start"))
+        self.assertIsNone(s.ack(prompt.key, 1))
+        self.receipt = play(s, p)
+        p.committed(prompt)
+        self.assertIsNone(p.ready(self.receipt.key, eligible=True))
+        self.assertNotEqual(self.receipt.listen_id, prompt.listen_id)
+        self.assertEqual(s.game.phase, phase)
+        self.assertEqual(s.game.silences, 0)
+        self.assertEqual(
+            (s.game.completed, s.game.used, s.game.clue_index, s.game.refused), before,
+        )
+        self.assertIsNone(p.image)
+
+    def test_silence_after_guess_confirmation(self):
+        self.speak("小鸡")
+        self.speak("小鸡")
+        self.speak("不要")
+        self.speak("猫咪", reliable=False)
+        self.silence_then_continue("confirm", "你说的是猫咪吗？")
+        self.assertEqual(self.session.game.pending, "猫咪")
+        self.assertTrue(self.session.game.refused)
+        self.speak("不是")
+        self.speak("小鸡")
+        self.speak("是")
+        self.assertEqual(self.session.game.phase, "guess")
+        self.assertEqual(self.session.game.completed, 0)
+        self.speak("猫咪", reliable=False)
+        self.speak("是")
+        self.assertEqual(self.session.game.completed, 1)
+
+    def test_silence_after_reveal_offer(self):
+        self.speak("小鸡")
+        self.speak("小鸡")
+        self.silence_then_continue("offer", "想知道答案吗？")
+        self.speak("是")
+        self.assertEqual(self.session.game.completed, 1)
+        self.assertEqual(self.playback.image, (1, "animal-cat"))
+
+    def test_silence_after_replay_offer(self):
+        for _ in range(3):
+            self.solve()
+        self.silence_then_continue("replay", "想再玩一次吗？")
+        self.assertEqual(self.session.game_results, [])
+        self.speak("是")
+        self.assertEqual(self.session.game.completed, 0)
+        self.assertEqual(len(self.session.game.used), 1)
+        self.assertEqual(self.session.game_results, [Summary("complete", 3)])
+
+    def test_silence_prompt_second_silence_or_cancel(self):
+        for cancel in (False, True):
+            with self.subTest(cancel=cancel):
+                self.setUp()
+                self.speak("猫咪", reliable=False)
+                s, p = self.session, self.playback
+                old = self.receipt
+                self.assertTrue(s.consume(old.key, old.listen_id, "silence"))
+                prompt = play(s, p)
+                if cancel:
+                    s.cancel("stop")
+                    p.cancel()
+                else:
+                    self.assertTrue(s.consume(prompt.key, prompt.listen_id, "silence"))
+                    self.assertFalse(s.consume(prompt.key, prompt.listen_id, "silence"))
+                    self.assertEqual(play(s, p).next_action, "end")
+                for receipt in (old, prompt):
+                    self.assertFalse(s.consume(receipt.key, receipt.listen_id, "start"))
+                    self.assertIsNone(s.ack(receipt.key, 1))
+                    p.committed(receipt)
+                    self.assertIsNone(p.ready(receipt.key, eligible=True))
+                self.assertEqual(s.summary, Summary("stop" if cancel else "silence", 0))
+                self.assertIsNone(s.game)
+                self.assertEqual(s.heard, [])
+                self.assertIsNone(p.image)
+
     def test_lost_duplicate_and_out_of_order_ack(self):
         s, p = self.session, self.playback
         reply = say(s, self.receipt, "猫")

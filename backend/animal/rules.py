@@ -5,7 +5,7 @@ import unicodedata
 from dataclasses import dataclass
 
 CATALOG_VERSION = "animal-click-1"
-RULE_VERSION = "animal-rules-1"
+RULE_VERSION = "animal-rules-2"
 
 
 @dataclass(frozen=True)
@@ -135,6 +135,9 @@ class Game:
         return self.next_card()
 
     def repeat(self):
+        if self.phase == "confirm":
+            prompt = f"你说的是{self.pending}吗？" if self.pending else "能再说清楚一点吗？"
+            return self.say(prompt)
         if self.phase == "replay":
             return self.say("想再玩一次吗？")
         if self.phase == "offer":
@@ -160,6 +163,7 @@ class Game:
         return self.say("你还想接着玩吗？有需要可以说停一下。")
 
     def respond(self, text, reliable):
+        after_silence_prompt = self.silences == 1
         self.silences = 0
         intent, candidate = classify(text, reliable)
         if intent == "help":
@@ -168,6 +172,13 @@ class Game:
             return self.finish("exit", "好，下次再玩！")
         if intent == "chat":
             return self.finish("chat", "我们先结束猜动物。回到待机后可以使用语音入口。")
+
+        if after_silence_prompt:
+            # The committed silence prompt temporarily owns the yes/no context.
+            if intent == "no":
+                return self.finish("exit", "好，下次再玩！")
+            if intent in {"yes", "unclear"} or self.phase == "replay":
+                return self.repeat()
 
         context = self.resume if self.phase == "confirm" else self.phase
         if context == "replay":
@@ -184,8 +195,7 @@ class Game:
         if intent == "unclear" or (self.phase == "replay" and intent not in {"yes", "no"}):
             self.resume, self.phase = self.phase, "confirm"
             self.pending = candidate if self.resume != "replay" else None
-            prompt = f"你说的是{candidate}吗？" if self.pending else "能再说清楚一点吗？"
-            return self.say(prompt)
+            return self.repeat()
 
         if self.phase == "replay":
             if intent == "yes":
