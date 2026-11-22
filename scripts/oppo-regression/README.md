@@ -13,8 +13,12 @@ python3 run.py --checkout '/远端/原检出路径/little-buddy' --apk-dir . --i
 - 已安装审定双包时可省略 `--apk-dir . --install`。只传 `--apk-dir` 时附加校验下载文件。覆盖安装时应用包授予调试所需运行时权限，测试包原位覆盖。
 - 缺省执行八个场景，固定按 asr、first-pcm、between、playing、release、late、blackhole、disconnect 顺序。有多个设备时带 `--serial`。默认 SSH 目标为 `ubuntu@43.139.76.15`，可用 `--ssh-target` 覆盖。使用系统 OpenSSH 默认身份和用户 known_hosts。首次出现主机密钥提示时应核对指纹。
 - 默认遇 FAIL 或 SKIP 停止。可用 `--continue-on-failure` 继续已安全清理的场景。若提示已有 9444 转发、夹具或 reverse，请先结束自己上一次的会话。若手机在测试中断开，报告会指出未能确认的清理。
-- 每次运行生成私有目录 `little-buddy-oppo-*`。把其中的 `oppo-report.zip` 发回工单即可。包内有中文摘要、JSON、JUnit XML 以及失败时可取得的 `AnimalTiming` 数值记录。报告省略序列号及地址。工具只生成本地报告。
+- 每次运行生成私有目录 `little-buddy-oppo-*`。把其中的 `oppo-report.zip` 发回工单即可。包内有中文摘要、JSON、JUnit XML 以及失败时可取得的 `AnimalTiming` 数值记录。报告包含工具构建提交与夹具提交，省略序列号及地址。工具只生成本地报告。
 
 远端从固定 Git 对象读取夹具，不需要切换检出分支。每个夹具由一个 SSH 通道持有，正常停止或通道关闭后回收。进程运行上限 180 秒。测试使用已存在的私有游戏 instrumentation，测试会启动调试 APK 并设置离线回环入口。报告只计这次选择的场景，历史 0.1.11 的四项 OPPO 通过记录保留在 TITA-20。
 
 替身测试命令为 `python3 -m unittest discover -s scripts/oppo-regression -p 'test_*.py'`，从仓库根目录执行。Mac、OPPO 和首次交互式密码流程仍需实际环境确认。
+
+工具为本次运行保留独立的本机回环端点，设备端的 9444 reverse 经该端点接入 SSH 9444。创建或删除超时会读回映射并核对本次目标。ADB 的删除指令按手机端口执行，运行时请避免另一个终端手工强制重绑同一手机的 9444。
+
+发布包用 `git archive --format=zip --output=oppo-regression.zip HEAD scripts/oppo-regression` 生成，归档会把固定提交写入报告使用的构建标记。

@@ -2,19 +2,22 @@
 """Run the pinned offline Little Buddy scenarios from a Mac terminal."""
 import argparse
 from collections import Counter
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import select
 import selectors
 import shlex
 import shutil
 import signal
 import socket
+import socketserver
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET
@@ -23,6 +26,8 @@ import zipfile
 HERE = Path(__file__).resolve().parent
 CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect")
 PORT = "tcp:9444"
+REVERSE_TIMEOUT = 5
+ARCHIVE_SHA = "$Format:%H$"
 APP = "com.littlebuddy.sim"
 TEST_APP = APP + ".test"
 RUNNER = TEST_APP + "/com.littlebuddy.SimUiRunner"
@@ -43,6 +48,26 @@ def interrupt(number, _frame):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     raise Interrupted("收到中断信号 " + str(number))
+
+
+@contextmanager
+def finish_cleanup():
+    received = []
+
+    def record(number, _frame):
+        received.append(number)
+
+    previous = {}
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        if signal.getsignal(sig) is interrupt:
+            previous[sig] = signal.signal(sig, record)
+    try:
+        yield
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+        if received:
+            interrupt(received[0], None)
 
 
 def invoke(command, stage, timeout=15):
@@ -98,12 +123,83 @@ def reverses(adb):
     return [row.split()[-1] for row in rows if len(row.split()) >= 3 and row.split()[-2] == PORT]
 
 
-def remove_reverse(adb):
-    mappings = reverses(adb)
-    if mappings == [PORT]:
-        checked(adb + ["reverse", "--remove", PORT], "清理本次 ADB reverse")
-    elif mappings:
-        raise Failure("9444 reverse 已被改动，请检查设备上的现有映射")
+class ForwardToFixture(socketserver.BaseRequestHandler):
+    def handle(self):
+        try:
+            with socket.create_connection(("127.0.0.1", 9444), timeout=5) as tunnel:
+                self.request.settimeout(5)
+                readers = {self.request: tunnel, tunnel: self.request}
+                while readers:
+                    ready, _, _ = select.select(list(readers), [], [], 125)
+                    if not ready:
+                        break
+                    for source in ready:
+                        destination = readers[source]
+                        data = source.recv(64 * 1024)
+                        if data:
+                            destination.sendall(data)
+                        else:
+                            destination.shutdown(socket.SHUT_WR)
+                            del readers[source]
+        except OSError:
+            pass  # Instrumentation reports transport failures without logging payloads.
+
+
+@contextmanager
+def reverse_relay():
+    # Keep this run's destination allocated until reverse reconciliation completes.
+    with socketserver.ThreadingTCPServer(("127.0.0.1", 0), ForwardToFixture) as server:
+        server.daemon_threads = True
+        relay = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.1})
+        relay.start()
+        try:
+            yield f"tcp:{server.server_address[1]}"
+        finally:
+            server.shutdown()
+            relay.join()
+
+
+def remove_reverse(adb, destination, create_uncertain):
+    # The source is shared. Only reconcile a mapping to our still-reserved port.
+    # After timeout adbd may apply the request after the client has exited.
+    idle_checks = 3 if create_uncertain else 1
+    for _ in range(2):
+        for attempt in range(idle_checks):
+            mappings = reverses(adb)
+            if mappings:
+                break
+            if attempt + 1 < idle_checks:
+                time.sleep(0.2)
+        if mappings != [destination]:
+            return
+        try:
+            checked(adb + ["reverse", "--remove", PORT], "清理本次 ADB reverse", REVERSE_TIMEOUT)
+        except Failure:
+            # The device may already have removed it. Read back before retrying.
+            pass
+        idle_checks = 1
+    if reverses(adb) == [destination]:
+        raise Failure("无法确认本次 ADB reverse 已清理")
+
+
+@contextmanager
+def attached_reverse(adb, destination, cleanup_errors):
+    if reverses(adb):
+        raise Failure("设备已有 9444 reverse，本次保留原映射并退出")
+    confirmed = False
+    try:
+        checked(adb + ["reverse", "--no-rebind", PORT, destination],
+                "新增 ADB reverse", REVERSE_TIMEOUT)
+        if reverses(adb) != [destination]:
+            raise Failure("未能确认本次 ADB reverse")
+        confirmed = True
+        yield
+    finally:
+        with finish_cleanup():
+            try:
+                remove_reverse(adb, destination, create_uncertain=not confirmed)
+            except Failure as exc:
+                cleanup_errors.append(str(exc))
 
 
 def verify_packages(adb, options, manifest):
@@ -136,29 +232,37 @@ def stop_process(process):
 
 
 @contextmanager
-def connection(target):
+def connection(target, cleanup_errors):
     with tempfile.TemporaryDirectory(prefix="lb-ssh-", dir="/tmp") as directory:
-        ssh = ["ssh", "-F", "/dev/null", "-S", directory + "/ctl",
+        control = Path(directory, "ctl")
+        ssh = ["ssh", "-F", "/dev/null", "-S", str(control),
                "-o", "StrictHostKeyChecking=ask", "-o", "ConnectTimeout=10",
                "-o", "NumberOfPasswordPrompts=1", "-o", "ServerAliveInterval=5",
                "-o", "ServerAliveCountMax=2"]
-        # SSH itself interacts with the user's terminal. Worker channels cannot authenticate.
-        master = subprocess.Popen(ssh + ["-M", "-N", "-o", "ControlPersist=no",
-                                         "--", target],
-                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        # OpenSSH owns terminal authentication, then detaches the master with -f.
+        # The dedicated control socket lets us exit only after fixture teardown.
+        master = subprocess.Popen(
+            ssh + ["-f", "-M", "-N", "-o", "ControlPersist=150", "-o", "ExitOnForwardFailure=yes",
+                   "-L", "127.0.0.1:9444:127.0.0.1:9444", "--", target],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         try:
-            end = time.monotonic() + 60
-            while time.monotonic() < end and master.poll() is None:
-                status = invoke(ssh + ["-O", "check", "--", target], "检查 SSH 控制连接", 2)
-                if status.returncode == 0 and master.poll() is None:
-                    checked(ssh + ["-O", "forward", "-L", "127.0.0.1:9444:127.0.0.1:9444",
-                                   "--", target], "专属 SSH 9444 转发", 10)
-                    yield ssh + ["-T", "-o", "BatchMode=yes", "-o", "ProxyCommand=false", "--", target]
-                    return
-                time.sleep(0.2)
-            raise Failure("SSH 登录或 9444 转发失败，或等待登录超时")
+            try:
+                status = master.wait(timeout=60)
+            except subprocess.TimeoutExpired:
+                raise Failure("等待 SSH 登录超时") from None
+            if status:
+                raise Failure("SSH 登录或 9444 转发失败")
+            checked(ssh + ["-O", "check", "--", target], "检查 SSH 控制连接", 5)
+            yield ssh + ["-T", "-o", "BatchMode=yes", "-o", "ProxyCommand=false", "--", target]
         finally:
-            stop_process(master)
+            with finish_cleanup():
+                stop_process(master)
+                if control.exists():
+                    try:
+                        checked(ssh + ["-O", "exit", "--", target], "关闭专属 SSH 连接", 5)
+                    except Failure as exc:
+                        if control.exists():
+                            cleanup_errors.append(str(exc) + "，空闲连接最长保留 150 秒")
 
 
 def read_ready(process, marker):
@@ -197,18 +301,19 @@ def fixture(ssh, options, manifest, run, scenario, cleanup_errors):
             ready = True
             yield process
         finally:
-            try:
-                # EOF also reaches the remote session when the local SSH connection is lost.
-                output, _ = process.communicate(input=b"STOP\n", timeout=12)
-                if ready and (process.returncode or f"STOPPED {unit}".encode() not in output.splitlines()):
-                    cleanup_errors.append(f"{scenario} 夹具停止未确认，远端单元最长运行 180 秒")
-                elif f"CLEANUP_FAILED {unit}".encode() in output.splitlines():
-                    cleanup_errors.append(f"{scenario} 远端夹具清理失败")
-                elif not ready and process.returncode == 255:
-                    cleanup_errors.append(f"{scenario} SSH 断开，远端单元最长运行 180 秒")
-            except subprocess.TimeoutExpired:
-                stop_process(process)
-                cleanup_errors.append(f"{scenario} 夹具清理超时，远端单元最长运行 180 秒")
+            with finish_cleanup():
+                try:
+                    # EOF also reaches the remote session when the local SSH connection is lost.
+                    output, _ = process.communicate(input=b"STOP\n", timeout=12)
+                    if ready and (process.returncode or f"STOPPED {unit}".encode() not in output.splitlines()):
+                        cleanup_errors.append(f"{scenario} 夹具停止未确认，远端单元最长运行 180 秒")
+                    elif f"CLEANUP_FAILED {unit}".encode() in output.splitlines():
+                        cleanup_errors.append(f"{scenario} 远端夹具清理失败")
+                    elif not ready and process.returncode == 255:
+                        cleanup_errors.append(f"{scenario} SSH 断开，远端单元最长运行 180 秒")
+                except subprocess.TimeoutExpired:
+                    stop_process(process)
+                    cleanup_errors.append(f"{scenario} 夹具清理超时，远端单元最长运行 180 秒")
 
 
 def classify(result):
@@ -315,24 +420,26 @@ def run(options, manifest, report):
             raise Failure("Mac 回环 9444 已被占用，本次未接管") from None
     verify_packages(adb, options, manifest)
     report["installed_apks_verified"] = True
-    with connection(options.ssh_target) as ssh:
-        with ExitStack() as cleanup:
-            # Defer interrupts across the mapping/callback ownership handoff.
-            mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
-            try:
-                checked(adb + ["reverse", "--no-rebind", PORT, PORT], "新增 ADB reverse")
-                cleanup.callback(remove_reverse, adb)
-            finally:
-                signal.pthread_sigmask(signal.SIG_SETMASK, mask)
-            if reverses(adb) != [PORT]:
-                raise Failure("未能确认本次 ADB reverse")
+    cleanup_errors = report["cleanup_errors"]
+    with connection(options.ssh_target, cleanup_errors) as ssh, reverse_relay() as destination:
+        with attached_reverse(adb, destination, cleanup_errors):
             for row in report["scenarios"]:
                 if row["status"] == "NOT_REQUESTED":
                     continue
                 print(f"运行 {row['scenario']}…", flush=True)
                 test_scenario(adb, ssh, options, manifest, report, row)
-                if report["cleanup_errors"] or (row["status"] != "PASS" and not options.keep_going):
+                if cleanup_errors or (row["status"] != "PASS" and not options.keep_going):
                     break
+
+
+def tool_sha():
+    if re.fullmatch(r"[0-9a-f]{40}", ARCHIVE_SHA):
+        return ARCHIVE_SHA
+    try:
+        sha = checked(["git", "-C", str(HERE), "rev-parse", "HEAD"], "读取工具提交", 3).strip()
+    except Failure:
+        return None
+    return sha if re.fullmatch(r"[0-9a-f]{40}", sha) else None
 
 
 def write_report(directory, report):
@@ -342,17 +449,17 @@ def write_report(directory, report):
     report["counts"] = dict(counts)
     report["passed"] = (counts["PASS"] == len(selected) and not report["error"]
                         and not report["cleanup_errors"])
-    suite = ET.Element("testsuite", name="Little Buddy OPPO", tests=str(len(selected)),
+    lifecycle_error = int(bool(report["error"] or report["cleanup_errors"]))
+    suite = ET.Element("testsuite", name="Little Buddy OPPO", tests=str(len(selected) + lifecycle_error),
                        failures=str(counts["FAIL"]), skipped=str(counts["SKIP"] + counts["NOT_RUN"]),
-                       errors=str(bool(report["error"] or report["cleanup_errors"])))
+                       errors=str(lifecycle_error))
     for row in selected:
         test = ET.SubElement(suite, "testcase", name=row["scenario"], time=str(row.get("seconds", 0)))
         if row["status"] == "FAIL":
             ET.SubElement(test, "failure", message=row["error"])
         elif row["status"] != "PASS":
             ET.SubElement(test, "skipped", message=row.get("error") or "未执行")
-    if report["error"] or report["cleanup_errors"]:
-        suite.set("tests", str(len(selected) + 1))
+    if lifecycle_error:
         lifecycle = ET.SubElement(suite, "testcase", name="run_lifecycle")
         ET.SubElement(lifecycle, "error", message=" / ".join(
             [message for message in [report["error"], *report["cleanup_errors"]] if message]))
@@ -360,7 +467,8 @@ def write_report(directory, report):
     (directory / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n",
                                            encoding="utf-8")
     summary = [f"{'PASS' if report['passed'] else 'FAIL'} · 已请求 {len(selected)} 项",
-               f"运行 {report['run_id']} · APK {report['version']} · {report['fixture_sha']}",
+               f"运行 {report['run_id']} · APK {report['version']} · 夹具 {report['fixture_sha']}",
+               f"工具提交 {report['tool_sha'] or '未知'}",
                f"通过 {counts['PASS']}，失败 {counts['FAIL']}，跳过 {counts['SKIP']}，未执行 {counts['NOT_RUN']}"]
     for row in rows:
         summary.append(f"{row['scenario']} {row['status']}  {row.get('seconds', 0):.3f}s  {row.get('error', '')}")
@@ -397,7 +505,7 @@ def main():
     os.umask(0o077)
     manifest = json.loads((HERE / "manifest.json").read_text(encoding="utf-8"))
     directory = Path(tempfile.mkdtemp(prefix="little-buddy-oppo-", dir=Path.cwd()))
-    report = dict(manifest, run_id=uuid.uuid4().hex, device="USB Android（标识已省略）",
+    report = dict(manifest, tool_sha=tool_sha(), run_id=uuid.uuid4().hex, device="USB Android（标识已省略）",
                   installed_apks_verified=False, error="", cleanup_errors=[],
                   scenarios=[{"scenario": case, "status": "NOT_RUN" if case in requested else "NOT_REQUESTED"}
                              for case in CASES])

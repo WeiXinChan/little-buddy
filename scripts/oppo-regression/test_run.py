@@ -7,8 +7,10 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
+import xml.etree.ElementTree as ET
 import zipfile
 
 import run
@@ -31,11 +33,31 @@ if name == "ssh":
         record("master")
         if mode == "password":
             sys.exit(255)
+        assert "-f" in args and "-N" in args
+        control = Path(args[args.index("-S") + 1])
+        with control.open("w") as marker:
+            child = os.fork()
+            if child:
+                sys.exit(0)
+        os.setsid()
         (state / "master").touch()
-        time.sleep(120)
+        end = time.monotonic() + 20
+        while control.exists() and time.monotonic() < end:
+            time.sleep(0.05)
+        (state / "master").unlink()
     elif "-O" in args:
-        sys.exit(0 if (state / "master").exists() else 1)
+        control = Path(args[args.index("-S") + 1])
+        if "check" in args:
+            end = time.monotonic() + 1
+            while not (state / "master").exists() and time.monotonic() < end:
+                time.sleep(0.01)
+        if not control.exists():
+            sys.exit(1)
+        if "exit" in args:
+            record("master-exit")
+            control.unlink()
     else:
+        assert (state / "master").exists()
         command = shlex.split(args[-1])
         assert command[:2] == ["bash", "-c"]
         assert command[3] == "fixture-session"
@@ -47,6 +69,7 @@ if name == "ssh":
         if mode == "disconnect":
             sys.exit(255)
         assert sys.stdin.readline() in ("STOP\n", "")
+        assert (state / "master").exists()
         record("stop " + case)
         print("STOPPED " + unit)
     sys.exit()
@@ -63,14 +86,30 @@ mapping = state / "reverse"
 if args == ["get-devpath"]:
     print("usb:1-1")
 elif args == ["reverse", "--list"]:
-    if mapping.exists() or mode == "reverse":
+    if mode == "reverse":
         print("UsbFfs tcp:9444 tcp:9444")
-elif args == ["reverse", "--no-rebind", "tcp:9444", "tcp:9444"]:
-    mapping.touch(exist_ok=False)
+    elif mapping.exists():
+        print("UsbFfs tcp:9444", mapping.read_text())
+elif args[:3] == ["reverse", "--no-rebind", "tcp:9444"]:
+    assert args[3] != "tcp:9444"
+    if mode == "reverse-foreign-create":
+        mapping.write_text("tcp:9444")
+        time.sleep(120)
+    with mapping.open("x") as out:
+        out.write(args[3])
     record("reverse")
+    if mode == "reverse-create-timeout":
+        time.sleep(120)
 elif args == ["reverse", "--remove", "tcp:9444"]:
+    assert mapping.read_text() != "tcp:9444"
     mapping.unlink()
     record("remove")
+    if mode == "reverse-foreign-delete":
+        mapping.write_text("tcp:9444")
+    if mode in ("reverse-delete-timeout", "reverse-foreign-delete"):
+        time.sleep(120)
+elif args == ["shell", "cat", "/proc/uptime"]:
+    print("1.00 2.00")
 elif args[:3] == ["shell", "pm", "path"]:
     print("package:/data/app/" + args[3] + "/base.apk")
 elif args[:2] == ["shell", "sha256sum"]:
@@ -78,8 +117,6 @@ elif args[:2] == ["shell", "sha256sum"]:
     print(list(manifest["apk"].values())[int(".sim.test/" in args[2])], args[2])
 elif args[:4] == ["shell", "pm", "list", "instrumentation"]:
     print("instrumentation:com.littlebuddy.sim.test/com.littlebuddy.SimUiRunner (target=com.littlebuddy.sim)")
-elif args[:3] == ["shell", "cat", "/proc/uptime"]:
-    print("1.00 2.00")
 elif args[:2] == ["shell", "logcat"]:
     print("transcript secret")
     print("event=segment_ack op=1 segment=1 ms=2000")
@@ -114,14 +151,16 @@ class Orchestration(unittest.TestCase):
             path.write_text("#!" + sys.executable + "\n" + FAKE)
             path.chmod(0o700)
 
-    def exercise(self, mode, *arguments, interrupt=None):
+    def exercise(self, mode, *arguments, interrupt=None, signal_group=False, foreign_mapping=False):
         checkout = "/remote/path with spaces/'quote'; $(literal)"
         environment = dict(os.environ, PATH=str(self.root) + os.pathsep + os.environ["PATH"],
                            FAKE_STATE=str(self.root), FAKE_MODE=mode, FAKE_CHECKOUT=checkout,
                            FAKE_MANIFEST=str(run.HERE / "manifest.json"))
         events_file = self.root / "events"
-        with subprocess.Popen([sys.executable, str(run.HERE / "run.py"), "--checkout", checkout,
-                               *arguments], env=environment, cwd=self.root,
+        launcher = ("import sys; sys.path.insert(0, sys.argv.pop(1)); "
+                    "import run; run.REVERSE_TIMEOUT = 0.5; sys.exit(run.main())")
+        with subprocess.Popen([sys.executable, "-c", launcher, str(run.HERE), "--checkout", checkout,
+                               *arguments], env=environment, cwd=self.root, start_new_session=True,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
             if interrupt:
                 end = time.monotonic() + 10
@@ -130,7 +169,10 @@ class Orchestration(unittest.TestCase):
                         process.kill()
                         self.fail("instrumentation did not start")
                     time.sleep(0.02)
-                process.send_signal(interrupt)
+                if signal_group:
+                    os.killpg(process.pid, interrupt)
+                else:
+                    process.send_signal(interrupt)
             stdout, stderr = process.communicate(timeout=25)
         directory, = self.root.glob("little-buddy-oppo-*")
         report = json.loads((directory / "report.json").read_text())
@@ -140,7 +182,16 @@ class Orchestration(unittest.TestCase):
             self.assertNotIn(b"secret", b"".join(archive.read(name) for name in archive.namelist()))
         self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
         self.assertTrue(all(item.stat().st_mode & 0o777 == 0o600 for item in directory.iterdir()))
-        self.assertFalse((self.root / "reverse").exists())
+        reverse = self.root / "reverse"
+        if foreign_mapping:
+            self.assertEqual(reverse.read_text(), "tcp:9444")
+        else:
+            self.assertFalse(reverse.exists())
+        self.assertRegex(report["tool_sha"], r"^[a-f0-9]{40}$")
+        suite = ET.parse(directory / "junit.xml").getroot()
+        for field, tag in (("tests", "testcase"), ("failures", "failure"),
+                           ("errors", "error"), ("skipped", "skipped")):
+            self.assertEqual(int(suite.attrib[field]), len(list(suite.iter(tag))))
         return report, events_file.read_text().splitlines() if events_file.exists() else []
 
     def test_all_eight_one_master_and_ordered_cleanup(self):
@@ -149,7 +200,7 @@ class Orchestration(unittest.TestCase):
         expected = ["master", "reverse"]
         for case in run.CASES:
             expected.extend([f"fixture {case}", f"instrument {case}", f"stop {case}"])
-        self.assertEqual(events, [*expected, "remove"])
+        self.assertEqual(events, [*expected, "remove", "master-exit"])
 
     def test_assumption_skip_and_selected_denominator(self):
         report, _ = self.exercise("skip", "--scenarios", "release,late,blackhole,disconnect")
@@ -168,17 +219,47 @@ class Orchestration(unittest.TestCase):
     def test_timeout_stops_instrumentation_and_fixture(self):
         report, events = self.exercise("timeout", "--scenarios", "release", "--timeout", "1")
         self.assertEqual(report["counts"], {"FAIL": 1})
-        self.assertEqual(events[-3:], ["force-stop", "stop release", "remove"])
+        self.assertEqual(events[-4:], ["force-stop", "stop release", "remove", "master-exit"])
 
     def test_sigint_cleans_up(self):
         report, events = self.exercise("signal", "--scenarios", "release", interrupt=signal.SIGINT)
         self.assertIn("中断", report["error"])
-        self.assertEqual(events[-3:], ["force-stop", "stop release", "remove"])
+        self.assertEqual(events[-4:], ["force-stop", "stop release", "remove", "master-exit"])
 
     def test_sigterm_cleans_up(self):
         report, events = self.exercise("signal", "--scenarios", "release", interrupt=signal.SIGTERM)
         self.assertIn("中断", report["error"])
-        self.assertEqual(events[-3:], ["force-stop", "stop release", "remove"])
+        self.assertEqual(events[-4:], ["force-stop", "stop release", "remove", "master-exit"])
+
+    def test_terminal_group_ctrl_c_confirms_stop_before_closing_master(self):
+        report, events = self.exercise("signal", "--scenarios", "release", interrupt=signal.SIGINT,
+                                       signal_group=True)
+        self.assertIn("中断", report["error"])
+        self.assertEqual(report["cleanup_errors"], [])
+        self.assertEqual(events[-4:], ["force-stop", "stop release", "remove", "master-exit"])
+
+    def test_reverse_create_timeout_reconciles_owned_mapping(self):
+        report, events = self.exercise("reverse-create-timeout", "--scenarios", "release")
+        self.assertIn("新增 ADB reverse超时", report["error"])
+        self.assertEqual(report["cleanup_errors"], [])
+        self.assertEqual(events, ["master", "reverse", "remove", "master-exit"])
+
+    def test_reverse_delete_timeout_uses_readback(self):
+        report, events = self.exercise("reverse-delete-timeout", "--scenarios", "release")
+        self.assertTrue(report["passed"])
+        self.assertEqual(events[-2:], ["remove", "master-exit"])
+
+    def test_foreign_reverse_created_during_create_timeout_is_preserved(self):
+        report, events = self.exercise("reverse-foreign-create", "--scenarios", "release",
+                                       foreign_mapping=True)
+        self.assertIn("新增 ADB reverse超时", report["error"])
+        self.assertEqual(events, ["master", "master-exit"])
+
+    def test_foreign_reverse_replacing_removed_mapping_is_preserved(self):
+        report, events = self.exercise("reverse-foreign-delete", "--scenarios", "release",
+                                       foreign_mapping=True)
+        self.assertTrue(report["passed"])
+        self.assertEqual(events[-2:], ["remove", "master-exit"])
 
     def test_existing_reverse_is_preserved(self):
         report, events = self.exercise("reverse")
@@ -216,7 +297,37 @@ class Orchestration(unittest.TestCase):
     def test_ssh_disconnected(self):
         report, events = self.exercise("disconnect", "--scenarios", "release")
         self.assertEqual(report["counts"], {"FAIL": 1})
-        self.assertEqual(events[-1], "remove")
+        self.assertEqual(events[-2:], ["remove", "master-exit"])
+
+    def test_reverse_relay_forwards_bytes_bidirectionally(self):
+        with socket.socket() as fixture:
+            fixture.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            fixture.bind(("127.0.0.1", 9444))
+            fixture.listen()
+            fixture.settimeout(3)
+
+            def respond():
+                peer, _ = fixture.accept()
+                with peer:
+                    peer.settimeout(3)
+                    while payload := peer.recv(256):
+                        peer.sendall(payload)
+
+            thread = threading.Thread(target=respond)
+            thread.start()
+            try:
+                with run.reverse_relay() as destination:
+                    port = int(destination.split(":")[1])
+                    self.assertNotEqual(port, 9444)
+                    with socket.create_connection(("127.0.0.1", port), timeout=3) as device:
+                        payload = bytes(range(256))
+                        device.sendall(payload)
+                        device.shutdown(socket.SHUT_WR)
+                        with device.makefile("rb") as source:
+                            self.assertEqual(source.read(), payload)
+            finally:
+                thread.join(timeout=4)
+                self.assertFalse(thread.is_alive())
 
     def test_zero_tests(self):
         output = subprocess.CompletedProcess([], 0, "OK (0 tests)\nINSTRUMENTATION_CODE: -1\n")
