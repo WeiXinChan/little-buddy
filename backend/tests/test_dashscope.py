@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 
-from backend.dashscope import DashScope, GreetingPolicy
+from backend.dashscope import DashScope, GreetingPolicy, SpeechTask, SpeechTaskError
 
 
 class SpeechSocket:
@@ -39,6 +39,18 @@ class SpeechSocket:
 
 
 class AdapterTest(unittest.IsolatedAsyncioTestCase):
+    def test_failed_task_preserves_code_without_provider_message(self):
+        task = SpeechTask(None)
+        event = json.dumps({"header": {
+            "task_id": task.id, "event": "task-failed", "error_code": "AccessDenied",
+            "error_message": "private upstream details",
+        }})
+        with self.assertRaises(SpeechTaskError) as failure:
+            task.event(event)
+        self.assertEqual(failure.exception.code, "AccessDenied")
+        self.assertEqual(str(failure.exception), "speech task failed")
+
+
     def test_uses_systemd_credential_file(self):
         with TemporaryDirectory() as folder, patch.dict("os.environ", {
             "CREDENTIALS_DIRECTORY": folder,

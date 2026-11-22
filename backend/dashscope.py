@@ -14,6 +14,14 @@ from websockets.asyncio.client import connect
 from backend.voice import ProtocolError
 
 
+class SpeechTaskError(ProtocolError):
+    def __init__(self, code):
+        self.code = code if isinstance(code, str) and re.fullmatch(
+            r"[A-Z][A-Za-z0-9_.]{0,63}", code
+        ) else "Unknown"
+        super().__init__("speech task failed")
+
+
 class GreetingPolicy:
     # Restrict live testing to the documented greeting. Canonicalize before sending to a model.
     def input(self, transcript):
@@ -42,8 +50,10 @@ class SpeechTask:
     def event(self, message):
         response = json.loads(message)
         header = response["header"]
-        if header["task_id"] != self.id or header["event"] == "task-failed":
-            raise ProtocolError("speech task failed")
+        if header["task_id"] != self.id:
+            raise ProtocolError("speech task ID mismatch")
+        if header["event"] == "task-failed":
+            raise SpeechTaskError(header.get("error_code"))
         return header["event"], response.get("payload", {})
 
     async def start(self, task, function, model, parameters):

@@ -63,3 +63,16 @@ LoadCredential=dashscope-api-key:/etc/little-buddy/voice/dashscope-api-key
 单个已认证 WSS 对应单轮，鉴权用 `Authorization: Bearer <设备令牌>`。服务端取得 ASR 就绪后送 `turn.ready`，手机随后打开麦克风。二进制头为版本 1、方向 1/2 和 32 位大端样本位置，负载为单声道小端 PCM16。上行为连续位置、16 kHz、最多 320,000 样本，`turn.end.samples` 为末尾后一位。下行为 24 kHz，位置每段归零，依次发送 `segment.start`、音频帧、`segment.end` 和 `reply.end`。安卓收到完整分段并核对样本数后进入顺序播放队列。任一时间仅允许一轮，断线后等待后端清理供应商连接再释放该轮名额。
 
 供应商参考 [Fun-ASR WebSocket](https://help.aliyun.com/en/model-studio/fun-asr-realtime-websocket-api) · [百炼 Base URL](https://help.aliyun.com/zh/model-studio/base-url) · [CosyVoice WebSocket](https://help.aliyun.com/zh/model-studio/cosyvoice-websocket-api/)。
+
+## 北京账号首轮真实探测
+
+使用 `scripts/cloud-voice-smoke.py`，由临时 systemd 单元以动态非 root 账号执行。单元使用 `EnvironmentFile=/etc/little-buddy/voice/dashscope.env` 和上文的 `LoadCredential`，总运行上限 50 秒。探针默认先用 TTS 生成固定普通话问候，再在内存中用 FFmpeg 转为 16 kHz。单次完整探针最多请求 1 次 ASR、1 次 LLM 和 3 次 TTS。诊断参数 `--mode asr-ready` 和 `--mode llm-only` 各只尝试一次对应接口；`--shared-speech` 仅用于北京共享语音端点诊断。探针无需监听端口。
+
+| 请求 | 端点 | 实测结果 | 耗时 |
+| --- | --- | --- | ---: |
+| TTS 合成输入 | 北京业务空间语音域名 | WebSocket 异常关闭，未取得音频 | 1341 ms |
+| TTS 合成输入 | 北京共享语音域名，显式传业务空间头 | `AccessDenied`，未取得音频 | 1308 ms |
+| Fun-ASR 就绪 | 北京共享语音域名，显式传业务空间头 | `AccessDenied`，未取得就绪信号，无音频上行 | 1277 ms |
+| Qwen 文本 SSE | 北京业务空间域名 | HTTP 403，未取得回复 | 277 ms |
+
+真实请求共四次，使用本页表格中的候选模型和音色。没有生成可供验证的 PCM，合成闭环、真实取消及成人 OPPO 待测。这些结果只能定位到上游访问被拒或异常断开，无法判断单个音色是否可用。由账号持有人核对北京业务空间成员权限、Key 对应的计费方案及对三项模型的授权范围。确认后再选择是否重试；当前没有证据支持改模型、音色或地域。 [百炼错误码](https://help.aliyun.com/en/model-studio/error-code)
