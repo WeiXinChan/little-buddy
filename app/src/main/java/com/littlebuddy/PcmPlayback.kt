@@ -40,13 +40,14 @@ internal fun pumpPcm(
         val drained = chunk == null && stream.ended
         if (started && drained && head >= written) return
 
-        // Older devices require a full native start buffer, even for short segments.
-        // Pad only a verified end and stop at the last actual frame.
+        // Native playback may need to refill its start buffer after an underrun.
+        // Pad only a verified end, then stop at the last actual frame.
+        val tailPadding = if (drained) (threshold - (written - head) - padding).coerceAtLeast(0) else 0
         val samples = chunk
         val accepted = if (samples != null) {
             output.write(samples, offset)
-        } else if (!started && drained && written + padding < threshold) {
-            output.write(ShortArray(threshold - written - padding), 0)
+        } else if (tailPadding > 0) {
+            output.write(ShortArray(tailPadding), 0)
         } else 0
         check(accepted >= 0)
         if (accepted > 0) {

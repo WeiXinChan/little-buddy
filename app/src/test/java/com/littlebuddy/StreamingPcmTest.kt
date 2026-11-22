@@ -84,6 +84,29 @@ class StreamingPcmTest {
         assertEquals(listOf("playback_requested" to 9L, "playback_head_first_advance" to 9L), events)
     }
 
+    @Test fun sealedShortTailRefillsNativeBufferAfterUnderflow() {
+        val stream = CloudPcm({ _, _ -> }).apply { push(packet(0, 1, 2)) }
+        val output = FakeOutput()
+        var now = 0L
+        pumpPcm(AudioWorker.Operation(7), stream, 2, output, { now }) {
+            now += 100
+            when (now) {
+                100L -> output.head = 2
+                500L -> {
+                    stream.push(packet(2, 3))
+                    stream.seal(3)
+                }
+                600L -> {
+                    // A native output that will not resume with the short tail alone.
+                    assertEquals(listOf<Short>(1, 2, 3, 0), output.samples)
+                    output.head = 4
+                }
+            }
+            check(now <= 600L)
+        }
+        assertEquals(4, output.head)
+    }
+
     @Test fun shortVerifiedSegmentStartsButUnsealedUnderflowFails() {
         val short = CloudPcm({ _, _ -> }).apply {
             push(packet(0, 1))

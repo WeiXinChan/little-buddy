@@ -9,20 +9,25 @@ internal class VoiceTrace(
 ) {
     private val id = UUID.randomUUID()
     private var closed = false
+    private var recordingStarted = false
     private var endpoint: Long? = null
     private var speech: Long? = null
     private val firstPcm = mutableMapOf<Int, Long>()
     private val requested = mutableMapOf<Int, Long>()
     private val head = mutableSetOf<Int>()
 
-    @Synchronized fun started() = emit("capture_started", capture, now())
+    @Synchronized fun started() {
+        if (closed || recordingStarted) return
+        recordingStarted = true
+        emit("capture_started", capture, now())
+    }
 
     @Synchronized fun speechDetected() {
         if (!closed && endpoint == null) speech = now()
     }
 
     @Synchronized fun endpointConfirmed() {
-        if (closed || endpoint != null) return
+        if (closed || !recordingStarted || endpoint != null) return
         speech?.let { emit("last_speech_detected", capture, it) }
         val time = now()
         endpoint = time

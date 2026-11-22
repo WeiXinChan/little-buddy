@@ -8,6 +8,8 @@ class VoiceTraceTest {
         var now = 100L
         val events = mutableListOf<String>()
         val trace = VoiceTrace(5, { now }, events::add)
+        trace.endpointConfirmed() // A connection that has not opened the recorder has no endpoint.
+        trace.started()
         trace.started()
         now = 110
         trace.speechDetected()
