@@ -4,14 +4,14 @@ from uuid import uuid4
 from contextlib import asynccontextmanager
 from unittest.mock import patch
 
-from websockets.exceptions import InvalidStatus
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from backend.demo import Demo
 from backend.server import voice_server
 from backend.tests import test_server, test_voice
 from backend.voice import Audio, End, Limits
 from experiments.pipecat.ab import trial
-from experiments.pipecat.pipeline import EndFrame, PipelineRunner, PipelineTask, run_pipeline
+from experiments.pipecat.pipeline import EndFrame, PipelineRunner, PipelineTask, Stage, run_pipeline
 
 
 def pipeline_server(*args, **kwargs):
@@ -96,6 +96,41 @@ class PipelineTest(test_server.ServerTest):
                         self.assertEqual(await trial(b"\x01\x00" * 320, test_server.TOKEN,
                                                      self.trust, str(uuid4())), "ok")
 
+    async def test_blocked_end_frame_times_out_and_releases_connection_slot(self):
+        process = Stage.process_frame
+        blocked = asyncio.Event()
+        exited = asyncio.Event()
+        demo = Demo()
+
+        async def block_first_end(stage, frame, direction):
+            if isinstance(frame, EndFrame) and not blocked.is_set():
+                blocked.set()
+                try:
+                    await asyncio.Future()
+                finally:
+                    exited.set()
+            await process(stage, frame, direction)
+
+        async def short_turn(channel, providers, policy, **kwargs):
+            await run_pipeline(channel, providers, policy, Limits(turn=0.3, io=2), **kwargs)
+
+        with patch.object(Stage, "process_frame", block_first_end):
+            async with voice_server("127.0.0.1", 0, self.tls, test_server.TOKEN,
+                                    demo, demo, turn_handler=short_turn) as server:
+                async with asyncio.timeout(1):
+                    async with self.open(server) as socket:
+                        await self.upload(socket)
+                        await blocked.wait()
+                        with self.assertRaises(ConnectionClosed) as closed:
+                            while True:
+                                self.assertNotIn("reply.end", str(await socket.recv()))
+                        self.assertEqual(closed.exception.rcvd.code, 1013)
+                        self.assertTrue(exited.is_set())
+                    port = server.sockets[0].getsockname()[1]
+                    with patch("experiments.pipecat.ab.PORT", port):
+                        self.assertEqual(await trial(b"\x01\x00" * 320, test_server.TOKEN,
+                                                     self.trust, str(uuid4())), "ok")
+
     async def test_cancel_at_every_provider_and_reopen(self):
         for phase in ("asr", "llm", "tts", "tts_pcm"):
             with self.subTest(phase=phase):
@@ -168,36 +203,28 @@ class PipelineVoiceTest(test_voice.VoiceTest):
         self.assertIn(("end", 2, 2), fake.trace)
         self.assertNotIn(("reply", 2), fake.trace)
 
-    async def test_turn_deadline_joins_delayed_runner_without_reply(self):
+    async def test_turn_deadline_cancels_delayed_runner_without_reply(self):
         run = PipelineRunner.run
         finishing = asyncio.Event()
-        release = asyncio.Event()
         exited = asyncio.Event()
 
         async def delayed_runner(runner, task):
             await run(runner, task)
             finishing.set()
-            await release.wait()
-            exited.set()
+            try:
+                await asyncio.Future()
+            finally:
+                exited.set()
 
         fake = test_voice.Fake()
         with patch.object(PipelineRunner, "run", delayed_runner):
-            turn = asyncio.create_task(self.prepared_turn(fake))
-            try:
-                await asyncio.wait_for(finishing.wait(), 1)
-                done, _ = await asyncio.wait({turn}, timeout=0.35)
-                self.assertFalse(done)
-                self.assertNotIn(("reply", 2), fake.trace)
-                release.set()
-                with self.assertRaises(TimeoutError):
-                    await asyncio.wait_for(turn, 1)
-                self.assertTrue(exited.is_set())
-                self.assertNotIn(("reply", 2), fake.trace)
-            finally:
-                release.set()
-                await asyncio.gather(turn, return_exceptions=True)
+            with self.assertRaises(TimeoutError):
+                await asyncio.wait_for(self.prepared_turn(fake), 1)
+        self.assertTrue(finishing.is_set())
+        self.assertTrue(exited.is_set())
+        self.assertNotIn(("reply", 2), fake.trace)
 
-    async def test_turn_timeout_waits_for_provider_cleanup(self):
+    async def test_repeated_cancel_during_timeout_waits_for_provider_cleanup(self):
         cleaning = asyncio.Event()
         release = asyncio.Event()
         closed = asyncio.Event()
@@ -219,9 +246,12 @@ class PipelineVoiceTest(test_voice.VoiceTest):
         turn = asyncio.create_task(self.prepared_turn(fake))
         try:
             await asyncio.wait_for(cleaning.wait(), 1)
-            self.assertFalse(turn.done())
+            for _ in range(2):
+                turn.cancel()
+                await asyncio.sleep(0)
+                self.assertFalse(turn.done())
             release.set()
-            with self.assertRaises(TimeoutError):
+            with self.assertRaises(asyncio.CancelledError):
                 await asyncio.wait_for(turn, 1)
             self.assertTrue(closed.is_set())
             self.assertNotIn(("reply", 2), fake.trace)
