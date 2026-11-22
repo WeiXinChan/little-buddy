@@ -138,3 +138,19 @@ LoadCredential=dashscope-api-key:/etc/little-buddy/voice/dashscope-api-key
 | `qwen3.8-flash` 与回复 TTS | ASR 未取得最终文本，本轮未调用。 |
 
 共发出一次 TTS 和一次 ASR 请求，无重试。音频只在内存和 FFmpeg 管道内流转，单元已退出。完整合成链路、LLM 首段、封口至首段可播放 PCM、整体成功轮次耗时和 OPPO 可闻延迟仍无本轮数据。ASR 额度需单独核对 `fun-asr-realtime` 在北京账号的免费额度停止开关、计划抵扣范围与计费状态。
+
+## ASR 免费额度停用开关调整后整轮实测
+
+原北京业务空间与普通 DashScope 凭证。非 root 临时 systemd 单元以 `LoadCredential` 注入，50 秒总上限。一次输入 TTS 预检、一次 ASR、一次 LLM、两次回复 TTS，无重试。合成音频只在内存和 FFmpeg 管道流转，单元已退出。
+
+| 阶段 | 实测结果 |
+| --- | --- |
+| 输入 TTS 预检 | `cosyvoice-v3-flash` / `longanyang`，首 PCM 617 ms，合成收齐 1958 ms。89,280 字节、1860 ms，24 kHz 单声道 PCM16LE。重采样并校验通过共 2025 ms，单独计时。 |
+| ASR | `fun-asr-realtime` 就绪 255 ms。确认已发送 59,520 字节 16 kHz 单声道 PCM16LE，最终转写匹配预期问候，阶段共 3306 ms。调用封口到最终结果收齐并退出 ASR 上下文为 1138 ms。 |
+| LLM | `qwen3.8-flash` 首个非空文本增量 493 ms，首个完整段 533 ms，流结束 559 ms，两段顺序通过。 |
+| 回复 TTS 第一段 | 同模型与音色，首 PCM 556 ms，完整段 1810 ms。51,840 字节，1080 ms，24 kHz 单声道 PCM16LE。 |
+| 回复 TTS 第二段 | 首 PCM 565 ms，完整段 1969 ms。95,040 字节，1980 ms，格式同第一段。 |
+
+从调用 ASR 封口到首段 PCM 完整收齐且通过非空、对齐和非静音检查为 **3507 ms**。从启动 ASR 至两段完成为 **7644 ms**，封口至两段完成为 **5476 ms**。正式轮计时剔除输入预检。此次服务器探针在 LLM 流结束并校验两段后才启动回复 TTS，未经过 Android 播放或手机至后端 WSS。单次结果没有 OPPO 可闻延迟或统计分位意义。成人 OPPO 待私有入口及用户真机验收，儿童效果未验证。
+
+后端段尾与回复结束发送在 WSS 背压下沿用最后有效进展建立的绝对期限，只有实际完成发送才能续期。离线回归覆盖两类控制帧写阻塞时提前超时退出。

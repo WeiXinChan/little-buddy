@@ -79,10 +79,11 @@ async def run_turn(
         async with AsyncExitStack() as resources:
             async with asyncio.timeout_at(deadline):
                 segments = await resources.enter_async_context(providers.answer(approved))
-            count = await deliver(channel, providers, policy, segments, limits, deadline)
+            count, deadline = await deliver(channel, providers, policy, segments, limits, deadline)
         if count == 0:
             raise ProtocolError("empty reply")
-        await channel.reply_ended(count)
+        async with asyncio.timeout_at(deadline):
+            await channel.reply_ended(count)
 
 
 async def recognize(channel: Channel, providers: Providers, limits: Limits) -> str:
@@ -116,14 +117,14 @@ async def deliver(
     segments: AsyncIterator[str],
     limits: Limits,
     deadline: float,
-) -> int:
+) -> tuple[int, float]:
     count = 0
     clock = asyncio.get_running_loop().time
     while True:
         async with asyncio.timeout_at(deadline):
             text = await anext(segments, None)
         if text is None:
-            return count
+            return count, deadline
         count += 1
         approved = policy.segment(text)
         if count > 8 or not approved or len(approved) > 240:
@@ -146,5 +147,6 @@ async def deliver(
                 deadline = clock() + limits.io
             if samples == 0:
                 raise ProtocolError("empty synthesized audio")
-            await channel.segment_ended(count, samples)
+            async with asyncio.timeout_at(deadline):
+                await channel.segment_ended(count, samples)
             deadline = clock() + limits.io

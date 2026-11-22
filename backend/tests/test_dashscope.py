@@ -177,8 +177,14 @@ class AdapterTest(unittest.IsolatedAsyncioTestCase):
                 await recognition.write(b"\x02\x00")
                 transcript = await recognition.finish()
             policy = GreetingPolicy()
-            async with adapter.answer(policy.input(transcript)) as answer:
-                segments = [policy.segment(text) async for text in answer]
+            events = []
+            async with adapter.answer(policy.input(transcript),
+                                      on_first_text=lambda: events.append("first text")) as answer:
+                segments = []
+                async for text in answer:
+                    events.append("complete segment")
+                    segments.append(policy.segment(text))
+            self.assertEqual(events, ["first text", "complete segment", "complete segment"])
             async with adapter.synthesize(segments[0], 24_000) as frames:
                 self.assertEqual([frame async for frame in frames], [b"\x01\x00"])
 

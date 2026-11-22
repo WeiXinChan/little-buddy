@@ -15,7 +15,9 @@ class ProbeTest(unittest.IsolatedAsyncioTestCase):
     async def test_probe_requires_the_two_expected_segments_in_order(self):
         class Adapter:
             @asynccontextmanager
-            async def answer(self, prompt):
+            async def answer(self, prompt, *, on_first_text):
+                on_first_text()
+
                 async def segments():
                     for text in response:
                         yield text

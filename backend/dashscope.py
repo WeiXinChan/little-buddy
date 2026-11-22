@@ -186,7 +186,7 @@ class DashScope:
                 await recognition.close()
 
     @asynccontextmanager
-    async def answer(self, transcript):
+    async def answer(self, transcript, *, on_first_text=None):
         async with self.http.stream("POST", self.chat_url, headers=self.headers, json={
             "model": self.llm,
             "messages": [
@@ -208,9 +208,9 @@ class DashScope:
                 except (ValueError, AttributeError):
                     details = upstream_details(None, None, response.headers.get("x-request-id"))
                 raise ChatStatusError(response.status_code, details)
-            yield self.sentences(response)
+            yield self.sentences(response, on_first_text)
 
-    async def sentences(self, response):
+    async def sentences(self, response, on_first_text=None):
         pending = ""
         async for line in response.aiter_lines():
             if not line.startswith("data:"):
@@ -226,6 +226,9 @@ class DashScope:
             content = choices[0]["delta"].get("content")
             if not content:
                 continue
+            if on_first_text is not None and content.strip():
+                on_first_text()
+                on_first_text = None
             pending += content
             if len(pending) > 240:
                 raise ProtocolError("oversized model segment")

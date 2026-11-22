@@ -200,3 +200,40 @@ class VoiceTest(unittest.IsolatedAsyncioTestCase):
             await run_turn(fake, fake, fake, Limits(io=0.1, turn=2))
         self.assertEqual(fake.trace[-4:],
                          [("end", 1, 1), ("start", 2), "waiting for first PCM", "second tts closed"])
+
+    async def test_reply_control_backpressure_cannot_wait_for_turn_deadline(self):
+        class Backpressure(Fake):
+            async def segment_ended(self, number, samples):
+                if self.block == "segment.end":
+                    await self.wait_for_send()
+                await super().segment_ended(number, samples)
+
+            async def reply_ended(self, count):
+                if self.block == "reply.end":
+                    await self.wait_for_send()
+                await super().reply_ended(count)
+
+            async def wait_for_send(self):
+                self.trace.append("send blocked")
+                try:
+                    await asyncio.Future()
+                finally:
+                    self.trace.append("send cancelled")
+
+        for frame in ("segment.end", "reply.end"):
+            with self.subTest(frame=frame):
+                fake = Backpressure()
+                fake.block = frame
+                fake.events.put_nowait(Audio(0, b"\x00\x00"))
+                fake.events.put_nowait(End(1))
+                task = asyncio.create_task(run_turn(fake, fake, fake, Limits(io=0.04, turn=5)))
+                try:
+                    done, _ = await asyncio.wait({task}, timeout=0.5)
+                    self.assertEqual(done, {task})
+                    with self.assertRaises(TimeoutError):
+                        await task
+                finally:
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+                self.assertEqual(fake.trace[-2:], ["send blocked", "send cancelled"])
+                self.assertNotIn(("reply", 2), fake.trace)
