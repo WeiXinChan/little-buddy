@@ -29,8 +29,7 @@
 主机源文件为 `/etc/little-buddy/voice/dashscope-api-key`，目录归 `root:root`，权限 `0700`，文件归 `root:root`，权限 `0600`。在服务器的可信交互 SSH 终端操作，关闭会话输入录制。凭证保管人可复制下列命令，再在隐藏输入提示出现后粘贴 Key 并回车。
 
 ```bash
-sudo -v
-(
+sudo -v && (
   set +x
   set -o pipefail
   systemd-ask-password --echo=no --timeout=90s '北京百炼 API Key' |
@@ -39,13 +38,14 @@ sudo -v
       dir=/etc/little-buddy/voice
       install -d -o root -g root -m 0700 "$dir"
       tmp=$(mktemp "$dir/.dashscope-api-key.XXXXXX")
-      trap '''rm -f -- "$tmp"''' EXIT
+      cleanup() { rm -f -- "$tmp"; }
+      trap cleanup EXIT
       IFS= read -r key
       [[ "$key" =~ ^[[:alnum:]_-]+$ ]]
       printf "%s\n" "$key" > "$tmp"
       mv -fT -- "$tmp" "$dir/dashscope-api-key"
     '
-)
+) &&
 sudo -n test -s /etc/little-buddy/voice/dashscope-api-key &&
   sudo -n stat -c '%a %U:%G %n' /etc/little-buddy/voice/dashscope-api-key
 ```
