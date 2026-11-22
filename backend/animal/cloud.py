@@ -27,15 +27,17 @@ class GameChannel(Channel):
         super().__init__(socket)
         self.key = None
         self.session = None
+        self.receipts = asyncio.Lock()
         self.counts = dict(asr=0, asr_samples=0, tts=0, tts_chars=0, llm=0)
 
     async def control(self, kind, **fields):
         await self.send(json.dumps(dict(event=kind, key=asdict(self.key), **fields)))
 
     async def segment_ended(self, number, samples):
-        await super().segment_ended(number, samples)
-        if not self.session.segment_sent(self.key, number):
-            raise ProtocolError("invalid segment order")
+        async with self.receipts:
+            await super().segment_ended(number, samples)
+            if not self.session.segment_sent(self.key, number):
+                raise ProtocolError("invalid segment order")
 
     async def receive(self):
         while True:
@@ -89,24 +91,65 @@ async def play_game(socket, providers, *, seed=None, report=print):
     async def acknowledge(key, number):
         if type(number) is not int:
             raise ProtocolError("invalid acknowledgement")
-        result = session.ack(key, number)
-        if result:
-            await channel.control("playback.segment_committed", number=number)
-            await commit(result.commit)
+        async with channel.receipts:
+            result = session.ack(key, number)
+            if result:
+                await channel.control("playback.segment_committed", number=number)
+                await commit(result.commit)
 
-    async def send_reply(reply):
+    async def send_reply(reply, cleanup=None):
         channel.key = reply.key
         started_at = clock()
         await channel.control("reply", segments=[dict(image_id=s.image_id) for s in reply.segments])
+
         async def segments():
             for segment in reply.segments:
                 counts["tts"] += 1
                 counts["tts_chars"] += len(segment.text)
                 yield segment.text
-        async with asyncio.timeout(limits.turn):
-            count, _ = await deliver(channel, providers, RuleSpeech(), segments(), limits, started_at + limits.io)
-            await channel.reply_ended(count)
-            await commit(session.reply_end(reply.key, count))
+
+        async def produce():
+            async with asyncio.timeout(limits.turn):
+                count, _ = await deliver(channel, providers, RuleSpeech(), segments(), limits, started_at + limits.io)
+                async with channel.receipts:
+                    await channel.reply_ended(count)
+                    await commit(session.reply_end(reply.key, count))
+                if cleanup is not None:
+                    await asyncio.shield(cleanup)
+
+        # While emitting audio and retiring providers, only ACKs can mutate
+        # this reply. Do not overlap socket readers or start another provider.
+        producer = asyncio.create_task(produce())
+        reader = asyncio.create_task(receive())
+        pending = None
+        try:
+            while True:
+                ready, _ = await asyncio.wait((producer, reader), return_when=asyncio.FIRST_COMPLETED)
+                if reader in ready:
+                    message = reader.result()
+                    kind = message["event"]
+                    key = TurnKey(**message["key"])
+                    if kind == "playback.segment_completed":
+                        await acknowledge(key, message["number"])
+                    elif kind in {"turn.start", "listen.silence", "turn.advance"}:
+                        receipt = session.commit
+                        if receipt and receipt.key == key and pending is None:
+                            if kind == "turn.advance":
+                                if receipt.next_action == "advance":
+                                    pending = message
+                            elif receipt.listen_id and receipt.listen_id == message.get("listen_id"):
+                                pending = message
+                    else:
+                        raise ProtocolError("unsupported event during reply")
+                if producer in ready:
+                    producer.result()
+                    return pending
+                reader = asyncio.create_task(receive()) if reader.done() else reader
+        finally:
+            for task in (producer, reader):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(producer, reader, return_exceptions=True)
 
     watch = observer.set(timing)
     try:
@@ -119,13 +162,13 @@ async def play_game(socket, providers, *, seed=None, report=print):
                 session = channel.session = Session(secrets.randbits(32) if seed is None else seed, hello["catalog"])
             except ValueError as exc:
                 raise ProtocolError("unsupported catalog") from exc
-        await send_reply(session.reply)
-        # A single coroutine owns all rule mutations. The outer handler cancels
-        # and joins it on disconnect, including while waiting on a provider.
+        pending = await send_reply(session.reply)
+        # The outer handler cancels and joins this session on disconnect.
         async with asyncio.timeout(900):
             while session.game:
                 async with asyncio.timeout(30):
-                    message = await receive()
+                    message = pending if pending is not None else await receive()
+                pending = None
                 event = message["event"]
                 key = TurnKey(**message["key"])
                 if event == "playback.segment_completed":
@@ -133,7 +176,7 @@ async def play_game(socket, providers, *, seed=None, report=print):
                 elif event == "turn.advance":
                     if reply := session.advance(key):
                         started = clock()
-                        await send_reply(reply)
+                        pending = await send_reply(reply)
                 elif event in {"turn.start", "listen.silence"}:
                     outcome = "start" if event == "turn.start" else "silence"
                     if not session.consume(key, message["listen_id"], outcome):
@@ -142,14 +185,14 @@ async def play_game(socket, providers, *, seed=None, report=print):
                     if outcome == "start":
                         counts["asr"] += 1
                         async with asyncio.timeout(limits.turn):
-                            async with recognize(channel, providers, limits, allow_empty=True) as (text, _):
+                            async with recognize(channel, providers, limits, allow_empty=True) as (text, cleanup):
                                 # The provider delivers text without calibrated confidence.
                                 # Apply exact phrases and context guards. Empty or ambiguous text clarifies.
                                 reply = session.transcript(key, text)
                                 del text
-                                await send_reply(reply)
+                                pending = await send_reply(reply, cleanup)
                     else:
-                        await send_reply(session.reply)
+                        pending = await send_reply(session.reply)
                 else:
                     raise ProtocolError("unsupported event")
         reason = session.summary.reason

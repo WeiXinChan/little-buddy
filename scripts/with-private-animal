@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
 # Run the private game over an SSH-owned loopback listener for up to 20 minutes.
 set -euo pipefail
-case "${1:-}" in
-  fake|dashscope) provider=$1 ;;
-  *) echo "Usage: $0 {fake|dashscope} /absolute/path/to/game-device-token" >&2; exit 2 ;;
+if [[ $# -ne 2 ]]; then
+  echo "Usage: $0 {fake|dashscope} /absolute/path/to/game-device-token | fixture SCENARIO" >&2
+  exit 2
+fi
+provider=$1
+case "$provider" in
+  fake|dashscope)
+    token_file=$2
+    [[ "$token_file" = /* ]] || { echo "Use an absolute token file path" >&2; exit 2; }
+    ;;
+  fixture) scenario=$2 ;;
+  *) echo "Unsupported provider: $provider" >&2; exit 2 ;;
 esac
-token_file=$2
-[[ "$token_file" = /* ]] || { echo "Use an absolute token file path" >&2; exit 2; }
 cd "$(dirname "$0")/.."
 directory=/etc/little-buddy/voice
 staging=$(sudo -n mktemp -d /run/little-buddy-animal.XXXXXXXX)
@@ -21,20 +28,27 @@ trap 'exit 143' HUP TERM
 sudo -n chmod 755 "$staging"
 sudo -n cp -r backend "$staging/"
 credentials=(
-  -p "LoadCredential=animal-device-token:$token_file"
   -p "LoadCredential=voice-cert:$directory/loopback-cert.pem"
   -p "LoadCredential=voice-key:$directory/loopback-key.pem"
 )
+if [[ "$provider" == fixture ]]; then
+  port=9444
+  program=(-m backend.animal.private_fixture "$scenario" --port "$port")
+else
+  credentials+=(-p "LoadCredential=animal-device-token:$token_file")
+  port=8444
+  program=(-m backend.animal.cloud --port "$port" --provider "$provider")
+fi
 if [[ "$provider" == dashscope ]]; then
   credentials+=(
     -p "EnvironmentFile=$directory/dashscope.env"
     -p "LoadCredential=dashscope-api-key:$directory/dashscope-api-key"
   )
 fi
-echo "回环 8444 · 日志 sudo journalctl -u $unit · Ctrl+C 停止"
+echo "回环 $port · 日志 sudo journalctl -u $unit · Ctrl+C 停止"
 sudo -n systemd-run --unit="$unit" --quiet --wait --pipe --collect \
   -p DynamicUser=yes -p NoNewPrivileges=yes -p ProtectSystem=strict \
   -p RuntimeMaxSec=20min -p TimeoutStopSec=5 -p MemoryMax=256M -p LimitCORE=0 \
   "${credentials[@]}" --working-directory="$staging" \
-  /usr/bin/python3 -B -m backend.animal.cloud --port 8444 --provider "$provider" \
+  /usr/bin/python3 -B "${program[@]}" \
   --cert '${CREDENTIALS_DIRECTORY}/voice-cert' --key '${CREDENTIALS_DIRECTORY}/voice-key'

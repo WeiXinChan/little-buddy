@@ -7,7 +7,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /** Audio worker writes frames. The activity authorizes and seals on its dispatcher. */
-internal class AnimalUpload(val operation: Long, private val socket: WebSocket) {
+internal class AnimalUpload(
+    val operation: Long,
+    private val socket: WebSocket,
+    val synthetic: Boolean,
+) {
     private val pending = ArrayDeque<ShortArray>()
     private var started = false
     private var ready = false

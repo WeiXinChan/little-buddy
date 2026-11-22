@@ -18,11 +18,13 @@
    python3 --version
    python3 -c 'import httpx, websockets; print(httpx.__version__, websockets.__version__)'
    umask 077
-   ANIMAL_TOKEN_FILE=$(mktemp "$PWD/.animal-device-token.XXXXXXXX")
+   ANIMAL_TOKEN_FILE=$(mktemp /tmp/little-buddy-animal-token.XXXXXXXX)
+   trap 'rm -f -- "$ANIMAL_TOKEN_FILE"' EXIT
    openssl rand -hex 32 > "$ANIMAL_TOKEN_FILE"
    cat "$ANIMAL_TOKEN_FILE"
    scripts/with-private-animal dashscope "$ANIMAL_TOKEN_FILE"
    rm -f -- "$ANIMAL_TOKEN_FILE"
+   trap - EXIT
    ```
 
    若需要安装依赖，先在管理员维护的 Python 3.11+ 环境按 `python3 -m pip install -r backend/requirements.txt` 安装，确保启动脚本使用的 `/usr/bin/python3` 可导入依赖。启动后应出现 `animal_ready port=8444`。脚本在前台结束或 20 分钟到期时回收服务。脚本显示的 unit 名可用于 `sudo journalctl -u <unit>` 或 `sudo systemctl stop <unit>`。
@@ -30,15 +32,17 @@
 3. 另开 Mac 终端，连接一台 OPPO。若多台设备在线，为每条 `adb` 命令加 `-s 手机序列号`。
 
    ```bash
+   shasum -a 256 -c SHA256SUMS.txt
    adb devices
-   adb install -r little-buddy-0.1.10-animal-private.apk
+   adb install -r -g little-buddy-0.1.11-animal-private.apk
+   adb install -r little-buddy-0.1.11-animal-private-test.apk
    adb reverse tcp:8444 tcp:8444
    adb reverse --list
    ```
 
 4. 打开「私有语音猜动物」，填独立游戏令牌，地址保持 `wss://127.0.0.1:8444/v1/animal`，点开始。等「正在听」说话，做一局三题并说「再玩一次」，任选一次说话时停止再重开。真实可闻首段可由成人现场标记，音频日志只记录播放请求和播放头时钟。
 
-如连不上，先核对 SSH 转发和 `adb reverse --list`，再检查已有 CA 和证书有效期、IP 或 localhost 是否在证书 SAN 中、游戏令牌是否填入正确入口。Mac 可用受信 CA 文件执行 `curl --cacert "$ANIMAL_CA_FILE" https://127.0.0.1:8444/healthz`，预期为 `ok`。服务终端记录固定原因和各阶段耗时。手机可用 `adb logcat -s AnimalTiming` 观察客户端播放。测试结束后停止 SSH 中的服务，Mac 执行 `adb reverse --remove tcp:8444`，关闭 SSH。回退时用原私有单轮入口与原转发配置。
+如连不上，先核对 SSH 转发和 `adb reverse --list`，再检查已有 CA 和证书有效期、IP 或 localhost 是否在证书 SAN 中、游戏令牌是否填入正确入口。Mac 可用受信 CA 文件执行 `curl --cacert "$ANIMAL_CA_FILE" https://127.0.0.1:8444/healthz`，预期为 `ok`。服务终端记录固定原因和各阶段耗时。手机可用 `adb logcat -s AnimalTiming` 观察客户端播放。测试结束后停止 SSH 中的服务，Mac 执行 `adb reverse --remove tcp:8444`，关闭 SSH。回退时用本包首页的原「私有语音验证」入口与原 8443 转发配置。若必须恢复旧 APK，0.1.8 是同包名 `com.littlebuddy.sim` 的版本码 9，Android 通常会拒绝覆盖安装。先确认可清除应用本地数据和授权状态，再由设备持有人卸载当前包并安装原签名 APK。不要为回滚改动原 8443 服务。
 
 ## 协议与验收边界
 
@@ -46,9 +50,36 @@
 
 离线执行 `PYTHONPATH=.:backend python3 -m unittest discover -s backend/tests`。APK 与测试 APK 使用服务器已有工程签名。设备 instrumentation、成人 OPPO 真实语音、弱网和童声分别登记。童声继续受设计文档的数据放行条件约束。
 
+## 私有 TLS 故障夹具
+
+先按上方命令核验和安装两包。使用一台已授权、已信任现有开发 CA 的实验设备。服务端运行假供应商，真机使用 AudioRecord 和 AudioTrack，测试仅上传内存合成的固定 PCM，不上传麦克风采样，不调用百炼。每个场景独立启动一次，避免故障序列被上一次连接消费。
+
+1. Mac 单独开启 SSH 转发，并在该 SSH 终端从固定提交的目录启动第一个场景。
+
+   ```bash
+   ssh -t -o ExitOnForwardFailure=yes -L 127.0.0.1:9444:127.0.0.1:9444 服务器别名
+   # 在服务器 SSH 终端执行
+   scripts/with-private-animal fixture asr
+   ```
+
+2. Mac 的另一个终端执行以下命令。`animalScenario` 必须与服务端一致。
+
+   ```bash
+   adb reverse tcp:9444 tcp:9444
+   adb shell am instrument -w \
+     -e class com.littlebuddy.AnimalPrivateActivityTest \
+     -e animalScenario asr \
+     com.littlebuddy.sim.test/com.littlebuddy.SimUiRunner
+   ```
+
+3. 每次先 Ctrl+C 停止上一个服务，将两端的 `asr` 换成下一场景，依次执行 `first-pcm`、`between`、`playing`、`release`、`late`、`blackhole`、`disconnect`。分别覆盖 等待 ASR 最终结果、TTS 首 PCM 挂起、揭晓后的段间挂起、播放头推进时停止、释放通知等待、旧段和整轮回执、TCP 黑洞及断流。夹具检查清图、归零、释放前不可重开、无旧会话自动采播以及手动新局。
+4. 停服务并执行 `adb reverse --remove tcp:9444`。原模拟入口的自动测试另按 [模拟 APK 说明](animal-apk-validation.md) 启动 8765 服务并指定 `com.littlebuddy.AnimalActivityTest`。
+
+本次服务器只执行后端 TLS 测试并构建 Android instrumentation。私有故障夹具的设备执行、锁屏、真人语音、实际弱网环境均分别登记。
+
 ## 实云合成探针
 
-使用 `scripts/probe-animal-cloud.py` 对同一进程里的回环 TLS 游戏路由发送合成语音。现有百炼凭证通过 systemd 注入，探针使用临时自签 localhost 证书。音频仅在内存生成、重采样和发送。探针用协议 ACK 模拟播放完成，设备播放由独立验收覆盖。
+以下为修复前 PR #11 固定 `74dd7b2` 的探针证据，本次时序复验使用离线假供应商。原探针用 `scripts/probe-animal-cloud.py` 对同一进程里的回环 TLS 游戏路由发送合成语音。现有百炼凭证通过 systemd 注入，探针使用临时自签 localhost 证书。音频仅在内存生成、重采样和发送。探针用协议 ACK 模拟播放完成，设备播放由独立验收覆盖。
 
 - 完整会话 1/1。三题提交数为 1、2、3，「再玩一次」后归零。无自动重试。另一次启动在本地 TLS 握手阶段失败，未打开游戏会话、未调用云。
 - 服务端 4 次 ASR，上行 114560 样本（7.16 秒）。游戏 TTS 11 次、109 字符。合成输入另用 2 次 TTS、11 字符。LLM 0 次。此轮未读取账户账单，实际费用待账单。

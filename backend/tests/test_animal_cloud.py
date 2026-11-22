@@ -8,9 +8,10 @@ import unittest
 from pathlib import Path
 
 from websockets.asyncio.client import connect
-from websockets.exceptions import InvalidStatus
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from backend.animal.cloud import game_server
+from backend.animal.private_fixture import fixture_server
 from backend.animal.rules import CARDS, CATALOG_VERSION
 from backend.demo import Demo
 from backend.wire import HEADER
@@ -56,7 +57,8 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
     def open(self, server, token=None):
         port = server.sockets[0].getsockname()[1]
         return connect(f"wss://localhost:{port}/v1/animal", ssl=self.trust,
-                       additional_headers={"Authorization": f"Bearer {token or self.token}"})
+                       additional_headers={"Authorization": f"Bearer {token or self.token}"},
+                       ping_interval=2, ping_timeout=2, close_timeout=0.5)
 
     async def receive(self, ws, event):
         message = json.loads(await asyncio.wait_for(ws.recv(), 3))
@@ -150,3 +152,110 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
                     receipt = await self.reply(ws)
                     self.assertEqual((receipt["completed"], receipt["next_action"]), (0, "listen"))
         self.assertEqual(demo.requests, 6)
+
+    async def test_reveal_ack_during_later_tts_or_asr_cleanup(self):
+        for phase in ("tts", "asr_cleanup"):
+            with self.subTest(phase=phase):
+                blocked = asyncio.Event()
+                release = asyncio.Event()
+
+                class Delayed(SpeechFixture):
+                    @asynccontextmanager
+                    async def recognize(self, sample_rate):
+                        async with super().recognize(sample_rate) as asr:
+                            yield asr
+                        if phase == "asr_cleanup":
+                            blocked.set()
+                            await release.wait()
+
+                    @asynccontextmanager
+                    async def synthesize(self, segment, sample_rate):
+                        if phase == "tts" and len(self.spoken) == 2:
+                            blocked.set()
+                            await release.wait()
+                        async with super().synthesize(segment, sample_rate) as result:
+                            yield result
+
+                demo = Delayed(["告诉我答案"])
+                async with game_server(0, self.tls, self.token, demo, seed=0, report=lambda _: None) as server:
+                    async with self.open(server) as ws:
+                        await self.start(ws)
+                        first = await self.reply(ws)
+                        await self.speech(ws, first)
+                        reply = await self.receive(ws, "reply")
+                        self.assertTrue(reply["segments"][0]["image_id"])
+                        key = reply["key"]
+
+                        async def drain(number):
+                            self.assertEqual((await self.receive(ws, "segment.start"))["number"], number)
+                            while isinstance(frame := await ws.recv(), bytes):
+                                pass
+                            self.assertEqual(json.loads(frame)["event"], "segment.end")
+
+                        await drain(1)
+                        if phase == "asr_cleanup":
+                            await drain(2)
+                            self.assertEqual((await self.receive(ws, "reply.end"))["count"], 2)
+                        await asyncio.wait_for(blocked.wait(), 1)
+                        try:
+                            for _ in range(2):
+                                await self.send(ws, "playback.segment_completed", key, number=1)
+                                committed = await asyncio.wait_for(
+                                    self.receive(ws, "playback.segment_committed"), 0.6)
+                                self.assertEqual(committed["number"], 1)
+                            with self.assertRaises(TimeoutError):
+                                await asyncio.wait_for(ws.recv(), 0.05)
+                            if phase == "tts":
+                                release.set()
+                                await drain(2)
+                                await self.receive(ws, "reply.end")
+                            await self.send(ws, "playback.segment_completed", key, number=2)
+                            await self.receive(ws, "playback.segment_committed")
+                            receipt = await self.receive(ws, "turn.committed")
+                            self.assertEqual((receipt["completed"], receipt["next_action"]), (1, "advance"))
+                            await self.send(ws, "turn.advance", key)
+                            if phase == "asr_cleanup":
+                                with self.assertRaises(TimeoutError):
+                                    await asyncio.wait_for(ws.recv(), 0.05)
+                            release.set()
+                            self.assertEqual((await self.reply(ws))["completed"], 1)
+                        finally:
+                            release.set()
+
+
+    async def test_private_fixture_faults_and_fresh_connection(self):
+        for scenario in ("asr", "first-pcm", "between", "blackhole", "disconnect"):
+            with self.subTest(scenario=scenario):
+                async with fixture_server(0, self.tls, self.token, scenario) as server:
+                    async with self.open(server) as ws:
+                        await self.start(ws)
+                        first = await self.reply(ws)
+                        await self.speech(ws, first)
+                        if scenario != "asr":
+                            response = await self.receive(ws, "reply")
+                            await self.receive(ws, "segment.start")
+                            if scenario == "first-pcm":
+                                with self.assertRaises(TimeoutError):
+                                    await asyncio.wait_for(ws.recv(), 0.15)
+                            else:
+                                while isinstance(frame := await ws.recv(), bytes):
+                                    pass
+                                self.assertEqual(json.loads(frame)["event"], "segment.end")
+                                await self.send(ws, "playback.segment_completed", response["key"], number=1)
+                                controls = [json.loads(await asyncio.wait_for(ws.recv(), 1)) for _ in range(2)]
+                                self.assertEqual({(item["event"], item["number"]) for item in controls},
+                                                 {("playback.segment_committed", 1), ("segment.start", 2)})
+                        if scenario in {"blackhole", "disconnect"}:
+                            with self.assertRaises(ConnectionClosed):
+                                await asyncio.wait_for(ws.recv(), 12)
+                        elif scenario == "asr":
+                            with self.assertRaises(TimeoutError):
+                                await asyncio.wait_for(ws.recv(), 0.15)
+                    # The old TCP tunnel can take one scheduler cycle to close
+                    # before its server stops returning 503 to new clients.
+                    await asyncio.sleep(0.1)
+                    async with self.open(server) as ws:
+                        await self.start(ws)
+                        fresh = await self.reply(ws)
+                        self.assertEqual(fresh["completed"], 0)
+                        self.assertNotEqual(first["key"]["session_id"], fresh["key"]["session_id"])

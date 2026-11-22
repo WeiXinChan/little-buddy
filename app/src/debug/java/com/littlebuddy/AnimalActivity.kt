@@ -32,13 +32,14 @@ import kotlin.math.sin
 
 internal enum class AnimalEvent {
     REPLY_END, FINAL_ACK, SEGMENT_CONFIRMATION, TURN_COMMIT, PLAYBACK_RELEASE,
-    CAPTURE_FRAME, TONE, TONE_DISPATCH, TAIL_TIMER, IMAGE_TIMER, CAPTURE_DISPATCH, IMAGE_SHOWN,
+    CAPTURE_FRAME, ASR_UPLOAD_END, PCM_HEAD_ADVANCED, TONE, TONE_DISPATCH, TAIL_TIMER, IMAGE_TIMER, CAPTURE_DISPATCH, IMAGE_SHOWN,
 }
 
 /** Debug instrumentation can pause delivery at the same boundaries used by the real adapters. */
 internal interface AnimalProbe {
     fun deliver(event: AnimalEvent, action: () -> Unit)
     fun observe(event: AnimalEvent)
+    val syntheticCapture: Boolean get() = false
 }
 
 class AnimalActivity : Activity() {
@@ -89,6 +90,7 @@ class AnimalActivity : Activity() {
     private var sequence = 0L
     private var slot: Long? = null
     private var slotGeneration = 0L
+    private var cloudPlayback: Long? = null
     private var capturing = false
     private var frames = false
     private var answer: JSONObject? = null
@@ -184,19 +186,25 @@ class AnimalActivity : Activity() {
         }
         setContentView(ScrollView(this).apply { addView(layout) })
         audio = AndroidAudio(handler, frame = { id, detected, endpoint ->
-            deliver(AnimalEvent.CAPTURE_FRAME) { captureFrame(id, detected, endpoint) }
+            deliver(AnimalEvent.CAPTURE_FRAME) {
+                val synthetic = upload?.synthetic == true
+                captureFrame(id, detected && !synthetic, endpoint && !synthetic)
+            }
         }, failed = { id ->
             if (id == slot && slotGeneration == generation) reset("音频失败，请重新开始")
         }, played = ::played, released = { id ->
             val current = reply
-            if (!capturing && current != null && current.played == current.segments.size) {
-                deliver(AnimalEvent.PLAYBACK_RELEASE) { released(id) }
+            if (cloudPlayback == id || (!capturing && current != null && current.played == current.segments.size)) {
+                deliver(AnimalEvent.PLAYBACK_RELEASE) {
+                    if (cloudPlayback == id) cloudPlayback = null
+                    released(id)
+                }
             } else {
                 released(id)
             }
         }, diagnostics = null, pcm = if (cloudMode) { id, samples, size ->
             val current = upload
-            if (current?.operation == id && !current.frame(samples, size)) {
+            if (current?.operation == id && !current.synthetic && !current.frame(samples, size)) {
                 handler.post { if (upload === current) reset("语音上传超出限制，请重新开始") }
             }
         } else null)
@@ -224,6 +232,15 @@ class AnimalActivity : Activity() {
             }
             if (endpoint) sealCloud()
         } else if (endpoint && input.text.isNotBlank()) seal(input.text.toString())
+    }
+
+    // Instrumentation can send a fixed in-memory PCM frame to the fake provider.
+    internal fun injectSyntheticCapture() {
+        check(cloudMode && probe?.syntheticCapture == true && frames)
+        val operation = checkNotNull(slot)
+        val pending = checkNotNull(upload)
+        check(pending.frame(ShortArray(320), 320))
+        captureFrame(operation, detected = true, endpoint = true)
     }
 
     private fun played(id: Long) {
@@ -365,6 +382,11 @@ class AnimalActivity : Activity() {
                                     val incoming = CloudPcm({ name, operation ->
                                         android.util.Log.i("AnimalTiming", "event=$name op=$operation ms=" +
                                             android.os.SystemClock.elapsedRealtime())
+                                        if (name == "playback_head_first_advance") dispatch(webSocket) {
+                                            if (slot == operation && slotGeneration == generation) {
+                                                probe?.observe(AnimalEvent.PCM_HEAD_ADVANCED)
+                                            }
+                                        }
                                     })
                                     stream = incoming
                                     segmentKey = key
@@ -523,7 +545,9 @@ class AnimalActivity : Activity() {
             capturing = false
             render("正在播放回复")
             timeout(18_000) { reset("播放或回执超时，请重新开始") }
-            audio.playStream(occupy(), stream)
+            val operation = occupy()
+            cloudPlayback = operation
+            audio.playStream(operation, stream)
             return
         }
         caption.text = current.segments[current.played].text
@@ -606,7 +630,7 @@ class AnimalActivity : Activity() {
                     captureSealed = false
                     captureReleased = false
                     cloudReady = false
-                    upload = AnimalUpload(operation, checkNotNull(socket))
+                    upload = AnimalUpload(operation, checkNotNull(socket), probe?.syntheticCapture == true)
                 }
                 audio.capture(operation)
                 probe?.observe(AnimalEvent.CAPTURE_DISPATCH)
@@ -641,6 +665,7 @@ class AnimalActivity : Activity() {
             send(event("listen.silence", current).put("listen_id", checkNotNull(current.receipt).permit))
         upload?.close()
         upload = null
+        if (sent && speech) probe?.observe(AnimalEvent.ASR_UPLOAD_END)
         if (sent) timeout(12_000) { reset("等待语音回复超时") }
         else reset("语音服务已断开，请重新开始")
     }
