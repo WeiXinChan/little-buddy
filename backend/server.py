@@ -63,7 +63,7 @@ class Channel:
 
 
 def voice_server(host: str, port: int, tls: ssl.SSLContext, token: str,
-                 providers: Providers, policy: ContentPolicy, *, timings: bool = False):
+                 providers: Providers, policy: ContentPolicy, *, timings: bool = False, turn_handler=run_turn):
     if tls is None or not 32 <= len(token) <= 256 or not token.isascii() or not token.isalnum():
         raise ValueError("TLS and a random device token (32–256 ASCII alphanumerics) are required")
     expected = ("Bearer " + token).encode("ascii")
@@ -106,7 +106,7 @@ def voice_server(host: str, port: int, tls: ssl.SSLContext, token: str,
                       f"segment={segment} since_connect_ms={elapsed}", flush=True)
 
         mark("connected")
-        turn = asyncio.create_task(run_turn(channel, providers, policy, timing=mark if timings else None))
+        turn = asyncio.create_task(turn_handler(channel, providers, policy, timing=mark if timings else None))
         disconnected = asyncio.create_task(socket.wait_closed())
         extra_input = asyncio.create_task(channel.reject_after_seal())
         tasks = (turn, disconnected, extra_input)

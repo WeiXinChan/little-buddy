@@ -11,6 +11,7 @@ from pathlib import Path
 
 from backend.dashscope import DashScope, GreetingPolicy, http_client
 from backend.server import voice_server
+from backend.voice import run_turn
 
 
 class Demo:
@@ -50,15 +51,17 @@ class Demo:
         return text if text in {"first", "second"} else None
 
 
-async def main():
+async def main(*, default_port=8443, turn_handler=run_turn, loopback_only=False):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", default=8443, type=int)
+    parser.add_argument("--port", default=default_port, type=int)
     parser.add_argument("--provider", choices=("fake", "dashscope"), default="fake")
     parser.add_argument("--timings", action="store_true")
     parser.add_argument("--cert", required=True)
     parser.add_argument("--key", required=True)
     args = parser.parse_args()
+    if loopback_only and (args.host, args.port) != ("127.0.0.1", 8444):
+        parser.error("experiment requires 127.0.0.1:8444")
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
     tls.load_cert_chain(args.cert, args.key)
@@ -74,7 +77,8 @@ async def main():
             providers, policy = DashScope.from_environment(http), GreetingPolicy()
         else:
             providers, policy = demo, demo
-        async with voice_server(args.host, args.port, tls, token, providers, policy, timings=args.timings):
+        async with voice_server(args.host, args.port, tls, token, providers, policy, timings=args.timings,
+                                turn_handler=turn_handler):
             await asyncio.Future()
 
 
