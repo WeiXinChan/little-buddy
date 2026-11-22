@@ -4,7 +4,7 @@
 
 依赖现有 Mac SSH 访问、Android Platform Tools、支持 USB 调试的 OPPO、服务端能执行 `sudo -n` 的授权维护账号。服务端已准备 30 天 localhost 开发证书与独立设备令牌。应用调试变体只对 localhost/127.0.0.1 增加系统用户 CA 信任，仍校验证书链和主机名。
 
-1. 在 Mac 下载工单的两个 APK 和 `little-buddy-0.1.5-voice-lab-SHA256SUMS`。运行 `shasum -a 256 -c little-buddy-0.1.5-voice-lab-SHA256SUMS`。旧版已安装的同一 localhost 开发 CA 继续有效，无需重装。首次联调时，从 TITA-10 下载并核对 CA，再将 `little-buddy-loopback-ca.cer` 安装到 OPPO 的用户 CA 存储。安装菜单随 ColorOS 版本变化。只在本次测试设备安装，验收后移除。
+1. 在 Mac 下载工单的两个 APK 和 `little-buddy-0.1.6-voice-lab-SHA256SUMS`。运行 `shasum -a 256 -c little-buddy-0.1.6-voice-lab-SHA256SUMS`。旧版已安装的同一 localhost 开发 CA 继续有效，无需重装。首次联调时，从 TITA-10 下载并核对 CA，再将 `little-buddy-loopback-ca.cer` 安装到 OPPO 的用户 CA 存储。安装菜单随 ColorOS 版本变化。只在本次测试设备安装，验收后移除。
 2. 登录原服务器，切到本 PR 分支的仓库目录。约定两个终端。第一个从 Mac 启动有转发的 SSH 会话，服务器提示符内运行 `scripts/with-private-voice fake`。确认假服务后用 Ctrl+C 停止，再按同样方式运行 `scripts/with-private-voice dashscope`。每次服务只监听服务器 `127.0.0.1:8443`，20 分钟自动结束。
 
    ```bash
@@ -16,9 +16,9 @@
 
    ```bash
    adb devices
-   adb install -r -g little-buddy-0.1.5-voice-lab-debug.apk
+   adb install -r -g little-buddy-0.1.6-voice-lab-debug.apk
    adb reverse tcp:8443 tcp:8443
-   adb install -r -t little-buddy-0.1.5-voice-lab-instrumentation.apk
+   adb install -r -t little-buddy-0.1.6-voice-lab-instrumentation.apk
    adb shell am instrument -w com.littlebuddy.sim.test/com.littlebuddy.SimUiRunner
    adb logcat -T 1 -v brief 'LittleBuddyVoice:D' '*:S' | tee little-buddy-timing.log
    ```
@@ -31,7 +31,7 @@
 - Android 日志以每次私有连接生成的随机 `turn_id` 分组。录音和收包事件使用录音 `op_id`，每段播放事件使用对应播放 `op_id`，`segment=0` 表示轮级事件。记录只包括事件、编号和单调时间，不含语音、文本和令牌。
 - 每轮录音封口时记录一次 `endpoint_confirmed`，在此之前若检测到语音，写出 `last_speech_detected` 的最后一个有效算法窗口时间。后者会受噪声、设备缓冲和算法影响。首段 `first_pcm_received` 给出端点到首 PCM。每段 `playback_requested` 对应请求启动 AudioTrack，`playback_head_first_advance` 记录播放头首次推进。首段附端点以及算法末语音至播放头的差值，后续段仅记录同段首 PCM 至播放头。播放头按约 5 ms 间隔轮询，实际说完至可闻仍由成人观察或同一外部时基测量。
 - `turn_finished` 表示已校验全部段尾和整轮结束声明，且所有播放操作均完成清理。`turn_cancelled` 包括主动停止、失去前台、超时和错误，部分已播音频无法撤回。服务端事件（如 `capture_sealed`、`asr_final`、`llm_first_approved_segment`、`tts_first_pcm`）单独使用服务端单调时间。只在同一设备内求差。
-- 旧版 0.1.4 收齐并核验整个 PCM 段才开始播放。新版 0.1.5 在首批已校验帧填满启动缓冲后开始播放，段尾仍核对累计样本数。Android 音频实现的启动参数默认 120 ms（约 2,880 帧），构造参数可在 40–300 ms 内调整。120 ms 用于吸收轻度抖动并早于正常整段到齐。API 31 及以上尽量采用所设帧数，较旧 Android 使用设备要求的有效缓冲容量。短段或断供后的短尾经段尾核验后可用静音补足缓冲水位，仅实际帧参与完成判定。
+- 旧版 0.1.4 收齐并核验整个 PCM 段才开始播放。从 0.1.5 起，手机在首批已校验帧填满启动缓冲后开始播放，段尾仍核对累计样本数。Android 音频实现的启动参数默认 120 ms（约 2,880 帧），构造参数可在 40–300 ms 内调整。120 ms 用于吸收轻度抖动并早于正常整段到齐。API 31 及以上尽量采用所设帧数，较旧 Android 使用设备要求的有效缓冲容量。短段或断供后的短尾经段尾核验后可用静音补足缓冲水位，仅实际帧参与完成判定。
 - 每段最多四个待消费 PCM 帧（每帧最多 6,400 字节），网络读取被限流，原生缓冲也有上限。短暂断供时设备可能输出静音，连续约 2 秒无写入或播放头进展会中止整轮并提示重试。乱序、缺帧、长度错误或控制帧提前结束也会取消并清空未播队列。原生释放完成前不会开始下一段或打开麦克风。后端已有首个有效 PCM 立即发送的路径，同时有界接收后续 LLM 文本。
 - OPPO 旧版已通过私有假服务两段播放，并听到真实云问候回复。旧日志可辨认的端点至首播放为 2908、2738、3593、3600 ms，主观约 3 秒。旧版没有轮次和段号，且播放清理会重复记端点，这些数值只供定位。新版对照请记录逐轮首段数据。先测假服务两段、等待时停止后重开、播放中停止、锁屏再解锁和原模拟流程，再测真实短问候。音频断供、恢复、音量突变和实际可闻时延均留待真机观察。儿童录音及云测试留待单独放行。
 
@@ -47,3 +47,38 @@
 | ASR 启动至两段结束 | 7644 ms | 7552 ms |
 
 优化轮输入 TTS 预检 1960 ms，重采样校验共 2032 ms，单独计时。ASR 上行 59,520 字节且最终转写匹配，阶段 3289 ms，两段回复返回有效 24 kHz PCM。离线门闩复现慢后续 LLM 与首段 TTS 确实重叠。两次样本不足以判断提速，首段本次反而慢 42 ms。该表只包含服务器数据。
+
+## 0.1.6 阶段时序与定位
+
+0.1.5 的服务器日志由用户从原 SSH 窗口补回，按连接顺序与手机记录配对。旧服务器日志没有手机的轮次 ID。
+
+| 成功轮 | 服务器封口至旧 ASR 标记 | LLM 至首批准段 | TTS 至首 PCM | 服务器封口至首 PCM | 手机端点至首 PCM | 手机首 PCM 至播放头 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1165 ms | 489 ms | 554 ms | 2208 ms | 2352 ms | 92 ms |
+| 2 | 1193 ms | 606 ms | 591 ms | 2390 ms | 2539 ms | 98 ms |
+| 3 | 1180 ms | 518 ms | 550 ms | 2248 ms | 2384 ms | 101 ms |
+| 平均 | 1179 ms | 538 ms | 565 ms | 2282 ms | 2425 ms | 97 ms |
+
+手机端点至播放头平均 2522 ms，算法末语音至播放头平均 4021 ms，主观约 3 秒。两套同机间隔的差为 144、149、136 ms，含录音封口交接、传输和记录口径等因素。取消轮在手机端点后 1305 ms 取消，服务端只有封口与旧 ASR 标记，间隔 1182 ms，原因未知，未计入成功轮。0.1.4 的日志缺少轮段标识且会重复记端点，版本间缺少严格对照。
+
+旧 `asr_final` 标记位于 ASR 上下文退出之后。0.1.6 将最终结果和关闭分开计时，最终结果通过输入检查后立即启动 LLM，同时关闭 ASR。整轮结束声明与下一轮接入仍等待清理。1.5 秒停顿容忍和识别阈值沿用原实现。
+
+一次 0.1.6 北京合成探针使用输入 TTS 和内存重采样，按 100 ms 分块送入生产 ASR 编排。使用既有模型配置，无重试。封口至最终 ASR 为 **166 ms**，最终 ASR 至退出为 **1033 ms**，而 LLM 已在最终结果后 **1 ms** 启动。LLM 请求至首批准段 **584 ms**，其中 TCP **79 ms**、TLS **56 ms**、请求体发完至响应头 **418 ms**。首段 TTS 建连 **197 ms**，等到任务就绪 **62 ms**，提交到首 PCM **362 ms**。封口至首 PCM **1372 ms**，合成探针的内存写入处于同一毫秒。该探针没有经过手机或 WSS 下发。真实回环服务另记实际首帧的 WebSocket 发送返回，表示本地写入接受。该样本验证 ASR 关闭与 LLM/TTS 重叠，真实 OPPO 提速仍待复测。首段结束到下一段启动相隔约 1 秒，后续可用 `tts_closed` 区分关闭与下一段等待。现有共享 HTTP 客户端支持连接池复用，出现 TCP/TLS 标记代表该次冷建连，本轮未改连接复用策略。
+
+### 保存下一轮脱敏服务器时序
+
+沿用原 SSH 目标。在 Mac 的独立终端执行以下命令，将服务器目录换成现有的 PR #6 checkout。先使用 `fake`，验证后改为 `dashscope`。使用同一终端读取文件中的对应轮次，分享所需行后退出终端，退出钩子清理本次临时目录。SSH 断开后，留在该终端仍可读取本次记录。
+
+```bash
+umask 077
+timing_dir=$(mktemp -d "${TMPDIR:-/tmp}/little-buddy-timing.XXXXXXXX")
+trap 'rm -f "$timing_dir/server.log"; rmdir "$timing_dir"' EXIT
+ssh -t -o ExitOnForwardFailure=yes -L 127.0.0.1:8443:127.0.0.1:8443 <已有SSH目标> \
+  'cd <服务器PR仓库> && scripts/with-private-voice fake' |
+  awk '{ sub(/\r$/, "") }
+       /^voice_timing [a-z0-9_]+ turn_id=([a-f0-9-]{36}|-) connection_id=[a-f0-9-]{36} segment=[0-8] since_connect_ms=[0-9]+$/ {
+           print; fflush()
+       }' | tee "$timing_dir/server.log"
+```
+
+每个 Android `turn_id` 由本轮连接随机产生并随已鉴权 WSS 请求传递。服务器验证 UUID 格式，独立标记 `connection_id`。用 `turn_id` 配对，用段号匹配首帧与播放。服务器 `since_connect_ms` 与手机 `t_ms` 分别取差。旧客户端没有关联 ID，服务器会显示 `turn_id=-`。服务器运行期只向 SSH 输出这些时序元数据；本命令只保存指定格式的时序行。请勿贴令牌、API Key、原始临时任务输出或录音。

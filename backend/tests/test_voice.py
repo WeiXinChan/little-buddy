@@ -73,15 +73,65 @@ class VoiceTest(unittest.IsolatedAsyncioTestCase):
         for event in (Audio(0, b"\x00\x00"), Audio(1, b"\x01\x00"), End(2)):
             fake.events.put_nowait(event)
         await run_turn(fake, fake, fake)
-        self.assertEqual(fake.trace[:7], [
+        self.assertEqual([event for event in fake.trace[:7] if event != "closed"], [
             ("open", 16000), "ready", ("write", b"\x00\x00"),
-            ("write", b"\x01\x00"), "finish", "closed", ("answer", "你好"),
+            ("write", b"\x01\x00"), "finish", ("answer", "你好"),
         ])
         self.assertEqual(fake.trace[7:12], [
             ("tts", "批准的短句", 24000), ("start", 1), ("audio", b"\x00\x00"),
             ("audio", b"\x01\x00"), ("end", 1, 2),
         ])
         self.assertEqual(fake.trace[-2:], [("end", 2, 2), ("reply", 2)])
+
+    async def test_final_result_starts_reply_while_cleanup_remains_owned(self):
+        release = asyncio.Event()
+        closing = asyncio.Event()
+        audio_sent = asyncio.Event()
+
+        class SlowClose(Fake):
+            @asynccontextmanager
+            async def recognize(self, rate):
+                yield self
+                closing.set()
+                await release.wait()
+                self.trace.append("closed")
+
+            async def audio(self, frame):
+                await super().audio(frame)
+                audio_sent.set()
+
+        for cancel in (False, True):
+            fake = SlowClose()
+            closing.clear()
+            release.clear()
+            audio_sent.clear()
+            fake.events.put_nowait(Audio(0, b"\0\0"))
+            fake.events.put_nowait(End(1))
+            stages = []
+            turn = asyncio.create_task(run_turn(fake, fake, fake, timing=lambda *m: stages.append(m)))
+            try:
+                await asyncio.wait_for(closing.wait(), 1)
+                await asyncio.wait_for(audio_sent.wait(), 1)
+                self.assertIn(("asr_final", 0), stages)
+                self.assertIn(("first_pcm_write_done", 1), stages)
+                self.assertNotIn(("asr_closed", 0), stages)
+                self.assertNotIn(("reply", 2), fake.trace)
+                if cancel:
+                    for _ in range(2):
+                        turn.cancel()
+                        await asyncio.sleep(0)
+                        self.assertFalse(turn.done())
+                release.set()
+                if cancel:
+                    with self.assertRaises(asyncio.CancelledError):
+                        await asyncio.wait_for(turn, 1)
+                    self.assertNotIn(("reply", 2), fake.trace)
+                else:
+                    await asyncio.wait_for(turn, 1)
+                    self.assertEqual(fake.trace[-2:], ["closed", ("reply", 2)])
+            finally:
+                release.set()
+                await asyncio.gather(turn, return_exceptions=True)
 
     async def test_bad_position_and_empty_end_never_reach_model(self):
         for event in (Audio(1, b"\x00\x00"), Audio(0, b"\x00"), End(0)):
@@ -118,7 +168,9 @@ class VoiceTest(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(ProtocolError):
             await run_turn(fake, fake, Reject())
-        self.assertEqual(fake.trace[-1], ("answer", "你好"))
+        self.assertIn(("answer", "你好"), fake.trace)
+        self.assertIn("closed", fake.trace)
+        self.assertFalse(any(isinstance(event, tuple) and event[0] == "tts" for event in fake.trace))
 
     async def test_second_tts_initialization_uses_progress_deadline_and_cleans_up(self):
         class Stalled(Fake):

@@ -34,6 +34,7 @@ internal class CloudVoice(
     @Volatile private var active: Attempt? = null
     private var nativeCapture: Long? = null
     private val client = OkHttpClient.Builder()
+        .retryOnConnectionFailure(false)
         .followRedirects(false)
         .followSslRedirects(false)
         .connectTimeout(4, TimeUnit.SECONDS)
@@ -55,7 +56,10 @@ internal class CloudVoice(
             return
         }
         attempt.socket = client.newWebSocket(
-            Request.Builder().url(url).header("Authorization", "Bearer $token").build(), attempt,
+            Request.Builder().url(url)
+                .header("Authorization", "Bearer $token")
+                .header("X-Voice-Turn-ID", attempt.trace.id)
+                .build(), attempt,
         )
     }
 

@@ -1,11 +1,14 @@
 import asyncio
+import io
+import re
 import json
 import ssl
 import subprocess
 import tempfile
 import unittest
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, redirect_stdout
 from pathlib import Path
+from uuid import uuid4
 
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus
@@ -47,10 +50,13 @@ class ServerTest(unittest.IsolatedAsyncioTestCase):
         cls.tls.load_cert_chain(cert, key)
         cls.trust = ssl.create_default_context(cafile=str(cert))
 
-    def open(self, server, token=TOKEN):
+    def open(self, server, token=TOKEN, turn_id=None):
+        headers = {"Authorization": f"Bearer {token}"}
+        if turn_id is not None:
+            headers["X-Voice-Turn-ID"] = turn_id
         port = server.sockets[0].getsockname()[1]
         return connect(f"wss://localhost:{port}/v1/turn", ssl=self.trust,
-                       additional_headers={"Authorization": f"Bearer {token}"})
+                       additional_headers=headers)
 
     async def upload(self, socket, end=4):
         self.assertEqual(json.loads(await socket.recv()), {"v": 1, "type": "turn.ready"})
@@ -80,6 +86,37 @@ class ServerTest(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(json.loads(frame),
                                      {"v": 1, "type": "segment.end", "number": number, "samples": position})
                 self.assertEqual(json.loads(await socket.recv()), {"v": 1, "type": "reply.end", "count": 2})
+
+    async def test_timing_correlation_and_allowlisted_metadata(self):
+        demo = Demo()
+        identifier = str(uuid4())
+        output = io.StringIO()
+        with redirect_stdout(output):
+            async with voice_server("127.0.0.1", 0, self.tls, TOKEN, demo, demo, timings=True) as server:
+                with self.assertRaises(InvalidStatus) as invalid:
+                    await self.open(server, turn_id="private-text")
+                self.assertEqual(invalid.exception.response.status_code, 400)
+                async with self.open(server, turn_id=identifier) as socket:
+                    await self.upload(socket)
+                    async for frame in socket:
+                        if isinstance(frame, str) and json.loads(frame)["type"] == "reply.end":
+                            break
+        pattern = re.compile(
+            rf"voice_timing ([a-z0-9_]+) turn_id={identifier} "
+            r"connection_id=([a-f0-9-]{36}) segment=([0-8]) since_connect_ms=([0-9]+)"
+        )
+        stages = []
+        connections = set()
+        for line in output.getvalue().splitlines():
+            match = pattern.fullmatch(line)
+            self.assertIsNotNone(match, line)
+            stages.append((match[1], match[3]))
+            connections.add(match[2])
+        self.assertEqual(len(connections), 1)
+        for event in (("asr_final", "0"), ("asr_closed", "0"), ("first_pcm_sent", "1"),
+                      ("first_pcm_sent", "2"), ("completed", "0")):
+            self.assertIn(event, stages)
+        self.assertNotIn(TOKEN, output.getvalue())
 
     async def test_bad_seal_rejected(self):
         demo = Demo()

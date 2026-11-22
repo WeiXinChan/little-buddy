@@ -12,6 +12,7 @@ from uuid import uuid4
 import httpx
 from websockets.asyncio.client import connect
 
+from backend.timing import mark
 from backend.voice import ProtocolError
 
 
@@ -128,6 +129,7 @@ class Recognition:
 
     async def finish(self):
         await self.task.command("finish-task")
+        mark("asr_finish_sent")
         return await self.results
 
     async def close(self):
@@ -187,7 +189,17 @@ class DashScope:
 
     @asynccontextmanager
     async def answer(self, transcript, *, on_first_text=None):
-        async with self.http.stream("POST", self.chat_url, headers=self.headers, json={
+        async def trace(event, _):
+            marker = {
+                "connection.connect_tcp.complete": "llm_tcp_ready",
+                "connection.start_tls.complete": "llm_tls_ready",
+                "http11.send_request_body.complete": "llm_body_sent",
+            }.get(event)
+            if marker:
+                mark(marker)
+
+        async with self.http.stream("POST", self.chat_url, headers=self.headers,
+                                    extensions={"trace": trace}, json={
             "model": self.llm,
             "messages": [
                 {"role": "system", "content": "请只用这两句话打招呼：你好！我是瓦力。"},
@@ -212,6 +224,7 @@ class DashScope:
 
     async def sentences(self, response, on_first_text=None):
         pending = ""
+        first_text = True
         async for line in response.aiter_lines():
             if not line.startswith("data:"):
                 continue
@@ -226,9 +239,11 @@ class DashScope:
             content = choices[0]["delta"].get("content")
             if not content:
                 continue
-            if on_first_text is not None and content.strip():
-                on_first_text()
-                on_first_text = None
+            if first_text and content.strip():
+                mark("llm_first_text")
+                if on_first_text is not None:
+                    on_first_text()
+                first_text = False
             pending += content
             if len(pending) > 240:
                 raise ProtocolError("oversized model segment")
@@ -241,11 +256,13 @@ class DashScope:
     @asynccontextmanager
     async def synthesize(self, segment, sample_rate):
         async with self.speech_socket() as socket:
+            mark("tts_socket_ready")
             task = SpeechTask(socket)
             await task.start("tts", "SpeechSynthesizer", self.tts, {
                 "text_type": "PlainText", "voice": self.voice, "format": "pcm",
                 "sample_rate": sample_rate, "enable_ssml": False,
             })
+            mark("tts_task_ready")
             await task.command("continue-task", input={"text": segment})
             await task.command("finish-task")
             yield self.audio(task)

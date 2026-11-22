@@ -14,7 +14,7 @@ from websockets.exceptions import ConnectionClosed, InvalidStatus
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend.dashscope import ChatStatusError, DashScope, GreetingPolicy, SpeechTaskError, http_client, upstream_details
 
-from backend.voice import prefetch_segments
+from backend.voice import Audio, End, prefetch_segments, run_turn
 
 
 def report(stage, **fields):
@@ -71,6 +71,40 @@ async def answer(adapter, policy, prompt):
         return [text async for text in checked_segments(adapter, policy, prompt)]
 
 
+class SyntheticChannel:
+    """Exercise production orchestration without saving or playing the fixture."""
+
+    def __init__(self, fixture):
+        self.fixture = fixture
+        self.offset = 0
+        self.reply_count = 0
+        self.segment_has_signal = False
+
+    async def ready(self):
+        pass
+
+    async def receive(self):
+        if self.offset == len(self.fixture):
+            return End(self.offset // 2)
+        await asyncio.sleep(0.1)
+        start = self.offset
+        self.offset = min(start + 3200, len(self.fixture))
+        return Audio(start // 2, self.fixture[start:self.offset])
+
+    async def segment_started(self, number):
+        self.segment_has_signal = False
+
+    async def audio(self, frame):
+        self.segment_has_signal |= any(frame)
+
+    async def segment_ended(self, number, samples):
+        if not self.segment_has_signal:
+            raise ValueError("silent synthesized segment")
+
+    async def reply_ended(self, count):
+        self.reply_count = count
+
+
 async def probe(mode, shared_speech):
     stage = "configuration"
     start = monotonic()
@@ -114,6 +148,15 @@ async def probe(mode, shared_speech):
                    format="pcm_s16le/24000/mono")
             del fixture
             if mode == "tts-fixture":
+                return 0
+            if mode == "production-turn":
+                start = monotonic()
+                channel = SyntheticChannel(converted)
+                await run_turn(channel, adapter, policy, timing=lambda event, segment:
+                               report(event, segment=segment, ms=elapsed(start)))
+                if channel.reply_count != 2:
+                    raise ValueError("unexpected segment count")
+                report("production_turn", result="ok", ms=elapsed(start))
                 return 0
             stage, start = "asr", monotonic()
             turn_start = start
@@ -177,7 +220,7 @@ async def probe(mode, shared_speech):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("turn", "asr-ready", "llm-only", "tts-fixture"), default="turn")
+    parser.add_argument("--mode", choices=("turn", "production-turn", "asr-ready", "llm-only", "tts-fixture"), default="turn")
     parser.add_argument("--shared-speech", action="store_true")
     args = parser.parse_args()
     sys.exit(asyncio.run(probe(args.mode, args.shared_speech)))

@@ -7,7 +7,7 @@ internal class VoiceTrace(
     private val now: () -> Long,
     private val sink: (String) -> Unit,
 ) {
-    private val id = UUID.randomUUID()
+    val id: String = UUID.randomUUID().toString()
     private var closed = false
     private var recordingStarted = false
     private var endpoint: Long? = null
