@@ -20,20 +20,36 @@ from backend.wire import VERSION, decode_input, playback_frame
 TURN_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
 
 
+class DeviceDisconnected(Exception):
+    """Closure observed on the authenticated device transport."""
+
+
 class Channel:
     def __init__(self, socket: ServerConnection):
         self.socket = socket
         self.sealed = asyncio.Event()
         self.position = 0
 
+    async def send(self, data: str | bytes) -> None:
+        try:
+            await self.socket.send(data)
+        except ConnectionClosed:
+            raise DeviceDisconnected from None
+
+    async def recv(self) -> str | bytes:
+        try:
+            return await self.socket.recv()
+        except ConnectionClosed:
+            raise DeviceDisconnected from None
+
     async def control(self, kind: str, **fields: int) -> None:
-        await self.socket.send(json.dumps({"v": VERSION, "type": kind, **fields}))
+        await self.send(json.dumps({"v": VERSION, "type": kind, **fields}))
 
     async def ready(self) -> None:
         await self.control("turn.ready")
 
     async def receive(self):
-        event = decode_input(await self.socket.recv())
+        event = decode_input(await self.recv())
         if isinstance(event, End):
             self.sealed.set()
         return event
@@ -45,7 +61,7 @@ class Channel:
     async def audio(self, pcm16le: bytes) -> None:
         for offset in range(0, len(pcm16le), 6400):
             frame = pcm16le[offset:offset + 6400]
-            await self.socket.send(playback_frame(self.position, frame))
+            await self.send(playback_frame(self.position, frame))
             if self.position == 0:
                 mark_stage("first_pcm_sent")
             self.position += len(frame) // 2
@@ -58,7 +74,7 @@ class Channel:
 
     async def reject_after_seal(self) -> None:
         await self.sealed.wait()
-        await self.socket.recv()
+        await self.recv()
         raise ProtocolError("unexpected input after seal")
 
 
@@ -111,6 +127,15 @@ def voice_server(host: str, port: int, tls: ssl.SSLContext, token: str,
         extra_input = asyncio.create_task(channel.reject_after_seal())
         tasks = (turn, disconnected, extra_input)
         outcome = "disconnected"
+
+        async def fail(code: int, reason: str) -> str:
+            # If the device already sent a close, keep that outcome even when
+            # its provider fails in the same event-loop cycle.
+            if socket.protocol.close_rcvd is not None or disconnected.done():
+                return "disconnected"
+            await socket.close(code, reason)
+            return reason
+
         try:
             finished, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             if turn in finished:
@@ -118,23 +143,18 @@ def voice_server(host: str, port: int, tls: ssl.SSLContext, token: str,
                 outcome = "completed"
             if extra_input in finished:
                 extra_input.result()
-        except ConnectionClosed:
+        except DeviceDisconnected:
             pass
         except EmptyTranscript:
-            outcome = "empty_transcript"
-            await socket.close(4401, outcome)
+            outcome = await fail(4401, "empty_transcript")
         except GreetingMismatch:
-            outcome = "greeting_mismatch"
-            await socket.close(4402, outcome)
+            outcome = await fail(4402, "greeting_mismatch")
         except ProtocolError:
-            outcome = "protocol_error"
-            await socket.close(1008, outcome)
+            outcome = await fail(1008, "protocol_error")
         except TimeoutError:
-            outcome = "timeout"
-            await socket.close(1013, outcome)
+            outcome = await fail(1013, "timeout")
         except Exception:
-            outcome = "provider_error"
-            await socket.close(1011, outcome)
+            outcome = await fail(1011, "provider_error")
         finally:
             for task in tasks:
                 task.cancel()

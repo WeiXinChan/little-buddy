@@ -4,7 +4,7 @@
 
 依赖现有 Mac SSH 访问、Android Platform Tools、支持 USB 调试的 OPPO、服务端能执行 `sudo -n` 的授权维护账号。服务端已准备 30 天 localhost 开发证书与独立设备令牌。应用调试变体只对 localhost/127.0.0.1 增加系统用户 CA 信任，仍校验证书链和主机名。
 
-1. 在 Mac 下载工单的两个 APK 和 `little-buddy-0.1.7-voice-lab-SHA256SUMS`。运行 `shasum -a 256 -c little-buddy-0.1.7-voice-lab-SHA256SUMS`。旧版已安装的同一 localhost 开发 CA 继续有效，无需重装。首次联调时，从 TITA-10 下载并核对 CA，再将 `little-buddy-loopback-ca.cer` 安装到 OPPO 的用户 CA 存储。安装菜单随 ColorOS 版本变化。只在本次测试设备安装，验收后移除。
+1. 在 Mac 下载工单的两个 APK 和 `little-buddy-0.1.8-voice-lab-SHA256SUMS`。运行 `shasum -a 256 -c little-buddy-0.1.8-voice-lab-SHA256SUMS`。旧版已安装的同一 localhost 开发 CA 继续有效，无需重装。首次联调时，从 TITA-10 下载并核对 CA，再将 `little-buddy-loopback-ca.cer` 安装到 OPPO 的用户 CA 存储。安装菜单随 ColorOS 版本变化。只在本次测试设备安装，验收后移除。
 2. 登录原服务器，切到本 PR 分支的仓库目录。约定两个终端。第一个从 Mac 启动有转发的 SSH 会话，服务器提示符内运行 `scripts/with-private-voice fake`。确认假服务后用 Ctrl+C 停止，再按同样方式运行 `scripts/with-private-voice dashscope`。每次服务只监听服务器 `127.0.0.1:8443`，20 分钟自动结束。
 
    ```bash
@@ -16,9 +16,9 @@
 
    ```bash
    adb devices
-   adb install -r -g little-buddy-0.1.7-voice-lab-debug.apk
+   adb install -r -g little-buddy-0.1.8-voice-lab-debug.apk
    adb reverse tcp:8443 tcp:8443
-   adb install -r -t little-buddy-0.1.7-voice-lab-instrumentation.apk
+   adb install -r -t little-buddy-0.1.8-voice-lab-instrumentation.apk
    adb shell am instrument -w com.littlebuddy.sim.test/com.littlebuddy.SimUiRunner
    adb logcat -T 1 -v brief 'LittleBuddyVoice:D' '*:S' | tee little-buddy-timing.log
    ```
@@ -103,3 +103,10 @@ ssh -t -o ExitOnForwardFailure=yes -L 127.0.0.1:8443:127.0.0.1:8443 <已有SSH�
 北京合成探针一次通过，沿用既有模型和内存夹具，无重试。首段发送结束在 3860 ms，第二段启动在 3861 ms，首段关闭在 4863 ms，第二段首 PCM 在 4425 ms。第二段启动距首段末 **1 ms**，且在首段关闭前约 **1002 ms** 已启动。上一版单次合成同口径间隔约 **1004 ms**。新版封口到首 PCM **1537 ms**，上版单次合成为 **1372 ms**，两次独立样本不足以判断首声变化。该探针没有手机或回环传输，真实可闻段间间隔待实测。
 
 复测沿用上文双端日志。先用假服务确认顺序、停止及重开，再用百炼验证成人短问候、白名单变体和一次未匹配后重开。按 `turn_id` 关联错误码，按手机播放头和服务器的首、次段阶段各自算差。请仅分享脱敏时序行。旧版失败轮的实际转写未复现。
+
+
+## 0.1.8 供应商断线分类
+
+ASR 在封口时收到供应商 WSS 关闭，以及 TTS 在合成时收到供应商 WSS 关闭，均向仍连接的手机发送固定 `1011 / provider_error`。手机提示「语音服务暂时不可用，请再试一次」。服务只记录固定分类、轮次和时序。若手机已先发送正常关闭或主动停止，保留 `disconnected` 或 `user_stopped`。晚到的旧轮供应商错误不会进入下一轮。该行为已用两端回环 TLS/WSS 假服务和竞态回归验证。
+
+升级需同时使用含修复的后端提交与本节版本的 APK。安排下一次联调窗口时，沿用原 CA、设备令牌和 SSH 转发，按上面的双端日志步骤运行。先用假服务验证两段顺序、停止和重开，再按用户安排进行成人 OPPO 正常问候和段间可闻复测。开发者离线回归覆盖供应商断开，无需在真机验收中制造真实云故障。

@@ -128,6 +128,7 @@ class VoiceRoundTest {
         val current = submit()
         round.segment(old, first)
         round.endReply(old, 1)
+        round.replyFailed(old)
         round.released(oldAudio)
         assertNotEquals(old, current)
         assertEquals(listOf(old), cancels)

@@ -11,8 +11,11 @@ from pathlib import Path
 from uuid import uuid4
 
 from websockets.asyncio.client import connect
-from websockets.exceptions import ConnectionClosed, InvalidStatus
+from websockets.asyncio.server import serve
+from websockets.exceptions import ConnectionClosed, ConnectionClosedError, InvalidStatus
+from websockets.frames import Close
 
+from backend.dashscope import DashScope
 from backend.demo import Demo
 from backend.server import voice_server
 from backend.voice import ProviderError
@@ -153,6 +156,92 @@ class ServerTest(unittest.IsolatedAsyncioTestCase):
                     await socket.recv()
                     await socket.close(4403)
         self.assertIn("voice_timing user_stopped ", logs.getvalue())
+
+    async def test_upstream_wss_close_maps_to_fixed_provider_failure(self):
+        demo = Demo()
+        sensitive = "synthetic-upstream-close-reason"
+        for stage in ("asr", "tts"):
+            with self.subTest(stage=stage):
+                async def upstream(socket):
+                    start = json.loads(await socket.recv())
+                    await socket.send(json.dumps({"header": {
+                        "task_id": start["header"]["task_id"], "event": "task-started",
+                    }}))
+                    async for frame in socket:
+                        if isinstance(frame, str) and json.loads(frame)["header"]["action"] == "finish-task":
+                            await socket.close(1011, sensitive)
+                            return
+
+                async with serve(upstream, "127.0.0.1", 0, ssl=self.tls) as upstream_server:
+                    port = upstream_server.sockets[0].getsockname()[1]
+                    trust = self.trust
+
+                    class Adapter(DashScope):
+                        def speech_socket(self):
+                            return connect(f"wss://localhost:{port}", ssl=trust)
+
+                        def recognize(self, rate):
+                            return super().recognize(rate) if stage == "asr" else demo.recognize(rate)
+
+                        def answer(self, transcript):
+                            return demo.answer(transcript)
+
+                    adapter = Adapter(None, workspace="test", region="cn-beijing",
+                                      key=TOKEN, asr="asr", llm="llm", tts="tts", voice="voice")
+                    output = io.StringIO()
+                    with redirect_stdout(output):
+                        async with voice_server("127.0.0.1", 0, self.tls, TOKEN,
+                                                adapter, demo, timings=True) as server:
+                            async with self.open(server) as socket:
+                                await self.upload(socket)
+                                with self.assertRaises(ConnectionClosed) as error:
+                                    while True:
+                                        frame = json.loads(await socket.recv())
+                                        self.assertNotEqual(frame["type"], "reply.end")
+                                self.assertEqual((error.exception.rcvd.code, error.exception.rcvd.reason),
+                                                 (1011, "provider_error"))
+                    self.assertIn("voice_timing provider_error ", output.getvalue())
+                    self.assertNotIn(sensitive, output.getvalue())
+                    self.assertNotIn(TOKEN, output.getvalue())
+
+    async def test_device_close_wins_over_upstream_failure_during_cancel_and_reopen(self):
+        for close_code, outcome in ((1000, "disconnected"), (4403, "user_stopped")):
+            with self.subTest(close_code=close_code):
+                entered = asyncio.Event()
+                released = asyncio.Event()
+
+                class CloseRace(Demo):
+                    async def finish(self):
+                        entered.set()
+                        try:
+                            await asyncio.Future()
+                        except asyncio.CancelledError:
+                            raise ConnectionClosedError(Close(1011, "late upstream"), None) from None
+
+                    @asynccontextmanager
+                    async def recognize(self, rate):
+                        try:
+                            yield self
+                        finally:
+                            released.set()
+
+                demo = CloseRace()
+                identifier = str(uuid4())
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    async with voice_server("127.0.0.1", 0, self.tls, TOKEN,
+                                            demo, demo, timings=True) as server:
+                        async with self.open(server, turn_id=identifier) as socket:
+                            await self.upload(socket)
+                            await asyncio.wait_for(entered.wait(), 1)
+                            await socket.close(close_code)
+                            self.assertEqual(socket.close_code, close_code)
+                        await asyncio.wait_for(released.wait(), 1)
+                        async with self.open(server) as replacement:
+                            self.assertEqual(json.loads(await replacement.recv())["type"], "turn.ready")
+                self.assertIn(f"voice_timing {outcome} turn_id={identifier} ", output.getvalue())
+                self.assertNotIn("voice_timing provider_error ", output.getvalue())
+                self.assertNotIn("late upstream", output.getvalue())
 
     async def test_bad_seal_rejected(self):
         demo = Demo()
