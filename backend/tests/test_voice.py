@@ -146,3 +146,30 @@ class VoiceTest(unittest.IsolatedAsyncioTestCase):
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
         self.assertEqual(fake.trace[-2:], [("end", 1, 2), "second tts closed"])
+
+    async def test_llm_and_tts_setup_share_the_deadline_after_segment_end(self):
+        class SlowNextSegment(Fake):
+            @asynccontextmanager
+            async def answer(self, transcript):
+                async def parts():
+                    yield "第一段"
+                    await asyncio.sleep(0.06)
+                    self.trace.append("second text")
+                    yield "第二段"
+                yield parts()
+
+            @asynccontextmanager
+            async def synthesize(self, text, rate):
+                if ("end", 1, 1) in self.trace:
+                    try:
+                        await asyncio.sleep(0.06)
+                    finally:
+                        self.trace.append("second setup exited")
+                yield values(b"\x00\x00")
+
+        fake = SlowNextSegment()
+        fake.events.put_nowait(Audio(0, b"\x00\x00"))
+        fake.events.put_nowait(End(1))
+        with self.assertRaises(TimeoutError):
+            await run_turn(fake, fake, fake, Limits(io=0.1, turn=2))
+        self.assertEqual(fake.trace[-3:], [("end", 1, 1), "second text", "second setup exited"])

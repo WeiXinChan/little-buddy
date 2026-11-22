@@ -75,8 +75,11 @@ async def run_turn(
         approved = policy.input(transcript)
         if not approved:
             raise ProtocolError("input rejected")
-        async with providers.answer(approved) as segments:
-            count = await deliver(channel, providers, policy, segments, limits)
+        deadline = asyncio.get_running_loop().time() + limits.io
+        async with AsyncExitStack() as resources:
+            async with asyncio.timeout_at(deadline):
+                segments = await resources.enter_async_context(providers.answer(approved))
+            count = await deliver(channel, providers, policy, segments, limits, deadline)
         if count == 0:
             raise ProtocolError("empty reply")
         await channel.reply_ended(count)
@@ -112,10 +115,12 @@ async def deliver(
     policy: ContentPolicy,
     segments: AsyncIterator[str],
     limits: Limits,
+    deadline: float,
 ) -> int:
     count = 0
+    clock = asyncio.get_running_loop().time
     while True:
-        async with asyncio.timeout(limits.io):
+        async with asyncio.timeout_at(deadline):
             text = await anext(segments, None)
         if text is None:
             return count
@@ -124,9 +129,9 @@ async def deliver(
         if count > 8 or not approved or len(approved) > 240:
             raise ProtocolError("invalid reply segment")
         async with AsyncExitStack() as resources:
-            async with asyncio.timeout(limits.io):
+            async with asyncio.timeout_at(deadline):
                 frames = await resources.enter_async_context(providers.synthesize(approved, PLAYBACK_RATE))
-            await channel.segment_started(count)
+                await channel.segment_started(count)
             samples = 0
             while True:
                 async with asyncio.timeout(limits.io):
@@ -141,3 +146,4 @@ async def deliver(
             if samples == 0:
                 raise ProtocolError("empty synthesized audio")
             await channel.segment_ended(count, samples)
+            deadline = clock() + limits.io

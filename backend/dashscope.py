@@ -5,6 +5,7 @@ import json
 import os
 import re
 from contextlib import asynccontextmanager
+from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,10 +18,15 @@ from backend.voice import ProtocolError
 def upstream_details(code, message, request_id):
     # Return only known diagnostic fragments. Upstream prose may echo sensitive input.
     details = {}
-    if isinstance(code, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_.]{0,63}", code):
+    known_codes = {
+        "AccessDenied", "AccessDenied.Unpurchased", "AllocationQuota.FreeTierOnly",
+        "InvalidApiKey", "Model.AccessDenied", "ModelNotFound", "Workspace.AccessDenied",
+        "access_denied", "insufficient_quota", "invalid_api_key", "model_not_found",
+    }
+    if isinstance(code, str) and code in known_codes:
         details["code"] = code
     if isinstance(request_id, str) and re.fullmatch(r"[a-fA-F0-9-]{16,64}", request_id):
-        details["request_id"] = request_id
+        details["request_id_sha256_prefix"] = sha256(request_id.encode("ascii")).hexdigest()[:16]
     if isinstance(message, str):
         normalized = message[:1024].casefold()
         phrases = ("model access scope", "api-key restrictions", "model does not exist",

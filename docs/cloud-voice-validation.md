@@ -79,12 +79,12 @@ LoadCredential=dashscope-api-key:/etc/little-buddy/voice/dashscope-api-key
 
 ## 北京候选模型复试
 
-临时 systemd 单元逐项各调用一次。北京共享语音端点显式发送业务空间头，以取得结构化任务错误。LLM 使用北京业务空间域名。探针仅保留结构化错误码、匹配诊断白名单的消息片段和格式有效的请求 ID。
+临时 systemd 单元逐项各调用一次。北京共享语音端点显式发送业务空间头，以取得结构化任务错误。LLM 使用北京业务空间域名。探针仅保留结构化错误码、匹配诊断白名单的消息片段和请求 ID 的 SHA-256 短摘要。
 
-| 阶段 | 实际候选 | 结果 | 请求 ID | 耗时 |
+| 阶段 | 实际候选 | 结果 | 请求 ID 摘要 | 耗时 |
 | --- | --- | --- | --- | ---: |
 | ASR 就绪 | `fun-asr-realtime` | WSS 任务错误 `AllocationQuota.FreeTierOnly`，消息已脱敏，无 PCM 上行 | 未提取到 | 1317 ms |
-| 文本 LLM | `qwen-flash-2025-07-28` | HTTP 403，`insufficient_quota`，消息已脱敏 | `5d3b0708-07eb-991e-80ff-763a8730705e` | 285 ms |
+| 文本 LLM | `qwen-flash-2025-07-28` | HTTP 403，`insufficient_quota`，消息已脱敏 | `a2504bb1a52e6ad6` | 285 ms |
 | TTS 合成输入 | `cosyvoice-v3-flash` / `longanyang` | WSS 任务错误 `AllocationQuota.FreeTierOnly`，消息已脱敏，无 PCM 输出 | 未提取到 | 1299 ms |
 
 百炼文档将 `AllocationQuota.FreeTierOnly` 归为免费额度耗尽且无法转为付费调用的场景。文本也返回额度错误。三个结果均未报模型不存在或音色不兼容，因此未尝试替代或发起完整轮次。Key 的具体模型授权范围仍需账号持有人在控制台核对。 [百炼错误码](https://help.aliyun.com/en/model-studio/error-code)
@@ -96,3 +96,15 @@ LoadCredential=dashscope-api-key:/etc/little-buddy/voice/dashscope-api-key
 套餐允许受支持工具中交互式发起的扩展调用，并限制自动化脚本和自定义后端。本次要求的临时 systemd 自动串联探针未执行，Token Plan 请求数为 **0**，无延迟和音频数据。正式分段适配与 APK 沿用原链路。订阅持有人可通过厂商支持的工具交互式验证各模型。若要用脚本测完整串行链路，需要使用允许此类调用的凭证和对应端点，或取得厂商对该执行方式的明确许可。 [Token Plan 权限与使用规范](https://help.aliyun.com/zh/model-studio/token-plan-permissions-and-usage)
 
 获准后的测量口径为分别记录输入合成、含上传的非实时 ASR、LLM 首文本和流结束、TTS 返回下载地址和下载首字节及完成，再记录从 ASR 提交至首个可解码输出。初始合成单列。非实时 ASR 等完整输入，TTS 返回 URL 后还需单独下载。服务器单次数据仅能说明本次小样，OPPO 可闻延迟和分位数需另测。
+
+## 语音节省计划购买后复查
+
+沿用原始北京按量业务空间的标准端点和独立 DashScope 凭证。三阶段各尝试一次，未触发完整轮次。
+
+| 阶段 | 模型与音色 | 结果 | 耗时 |
+| --- | --- | --- | ---: |
+| ASR | `fun-asr-realtime` | 收到就绪信号后主动关闭，无音频上行，未测转写 | 258 ms |
+| TTS | `cosyvoice-v3-flash` / `longanyang` | WSS 1011，未取得 PCM，供应商原因未确认 | 1265 ms |
+| 文本 LLM | `qwen-flash-2025-07-28` | HTTP 403 / `insufficient_quota`，请求 ID 摘要 `e42dcab305afd17b` | 237 ms |
+
+临时非 root 任务通过 systemd 凭证加载，未产生落盘音频。本次数据只说明就绪或失败耗时，端到端、OPPO 可闻延迟与儿童测试仍待验证。TTS 1011 未提供可公开的原因，文本额度仍需账号持有人核对。

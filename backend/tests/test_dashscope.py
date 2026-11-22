@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 
-from backend.dashscope import ChatStatusError, DashScope, GreetingPolicy, SpeechTask, SpeechTaskError
+from backend.dashscope import ChatStatusError, DashScope, GreetingPolicy, SpeechTask, SpeechTaskError, upstream_details
 
 
 class SpeechSocket:
@@ -51,6 +51,13 @@ class AdapterTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(str(failure.exception), "speech task failed")
 
 
+    def test_upstream_fields_cannot_echo_format_valid_markers(self):
+        marker = "deadbeefdeadbeef"
+        fields = upstream_details("PrivateMarkerCode", marker, marker)
+        self.assertNotIn("code", fields)
+        self.assertEqual(len(fields["request_id_sha256_prefix"]), 16)
+        self.assertNotIn(marker, str(fields))
+
     async def test_chat_failure_extracts_diagnostics_without_echoing_error_body(self):
         async def denied(request):
             return httpx.Response(403, json={
@@ -67,7 +74,7 @@ class AdapterTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(error.exception.status, 403)
         self.assertEqual(error.exception.details, {
-            "code": "insufficient_quota", "request_id": "abcdef00-1111-2222-3333-444444444444",
+            "code": "insufficient_quota", "request_id_sha256_prefix": "c06936b0dc5003fb",
             "message": "[redacted upstream message]",
         })
 
