@@ -126,3 +126,15 @@ LoadCredential=dashscope-api-key:/etc/little-buddy/voice/dashscope-api-key
 ## 普通北京端点文本模型复查
 
 已按用户指定将 `DASHSCOPE_LLM_MODEL` 更新为 `qwen3.8-flash`。原北京业务空间标准 Chat Completions 和原 DashScope 凭证完成一次短文本请求，`stream=true`、`enable_thinking=false`、`max_tokens=64`。首个完整文本段 615 ms，流结束 647 ms，两段内容通过预期顺序校验。此结果验证当前账号可用普通端点完成该请求。三个 TTS 对照仍阻塞，因此未启动完整合成轮次。 [模型](https://help.aliyun.com/zh/model-studio/qwen3-8-flash) · [思考参数](https://help.aliyun.com/zh/model-studio/deep-thinking/)
+
+## TTS 免费额度停用开关调整后复测
+
+用户确认语音节省计划已生效，且已关闭 `cosyvoice-v3-flash` 的免费额度用完即停。使用普通北京业务空间的标准入口与现有 DashScope 凭证，临时非 root systemd 单元通过 `LoadCredential` 运行，单元限时 50 秒。
+
+| 阶段 | 实测结果 |
+| --- | --- |
+| TTS 预检 `cosyvoice-v3-flash` / `longanyang` | 一次成功，1907 ms 得到 89,280 字节、约 1860 ms 的 24 kHz 单声道 PCM16LE。FFmpeg 解码并转为非空、非静音的 16 kHz PCM，含验证共 2463 ms。 |
+| ASR `fun-asr-realtime` | 复用前一步内存样本尝试一轮，1260 ms 后收到 WSS 1011，脱敏摘要 `quota`。没有最终转写；本次探针未细分失败前是否已发送部分音频。 |
+| `qwen3.8-flash` 与回复 TTS | ASR 未取得最终文本，本轮未调用。 |
+
+共发出一次 TTS 和一次 ASR 请求，无重试。音频只在内存和 FFmpeg 管道内流转，单元已退出。完整合成链路、LLM 首段、封口至首段可播放 PCM、整体成功轮次耗时和 OPPO 可闻延迟仍无本轮数据。ASR 额度需单独核对 `fun-asr-realtime` 在北京账号的免费额度停止开关、计划抵扣范围与计费状态。

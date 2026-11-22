@@ -134,7 +134,7 @@ async def deliver(
                 await channel.segment_started(count)
             samples = 0
             while True:
-                async with asyncio.timeout(limits.io):
+                async with asyncio.timeout_at(deadline):
                     frame = await anext(frames, None)
                     if frame is None:
                         break
@@ -143,6 +143,7 @@ async def deliver(
                     if extra_byte or not frame_samples or samples > PLAYBACK_RATE * 10:
                         raise ProtocolError("invalid synthesized audio")
                     await channel.audio(frame)
+                deadline = clock() + limits.io
             if samples == 0:
                 raise ProtocolError("empty synthesized audio")
             await channel.segment_ended(count, samples)

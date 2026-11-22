@@ -30,7 +30,7 @@ async def synthesize(adapter, text):
             if len(frame) % 2 or len(pcm) + len(frame) > 480_000:
                 raise ValueError("invalid PCM")
             pcm.extend(frame)
-    if not pcm:
+    if not pcm or not any(pcm):
         raise ValueError("empty PCM")
     return pcm
 
@@ -82,17 +82,23 @@ async def probe(mode, shared_speech):
             stage, start = "tts_fixture", monotonic()
             async with asyncio.timeout(10):
                 fixture = await synthesize(adapter, "你好，瓦力。")
-            report(stage, result="ok", ms=elapsed(start), bytes=len(fixture), format="pcm_s16le/24000/mono")
-            if mode == "tts-fixture":
-                return 0
-            stage, start = "resample", monotonic()
+            fixture_ms = elapsed(start)
+            stage = "fixture_decode"
             converted = subprocess.run(
                 ["/usr/bin/ffmpeg", "-v", "error", "-f", "s16le", "-ar", "24000",
                  "-ac", "1", "-i", "pipe:0", "-f", "s16le", "-ar", "16000", "pipe:1"],
                 input=fixture, capture_output=True, check=True, timeout=4,
             ).stdout
+            if not converted or len(converted) % 2 or not any(converted):
+                raise ValueError("invalid decoded fixture")
+            report("tts_fixture", result="ok", ms=fixture_ms, validated_ms=elapsed(start),
+                   bytes=len(fixture), duration_ms=round(len(fixture) / 48),
+                   format="pcm_s16le/24000/mono")
             del fixture
+            if mode == "tts-fixture":
+                return 0
             stage, start = "asr", monotonic()
+            turn_start = start
             async with asyncio.timeout(12):
                 async with adapter.recognize(16_000) as recognition:
                     ready_ms = elapsed(start)
@@ -114,9 +120,11 @@ async def probe(mode, shared_speech):
                 stage, start = f"tts_reply_{number}", monotonic()
                 async with asyncio.timeout(10):
                     result = await synthesize(adapter, segment)
+                metrics = {"seal_to_playable_ms": elapsed(seal)} if number == 1 else {}
                 report(stage, result="ok", ms=elapsed(start), bytes=len(result),
-                       format="pcm_s16le/24000/mono")
+                       duration_ms=round(len(result) / 48), format="pcm_s16le/24000/mono", **metrics)
                 del result
+            report("turn", result="ok", ms=elapsed(turn_start), seal_to_done_ms=elapsed(seal))
             return 0
     except Exception as exc:
         details = {}

@@ -173,3 +173,30 @@ class VoiceTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(TimeoutError):
             await run_turn(fake, fake, fake, Limits(io=0.1, turn=2))
         self.assertEqual(fake.trace[-3:], [("end", 1, 1), "second text", "second setup exited"])
+
+    async def test_second_tts_setup_and_first_pcm_share_progress_deadline(self):
+        class SlowAudio(Fake):
+            @asynccontextmanager
+            async def synthesize(self, text, rate):
+                if ("end", 1, 1) not in self.trace:
+                    yield values(b"\x00\x00")
+                    return
+
+                async def delayed_audio():
+                    self.trace.append("waiting for first PCM")
+                    await asyncio.sleep(0.07)
+                    yield b"\x01\x00"
+
+                try:
+                    await asyncio.sleep(0.07)
+                    yield delayed_audio()
+                finally:
+                    self.trace.append("second tts closed")
+
+        fake = SlowAudio()
+        fake.events.put_nowait(Audio(0, b"\x00\x00"))
+        fake.events.put_nowait(End(1))
+        with self.assertRaises(TimeoutError):
+            await run_turn(fake, fake, fake, Limits(io=0.1, turn=2))
+        self.assertEqual(fake.trace[-4:],
+                         [("end", 1, 1), ("start", 2), "waiting for first PCM", "second tts closed"])
