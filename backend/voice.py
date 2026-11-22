@@ -164,7 +164,7 @@ async def run_turn(
 
 
 @asynccontextmanager
-async def recognize(channel: Channel, providers: Providers, limits: Limits):
+async def recognize(channel: Channel, providers: Providers, limits: Limits, *, allow_empty=False):
     async with AsyncExitStack() as resources:
         async with asyncio.timeout(limits.ready):
             asr = await resources.enter_async_context(providers.recognize(UPLOAD_RATE))
@@ -180,7 +180,7 @@ async def recognize(channel: Channel, providers: Providers, limits: Limits):
                     mark("capture_sealed")
                     transcript = (await asr.finish()).strip()
                     mark("asr_final")
-                    if not transcript:
+                    if not transcript and not allow_empty:
                         raise EmptyTranscript()
                     if len(transcript) > 1024:
                         raise ProviderError("invalid transcript")

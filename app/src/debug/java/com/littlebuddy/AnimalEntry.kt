@@ -10,4 +10,10 @@ internal fun addAnimalEntry(content: LinearLayout) {
         text = "玩猜动物"
         setOnClickListener { context.startActivity(Intent(context, AnimalActivity::class.java).putExtra("startGame", true)) }
     })
+    content.addView(Button(context).apply {
+        text = "私有语音猜动物"
+        setOnClickListener {
+            context.startActivity(Intent(context, AnimalActivity::class.java).putExtra("privateGame", true))
+        }
+    })
 }
