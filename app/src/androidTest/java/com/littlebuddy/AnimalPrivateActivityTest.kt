@@ -56,7 +56,13 @@ class AnimalPrivateActivityTest {
             "first-pcm" -> await { has("正在播放回复") && gates.count(PCM_HEAD_ADVANCED) == spoken }
             "between" -> await { imageVisible() && gates.count(PCM_HEAD_ADVANCED) == spoken + 1 }
             "playing" -> await { gates.count(PCM_HEAD_ADVANCED) > spoken && !imageVisible() }
-            "release" -> await { imageVisible() && gates.ready(PLAYBACK_RELEASE) }
+            "release" -> {
+                await { imageVisible() && gates.ready(PLAYBACK_RELEASE) }
+                onMain {
+                    assertEquals(spoken + 1, gates.count(PCM_HEAD_ADVANCED))
+                    assertTrue(has("完成 0 / 3"))
+                }
+            }
             "late" -> await { gates.queued(SEGMENT_CONFIRMATION) == 2 && gates.ready(TURN_COMMIT) }
             "blackhole", "disconnect" -> {
                 await { imageVisible() }
@@ -120,7 +126,13 @@ class AnimalPrivateActivityTest {
             if (gatesOnMain(condition)) return
             SystemClock.sleep(25)
         } while (SystemClock.elapsedRealtime() < until)
-        throw AssertionError("Private route condition not reached")
+        val metadata = gatesOnMain {
+            "image=${imageVisible()} startEnabled=${button("开始猜动物").isEnabled} " +
+                "releasePending=${gates.queued(PLAYBACK_RELEASE)} playedHeads=${gates.count(PCM_HEAD_ADVANCED)} " +
+                "segmentConfirmed=${gates.count(SEGMENT_CONFIRMATION)} " +
+                "turnCommitted=${gates.count(TURN_COMMIT)} captureDispatch=${gates.count(CAPTURE_DISPATCH)}"
+        }
+        throw AssertionError("Private route condition not reached ($metadata)")
     }
 
     private fun views(view: View = activity.window.decorView): Sequence<View> = sequence {

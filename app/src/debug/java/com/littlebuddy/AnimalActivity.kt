@@ -194,9 +194,13 @@ class AnimalActivity : Activity() {
             if (id == slot && slotGeneration == generation) reset("音频失败，请重新开始")
         }, played = ::played, released = { id ->
             val current = reply
+            if (cloudPlayback == id) traceCloud("release_notice", id)
             if (cloudPlayback == id || (!capturing && current != null && current.played == current.segments.size)) {
                 deliver(AnimalEvent.PLAYBACK_RELEASE) {
-                    if (cloudPlayback == id) cloudPlayback = null
+                    if (cloudPlayback == id) {
+                        traceCloud("release_applied", id)
+                        cloudPlayback = null
+                    }
                     released(id)
                 }
             } else {
@@ -243,13 +247,24 @@ class AnimalActivity : Activity() {
         captureFrame(operation, detected = true, endpoint = true)
     }
 
+    private fun traceCloud(event: String, operation: Long, segment: Int = 0) {
+        android.util.Log.i("AnimalTiming", "event=$event op=$operation segment=$segment ms=" +
+            android.os.SystemClock.elapsedRealtime())
+    }
+
     private fun played(id: Long) {
         val current = reply ?: return
         if (id != slot || slotGeneration != generation || capturing) return
         val number = ++current.played
+        if (cloudMode) {
+            traceCloud("segment_drained", id, number)
+            current.streams[number - 1].abort()
+        }
         val acknowledge = {
             if (current === reply) {
-                send(event("playback.segment_completed", current).put("number", number))
+                if (send(event("playback.segment_completed", current).put("number", number)) && cloudMode) {
+                    traceCloud("segment_ack", id, number)
+                }
             }
             Unit
         }
@@ -332,6 +347,8 @@ class AnimalActivity : Activity() {
                 private var segmentKey: JSONObject? = null
                 private var segmentNumber = 0
                 private var wireReplyKey: JSONObject? = null
+                private var wireSegments = 0
+                private var wireSegmentIndex = 0
                 private var discardSegment = false
 
                 private fun protocolFailure(webSocket: WebSocket) =
@@ -367,6 +384,10 @@ class AnimalActivity : Activity() {
                                     val previous = wireReplyKey
                                     if (previous != null && (key.getString("session_id") != previous.getString("session_id") ||
                                             key.getInt("turn_id") <= previous.getInt("turn_id"))) return
+                                    check(stream == null && !discardSegment)
+                                    wireSegments = message.getJSONArray("segments").length()
+                                    check(wireSegments in 1..8)
+                                    wireSegmentIndex = 0
                                     wireReplyKey = key
                                 }
                                 "segment.start" -> {
@@ -379,6 +400,9 @@ class AnimalActivity : Activity() {
                                         return
                                     }
                                     check(key.getInt("turn_id") == latest.getInt("turn_id"))
+                                    val number = message.getInt("number")
+                                    check(number == wireSegmentIndex + 1 && number <= wireSegments)
+                                    wireSegmentIndex = number
                                     val incoming = CloudPcm({ name, operation ->
                                         android.util.Log.i("AnimalTiming", "event=$name op=$operation ms=" +
                                             android.os.SystemClock.elapsedRealtime())
@@ -387,10 +411,10 @@ class AnimalActivity : Activity() {
                                                 probe?.observe(AnimalEvent.PCM_HEAD_ADVANCED)
                                             }
                                         }
-                                    })
+                                    }, bufferEntireSegment = true)
                                     stream = incoming
                                     segmentKey = key
-                                    segmentNumber = message.getInt("number")
+                                    segmentNumber = number
                                     dispatch(webSocket) { acceptStream(message, incoming) }
                                     return
                                 }
@@ -499,6 +523,7 @@ class AnimalActivity : Activity() {
                 val number = message.getInt("number")
                 if (number == current.confirmed + 1 && number <= current.played) {
                     current.confirmed = number
+                    if (cloudMode) traceCloud("segment_confirmed", slot ?: 0L, number)
                     current.segments[number - 1].image?.let {
                         picture.setImageResource(it)
                         picture.visibility = View.VISIBLE

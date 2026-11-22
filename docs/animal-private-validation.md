@@ -34,8 +34,8 @@
    ```bash
    shasum -a 256 -c SHA256SUMS.txt
    adb devices
-   adb install -r -g little-buddy-0.1.11-animal-private.apk
-   adb install -r little-buddy-0.1.11-animal-private-test.apk
+   adb install -r -g little-buddy-0.1.12-animal-private.apk
+   adb install -r little-buddy-0.1.12-animal-private-test.apk
    adb reverse tcp:8444 tcp:8444
    adb reverse --list
    ```
@@ -84,3 +84,16 @@
 - 完整会话 1/1。三题提交数为 1、2、3，「再玩一次」后归零。无自动重试。另一次启动在本地 TLS 握手阶段失败，未打开游戏会话、未调用云。
 - 服务端 4 次 ASR，上行 114560 样本（7.16 秒）。游戏 TTS 11 次、109 字符。合成输入另用 2 次 TTS、11 字符。LLM 0 次。此轮未读取账户账单，实际费用待账单。
 - 4 次封口至最终 ASR 分别为 156、135、120、147 ms。封口至服务端发首 PCM 分别为 732、741、619、711 ms。该采样点早于 OPPO 收包和可闻首声。
+
+### 释放闸门复验
+
+0.1.11 在 OPPO 上已通过 `asr`、`first-pcm`、`between`、`playing`。`release` 超时，`late`、`blackhole`、`disconnect` 尚未执行。候选修复只需补跑这四项。原释放断言保留，并额外检查图已亮时庆祝段还没有开始播放、计数仍为 0。
+
+复现使用实际 OkHttp WebSocket、回环 TLS release 服务和生产 PCM 缓冲。首段模拟排空后发 ACK，第二段保持无消费者。当超过四个第二段 PCM 帧排在确认消息前，旧队列卡住读取。私有游戏缓冲按每段协议上限 240000 样本接收入站 PCM，Socket 可继续读确认，音频槽仍独占直到释放通知。可通过构建锁运行该探针。
+
+```bash
+scripts/with-build-lock env ANIMAL_RELEASE_PROBE=1 ./gradlew --offline --no-daemon --max-workers=1 \
+  testDebugUnitTest --tests com.littlebuddy.GameReleaseIntegrationTest
+```
+
+OPPO 若需定位，可在复现前后查看 `adb logcat -d -s AnimalTiming`。比较同一音频操作的 `segment_drained`、`segment_ack`、`release_notice`、`segment_confirmed` 和 `release_applied`，并记录 instrumentation 的超时状态摘要。时序只包含操作号、段号、计数、布尔状态和单调时间。
