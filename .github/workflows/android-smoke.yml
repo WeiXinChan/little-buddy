@@ -51,37 +51,44 @@ jobs:
           echo "::notice::Source $(git rev-parse HEAD), standard ubuntu-24.04 / $(uname -m), /dev/kvm readable and writable"
 
       - name: Prepare virtual audio dependency
-        timeout-minutes: 5
+        timeout-minutes: 6
         run: |
           audio_available() {
             command -v pulseaudio >/dev/null && command -v pactl >/dev/null &&
               dpkg-query -W -f='${db:Status-Status}' libpulse0 | grep -qx installed
           }
           if ! audio_available; then
-            source_file="$RUNNER_TEMP/audio-ubuntu.sources"
-            cat >"$source_file" <<'SOURCES'
+            apt=(sudo -n apt-get -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
+              -o Acquire::Retries=0 -o DPkg::Lock::Timeout=10)
+            packages=(libpulse0 pulseaudio pulseaudio-utils)
+            # Use the runner's package indexes if they can resolve and install the dependencies.
+            echo 'PulseAudio dependency setup attempt 1/2 using runner indexes'
+            if timeout --kill-after=5s 60s "${apt[@]}" install -y --no-install-recommends "${packages[@]}"; then
+              echo 'PulseAudio installed using runner indexes'
+            else
+              sleep 3
+              echo 'PulseAudio dependency setup attempt 2/2 using Ubuntu archive'
+              source_file="$RUNNER_TEMP/audio-ubuntu.sources"
+              cat >"$source_file" <<'SOURCES'
           Types: deb
           URIs: https://archive.ubuntu.com/ubuntu/
           Suites: noble noble-updates noble-security
           Components: main universe
+          Architectures: amd64
           Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
           SOURCES
-            apt=(sudo -n apt-get -o "Dir::Etc::sourcelist=$source_file" -o Dir::Etc::sourceparts=-
-              -o Acquire::http::Timeout=12 -o Acquire::https::Timeout=12 -o Acquire::Retries=0
-              -o DPkg::Lock::Timeout=10)
-            for attempt in 1 2; do
-              echo "PulseAudio dependency setup attempt $attempt/2"
-              if timeout --kill-after=5s 75s "${apt[@]}" -o APT::Update::Error-Mode=any update &&
-                 timeout --kill-after=5s 50s "${apt[@]}" install -y --no-install-recommends \
-                   libpulse0 pulseaudio pulseaudio-utils; then
-                break
-              fi
-              if (( attempt == 2 )); then
-                echo '::error::PulseAudio dependency setup failed after two attempts'
+              apt+=(-o "Dir::Etc::sourcelist=$source_file" -o Dir::Etc::sourceparts=-)
+              if ! timeout --kill-after=5s 155s "${apt[@]}" -o APT::Update::Error-Mode=any \
+                -o Acquire::Languages=none -o Acquire::IndexTargets::deb::DEP-11::DefaultEnabled=false \
+                -o Acquire::IndexTargets::deb::CNF::DefaultEnabled=false update; then
+                echo '::error::PulseAudio dependency setup failed while refreshing Ubuntu package indexes'
                 exit 1
               fi
-              sleep 3
-            done
+              if ! timeout --kill-after=5s 75s "${apt[@]}" install -y --no-install-recommends "${packages[@]}"; then
+                echo '::error::PulseAudio dependency installation failed after two attempts'
+                exit 1
+              fi
+            fi
           fi
           audio_available
           { pulseaudio --version; pactl --version; } | tee -a "$GITHUB_STEP_SUMMARY"
