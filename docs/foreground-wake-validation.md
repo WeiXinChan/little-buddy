@@ -43,7 +43,7 @@ Gradle 8.13、JDK 17、Android SDK 36、Build Tools 35.0.0。同工具链下原�
 
 上传环缓冲保留最多 80,000 个样本，并把短读合并为 320 样本的线上包。仅封口允许短包。WebSocket 预算为 161,500 字节，等于 250 个最大包（含每包 6 字节头）。发送前检查加入本包后的队列长度。主线程每次最多排送 16 包，队列满时以 20 ms 间隔检查，连续阻塞 2 秒即撤销采集代。封口沿相同队列等待剩余数据依序排送和结束包的空间。旧代取消会移除排送回调、擦除未送样本并取消 WebSocket。
 
-设备回归新增容量和取消检查，并用正式 BuddyActivity、Android 真实录放句柄、Sherpa JNI 和回环 TLS 假 ASR 串接。测试在 AudioRecord 读返回后替换样本值，保留读长度和实际资源生命周期。假 ASR 比对完整「玩猜动物」音频及它所在的逐字节连续区间。用例覆盖待机、单独回应、续听、停止、退后台和设备睡眠。Android 设备执行结果以当前 PR 的 CI 为准。测试 APK 中的三段 gzip 资产从以下命令生成的 PCM 压缩得到，采用无时间戳 gzip，正式 APK 不含测试语料。
+设备回归新增容量和取消检查，并用正式 BuddyActivity、Android 真实录放句柄、Sherpa JNI 和回环 TLS 假 ASR 串接。测试在 AudioRecord 读返回后替换样本值，保留读长度和实际资源生命周期。假 ASR 比对完整「玩猜动物」音频及它所在的逐字节连续区间。用例覆盖待机、单独回应、续听、停止、退后台和设备睡眠。Android 设备执行结果以当前 PR 的 CI 为准。测试 APK 中三段 PCM 直接取自以下命令生成的对应文件。AAPT 会把以 .gz 结尾的资产解压并去掉后缀，旧 CI 以 .gz 路径打开导致失败。现在源码、APK 条目与 AssetManager 统一使用 .pcm，CI 与 OPPO 入口都预检逐文件哈希。正式 APK 不含测试语料。
 
 ```bash
 python3 scripts/test-wake-model.py --fixtures /path/to/fixtures
@@ -62,3 +62,18 @@ WenetSpeech 对照用官方归档，SHA-256 `b2f7c89690dc8ce4c6ed6afeab7cd800c36
 ### 百炼素材使用证据
 
 现有账号通过北京业务空间的已配 CosyVoice 推理 API 产生该片段。生成链路没有调用控制台体验入口、声音克隆或第三方音色。产品服务协议第 85.1 条指向百炼专门协议。专门协议将 API 集成纳入适用范围，并要求使用方对输出商业化、第三方权利及合成标识承担责任。体验条款对体验输出的分发另有限制，其范围为体验入口。当前服务器能核验推理配置和已生成素材，缺少该账号的订购单和可能覆盖公开再分发的补充条款，公开分发权利仍待账号持有人核对。包内已保留来源、参数与合成音标识说明。 [产品服务协议](https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud201802281451_77479.html) · [百炼服务协议](https://terms.alicdn.com/legal-agreement/terms/common_platform_service/20230728213935489/20230728213935489.html) · [体验功能特别说明](https://terms.alicdn.com/legal-agreement/terms/common_platform_service/20260716114753386/20260716114753386.html)
+
+## 家庭素材与公开构建隔离
+
+家庭包仍要求清晰温暖的「宝宝，我在。」。后续源码从 `main` assets 移除百炼 PCM，现有账号的原始合成素材保存在服务器受控输入。现用素材 SHA-256 为 `90eac1536ac74f27a1a9e9983d0db781097f97342c037d68cf9840d84f0b6a3f`。公开源码与公开 CI 自本变更起停止新增该素材。此前的 Git 历史与第三方缓存仍可能保留旧副本。
+
+家庭签名保管人先在受限服务器核对签名环境，用新建的私有检出和 `umask 077` 构建，再按既定流程签名。应在签名后从 APK 提取 `assets/wake/prompt.pcm` 并复核上述哈希，以及已登记的证书和应用 ID。Release 生成任务在输入未指定、文件在仓库内或者大小／SHA-256 不符时失败。在已授权的签名环境中执行下列命令，发布签名由签名保管人单独处理。
+
+```bash
+umask 077
+scripts/with-build-lock env LITTLE_BUDDY_FAMILY_PROMPT=/srv/little-buddy-private/wake/prompt.pcm \
+    ./gradlew --no-daemon :app:assembleRelease
+unzip -p app/build/outputs/apk/release/app-release-unsigned.apk assets/wake/prompt.pcm | sha256sum
+```
+
+公开 CI 编译 `ciRelease`，其包名为 `com.littlebuddy.sim.ci`。Debug 和 `ciRelease` 使用工程生成的两段正弦音，CC0-1.0。家庭 Release 仅从独立生成目录读取已校验 PCM。OPPO 工程探针使用可分发测试音，家庭暖声听感保留给成品验收。

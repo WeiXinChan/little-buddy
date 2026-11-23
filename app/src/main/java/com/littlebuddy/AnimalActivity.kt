@@ -31,6 +31,7 @@ import kotlin.math.sin
 
 internal enum class AnimalEvent {
     REPLY_END, FINAL_ACK, SEGMENT_CONFIRMATION, TURN_COMMIT, PLAYBACK_RELEASE,
+    WAKE_COMMAND, ASR_READY, PCM_SEGMENT, PCM_BUFFERED,
     WAKE_CAPTURE, WAKE_CAPTURE_RELEASED, WAKE_PROMPT, WAKE_PROMPT_RELEASED, OPEN_SOCKET,
     CAPTURE_FRAME, ASR_UPLOAD_END, PCM_HEAD_ADVANCED, TONE, TONE_DISPATCH, TAIL_TIMER, IMAGE_TIMER, CAPTURE_DISPATCH, IMAGE_SHOWN,
 }
@@ -238,12 +239,14 @@ open class AnimalActivity : Activity() {
             }
             WakeReader(keyword, command = {
                 handler.post {
-                    if (upload === pending && epoch == generation && eligible()) {
-                        wakeEntry = true
-                        speech = true
-                        capturing = true
-                        frames = true
-                        connect()
+                    deliver(AnimalEvent.WAKE_COMMAND) {
+                        if (upload === pending && epoch == generation && eligible()) {
+                            wakeEntry = true
+                            speech = true
+                            capturing = true
+                            frames = true
+                            connect()
+                        }
                     }
                 }
             }, solo = {
@@ -569,7 +572,13 @@ open class AnimalActivity : Activity() {
                                     stream = incoming
                                     segmentKey = key
                                     segmentNumber = number
-                                    dispatch(webSocket) { acceptStream(message, incoming) }
+                                    handler.post {
+                                        if (webSocket !== socket) incoming.abort()
+                                        else deliver(AnimalEvent.PCM_SEGMENT) {
+                                            if (webSocket === socket && eligible()) acceptStream(message, incoming)
+                                            else incoming.abort()
+                                        }
+                                    }
                                     return
                                 }
                                 "segment.end" -> {
@@ -583,6 +592,7 @@ open class AnimalActivity : Activity() {
                                         key.getInt("turn_id") == segmentKey?.getInt("turn_id"))
                                     checkNotNull(stream).seal(message.getInt("samples"))
                                     stream = null
+                                    dispatch(webSocket) { probe?.observe(AnimalEvent.PCM_BUFFERED) }
                                     return
                                 }
                             }
@@ -596,6 +606,7 @@ open class AnimalActivity : Activity() {
                             "reply.end" -> AnimalEvent.REPLY_END
                             "playback.segment_committed" -> AnimalEvent.SEGMENT_CONFIRMATION
                             "turn.committed" -> AnimalEvent.TURN_COMMIT
+                            "turn.ready" -> AnimalEvent.ASR_READY
                             else -> null
                         }
                         val receiveCurrent = {

@@ -2,7 +2,6 @@
 import argparse
 import asyncio
 from contextlib import asynccontextmanager
-import gzip
 import math
 from pathlib import Path
 import ssl
@@ -12,7 +11,7 @@ from backend.animal.cloud import game_server
 from backend.demo import Demo
 
 
-CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect", "conversation", "wake")
+CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect", "conversation", "wake", "wake-revoke")
 
 
 class Fixture(Demo):
@@ -31,18 +30,20 @@ class Fixture(Demo):
         yield self
 
     async def write(self, pcm16le):
-        if self.scenario == "wake":
+        if self.scenario in {"wake", "wake-revoke"}:
+            if not self.pcm:
+                self.report(f"wake_fixture_first_pcm turn={self.recognitions}")
             self.pcm.extend(pcm16le)
 
     async def finish(self):
         if self.scenario == "asr" and self.recognitions == 1:
             await asyncio.Future()
-        if self.scenario == "wake":
+        if self.scenario in {"wake", "wake-revoke"}:
             assets = Path("app/src/androidTest/assets/wake")
-            command_pcm = gzip.decompress((assets / "command-alone.pcm.gz").read_bytes())
+            command_pcm = (assets / "command-alone.pcm").read_bytes()
             command = command_pcm[16000:-64000]
-            source_file = "gap-120.pcm.gz" if self.recognitions == 1 else "command-alone.pcm.gz"
-            source = gzip.decompress((assets / source_file).read_bytes()) + b"\0" * 64000
+            source_file = "gap-120.pcm" if self.scenario == "wake-revoke" or self.recognitions == 1 else "command-alone.pcm"
+            source = (assets / source_file).read_bytes() + b"\0" * 64000
             received = bytes(self.pcm)
             offset = source.find(received)
             valid = offset >= 0 and offset % 2 == 0 and command in received
@@ -93,7 +94,7 @@ async def fixture_server(port, tls, token, scenario, *, report=lambda _: None):
 
         async def proxy(reader, writer):
             nonlocal first
-            if scenario == "wake":
+            if scenario in {"wake", "wake-revoke"}:
                 report("wake_fixture_connection")
             inject = first and scenario in {"blackhole", "disconnect"}
             first = False

@@ -230,6 +230,31 @@ else
 fi
 stop_fixture || failures=1
 
+if start_fixture wake-revoke "$scratch/wake-revoke.fixture"; then
+    for revoke in stop background sleep; do
+        for gate in WAKE_COMMAND ASR_READY PCM_SEGMENT; do
+            if reset_app; then
+                run_test com.littlebuddy.BuddyActivityTest nativeWakeRejectsRevokedCallbacks "wake-$revoke-$gate" \
+                    -e animalUrl "wss://127.0.0.1:$guest_port/v1/animal" -e wakeGate "$gate" -e wakeRevoke "$revoke" ||
+                    failures=1
+            else
+                report "- Wake $revoke/$gate not run (app reset failed)"
+                failures=1
+            fi
+        done
+    done
+    if [[ $(grep -c '^wake_fixture_connection$' "$scratch/wake-revoke.fixture") != 6 ]] ||
+        [[ $(grep -c '^wake_fixture_first_pcm turn=[0-9][0-9]*$' "$scratch/wake-revoke.fixture") != 3 ]] ||
+        [[ $(grep -c '^wake_fixture_pcm turn=[0-9][0-9]* exact=1$' "$scratch/wake-revoke.fixture") != 3 ]]; then
+        report "- Wake cancellation matrix transport counters differed from 6 connections and 3 exact ASR turns"
+        failures=1
+    fi
+else
+    report "- Wake cancellation matrix fixture setup failed"
+    failures=1
+fi
+stop_fixture || failures=1
+
 report ''
 report "- Game scenarios: $game_passed/8 verified, $game_started/8 instrumentation invocations"
 if [[ -s "$scratch/diagnostics" ]]; then

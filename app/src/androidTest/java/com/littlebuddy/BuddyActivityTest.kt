@@ -149,14 +149,8 @@ class BuddyActivityTest {
     @Test fun nativeWakeFlowsThroughProductAudioAndTlsAsr() {
         val url = checkNotNull(InstrumentationRegistry.getArguments().getString("animalUrl"))
         val events = mutableListOf<AnimalEvent>()
-        val readsStarted = java.util.concurrent.atomic.AtomicInteger()
         val inputs = ArrayDeque(listOf("gap-120", "wake", "command-alone"))
-        val assets = instrumentation.context.assets
-        val fixtures = inputs.associateWith { name ->
-            val bytes = java.util.zip.GZIPInputStream(assets.open("wake/$name.pcm.gz")).use { it.readBytes() }
-            val buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            ShortArray(bytes.size / 2) { buffer.short }
-        }
+        val fixtures = inputs.associateWith(::wakeFixture)
         launch()
         onMain {
             activity.probe = object : AnimalProbe {
@@ -166,7 +160,6 @@ class BuddyActivityTest {
                     val pcm = if (inputs.isEmpty()) ShortArray(0) else fixtures.getValue(inputs.removeFirst())
                     var offset = 0
                     return { samples, count ->
-                        if (offset == 0) readsStarted.incrementAndGet()
                         repeat(count) { i -> samples[i] = pcm.getOrElse(offset++) { 0 } }
                     }
                 }
@@ -195,36 +188,98 @@ class BuddyActivityTest {
             assertEquals(2, events.count { it == AnimalEvent.OPEN_SOCKET })
             button("停止").performClick()
         }
-        fun shell(command: String): String = android.os.ParcelFileDescriptor.AutoCloseInputStream(
-            instrumentation.uiAutomation.executeShellCommand(command),
-        ).bufferedReader().use { it.readText() }
+    }
 
-        await { readsStarted.get() == 4 }
-        onMain { assertTrue(activity.moveTaskToBack(true)) }
-        await { events.count { it == AnimalEvent.WAKE_CAPTURE_RELEASED } == 4 }
-        val automation = instrumentation.uiAutomation
-        automation.adoptShellPermissionIdentity("android.permission.START_ACTIVITIES_FROM_BACKGROUND")
-        try {
-            onMain {
-                activity.startActivity(Intent(activity, BuddyActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+    @Test fun nativeWakeRejectsRevokedCallbacks() {
+        val args = InstrumentationRegistry.getArguments()
+        val url = checkNotNull(args.getString("animalUrl"))
+        val marker = AnimalEvent.valueOf(checkNotNull(args.getString("wakeGate")))
+        val revoke = checkNotNull(args.getString("wakeRevoke"))
+        require(marker in setOf(AnimalEvent.WAKE_COMMAND, AnimalEvent.ASR_READY, AnimalEvent.PCM_SEGMENT))
+        require(revoke in setOf("stop", "background", "sleep"))
+        val pcm = wakeFixture("gap-120")
+        var captures = 0
+        val gate = AnimalGates(input = {
+            val input = if (captures++ == 0) pcm else ShortArray(0)
+            var offset = 0
+            val read: (ShortArray, Int) -> Unit = { samples, count ->
+                repeat(count) { index -> samples[index] = input.getOrElse(offset++) { 0 } }
             }
-        } finally {
-            automation.dropShellPermissionIdentity()
+            read
+        })
+        launch()
+        onMain {
+            activity.probe = gate
+            gate.held = setOf(marker)
+            field("WSS 服务地址").setText(url)
+            field("设备令牌").setText("offlinefixture".repeat(3))
+            button("保存并进入").performClick()
         }
-        await { readsStarted.get() == 5 }
+
+        await {
+            gate.ready(marker) && button("停止").isEnabled &&
+                (marker != AnimalEvent.PCM_SEGMENT || gate.count(AnimalEvent.PCM_BUFFERED) > 0)
+        }
+        lateinit var late: () -> Unit
+        var connections = 0
+        var uploadsEnded = 0
+        var playbackHeads = 0
+        onMain {
+            late = gate.take(marker)
+            gate.held = emptySet()
+            connections = gate.count(AnimalEvent.OPEN_SOCKET)
+            uploadsEnded = gate.count(AnimalEvent.ASR_UPLOAD_END)
+            playbackHeads = gate.count(AnimalEvent.PCM_HEAD_ADVANCED)
+            assertEquals(if (marker == AnimalEvent.WAKE_COMMAND) 0 else 1, connections)
+            assertEquals(if (marker == AnimalEvent.PCM_SEGMENT) 1 else 0, uploadsEnded)
+            assertEquals(0, playbackHeads)
+        }
+        val power = activity.getSystemService(android.os.PowerManager::class.java)
         try {
-            shell("input keyevent KEYCODE_SLEEP")
-            await { events.count { it == AnimalEvent.WAKE_CAPTURE_RELEASED } == 5 }
+            when (revoke) {
+                "stop" -> {
+                    onMain { button("停止").performClick() }
+                    await { captures == 2 }
+                }
+                "background" -> {
+                    onMain { assertTrue(activity.moveTaskToBack(true)) }
+                    await { !button("停止").isEnabled }
+                }
+                "sleep" -> {
+                    shell("input keyevent KEYCODE_SLEEP")
+                    await { !power.isInteractive && !button("停止").isEnabled }
+                    val keyguard = activity.getSystemService(android.app.KeyguardManager::class.java)
+                    val run = args.getString("wakeRun").orEmpty()
+                    android.util.Log.i("WakeProbe",
+                        "run=$run gate=$marker screen_interactive=false keyguard_locked=${keyguard.isKeyguardLocked}")
+                }
+            }
+            onMain { late() }
+            SystemClock.sleep(400)
             onMain {
-                assertEquals(2, events.count { it == AnimalEvent.OPEN_SOCKET })
+                assertEquals(connections, gate.count(AnimalEvent.OPEN_SOCKET))
+                assertEquals(uploadsEnded, gate.count(AnimalEvent.ASR_UPLOAD_END))
+                assertEquals(playbackHeads, gate.count(AnimalEvent.PCM_HEAD_ADVANCED))
                 assertFalse(button("结束录音").isEnabled)
             }
         } finally {
-            shell("input keyevent KEYCODE_WAKEUP")
-            shell("wm dismiss-keyguard")
+            if (revoke == "sleep") {
+                shell("input keyevent KEYCODE_WAKEUP")
+                shell("wm dismiss-keyguard")
+            }
         }
     }
+
+    private fun wakeFixture(name: String): ShortArray {
+        val assets = instrumentation.context.assets
+        val bytes = assets.open("wake/$name.pcm").use { it.readBytes() }
+        val buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        return ShortArray(bytes.size / 2) { buffer.short }
+    }
+
+    private fun shell(command: String): String = android.os.ParcelFileDescriptor.AutoCloseInputStream(
+        instrumentation.uiAutomation.executeShellCommand(command),
+    ).bufferedReader().use { it.readText() }
 
     private fun progress() = views().filterIsInstance<TextView>().single { it.text.startsWith("完成 ") }
 
