@@ -10,7 +10,7 @@
 2. 使用 `backend/deploy/service.env.example` 创建 `/etc/little-buddy-v1/service.env`，填写现有授权百炼项目和模型。把 API key、证书链及私钥分别配置至单元的 `LoadCredential=` 输入，凭据文件 root:root 0600、凭据目录 0700。证书必须含 IP SAN `127.0.0.1`。TLS 证书续签后重新加载凭据需要重启专用实例。启动跑在 systemd 动态非 root 用户下。
 3. 在 `/etc/little-buddy-v1/` 下新建独立凭据目录（0700），其中 `token` 为 `openssl rand -hex 32` 产生的 64 个小写十六进制字符，`expiry` 为授权期限的绝对 Unix 秒。用受保护重定向写入 0600 文件，令牌只经授权私密渠道交设备操作者。由 root 创建 `device` 符号链接指向这一目录。签名流程不读取这些私密文件。
 4. 把单元安装到 `/etc/systemd/system/`。运行 `systemd-analyze verify`、`systemctl daemon-reload` 和 `systemctl start little-buddy-v1.service`。从回环以严格 TLS 验证服务进程、`/healthz` 和鉴权 WSS，确认真实 UID 非 0。使用合成夹具时通过临时回环实例加 `--provider fake`，运行 `PYTHONPATH=.:backend python3 -m unittest discover -s backend/tests -q`。默认回环端口 19443，启用前核对未占用。
-5. 由运维应用已独立复核且备好回退的 SSH 专用设备身份。启用前保留当前管理会话，记录管理登录与监听基线。服务端仅接受设备公钥和 RSA-SHA2-256，只允许客户端转发到 `127.0.0.1:19443`，禁用 shell、exec、子系统和其他转发。验证随后仍可新建管理连接，并从 Wi-Fi 和移动网用正式包验证业务 WSS。
+5. 由运维应用已独立复核且备好回退的 SSH 专用设备身份。启用前保留当前管理会话，记录管理登录与监听基线。服务端仅接受设备公钥和 RSA-SHA2-256，只允许客户端转发到 `127.0.0.1:19443`，禁用 shell、exec、子系统和其他转发。验证随后仍可新建管理连接，并从 Wi-Fi 和移动网用正式包验证业务 WSS。 [SSH 设备身份运维](device-ssh-operations.md)
 
 单实例最多一个已升级会话。有效设备启动尝试每分钟最多 6 次，错误令牌不占设备配额。应用会话限制 ASR、LLM 和 TTS 次数，另有帧长、队列、心跳和时限。公网代理还应限制未鉴权连接速率和并发。日志仅含计数、分类和时延。看护时用 `journalctl -u little-buddy-v1.service` 对照供应商计量，不记录原始音频、转写和完整聊天。合成测试核对计数与释放行为，供应商真实用量、外网时延与童声体验留最终窗口。
 

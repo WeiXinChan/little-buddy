@@ -1,0 +1,264 @@
+#!/usr/bin/python3 -I
+"""Operate the single Little Buddy SSH device slot on Ubuntu/OpenSSH."""
+import argparse
+import fcntl
+import ipaddress
+import os
+from pathlib import Path
+import pwd
+import re
+import select
+import signal
+import stat
+import subprocess
+import tempfile
+import time
+
+USER = "little-buddy-device"
+STATE = Path("/etc/little-buddy-ssh")
+KEY = STATE / "authorized_keys"
+SSHD = Path("/usr/sbin/sshd")
+TARGET = "127.0.0.1:19443"
+PREFIX = f'restrict,port-forwarding,permitopen="{TARGET}" '.encode()
+POLICY = {
+    "authenticationmethods": "publickey", "pubkeyauthentication": "yes",
+    "pubkeyacceptedalgorithms": "rsa-sha2-256", "authorizedkeysfile": str(KEY),
+    "authorizedkeyscommand": "none", "trustedusercakeys": "none",
+    "passwordauthentication": "no", "kbdinteractiveauthentication": "no",
+    "hostbasedauthentication": "no", "gssapiauthentication": "no", "strictmodes": "yes",
+    "disableforwarding": "no", "allowtcpforwarding": "local", "permitopen": TARGET,
+    "permitlisten": "none", "allowstreamlocalforwarding": "no", "allowagentforwarding": "no",
+    "x11forwarding": "no", "permittunnel": "no", "permittty": "no", "permituserrc": "no",
+    "maxsessions": "0", "usepam": "yes",
+}
+
+
+def run(*args, **kwargs):
+    return subprocess.check_output(args, text=True, timeout=10, **kwargs).strip()
+
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+def effective(config, account, peer, local):
+    return run(SSHD, "-T", "-f", config, "-C",
+               f"user={account},host={peer},addr={peer},laddr={local},lport=22")
+
+
+def settings(output):
+    return dict(line.split(" ", 1) for line in output.splitlines() if " " in line)
+
+
+def grace(policy):
+    seconds = int(policy["logingracetime"])
+    require(0 < seconds <= 120, "expected LoginGraceTime between 1 and 120 seconds")
+    return seconds
+
+
+def check(baseline, candidate, pairs):
+    for config in (baseline, candidate):
+        run(SSHD, "-t", "-f", config)
+    accounts = {entry.pw_name for entry in pwd.getpwall()} - {USER}
+    contexts = {("127.0.0.1", "127.0.0.1"), ("::1", "::1")}
+    for pair in pairs:
+        peer, local = pair.split(",")
+        contexts.add(tuple(str(ipaddress.ip_address(value)) for value in (peer, local)))
+    for peer, local in contexts:
+        for account in sorted(accounts):
+            require(effective(baseline, account, peer, local) ==
+                    effective(candidate, account, peer, local),
+                    f"SSH configuration changed for {account} at {peer},{local}")
+        old = settings(effective(baseline, USER, peer, local))
+        new = settings(effective(candidate, USER, peer, local))
+        require(old["usedns"] == new["usedns"] == "no", "expected UseDNS no")
+        require(old["logingracetime"] == new["logingracetime"], "LoginGraceTime changed")
+        require(old["authorizedkeyscommand"] == old["trustedusercakeys"] == "none"
+                and all(path.startswith(".ssh/") for path in old["authorizedkeysfile"].split()),
+                "baseline device account has an alternate key source")
+        grace(new)
+        for name, expected in POLICY.items():
+            require(new.get(name) == expected, f"unexpected effective device setting: {name}")
+    print(f"matched {len(accounts)} non-device accounts across {len(contexts)} contexts")
+
+
+def exact_metadata(path, mode, kind):
+    info = path.lstat()
+    require(kind(info.st_mode) and info.st_uid == info.st_gid == 0
+            and stat.S_IMODE(info.st_mode) == mode, f"unexpected permissions: {path}")
+
+
+def slot_uid():
+    account = pwd.getpwnam(USER)
+    require(account.pw_uid > 0 and account.pw_gid > 0
+            and [entry.pw_name for entry in pwd.getpwall() if entry.pw_uid == account.pw_uid] == [USER]
+            and account.pw_shell == "/usr/sbin/nologin"
+            and account.pw_dir == str(STATE / "home"), "expected dedicated non-root device account")
+    shadow = run("/usr/bin/getent", "shadow", USER).split(":")
+    require(shadow[1].startswith(("!", "*")), "device password must be locked")
+    exact_metadata(STATE / "home", 0o755, stat.S_ISDIR)
+    require(not any((STATE / "home").iterdir()), "device home must be empty")
+    return account.pw_uid
+
+
+def key_info(data):
+    match = re.fullmatch(rb"ssh-rsa ([A-Za-z0-9+/=]+)(?: [^\r\n]*)?\n?", data)
+    require(match, "expected one plain RSA public key")
+    canonical = b"ssh-rsa " + match[1] + b"\n"
+    result = run("/usr/bin/ssh-keygen", "-l", "-E", "sha256", "-f", "/dev/stdin",
+                 input=canonical.decode()).split()
+    require(result[0] == "2048" and result[-1] == "(RSA)", "expected RSA-2048")
+    return canonical, result[1]
+
+
+def current_key():
+    if not KEY.exists():
+        return None
+    exact_metadata(KEY, 0o644, stat.S_ISREG)
+    line = KEY.read_bytes()
+    require(line.startswith(PREFIX), "unexpected authorized_keys format")
+    return key_info(line[len(PREFIX):])[1]
+
+
+def sync_state():
+    fd = os.open(STATE, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def publish(data):
+    fd, temporary = tempfile.mkstemp(dir=STATE, prefix=".authorized-")
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            os.fchmod(stream.fileno(), 0o644)
+            stream.write(PREFIX + data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, KEY)
+        sync_state()
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def audit(action, fingerprint):
+    with (STATE / "audit.log").open("a") as log:
+        log.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} "
+                  f"{action} {fingerprint}\n")
+        log.flush()
+        os.fsync(log.fileno())
+    sync_state()
+
+
+def device_process(process, uid):
+    status = (process / "status").read_text()
+    ids = set(map(int, re.search(r"(?m)^Uid:\s+(.+)$", status)[1].split()))
+    if uid in ids:
+        # The dedicated UID runs only its OpenSSH post-authentication workers.
+        return True
+    if ids != {0}:
+        return False
+    title = (process / "cmdline").read_bytes().split(b"\0", 1)[0]
+    if title != f"sshd: {USER} [priv]".encode():
+        return False
+    require((process / "exe").stat().st_ino == SSHD.stat().st_ino
+            and (process / "exe").stat().st_dev == SSHD.stat().st_dev,
+            "unexpected OpenSSH monitor executable")
+    return True
+
+
+def drain(uid, grace_seconds):
+    # A handshake may have read the old key before unlink. Cover the full
+    # configured grace interval and its transition to the post-auth worker.
+    quiet_after = time.monotonic() + grace_seconds + 1
+    deadline = quiet_after + 4
+    while time.monotonic() < deadline:
+        active = False
+        for process in Path("/proc").iterdir():
+            if not process.name.isdecimal():
+                continue
+            try:
+                if not device_process(process, uid):
+                    continue
+                with_pid = os.pidfd_open(int(process.name))
+                try:
+                    poll = select.poll()
+                    poll.register(with_pid, select.POLLIN)
+                    if not poll.poll(0) and device_process(process, uid):
+                        signal.pidfd_send_signal(with_pid, signal.SIGKILL)
+                        active = True
+                finally:
+                    os.close(with_pid)
+            except (FileNotFoundError, ProcessLookupError):
+                continue
+        if not active and time.monotonic() >= quiet_after:
+            return
+        time.sleep(0.25)
+    raise ValueError("device processes failed to drain; authorization remains withdrawn")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", default="/etc/ssh/sshd_config")
+    actions = parser.add_subparsers(dest="action", required=True)
+    preflight = actions.add_parser("check")
+    preflight.add_argument("baseline")
+    preflight.add_argument("candidate")
+    preflight.add_argument("pairs", nargs="*", metavar="PEER,LOCAL")
+    register = actions.add_parser("register")
+    register.add_argument("public_key", type=Path)
+    revoke = actions.add_parser("revoke")
+    revoke.add_argument("fingerprint")
+    actions.add_parser("rollback")
+    args = parser.parse_args()
+    require(os.geteuid() == 0, "root required")
+    if args.action == "check":
+        check(args.baseline, args.candidate, args.pairs)
+        return
+
+    os.umask(0o077)
+    exact_metadata(STATE, 0o755, stat.S_ISDIR)
+    uid = slot_uid()
+    with (STATE / "lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            previous = current_key()
+        except (OSError, ValueError, subprocess.SubprocessError):
+            if args.action != "rollback":
+                raise
+            previous = "unknown"
+        if args.action == "register":
+            policy = settings(effective(args.config, USER, "127.0.0.1", "127.0.0.1"))
+            require(all(policy.get(name) == expected for name, expected in POLICY.items()),
+                    "device SSH policy is not installed")
+            key, fingerprint = key_info(args.public_key.read_bytes())
+            require(previous in (None, fingerprint), "revoke the current key before registering another")
+            if previous is None:
+                audit("register-start", fingerprint)
+                drain(uid, grace(policy))
+                publish(key)
+                audit("registered", fingerprint)
+            print(f"authorized {fingerprint}")
+            return
+
+        fingerprint = previous or "-"
+        if args.action == "revoke":
+            require(re.fullmatch(r"SHA256:[A-Za-z0-9+/]{43}", args.fingerprint)
+                    and previous in (None, args.fingerprint), "fingerprint differs from active key")
+            fingerprint = args.fingerprint
+        KEY.unlink(missing_ok=True)
+        sync_state()
+        audit(f"{args.action}-deny", fingerprint)
+        policy = settings(effective(args.config, USER, "127.0.0.1", "127.0.0.1"))
+        drain(uid, grace(policy))
+        audit(f"{args.action}-drained", fingerprint)
+        print(f"authorization absent; device connections drained ({fingerprint})")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+        raise SystemExit(f"device-ssh: {error}") from error
