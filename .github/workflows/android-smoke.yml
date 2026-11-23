@@ -51,23 +51,22 @@ jobs:
           echo "::notice::Source $(git rev-parse HEAD), standard ubuntu-24.04 / $(uname -m), /dev/kvm readable and writable"
 
       - name: Prepare virtual audio dependency
-        timeout-minutes: 6
+        timeout-minutes: 12
         run: |
           audio_available() {
             command -v pulseaudio >/dev/null && command -v pactl >/dev/null &&
-              dpkg-query -W -f='${db:Status-Status}' libpulse0 | grep -qx installed
+              dpkg-query -W -f='${db:Status-Status}\n' libpulse0 pulseaudio pulseaudio-utils |
+                awk '$0 != "installed" { invalid = 1 } END { exit (NR != 3 || invalid) }'
           }
           if ! audio_available; then
             apt=(sudo -n apt-get -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
               -o Acquire::Retries=0 -o DPkg::Lock::Timeout=10)
             packages=(libpulse0 pulseaudio pulseaudio-utils)
-            # Use the runner's package indexes if they can resolve and install the dependencies.
-            echo 'PulseAudio dependency setup attempt 1/2 using runner indexes'
-            if timeout --kill-after=5s 60s "${apt[@]}" install -y --no-install-recommends "${packages[@]}"; then
-              echo 'PulseAudio installed using runner indexes'
-            else
+            install_args=(install -y --no-install-recommends "${packages[@]}")
+            echo 'PulseAudio download attempt 1/2 using runner indexes'
+            if ! timeout --kill-after=5s 120s "${apt[@]}" --download-only "${install_args[@]}"; then
               sleep 3
-              echo 'PulseAudio dependency setup attempt 2/2 using Ubuntu archive'
+              echo 'PulseAudio download attempt 2/2 using Ubuntu archive'
               source_file="$RUNNER_TEMP/audio-ubuntu.sources"
               cat >"$source_file" <<'SOURCES'
           Types: deb
@@ -84,8 +83,17 @@ jobs:
                 echo '::error::PulseAudio dependency setup failed while refreshing Ubuntu package indexes'
                 exit 1
               fi
-              if ! timeout --kill-after=5s 75s "${apt[@]}" install -y --no-install-recommends "${packages[@]}"; then
-                echo '::error::PulseAudio dependency installation failed after two attempts'
+              if ! timeout --kill-after=5s 120s "${apt[@]}" --download-only "${install_args[@]}"; then
+                echo '::error::PulseAudio package download failed after two attempts'
+                exit 1
+              fi
+            fi
+
+            # Downloads cannot consume the time reserved for unpacking and configuring.
+            if ! timeout --kill-after=10s 150s "${apt[@]}" --no-download "${install_args[@]}"; then
+              echo 'PulseAudio offline install interrupted or failed; attempting one dpkg recovery'
+              if ! timeout --kill-after=10s 90s sudo -n dpkg --configure -a || ! audio_available; then
+                echo '::error::PulseAudio installation incomplete after dpkg recovery'
                 exit 1
               fi
             fi
