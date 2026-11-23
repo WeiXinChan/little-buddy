@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# One emulator and one fresh fixture per game scenario. Run from the repo root.
+set -euo pipefail
+
+serial=$1
+scratch=$2
+adb=("$ANDROID_HOME/platform-tools/adb" -s "$serial")
+python="$RUNNER_TEMP/smoke-venv/bin/python"
+tls="$RUNNER_TEMP/animal-ci-tls"
+fixture_pid=
+reverse=
+guest_port=19444
+runner=com.littlebuddy.sim.test/com.littlebuddy.SimUiRunner
+smoke_class=com.littlebuddy.StreamingAudioTest
+smoke_case=nativePlaybackHeadAdvancesBeforeEndAndReleaseFollowsDrain
+game_class=com.littlebuddy.AnimalPrivateActivityTest
+game_case=stopOrDisconnectClearsAndAllowsOnlyAManualNewGame
+scenarios=(asr first-pcm between playing release late blackhole disconnect)
+failures=0
+game_started=0
+game_passed=0
+
+report() { printf '%s\n' "$*" | tee -a "$GITHUB_STEP_SUMMARY"; }
+
+stop_fixture() {
+    local result=0
+    if [[ -n "$reverse" ]]; then
+        if timeout 5s "${adb[@]}" reverse --remove "tcp:$guest_port"; then
+            reverse=
+        else
+            result=1
+        fi
+    fi
+    if [[ -n "$fixture_pid" ]]; then
+        kill -TERM "$fixture_pid" 2>/dev/null || true
+        for attempt in {1..10}; do
+            kill -0 "$fixture_pid" 2>/dev/null || break
+            sleep 0.2
+        done
+        if kill -0 "$fixture_pid" 2>/dev/null; then
+            kill -KILL "$fixture_pid" 2>/dev/null || true
+            result=1
+        fi
+        wait "$fixture_pid" 2>/dev/null || true
+        fixture_pid=
+    fi
+    return "$result"
+}
+
+cleanup() {
+    local result=$?
+    if ! stop_fixture; then
+        report "- Final fixture cleanup failed"
+        result=1
+    fi
+    exit "$result"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' HUP TERM
+
+start_fixture() {
+    local scenario=$1 log=$2 port
+    "$python" -u -B -m backend.animal.private_fixture "$scenario" --port 0 --timing \
+        --cert "$tls/cert.pem" --key "$tls/key.pem" >"$log" 2>&1 &
+    fixture_pid=$!
+    for attempt in {1..25}; do
+        kill -0 "$fixture_pid" 2>/dev/null || return 1
+        port=$(sed -n "s/^animal_fixture_ready scenario=$scenario port=\([0-9][0-9]*\)$/\1/p" "$log")
+        if [[ -n "$port" ]]; then
+            # A TCP health probe would use the first connection earmarked for the fault.
+            reverse=1
+            timeout 5s "${adb[@]}" reverse --no-rebind "tcp:$guest_port" "tcp:$port"
+            return $?
+        fi
+        sleep 0.2
+    done
+    return 1
+}
+
+run_test() {
+    local test_class=$1 case=$2 scenario=$3
+    shift 3
+    local start=$SECONDS status=0 result="$scratch/$scenario.instrumentation" verdict
+    timeout --kill-after=5s 90s "${adb[@]}" shell am instrument -w -r \
+        -e class "$test_class#$case" "$@" "$runner" 2>&1 |
+        tr -d '\r' >"$result" || status=$?
+    verdict=$("$python" scripts/android-ci-result.py "$result" "$test_class" "$case" \
+        "$scenario" "$((SECONDS - start))" "$status") || {
+        local row="${verdict%%$'\n'*}"
+        report "$row"
+        echo "::error::$row"
+        if [[ "$verdict" == *$'\n'* ]]; then
+            printf '%s\n' "${verdict#*$'\n'}" >>"$scratch/diagnostics"
+        fi
+        {
+            printf '\n#### %s\n\n' "$scenario"
+            timeout 5s "${adb[@]}" logcat -d -T 300 -s AndroidRuntime:E AudioTrack:E AudioRecord:E TestRunner:E |
+                sed -nE '/FATAL EXCEPTION|at com\.littlebuddy\.[[:alnum:]_.$]+\([[:alnum:]_.]+:[0-9]+\)|[Aa]udio(T|R)[[:alpha:]]+.*(dead object|status -[0-9]+)/p' |
+                tail -25
+        } >>"$scratch/diagnostics" || true
+        return 1
+    }
+    report "$verdict"
+    echo "::notice::$verdict"
+}
+
+unexecuted() {
+    local row="| $1 | $game_class#$game_case | 0/1 | 0 | 0 | 0 | 0s | NOT RUN ($2) |"
+    report "$row"
+    echo "::error::$row"
+}
+
+report ''
+report '| Scenario | Test | Started | Pass | Fail | Skip | Time | Result |'
+report '| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |'
+run_test "$smoke_class" "$smoke_case" smoke || failures=1
+
+transport_healthy=1
+for scenario in "${scenarios[@]}"; do
+    if (( ! transport_healthy )); then
+        unexecuted "$scenario" 'previous scenario cleanup failed'
+        continue
+    fi
+
+    # Reset the activity, settings and any instrumentation left after an ADB timeout.
+    if ! timeout 10s "${adb[@]}" shell pm clear com.littlebuddy.sim | grep -qx Success ||
+       ! timeout 10s "${adb[@]}" shell pm grant com.littlebuddy.sim android.permission.RECORD_AUDIO; then
+        unexecuted "$scenario" 'app reset failed'
+        failures=1
+        transport_healthy=0
+        continue
+    fi
+    log="$scratch/$scenario.fixture"
+    if ! start_fixture "$scenario" "$log"; then
+        unexecuted "$scenario" 'fixture startup or ADB reverse failed'
+        failures=1
+    else
+        game_started=$((game_started + 1))
+        if run_test "$game_class" "$game_case" "$scenario" \
+            -e animalScenario "$scenario" -e animalUrl "wss://127.0.0.1:$guest_port/v1/animal"; then
+            game_passed=$((game_passed + 1))
+        else
+            failures=1
+            {
+                printf '\nFixture timing (%s)\n\n```text\n' "$scenario"
+                tail -35 "$log" | grep -E '^animal_(timing|result|usage|fixture_fault) ' || true
+                printf '```\n'
+            } >>"$scratch/diagnostics"
+        fi
+    fi
+    if ! stop_fixture; then
+        printf '\n- %s fixture cleanup failed\n' "$scenario" >>"$scratch/diagnostics"
+        failures=1
+        transport_healthy=0
+    fi
+done
+
+report ''
+report "- Game scenarios: $game_passed/8 verified, $game_started/8 instrumentation invocations"
+if [[ -s "$scratch/diagnostics" ]]; then
+    tee -a "$GITHUB_STEP_SUMMARY" <"$scratch/diagnostics"
+fi
+exit "$failures"

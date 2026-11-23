@@ -52,9 +52,9 @@ class Fixture(Demo):
 
 
 @asynccontextmanager
-async def fixture_server(port, tls, token, scenario):
+async def fixture_server(port, tls, token, scenario, *, report=lambda _: None):
     fixture = Fixture(scenario)
-    async with game_server(0, tls, token, fixture, seed=0, report=lambda _: None) as backend:
+    async with game_server(0, tls, token, fixture, seed=0, report=report) as backend:
         destination = backend.sockets[0].getsockname()[1]
         first = True
 
@@ -78,6 +78,7 @@ async def fixture_server(port, tls, token, scenario):
 
             async def cut():
                 await fixture.network_fault.wait()
+                report(f"animal_fixture_fault scenario={scenario}")
                 if scenario == "blackhole":
                     await asyncio.Future()
 
@@ -100,8 +101,10 @@ async def fixture_server(port, tls, token, scenario):
 async def main(args):
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.load_cert_chain(args.cert, args.key)
-    async with fixture_server(args.port, tls, args.token, args.scenario):
-        print(f"animal_fixture_ready scenario={args.scenario} port={args.port}", flush=True)
+    async with fixture_server(args.port, tls, args.token, args.scenario,
+                              report=print if args.timing else lambda _: None) as listener:
+        port = listener.sockets[0].getsockname()[1]
+        print(f"animal_fixture_ready scenario={args.scenario} port={port}", flush=True)
         await asyncio.Future()
 
 
@@ -111,5 +114,6 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=9444)
     parser.add_argument("--cert", required=True)
     parser.add_argument("--key", required=True)
+    parser.add_argument("--timing", action="store_true")
     parser.add_argument("--token", default="offlinefixture" * 3)
     asyncio.run(main(parser.parse_args()))
