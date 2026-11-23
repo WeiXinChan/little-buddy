@@ -112,8 +112,8 @@ run_test() {
         fi
         {
             printf '\n#### %s\n\n' "$scenario"
-            timeout 5s "${adb[@]}" logcat -d -T 300 -s AndroidRuntime:E AudioTrack:E AudioRecord:E TestRunner:E |
-                sed -nE '/FATAL EXCEPTION|at com\.littlebuddy\.[[:alnum:]_.$]+\([[:alnum:]_.]+:[0-9]+\)|[Aa]udio(T|R)[[:alpha:]]+.*(dead object|status -[0-9]+)/p' |
+            timeout 5s "${adb[@]}" logcat -d -T 300 -s AndroidRuntime:E AudioTrack:E AudioRecord:E TestRunner:E AnimalTiming:I WakeProbe:I |
+                sed -nE '/event=wake_[a-z_]+ op=[0-9]+|late_gate=[A-Z_]+ revoke=[a-z]+ delivered=1|FATAL EXCEPTION|at com\.littlebuddy\.[[:alnum:]_.$]+\([[:alnum:]_.]+:[0-9]+\)|[Aa]udio(T|R)[[:alpha:]]+.*(dead object|status -[0-9]+)/p' |
                 tail -25
         } >>"$scratch/diagnostics" || true
         return 1
@@ -206,6 +206,67 @@ if (( transport_healthy )) && reset_app && start_fixture conversation "$scratch/
         -e animalUrl "wss://127.0.0.1:$guest_port/v1/animal" || failures=1
 else
     report "- Buddy conversation regression not run (previous cleanup, app reset or fixture startup failed)"
+    failures=1
+fi
+stop_fixture || failures=1
+
+run_test com.littlebuddy.WakeUploadTest pendingAndLiveFramesSealInOrderAndCancellationDropsPendingFrames wake-upload || failures=1
+run_test com.littlebuddy.WakeUploadTest fullBudgetCoalescesShortReadsAndResumesOrCancelsUnderBackpressure wake-pressure || failures=1
+run_test com.littlebuddy.WakeUploadTest cancellationWhileAudioIsQueuedPreventsFurtherPackets wake-cancel || failures=1
+run_test com.littlebuddy.WakeUploadTest packagedNativeModelLoadsAndRejectsSilence wake-native || failures=1
+
+verify_wake_transport() {
+    local log=$1 scenario=$2 connections=$3 ready=$4 sealed=$5 matches
+    matches=$(grep -c '^wake_fixture_connection$' "$log") || true
+    local actual_connections=$matches
+    matches=$(grep -c '^animal_timing event=asr_ready ' "$log") || true
+    local actual_ready=$matches
+    matches=$(grep -c '^animal_timing event=capture_sealed ' "$log") || true
+    local actual_sealed=$matches
+    matches=$(grep -c '^wake_fixture_first_pcm turn=[0-9][0-9]*$' "$log") || true
+    local actual_first_pcm=$matches
+    matches=$(grep -c '^wake_fixture_pcm turn=[0-9][0-9]* exact=1$' "$log") || true
+    local actual_exact=$matches
+    report "- $scenario transport: connections=$actual_connections ready=$actual_ready sealed=$actual_sealed first_pcm=$actual_first_pcm exact=$actual_exact"
+    [[ "$actual_connections" == "$connections" && "$actual_ready" == "$ready" &&
+        "$actual_sealed" == "$sealed" && "$actual_first_pcm" == "$sealed" && "$actual_exact" == "$sealed" ]] &&
+        ! grep -q '^wake_fixture_pcm .* exact=0$' "$log"
+}
+
+if reset_app && start_fixture wake "$scratch/wake.fixture"; then
+    run_test com.littlebuddy.BuddyActivityTest nativeWakeFlowsThroughProductAudioAndTlsAsr wake-flow \
+        -e animalUrl "wss://127.0.0.1:$guest_port/v1/animal" || failures=1
+    if ! verify_wake_transport "$scratch/wake.fixture" wake-flow 2 2 2 ||
+        ! grep -Fxq 'wake_fixture_pcm turn=1 exact=1' "$scratch/wake.fixture" ||
+        ! grep -Fxq 'wake_fixture_pcm turn=2 exact=1' "$scratch/wake.fixture"; then
+        report "- Wake fixture did not observe exactly two connections with intact first commands"
+        failures=1
+    fi
+else
+    report "- Wake fixture setup failed"
+    failures=1
+fi
+stop_fixture || failures=1
+
+if start_fixture wake-revoke "$scratch/wake-revoke.fixture"; then
+    for revoke in stop background sleep; do
+        for gate in WAKE_COMMAND ASR_READY PCM_SEGMENT; do
+            if reset_app; then
+                run_test com.littlebuddy.BuddyActivityTest nativeWakeRejectsRevokedCallbacks "wake-$revoke-$gate" \
+                    -e animalUrl "wss://127.0.0.1:$guest_port/v1/animal" -e wakeGate "$gate" -e wakeRevoke "$revoke" ||
+                    failures=1
+            else
+                report "- Wake $revoke/$gate not run (app reset failed)"
+                failures=1
+            fi
+        done
+    done
+    if ! verify_wake_transport "$scratch/wake-revoke.fixture" wake-revoke 6 6 3; then
+        report "- Wake cancellation matrix transport counters differed from 6 connections and 3 exact ASR turns"
+        failures=1
+    fi
+else
+    report "- Wake cancellation matrix fixture setup failed"
     failures=1
 fi
 stop_fixture || failures=1

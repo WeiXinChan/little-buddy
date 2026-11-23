@@ -51,14 +51,14 @@ MAX_CHAT_TURNS = 3
 class Session:
     """Call on one serial dispatcher. One instance owns one click session."""
 
-    def __init__(self, seed, catalog_version=CATALOG_VERSION, *, session_id=None, conversation=False):
+    def __init__(self, seed, catalog_version=CATALOG_VERSION, *, session_id=None, conversation=False, wake=False):
         if catalog_version != CATALOG_VERSION:
             raise ValueError("unsupported animal catalog")
         self.session_id = session_id if session_id is not None else uuid4().hex
         self.seed = seed
         self.conversation = conversation
         self.game_number = 0
-        self.game = Game(seed)
+        self.game = Chat() if conversation and wake else Game(seed)
         self.reply = None
         self.summary = None
         self.game_results = []
@@ -66,7 +66,10 @@ class Session:
         self.heard = []
         self.chat_history = []
         self.turn_id = 0
-        self._stage(deepcopy(self.game), Game.next_card)
+        if isinstance(self.game, Chat):
+            self._stage(deepcopy(self.game), lambda _: ((), "listen"))
+        else:
+            self._stage(deepcopy(self.game), Game.next_card)
 
     def _stage(self, proposed, decide):
         segments, self.next_action = decide(proposed)

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Validate both staged source data and APK entries before contacting a device.
+set -euo pipefail
+[[ $# == 1 ]]
+while read -r expected entry; do
+    source="app/src/androidTest/$entry"
+    source_digest=$(shasum -a 256 "$source" | cut -d ' ' -f 1)
+    apk_digest=$(unzip -p "$1" "$entry" | shasum -a 256 | cut -d ' ' -f 1)
+    if [[ "$source_digest" != "$expected" || "$apk_digest" != "$expected" ]]; then
+        echo "Wake fixture mismatch: $entry" >&2
+        exit 1
+    fi
+    printf '%s  %s\n' "$expected" "$entry"
+done < scripts/wake-fixtures.sha256

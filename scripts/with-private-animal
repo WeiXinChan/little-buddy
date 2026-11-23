@@ -32,8 +32,14 @@ credentials=(
   -p "LoadCredential=voice-key:$directory/loopback-key.pem"
 )
 if [[ "$provider" == fixture ]]; then
-  port=9444
-  program=(-m backend.animal.private_fixture "$scenario" --port "$port")
+  port=${LITTLE_BUDDY_FIXTURE_PORT:-9444}
+  [[ "$port" =~ ^[0-9]{1,5}$ ]] && (( 10#$port >= 1024 && 10#$port <= 65535 )) ||
+    { echo "Invalid fixture port" >&2; exit 2; }
+  if [[ "$scenario" == wake || "$scenario" == wake-revoke ]]; then
+    sudo -n mkdir -p "$staging/app/src/androidTest/assets"
+    sudo -n cp -r app/src/androidTest/assets/wake "$staging/app/src/androidTest/assets/"
+  fi
+  program=(-m backend.animal.private_fixture "$scenario" --port "$port" --timing)
 else
   credentials+=(-p "LoadCredential=animal-device-token:$token_file")
   port=8444

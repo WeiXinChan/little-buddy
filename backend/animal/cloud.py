@@ -8,6 +8,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import secrets
 import ssl
 
@@ -176,10 +177,11 @@ async def play_game(socket, providers, *, seed=None, report=print, trial_limits=
             if (hello["event"] != "session.start" or hello["v"] != 1
                     or set(hello["images"]) != {card.image_id for card in CARDS}):
                 raise ProtocolError("catalog mismatch")
+            wake = hello.get("wake") is True and hello.get("conversation") is True
             try:
                 session = channel.session = Session(
                     secrets.randbits(32) if seed is None else seed, hello["catalog"],
-                    conversation=hello.get("conversation") is True,
+                    conversation=hello.get("conversation") is True, wake=wake,
                 )
             except ValueError as exc:
                 raise ProtocolError("unsupported catalog") from exc
@@ -209,6 +211,8 @@ async def play_game(socket, providers, *, seed=None, report=print, trial_limits=
                             async with recognize(channel, providers, limits, allow_empty=True) as (text, cleanup):
                                 # The provider delivers text without calibrated confidence.
                                 # Apply exact phrases and context guards. Empty or ambiguous text clarifies.
+                                if wake and key.turn_id == 1:
+                                    text = re.sub(r"^\s*瓦力[，、。！？,.!?\s]*瓦力[，、。！？,.!?\s]*", "", text, count=1)
                                 history = session.chat_request(key, text)
                                 needs_adult, answer = False, ()
                                 if history is not None:

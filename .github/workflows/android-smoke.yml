@@ -11,6 +11,8 @@ on:
       - 'app/**'
       - 'backend/**'
       - 'scripts/android-ci-*'
+      - 'scripts/check-wake-fixtures'
+      - 'scripts/wake-fixtures.sha256'
       - 'gradle/**'
       - '*.gradle.kts'
       - 'gradle.properties'
@@ -146,7 +148,10 @@ jobs:
           sed -i '/<certificates src="user"/a\            <certificates src="@raw/animal_ci_ca" />' \
             app/src/debug/res/xml/voice_debug_network_security.xml
           ANIMAL_RELEASE_PROBE=1 ./gradlew --no-daemon \
-            :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease
+            :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleCiRelease
+          scripts/check-wake-fixtures app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          ci_prompt=$(unzip -p app/build/outputs/apk/ciRelease/app-ciRelease-unsigned.apk assets/wake/prompt.pcm | sha256sum | cut -d ' ' -f 1)
+          test "$ci_prompt" = '3de10f139196d2dc0a48715e37585e6aeabc79ecaeb09015ca08dfbec52eb557'
           python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           from xml.etree import ElementTree
 
@@ -161,7 +166,7 @@ jobs:
               raise SystemExit(f"Unexpected TLS release probe result: {len(cases)} recorded, {skipped} skipped, {failed} failed")
           print(f"- JVM TLS release probe: {len(cases) - skipped}/1 executed, {failed} failed, {skipped} skipped")
           PY
-          echo "::notice::JVM debug unit tests including TLS release probe and debug and release APK builds passed"
+          echo "::notice::JVM debug unit tests including TLS release probe and debug and isolated CI release APK builds passed"
           echo "- JVM debug unit tests (including TLS release probe) passed" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Boot, install and run smoke and game scenarios

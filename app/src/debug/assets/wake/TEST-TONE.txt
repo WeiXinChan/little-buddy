@@ -1,0 +1,3 @@
+工程测试提示音。项目生成的两段正弦音，采用 CC0-1.0，可复制及再分发。
+仅用于 Debug、隔离 OPPO 工程包及 com.littlebuddy.sim.ci。
+SHA-256 3de10f139196d2dc0a48715e37585e6aeabc79ecaeb09015ca08dfbec52eb557

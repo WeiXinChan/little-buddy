@@ -67,8 +67,8 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message["event"], event)
         return message
 
-    async def start(self, ws, conversation=False):
-        await ws.send(json.dumps(dict(event="session.start", v=1, catalog=CATALOG_VERSION, conversation=conversation,
+    async def start(self, ws, conversation=False, wake=False):
+        await ws.send(json.dumps(dict(event="session.start", v=1, catalog=CATALOG_VERSION, conversation=conversation, wake=wake,
                                       images=[card.image_id for card in CARDS])))
 
     async def reply(self, ws, reveal=False):
@@ -105,6 +105,53 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.receive(ws, "turn.ready"))["key"], key)
         await ws.send(HEADER.pack(1, 1, 0) + b"\0\0" * 320)
         await ws.send(json.dumps({"v": 1, "type": "turn.end", "samples": 320}))
+
+    async def test_wake_has_silent_permit_and_routes_first_command(self):
+        demo = SpeechFixture(["瓦力瓦力，玩猜动物"])
+        async with game_server(0, self.tls, self.token, demo, seed=0, report=lambda _: None) as server:
+            async with self.open(server) as ws:
+                await self.start(ws, conversation=True, wake=True)
+                permit = await self.reply(ws)
+                self.assertEqual((permit["mode"], permit["next_action"]), ("chat", "listen"))
+                self.assertEqual((demo.requests, demo.spoken), (0, []))
+                await self.speech(ws, permit)
+                game = await self.reply(ws)
+                self.assertEqual((game["mode"], game["completed"]), ("game", 0))
+        self.assertEqual(demo.requests, 1)
+
+    async def test_wake_fixture_counts_ready_and_only_complete_pcm_seals(self):
+        logs = []
+        source = Path("app/src/androidTest/assets/wake/gap-120.pcm").read_bytes()
+        pcm = source[44_800:]
+        async with fixture_server(0, self.tls, self.token, "wake-revoke", report=logs.append) as server:
+            for send_pcm in (False, True, True):
+                async with self.open(server) as ws:
+                    await self.start(ws, conversation=True, wake=True)
+                    permit = await self.reply(ws)
+                    self.assertEqual((permit["count"], permit["mode"], permit["next_action"]), (0, "chat", "listen"))
+                    key = permit["key"]
+                    await self.send(ws, "turn.start", key, listen_id=permit["listen_id"])
+                    self.assertEqual((await self.receive(ws, "turn.ready"))["key"], key)
+                    if send_pcm:
+                        for offset in range(0, len(pcm), 640):
+                            await ws.send(HEADER.pack(1, 1, offset // 2) + pcm[offset:offset + 640])
+                        await ws.send(json.dumps({"v": 1, "type": "turn.end", "samples": len(pcm) // 2}))
+                        self.assertEqual((await self.reply(ws))["mode"], "game")
+                # Join backend teardown before the next single-device connection.
+                for _ in range(100):
+                    if sum(line.startswith("animal_usage ") for line in logs) == logs.count("wake_fixture_connection"):
+                        break
+                    await asyncio.sleep(0.01)
+
+        for marker, count in (
+            ("wake_fixture_connection", 3),
+            ("animal_timing event=asr_ready ", 3),
+            ("animal_timing event=capture_sealed ", 2),
+            ("wake_fixture_first_pcm ", 2),
+        ):
+            self.assertEqual(sum(line.startswith(marker) for line in logs), count, marker)
+        self.assertEqual([line for line in logs if line.startswith("wake_fixture_pcm ")],
+                         ["wake_fixture_pcm turn=2 exact=1", "wake_fixture_pcm turn=3 exact=1"])
 
     async def test_three_reveals_then_restart(self):
         demo = SpeechFixture(["告诉我答案"] * 3 + ["是"])

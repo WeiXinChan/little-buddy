@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:networkSecurityConfig="@xml/voice_debug_network_security">
+    <application android:networkSecurityConfig="@xml/${debugVoiceSecurity}">
         <activity android:name=".CloudActivity" android:exported="false" android:screenOrientation="sensorLandscape" />
         <activity android:name=".BuddyActivity" android:exported="false" />
         <activity android:name=".SimActivity" android:exported="true" android:screenOrientation="sensorLandscape">

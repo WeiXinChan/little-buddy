@@ -27,7 +27,11 @@ internal class AndroidAudio(
     private val startupFrames = PLAY_RATE * startupBufferMs.also { require(it in 40..300) } / 1000
     private val worker = AudioWorker({ action -> dispatcher.post { action() } }, failed, played, released)
 
-    override fun capture(operation: Long) = worker.submit(operation, ::record)
+    override fun capture(operation: Long) = worker.submit(operation) { record(it) }
+
+    fun captureWake(operation: Long, samplesRead: ((ShortArray, Int) -> Unit)?, createReader: () -> WakeReader) = worker.submit(operation) {
+        if (!it.cancelled) createReader().use { reader -> record(it, reader, samplesRead) }
+    }
 
     override fun play(operation: Long, samples: ShortArray) =
         worker.submit(operation) { playTone(it, samples) }
@@ -40,7 +44,8 @@ internal class AndroidAudio(
     fun close() = worker.close()
 
     @SuppressLint("MissingPermission")
-    private fun record(operation: AudioWorker.Operation) {
+    private fun record(operation: AudioWorker.Operation, wake: WakeReader? = null,
+                       samplesRead: ((ShortArray, Int) -> Unit)? = null) {
         val minimum = AudioRecord.getMinBufferSize(MIC_RATE, AudioFormat.CHANNEL_IN_MONO, PCM)
         check(minimum > 0)
         val recorder = AudioRecord(
@@ -62,6 +67,11 @@ internal class AndroidAudio(
                 check(count >= 0)
                 if (count == 0) {
                     Thread.sleep(10)
+                    continue
+                }
+                if (wake != null) {
+                    samplesRead?.invoke(samples, count)
+                    if (!wake.accept(samples, count)) break
                     continue
                 }
                 pcm?.invoke(operation.id, samples, count)
