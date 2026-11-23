@@ -2,6 +2,7 @@
 import argparse
 from collections import deque
 import asyncio
+import ctypes
 from dataclasses import asdict
 import hmac
 from http import HTTPStatus
@@ -305,6 +306,15 @@ def game_server(port, tls, token, providers, *, seed=None, report=print, trial_l
                  server_header=None, logger=logger)
 
 
+def disable_core_dumps():
+    # Linux ignores RLIMIT_CORE for a piped core handler. Set the process flag
+    # before loading any TLS or provider credentials.
+    pr_set_dumpable = 4
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(pr_set_dumpable, 0, 0, 0, 0) != 0:
+        raise RuntimeError("standalone could not disable core dumps")
+
+
 async def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8444)
@@ -316,6 +326,8 @@ async def main():
     args = parser.parse_args()
     if args.port == 8443:
         parser.error("8443 is reserved for the single-turn service")
+    if args.standalone:
+        disable_core_dumps()
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
     tls.load_cert_chain(args.cert, args.key)
