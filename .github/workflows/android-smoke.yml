@@ -146,7 +146,7 @@ jobs:
           sed -i '/<certificates src="user"/a\            <certificates src="@raw/animal_ci_ca" />' \
             app/src/debug/res/xml/voice_debug_network_security.xml
           ANIMAL_RELEASE_PROBE=1 ./gradlew --no-daemon \
-            :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
+            :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease
           python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           from xml.etree import ElementTree
 
@@ -161,7 +161,7 @@ jobs:
               raise SystemExit(f"Unexpected TLS release probe result: {len(cases)} recorded, {skipped} skipped, {failed} failed")
           print(f"- JVM TLS release probe: {len(cases) - skipped}/1 executed, {failed} failed, {skipped} skipped")
           PY
-          echo "::notice::JVM debug unit tests including TLS release probe and debug APK builds passed"
+          echo "::notice::JVM debug unit tests including TLS release probe and debug and release APK builds passed"
           echo "- JVM debug unit tests (including TLS release probe) passed" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Boot, install and run smoke and game scenarios

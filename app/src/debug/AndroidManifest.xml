@@ -1,5 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application android:networkSecurityConfig="@xml/voice_debug_network_security">
+        <activity android:name=".CloudActivity" android:exported="false" android:screenOrientation="sensorLandscape" />
+        <activity android:name=".BuddyActivity" android:exported="false" />
+        <activity android:name=".SimActivity" android:exported="true" android:screenOrientation="sensorLandscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
         <activity android:name=".AnimalActivity" android:exported="false" android:screenOrientation="sensorLandscape" />
     </application>
 </manifest>
