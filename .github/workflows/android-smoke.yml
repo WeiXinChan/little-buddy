@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/android-smoke.yml'
 
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: read
 
@@ -65,8 +69,15 @@ jobs:
           PYTHONPATH=.:backend "$RUNNER_TEMP/smoke-venv/bin/python" -B -m unittest discover -s backend/tests
           ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
 
+      - name: Prepare virtual audio dependency
+        run: |
+          if ! command -v pulseaudio >/dev/null || ! command -v pactl >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils
+          fi
+          pulseaudio --version | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Boot, install and run StreamingAudioTest
-        shell: bash
         run: |
           adb="$ANDROID_HOME/platform-tools/adb"
           emulator="$ANDROID_HOME/emulator/emulator"
@@ -76,6 +87,7 @@ jobs:
           export ANDROID_AVD_HOME
           ANDROID_AVD_HOME="$(mktemp -d "$RUNNER_TEMP/smoke-avd.XXXXXX")"
           emulator_pid=
+          pulse_pid=
           test_result="$ANDROID_AVD_HOME/instrumentation.txt"
           report() { echo "$*" | tee -a "$GITHUB_STEP_SUMMARY"; }
           cleanup() {
@@ -83,7 +95,7 @@ jobs:
             if (( result != 0 )); then
               report "- Smoke failed (exit $result)"
               if [[ -n "$emulator_pid" ]]; then
-                timeout 5s "$adb" -s "$serial" logcat -d -s AndroidRuntime:E AudioTrack:E TestRunner:E | tail -60 || true
+                timeout 5s "$adb" -s "$serial" logcat -d -s AndroidRuntime:E AudioTrack:E AudioFlinger:E AudioPolicyManager:E TestRunner:E | tail -60 || true
                 tail -30 "$ANDROID_AVD_HOME/emulator.log" || true
               fi
             fi
@@ -91,6 +103,10 @@ jobs:
               timeout 5s "$adb" -s "$serial" emu kill >/dev/null 2>&1 || true
               kill "$emulator_pid" 2>/dev/null || true
               wait "$emulator_pid" 2>/dev/null || true
+            fi
+            if [[ -n "$pulse_pid" ]]; then
+              kill "$pulse_pid" 2>/dev/null || true
+              wait "$pulse_pid" 2>/dev/null || true
             fi
             rm -rf -- "$ANDROID_AVD_HOME"
           }
@@ -100,8 +116,34 @@ jobs:
           report "- Case: $test_class#$test_case"
 
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n smoke -k "$SYSTEM_IMAGE"
+          # The guest gets a real playback route. The host sink discards PCM and
+          # its monitor provides a synthetic source, with no host mic configured.
+          export PULSE_SERVER="unix:$ANDROID_AVD_HOME/pulse.sock"
+          cat >"$ANDROID_AVD_HOME/pulse.pa" <<PULSE
+          load-module module-native-protocol-unix socket=$ANDROID_AVD_HOME/pulse.sock auth-anonymous=1
+          load-module module-null-sink sink_name=smoke_playback
+          set-default-sink smoke_playback
+          set-default-source smoke_playback.monitor
+          PULSE
+          chmod 700 "$ANDROID_AVD_HOME"
+          pulseaudio -n -F "$ANDROID_AVD_HOME/pulse.pa" --daemonize=no --exit-idle-time=-1 \
+            --use-pid-file=no >"$ANDROID_AVD_HOME/pulse.log" 2>&1 &
+          pulse_pid=$!
+          audio_ready=
+          for attempt in {1..10}; do
+            if timeout 2s pactl get-default-sink 2>/dev/null | grep -Fx smoke_playback; then
+              audio_ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$audio_ready" != 1 ]]; then
+            tail -20 "$ANDROID_AVD_HOME/pulse.log"
+            exit 1
+          fi
+          report "- Host audio: PulseAudio virtual sink and monitor"
           start=$SECONDS
-          QEMU_AUDIO_DRV=none "$emulator" -avd smoke -port 5554 -accel on -no-window -no-snapshot -no-boot-anim \
+          QEMU_AUDIO_DRV=pa "$emulator" -avd smoke -port 5554 -accel on -no-window -no-snapshot -no-boot-anim \
             -gpu swiftshader_indirect -no-metrics >"$ANDROID_AVD_HOME/emulator.log" 2>&1 &
           emulator_pid=$!
           booted=
