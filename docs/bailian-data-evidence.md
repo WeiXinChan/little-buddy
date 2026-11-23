@@ -17,7 +17,7 @@
 
 | 北京模型与接入 | 数据与用途 | 已证实的适用证据 | 期限、删除和访问待证 |
 | --- | --- | --- | --- |
-| `fun-asr-realtime`，双向 WSS `/api-ws/v1/inference` | 原始语音 PCM，当前轮识别 | 北京接口说明确认收二进制音频。G1/G2 提供平台通用处理和训练约束。 [Fun-ASR WebSocket](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api) | 原音是否落盘、缓存和备份期限、按任务删除入口及权限、人审触发和角色未知。 |
+| `fun-asr-realtime`，双向 WSS `/api-ws/v1/inference` | 原始语音 PCM，当前轮识别 | 北京接口说明确认收二进制音频。G1/G2 提供平台通用说明。§6.2.5 的未经授权不得用于训练条款是否覆盖该接口原音，尚无适用证据。 [Fun-ASR WebSocket](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api) | 原音是否落盘、缓存和备份期限、按任务删除入口及权限、人审触发和角色未知。 |
 | 同上 | 中间/最终转写，项目消费最终句 | API 说明返回识别事件及文本。G1/G2 适用平台通用层。 [Fun-ASR WebSocket](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api) | 中间与最终结果各自的 TTL、按任务删除和权限、人审核验未知。结束或关闭流只代表结束处理通道。 |
 | `qwen3.8-flash`，HTTPS `/compatible-mode/v1/chat/completions` SSE | 请求文本，包括系统指令、当前转写与有界会话上下文 | 模型页列北京，Chat Completions 参考记录请求与流式格式。G1/G2 说明通用对话数据政策，具体请求字段是否落入该条及账号其他授权待证。若启用且模型受支持，G3/G4 另有正文副本。 [模型，2026-10-29 更新](https://help.aliyun.com/zh/model-studio/qwen3-8-flash) · [Chat Completions](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions) | 平台内容及缓存/备份的具体期限、删除接口或有权角色、账号投递与缓存配置、人审范围未知。 |
 | 同上 | 请求公共前缀，上下文缓存 | 北京模型清单含该模型。隐式缓存自动启用、不可关闭，公共前缀达到 1024 Token 才具备写入和命中条件，系统定期清理且无固定有效期。显式缓存需主动标记，5 分钟有效且命中重置。检查的后端请求未设置显式缓存标记。 [上下文缓存，2026-10-29 更新](https://help.aliyun.com/zh/model-studio/context-cache) | 实际轮次有无命中、隐式缓存落盘和逐条删除能力、人审及副本范围待证。 |
@@ -43,9 +43,20 @@
 2026-11-24 在正式主机以临时动态非 root 单元验证本 PR 的候选代码与资源限制。正式单元在核验窗口处于停用状态，继续使用上表所述旧制品，部署时须同时选择含进程保护的后端版本及更新的单元。
 
 - 主机的 `core_pattern` 为 Apport 管道。Linux 可绕过进程的 `RLIMIT_CORE` 将转储交给管道处理器。专用单元配置 `MemorySwapMax=0` 和 `LimitCORE=0`，standalone 入口在加载 TLS 和供应商凭据前调用 `PR_SET_DUMPABLE=0`，失败时退出。 [Linux 内核 core 手册](https://kernel.googlesource.com/pub/scm/docs/man-pages/man-pages/%2B/refs/tags/man-pages-6.11/man/man5/core.5)
-- 临时单元沿用 256 MiB 与 32 任务上限。两次启动在进程内确认有效 UID 非 0、`memory.swap.max=0`、core 软硬限制均为 0、`PR_GET_DUMPABLE=0`。首进程在私有临时目录写合成标记后触发 SIGABRT。服务管理器记录 `code=killed, status=6/ABRT`，自动重启一次，次进程确认标记不存在。该 PID 的 `COREDUMP_PID` 精确日志查询为 0 条。未采集转储正文。
+- 临时单元沿用 256 MiB 与 32 任务上限。两次启动在进程内确认有效 UID 非 0、`memory.swap.max=0`、core 软硬限制均为 0、`PR_GET_DUMPABLE=0`。首进程在私有临时目录写合成标记后触发 SIGABRT。服务管理器记录 `code=killed, status=6/ABRT`，自动重启一次，次进程确认标记不存在。本机 Apport 的专项验证见下文。
 - 另用 `--standalone --provider fake`、临时证书和合成凭据在 29443 回环验证。SIGABRT 前后严格 TLS 的 `/healthz` 均成功，重启换 PID，停止后监听释放。以独立发布目录运行 `select-release`，验证旧版→候选版→旧版的链接切换。两次验证后清理了临时单元和夹具。该回退测试覆盖发布链接切换，正式发布与回退需验同版单元以及后端保护。
 - 独立复验时，可用仅含合成数据的瞬态单元，复制候选单元的 `DynamicUser`、`PrivateTmp`、`MemoryMax`、`TasksMax`、`MemorySwapMax`、`LimitCORE` 和 `Restart` 设置。进程调用 `disable_core_dumps()` 后，用 `prctl(3)`、`resource.getrlimit(resource.RLIMIT_CORE)` 与本进程 cgroup 的 `memory.swap.max` 检查有效值。记录其 PID 并触发 SIGABRT，检查退出类型、新 PID、私有临时标记和专属 PID 转储元数据。合成服务测试使用另选的空闲回环端口，切换脚本通过 `LITTLE_BUDDY_RELEASE_ROOT` 指定临时目录。
+
+### Apport 正反对照
+
+在 2026-11-23 23:13:30.959593188 至 23:13:33.698491065 UTC 的窗口内（北京时间 11-24），以两个瞬态非 root 单元运行同一专属 Python 可执行副本 `/opt/tita71-apport.UrqYW5/probe-python`。两组均固定 `LimitCORE=0` 和 `MemorySwapMax=0`，仅保护组调用仓库的 `disable_core_dumps()`。进程在 SIGABRT 前记录 PID、UID、`/proc/self/stat` 第 22 字段的启动 tick、systemd invocation ID 和 UTC 时间。
+
+| 组 | PID / UID / 启动 tick | invocation ID / 触发 UTC | 实际 Apport 事件及预期报告元数据 |
+| --- | --- | --- | --- |
+| 保护组，dumpable=0 | 2635404 / 63424 / 57133913 | `00658bc2c7f04903ba3bf07a37a6f829` / 23:13:31.428623 | systemd 为 `code=killed`。Apport 日志按 PID、信号 6 精确匹配 0 条。`/var/crash/_opt_tita71-apport.UrqYW5_probe-python.63424.crash` 不存在。 |
+| 对照组，dumpable=1 | 2635415 / 65125 / 57133963 | `0a4f3610e563427887cf48058e650f0c` / 23:13:31.865056 | systemd 为 `code=dumped`。Apport 日志按 PID、信号 6 精确匹配 1 条。`/var/crash/_opt_tita71-apport.UrqYW5_probe-python.65125.crash` 存在，大小 8,354,834 字节，mtime 23:13:33.571674580 UTC。 |
+
+复验时使用唯一可执行副本路径，记录 `/var/log/apport.log` 开始时 inode 与字节偏移，验证窗口内 inode 一致，仅计新增的本次 PID 及信号事件。按本机 handler 源码规则，将实际可执行路径的每个斜线替换成下划线，再加 `.<UID>.crash`，对两条确定路径分别做 `stat`。对照组确认管道在 core 限制为零时仍触发且可生成报告。仅记录报告元数据，精确清理本次合成报告和执行副本。正式服务保持停用，主机全局配置未改动。
 
 ## 放行判断
 
