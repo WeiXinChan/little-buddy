@@ -19,7 +19,13 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-internal class BuddyConnection(val url: HttpUrl, val token: String) {
+internal data class BuddyConnection(
+    val url: HttpUrl,
+    val token: String,
+    val manualStartRequired: Boolean = false,
+) {
+    override fun toString() = "BuddyConnection(manualStartRequired=$manualStartRequired)"
+
     companion object {
         fun parse(address: String, token: String): BuddyConnection? {
             if (!address.startsWith("wss://") || !token.matches(Regex("[a-zA-Z0-9]{32,256}"))) return null
@@ -43,9 +49,10 @@ internal class BuddySetup(private val context: Context, private val ssh: Boolean
         val config = JSONObject(String(cipher.doFinal(bytes, IV_BYTES, bytes.size - IV_BYTES), Charsets.UTF_8))
         BuddyConnection.parse(config.getString("address"), config.getString("token"))
             ?.takeIf { !ssh || it.url == BuddySshProfile.endpoint }
+            ?.copy(manualStartRequired = config.optBoolean("manualStartRequired"))
     }.getOrNull()
 
-    private fun save(config: BuddyConnection) {
+    fun save(config: BuddyConnection) {
         val store = keyStore()
         val key = store.getKey(KEY_ALIAS, null) as SecretKey? ?: KeyGenerator
             .getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
@@ -59,7 +66,7 @@ internal class BuddySetup(private val context: Context, private val ssh: Boolean
         cipher.init(Cipher.ENCRYPT_MODE, key)
         check(cipher.iv.size == IV_BYTES)
         val plaintext = JSONObject().put("address", config.url.toString().replaceFirst("https:", "wss:"))
-            .put("token", config.token).toString().toByteArray(Charsets.UTF_8)
+            .put("token", config.token).put("manualStartRequired", config.manualStartRequired).toString().toByteArray(Charsets.UTF_8)
         val encrypted = try {
             cipher.doFinal(plaintext)
         } finally {
@@ -74,7 +81,7 @@ internal class BuddySetup(private val context: Context, private val ssh: Boolean
             file.failWrite(output)
             throw failure
         }
-        check(load() != null)
+        check(load() == config)
     }
 
     fun form(previousAddress: HttpUrl?, complete: (BuddyConnection) -> Unit): View {
@@ -119,6 +126,7 @@ internal class BuddySetup(private val context: Context, private val ssh: Boolean
                 val endpoint = if (ssh) BuddySshProfile.endpoint.toString().replaceFirst("https:", "wss:")
                     else address?.text.toString().trim()
                 val config = BuddyConnection.parse(endpoint, token.text.toString().trim())
+                    ?.copy(manualStartRequired = previousAddress != null)
                 if (config == null) {
                     feedback.text = if (ssh) "请检查设备令牌" else "请检查 WSS 地址和设备令牌"
                 } else if (runCatching { save(config) }.isFailure) {

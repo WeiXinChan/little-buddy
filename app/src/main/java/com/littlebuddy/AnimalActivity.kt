@@ -57,7 +57,7 @@ open class AnimalActivity : Activity() {
     private var wakeEntry = false
     private var focusHeld = false
     private var wakePermissionAsked = false
-    private var manualStartRequired = false
+    private lateinit var configuration: BuddySetup
     private val screenOff = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
             if (intent.action == android.content.Intent.ACTION_SCREEN_OFF) reset()
@@ -171,7 +171,7 @@ open class AnimalActivity : Activity() {
 
     private fun createProduct() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val configuration = BuddySetup(this, BuildConfig.BUDDY_SSH)
+        configuration = BuddySetup(this, BuildConfig.BUDDY_SSH)
         val screen = BuddyScreen(this, ::startProduct, ::resetToWake, ::sealCloud)
         face = screen.face
         status = screen.status
@@ -183,7 +183,6 @@ open class AnimalActivity : Activity() {
         sendAnswer = screen.finish
         connection = configuration.load()
         openSetup = { previous ->
-            manualStartRequired = previous != null
             connection = null
             val secure = android.view.WindowManager.LayoutParams.FLAG_SECURE
             window.addFlags(secure)
@@ -199,7 +198,15 @@ open class AnimalActivity : Activity() {
 
     private fun startProduct() {
         if (!resumed) return
-        manualStartRequired = false
+        val current = connection ?: return
+        if (current.manualStartRequired) {
+            val unlocked = current.copy(manualStartRequired = false)
+            if (runCatching { configuration.save(unlocked) }.isFailure) {
+                render("无法保存设备配置，请重试", BuddyMood.ERROR)
+                return
+            }
+            connection = unlocked
+        }
         if (socket != null || wakeCapture || wakePrompt) reset()
         if (slot != null) {
             restartPending = true
@@ -210,7 +217,7 @@ open class AnimalActivity : Activity() {
     }
 
     private fun prepareWake() {
-        if (!product || !resumed || connection == null || permissionPending || manualStartRequired) return
+        if (!product || !resumed || connection?.manualStartRequired != false || permissionPending) return
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             if (slot != null && slotGeneration != generation) rearmAfterRelease = true
             else armWake()
@@ -222,7 +229,7 @@ open class AnimalActivity : Activity() {
     }
 
     private fun armWake(afterPrompt: Boolean = false) {
-        if (!product || connection == null || !eligible() || slot != null ||
+        if (!product || connection?.manualStartRequired != false || !eligible() || slot != null ||
             socket != null || probe?.syntheticCapture == true) return
         if (!holdFocus()) return
         val id = occupy()

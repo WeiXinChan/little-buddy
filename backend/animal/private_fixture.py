@@ -11,7 +11,7 @@ from backend.animal.cloud import game_server
 from backend.demo import Demo
 
 
-CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect", "conversation", "wake", "wake-revoke", "rotate")
+CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect", "conversation", "wake", "wake-revoke", "rotate", "ssh-disconnect")
 
 
 class Fixture(Demo):
@@ -76,12 +76,15 @@ class Fixture(Demo):
                     await asyncio.sleep(1.5)  # Let the first reveal play and be acknowledged.
                     self.network_fault.set()
                 await asyncio.Future()
-            duration = 3.0 if self.scenario == "playing" and number == 2 else 0.45
+            duration = 3.0 if self.scenario in {"playing", "ssh-disconnect"} and number == 2 else 0.45
             pcm = struct.pack("<480h", *(round(1200 * math.sin(math.tau * 440 * i / sample_rate))
                                          for i in range(480)))
             for _ in range(round(duration / 0.02)):
                 yield pcm
                 await asyncio.sleep(0.02)
+            if self.scenario == "ssh-disconnect" and number == 2:
+                # Let the Android client seal and start the buffered segment, then drop its TCP leg.
+                asyncio.get_running_loop().call_later(0.8, self.network_fault.set)
         yield frames()
 
 
@@ -103,7 +106,7 @@ async def fixture_server(port, tls, token, scenario, *, report=lambda _: None):
             nonlocal first
             if scenario in {"wake", "wake-revoke"}:
                 report("wake_fixture_connection")
-            inject = first and scenario in {"blackhole", "disconnect"}
+            inject = first and scenario in {"blackhole", "disconnect", "ssh-disconnect"}
             target = destination if first else rotated_destination
             if scenario == "rotate":
                 report(f"rotation_fixture_connection credential_epoch={1 if first else 2}")
@@ -113,7 +116,7 @@ async def fixture_server(port, tls, token, scenario, *, report=lambda _: None):
             async def relay(source, target, *, keep_blackhole=False):
                 while data := await source.read(8192):
                     if inject and fixture.network_fault.is_set():
-                        if scenario == "disconnect":
+                        if scenario != "blackhole":
                             return
                         continue
                     target.write(data)

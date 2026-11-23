@@ -49,10 +49,11 @@ app_file ssh-wrong-ca.pem < "$fixture/wrong.pem"
 
 run_test() {
     local case=$1 scenario=${2:-$1} class=${3:-$test_class}
+    shift "$(( $# < 3 ? $# : 3 ))"
     local start=$SECONDS status=0 result="$fixture/$scenario.instrumentation"
     timeout --kill-after=5s 90s "${adb[@]}" shell am instrument -w -r \
         -e class "$class#$case" -e sshKey "$host_key" -e sshUser "$user" \
-        -e animalUrl wss://127.0.0.1:19443/v1/animal "$runner" |
+        -e animalUrl wss://127.0.0.1:19443/v1/animal "$@" "$runner" |
         tr -d '\r' > "$result" || status=$?
     "$python" scripts/android-ci-result.py "$result" "$class" "$case" "SSH API $api / $scenario" \
         "$((SECONDS - start))" "$status" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -96,8 +97,9 @@ stop_backend() {
 }
 start_backend() {
     local cert=$1 key=$2 scenario=$3
+    shift 3
     "$python" -u -B -m backend.animal.private_fixture "$scenario" --port 19443 \
-        --cert "$cert" --key "$key" > "$fixture/backend.log" 2>&1 &
+        --cert "$cert" --key "$key" "$@" > "$fixture/backend.log" 2>&1 &
     backend_pid=$!
     for attempt in {1..25}; do
         kill -0 "$backend_pid"
@@ -141,6 +143,37 @@ if [[ "$api" == 36 ]]; then
     start_backend "$tls/cert.pem" "$tls/key.pem" rotate
     run_test unauthorizedHandshakeClearsOldGameAndAllowsManualStartWithRotatedToken \
         activity-rotation com.littlebuddy.BuddyActivityTest || failures=1
+    stop_backend
+
+    reset_connection() {
+        timeout 10s "${adb[@]}" shell am force-stop com.littlebuddy.sim
+        timeout 10s "${adb[@]}" shell run-as com.littlebuddy.sim rm -f \
+            no_backup/buddy-connection no_backup/buddy-connection.new no_backup/buddy-connection.bak
+    }
+    activity_test=com.littlebuddy.BuddyActivityTest
+    reset_connection
+    start_backend "$tls/cert.pem" "$tls/key.pem" asr --token rotatedfixturerotatedfixturerotatedfixture
+    if run_test saveRecoveryForColdStart cold-seed "$activity_test"; then
+        timeout 10s "${adb[@]}" shell am force-stop com.littlebuddy.sim
+        running=$(timeout 5s "${adb[@]}" shell 'pidof com.littlebuddy.sim || true' | tr -d '\r')
+        test -z "$running"
+        run_test coldStartWaitsForManualStartAfterUnauthorized cold-resume "$activity_test" || failures=1
+    else
+        failures=1
+        echo "- SSH API 36 / cold-resume: 0/1, not run (recovery setup failed)" | tee -a "$GITHUB_STEP_SUMMARY"
+    fi
+    stop_backend
+
+    for revoke in stop background sleep disconnect; do
+        reset_connection
+        scenario=playing
+        if [[ "$revoke" == disconnect ]]; then scenario=ssh-disconnect; fi
+        start_backend "$tls/cert.pem" "$tls/key.pem" "$scenario"
+        run_test activeSshSessionReleasesForwardingAndRejectsLateAudio "active-$revoke" "$activity_test" \
+            -e sshCase "$revoke" || failures=1
+        stop_backend
+    done
+    start_backend "$tls/cert.pem" "$tls/key.pem" asr
     : > "$fixture/authorized"
     run_test revokedDeviceKeyCannotAuthenticate || failures=1
 fi
