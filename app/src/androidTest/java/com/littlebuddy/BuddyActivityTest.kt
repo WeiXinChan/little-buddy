@@ -211,8 +211,10 @@ class BuddyActivityTest {
             assertEquals(0, activity.window.attributes.flags and secure)
             assertEquals("完成 0 / 3", progress().text)
             assertEquals(BuddyMood.IDLE, face().mood)
+            assertTrue(views().filterIsInstance<TextView>().any { it.text == "准备好了" })
             assertFalse(button("结束录音").isEnabled)
             assertFalse(button("停止").isEnabled)
+            assertEquals(3, gates.count(AnimalEvent.OPEN_SOCKET))
             staleSegment()
         }
         SystemClock.sleep(400)

@@ -187,8 +187,7 @@ open class AnimalActivity : Activity() {
                 connection = config
                 setContentView(screen.root)
                 window.clearFlags(secure)
-                render()
-                prepareWake()
+                resetToWake()
             })
         }
         if (connection == null) openSetup(null) else setContentView(screen.root)
