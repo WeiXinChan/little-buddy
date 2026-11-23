@@ -139,7 +139,7 @@ for scenario in "${scenarios[@]}"; do
             failures=1
             {
                 printf '\nFixture timing (%s)\n\n```text\n' "$scenario"
-                tail -35 "$log" | grep -E '^animal_(timing|result|usage|fixture_fault) '
+                tail -35 "$log" | grep -E '^animal_(timing|result|usage|fixture_fault) ' || true
                 printf '```\n'
             } >>"$scratch/diagnostics"
         fi
