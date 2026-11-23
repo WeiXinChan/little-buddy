@@ -105,8 +105,24 @@ jobs:
           export ANDROID_AVD_HOME
           ANDROID_AVD_HOME="$(mktemp -d "$RUNNER_TEMP/smoke-avd.XXXXXX")"
           emulator_pid=
+          adb_pid=
           pulse_pid=
+          export ANDROID_ADB_SERVER_PORT=15037
           report() { echo "$*" | tee -a "$GITHUB_STEP_SUMMARY"; }
+          stop_process() {
+            local target=$1
+            for attempt in {1..20}; do
+              kill -0 -- "$target" 2>/dev/null || return 0
+              sleep 0.2
+            done
+            kill -TERM -- "$target" 2>/dev/null || true
+            for attempt in {1..10}; do
+              kill -0 -- "$target" 2>/dev/null || return 0
+              sleep 0.2
+            done
+            kill -KILL -- "$target" 2>/dev/null || true
+            return 1
+          }
           cleanup() {
             local result=$?
             if (( result != 0 )); then
@@ -118,14 +134,21 @@ jobs:
             fi
             if [[ -n "$emulator_pid" ]]; then
               timeout 5s "$adb" -s "$serial" emu kill >/dev/null 2>&1 || true
-              kill "$emulator_pid" 2>/dev/null || true
+              stop_process "-$emulator_pid" || { report "- Emulator required SIGKILL"; result=1; }
               wait "$emulator_pid" 2>/dev/null || true
             fi
+            if [[ -n "$adb_pid" ]]; then
+              kill -TERM "$adb_pid" 2>/dev/null || true
+              stop_process "$adb_pid" || { report "- ADB required SIGKILL"; result=1; }
+              wait "$adb_pid" 2>/dev/null || true
+            fi
             if [[ -n "$pulse_pid" ]]; then
-              kill "$pulse_pid" 2>/dev/null || true
+              kill -TERM "$pulse_pid" 2>/dev/null || true
+              stop_process "$pulse_pid" || { report "- PulseAudio required SIGKILL"; result=1; }
               wait "$pulse_pid" 2>/dev/null || true
             fi
             rm -rf -- "$ANDROID_AVD_HOME"
+            exit "$result"
           }
           trap cleanup EXIT
           trap 'exit 130' INT
@@ -158,8 +181,28 @@ jobs:
             exit 1
           fi
           report "- Host audio: PulseAudio virtual sink and monitor"
+
+          # Use an owned foreground ADB server and an emulator process group so
+          # teardown has handles for the child processes even on failure.
+          adb_listener() { ss -Hlt "sport = :$ANDROID_ADB_SERVER_PORT"; }
+          test -z "$(adb_listener)"
+          "$adb" -L "tcp:127.0.0.1:$ANDROID_ADB_SERVER_PORT" nodaemon server \
+            >"$ANDROID_AVD_HOME/adb.log" 2>&1 &
+          adb_pid=$!
+          for attempt in {1..20}; do
+            kill -0 "$adb_pid" 2>/dev/null || break
+            if [[ -n "$(adb_listener)" ]]; then
+              break
+            fi
+            sleep 0.25
+          done
+          if ! kill -0 "$adb_pid" 2>/dev/null || [[ -z "$(adb_listener)" ]]; then
+            tail -20 "$ANDROID_AVD_HOME/adb.log"
+            exit 1
+          fi
+
           start=$SECONDS
-          QEMU_AUDIO_DRV=pa "$emulator" -avd smoke -port 5554 -accel on -no-window -no-snapshot -no-boot-anim \
+          QEMU_AUDIO_DRV=pa setsid "$emulator" -avd smoke -port 5554 -accel on -no-window -no-snapshot -no-boot-anim \
             -gpu swiftshader_indirect -no-metrics >"$ANDROID_AVD_HOME/emulator.log" 2>&1 &
           emulator_pid=$!
           booted=
