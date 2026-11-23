@@ -57,6 +57,7 @@ open class AnimalActivity : Activity() {
     private var wakeEntry = false
     private var focusHeld = false
     private var wakePermissionAsked = false
+    private var manualStartRequired = false
     private val screenOff = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
             if (intent.action == android.content.Intent.ACTION_SCREEN_OFF) reset()
@@ -102,6 +103,7 @@ open class AnimalActivity : Activity() {
             .setOnAudioFocusChangeListener({ if (it < 0 && focusHeld) reset("音频焦点丢失，请重新开始") }, handler)
             .build()
     }
+    private var tunnel: BuddySsh? = null
     private var socket: WebSocket? = null
     private var resumed = false
     private var permissionPending = false
@@ -168,7 +170,7 @@ open class AnimalActivity : Activity() {
 
     private fun createProduct() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val configuration = BuddySetup(this)
+        val configuration = BuddySetup(this, BuildConfig.BUDDY_SSH)
         val screen = BuddyScreen(this, ::startProduct, ::resetToWake, ::sealCloud)
         face = screen.face
         status = screen.status
@@ -180,6 +182,7 @@ open class AnimalActivity : Activity() {
         sendAnswer = screen.finish
         connection = configuration.load()
         openSetup = { previous ->
+            manualStartRequired = previous != null
             connection = null
             val secure = android.view.WindowManager.LayoutParams.FLAG_SECURE
             window.addFlags(secure)
@@ -195,6 +198,7 @@ open class AnimalActivity : Activity() {
 
     private fun startProduct() {
         if (!resumed) return
+        manualStartRequired = false
         if (socket != null || wakeCapture || wakePrompt) reset()
         if (slot != null) {
             restartPending = true
@@ -205,7 +209,7 @@ open class AnimalActivity : Activity() {
     }
 
     private fun prepareWake() {
-        if (!product || !resumed || connection == null || permissionPending) return
+        if (!product || !resumed || connection == null || permissionPending || manualStartRequired) return
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             if (slot != null && slotGeneration != generation) rearmAfterRelease = true
             else armWake()
@@ -490,11 +494,20 @@ open class AnimalActivity : Activity() {
             request.url(config.url).header("Authorization", "Bearer ${config.token}")
         } else request.url("ws://127.0.0.1:8765/animal")
         if (!holdFocus()) return
+        val transport = if (product && BuildConfig.BUDDY_SSH) {
+            try {
+                val profile = BuddySshProfile.load(this)
+                BuddySsh(profile).also { tunnel = it }.client(client)
+            } catch (_: Exception) {
+                reset("设备连接配置不可用")
+                return
+            }
+        } else client
         val regression = permutations?.isChecked == true
         val wakeOperation = if (wakeEntry) upload?.operation else null
         wakeOperation?.let { traceCloud("wake_connection_attempt", it) }
         probe?.observe(AnimalEvent.OPEN_SOCKET)
-        socket = client.newWebSocket(request.build(),
+        socket = transport.newWebSocket(request.build(),
             object : WebSocketListener() {
                 private var stream: CloudPcm? = null
                 private var segmentKey: JSONObject? = null
@@ -632,7 +645,7 @@ open class AnimalActivity : Activity() {
                     }
             })
         render("正在连接游戏服务", BuddyMood.WAITING)
-        timeout(if (cloudMode) 12_000 else 5_000) { reset("连接或回复超时，请重新开始") }
+        timeout(if (tunnel != null) 10_000 else if (cloudMode) 12_000 else 5_000) { reset("连接或回复超时，请重新开始") }
     }
 
     private fun dispatch(source: WebSocket, action: () -> Unit) {
@@ -899,7 +912,7 @@ open class AnimalActivity : Activity() {
             }
             "advance" -> {
                 picture.visibility = View.GONE
-                if (send(event("turn.advance", current))) timeout(if (cloudMode) 12_000 else 5_000) { reset("等待下一题超时") }
+                if (send(event("turn.advance", current))) timeout(if (tunnel != null) 10_000 else if (cloudMode) 12_000 else 5_000) { reset("等待下一题超时") }
             }
             "end" -> if (product) resetToWake() else reset("本局已结束", keepCaption = true)
             else -> reset("模拟协议错误")
@@ -1009,10 +1022,12 @@ open class AnimalActivity : Activity() {
         deadline = null
         val previous = socket
         socket = null
+        slot?.let(audio::stop)
         previous?.cancel()
+        tunnel?.close()
+        tunnel = null
         if (focusHeld) manager.abandonAudioFocusRequest(focus)
         focusHeld = false
-        slot?.let(audio::stop)
         capturing = false
         frames = false
         answer = null

@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# Isolated OpenSSH/TLS fixture on an ephemeral Android CI runner.
+set -euo pipefail
+
+serial=$1
+scratch=$2
+api=$3
+adb=("$ANDROID_HOME/platform-tools/adb" -s "$serial")
+python="$RUNNER_TEMP/smoke-venv/bin/python"
+tls="$RUNNER_TEMP/animal-ci-tls"
+test_class=com.littlebuddy.BuddySshTest
+runner=com.littlebuddy.sim.test/com.littlebuddy.SimUiRunner
+fixture=$(mktemp -d "$scratch/ssh.XXXXXX")
+sshd_pid=
+backend_pid=
+reverse=
+cleanup() {
+    local result=$?
+    if [[ -n "$reverse" ]]; then
+        timeout 5s "${adb[@]}" reverse --remove tcp:19442 || result=1
+    fi
+    if [[ -n "$sshd_pid" ]]; then
+        sudo -n kill -TERM "$sshd_pid" || result=1
+    fi
+    if [[ -n "$backend_pid" ]]; then
+        kill -TERM "$backend_pid" 2>/dev/null || true
+        wait "$backend_pid" || true
+    fi
+    exit "$result"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+test -z "$(ss -Hlt '( sport = :19442 or sport = :19443 )')"
+user=$(id -un)
+chmod 700 "$fixture"
+ssh-keygen -q -t ecdsa -b 256 -N '' -f "$fixture/host"
+host_key=$(awk '{print $2}' "$fixture/host.pub")
+openssl req -x509 -newkey rsa:2048 -noenc -days 1 -subj /CN=Untrusted -addext 'basicConstraints=critical,CA:TRUE' \
+    -keyout "$fixture/wrong.key" -out "$fixture/wrong.pem" >/dev/null 2>&1
+app_file() {
+    timeout 10s "${adb[@]}" shell -T run-as com.littlebuddy.sim tee "files/$1" > /dev/null
+}
+timeout 10s "${adb[@]}" shell run-as com.littlebuddy.sim mkdir -p files
+app_file ssh-ca.pem < "$tls/cert.pem"
+app_file ssh-wrong-ca.pem < "$fixture/wrong.pem"
+
+run_test() {
+    local case=$1 scenario=${2:-$1} start=$SECONDS status=0 result="$fixture/${2:-$1}.instrumentation"
+    timeout --kill-after=5s 55s "${adb[@]}" shell am instrument -w -r \
+        -e class "$test_class#$case" -e sshKey "$host_key" -e sshUser "$user" "$runner" |
+        tr -d '\r' > "$result" || status=$?
+    "$python" scripts/android-ci-result.py "$result" "$test_class" "$case" "SSH API $api / $scenario" \
+        "$((SECONDS - start))" "$status" | tee -a "$GITHUB_STEP_SUMMARY"
+}
+run_test exportOnlyIndependentPublicKey
+timeout 10s "${adb[@]}" exec-out run-as com.littlebuddy.sim cat files/ssh-device.pub > "$fixture/device.pub"
+ssh-keygen -lf "$fixture/device.pub" >/dev/null
+awk '{print "restrict,port-forwarding,permitopen=\"127.0.0.1:19443\" " $0}' \
+    "$fixture/device.pub" > "$fixture/authorized"
+cat > "$fixture/sshd.conf" <<CONFIG
+Port 19442
+ListenAddress 127.0.0.1
+HostKey $fixture/host
+PidFile $fixture/sshd.pid
+AuthorizedKeysFile $fixture/authorized
+StrictModes yes
+AllowUsers $user
+PubkeyAuthentication yes
+PubkeyAcceptedAlgorithms rsa-sha2-256
+AuthenticationMethods publickey
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+UsePAM yes
+AllowTcpForwarding local
+PermitOpen 127.0.0.1:19443
+AllowStreamLocalForwarding no
+PermitTunnel no
+X11Forwarding no
+AllowAgentForwarding no
+PermitTTY no
+MaxSessions 0
+CONFIG
+sudo -n mkdir -p /run/sshd
+sudo -n /usr/sbin/sshd -f "$fixture/sshd.conf" -E "$fixture/sshd.log"
+sshd_pid=$(cat "$fixture/sshd.pid")
+export PYTHONPATH="$PWD:$PWD/backend"
+stop_backend() {
+    kill -TERM "$backend_pid"
+    wait "$backend_pid" || true
+    backend_pid=
+}
+start_backend() {
+    local cert=$1 key=$2 scenario=$3
+    "$python" -u -B -m backend.animal.private_fixture "$scenario" --port 19443 \
+        --cert "$cert" --key "$key" > "$fixture/backend.log" 2>&1 &
+    backend_pid=$!
+    for attempt in {1..25}; do
+        kill -0 "$backend_pid"
+        grep -q 'animal_fixture_ready' "$fixture/backend.log" && return 0
+        sleep 0.2
+    done
+    return 1
+}
+
+start_backend "$tls/cert.pem" "$tls/key.pem" asr
+timeout 5s "${adb[@]}" reverse --no-rebind tcp:19442 tcp:19442
+reverse=1
+failures=0
+run_test authenticatedWssReopensAfterClose || failures=1
+run_test closeInterruptsHandshakeAndAllowsFreshTunnel || failures=1
+if [[ "$api" == 36 ]]; then
+    run_test tlsAndTokenAreStillRequired || failures=1
+    run_test rejectsWrongHostKeyAndOccupiedLocalPort || failures=1
+    stop_backend
+
+    openssl req -new -newkey rsa:2048 -noenc -subj /CN=fixture \
+        -keyout "$fixture/leaf.key" -out "$fixture/leaf.csr" >/dev/null 2>&1
+    printf 'subjectAltName=IP:127.0.0.2\nbasicConstraints=CA:FALSE\n' > "$fixture/leaf.ext"
+    openssl x509 -req -days 1 -CA "$tls/cert.pem" -CAkey "$tls/key.pem" -set_serial 2 \
+        -in "$fixture/leaf.csr" -extfile "$fixture/leaf.ext" -out "$fixture/wrong-san.pem"
+    start_backend "$fixture/wrong-san.pem" "$fixture/leaf.key" asr
+    run_test rejectsInvalidServerCertificate wrong-san || failures=1
+    stop_backend
+
+    printf 'subjectAltName=IP:127.0.0.1\nbasicConstraints=CA:FALSE\n' > "$fixture/leaf.ext"
+    openssl x509 -req -days 0 -CA "$tls/cert.pem" -CAkey "$tls/key.pem" -set_serial 3 \
+        -in "$fixture/leaf.csr" -extfile "$fixture/leaf.ext" -out "$fixture/expired.pem"
+    start_backend "$fixture/expired.pem" "$fixture/leaf.key" asr
+    run_test rejectsInvalidServerCertificate expired || failures=1
+    stop_backend
+
+    start_backend "$tls/cert.pem" "$tls/key.pem" rotate
+    run_test replacedDeviceTokenCannotStartAnotherSession || failures=1
+    : > "$fixture/authorized"
+    run_test revokedDeviceKeyCannotAuthenticate || failures=1
+fi
+exit "$failures"

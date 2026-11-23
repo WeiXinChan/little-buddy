@@ -35,9 +35,22 @@ jobs:
       ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - api: 36
+            image: system-images;android-36;google_apis;x86_64
+            abi: x86_64
+          - api: 26
+            image: system-images;android-26;google_apis;x86
+            abi: x86
     timeout-minutes: 32
     env:
-      SYSTEM_IMAGE: system-images;android-36;google_apis;x86_64
+      SYSTEM_IMAGE: ${{ matrix.image }}
+      EXPECTED_API: ${{ matrix.api }}
+      EXPECTED_ABI: ${{ matrix.abi }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -142,6 +155,7 @@ jobs:
           mkdir -m 700 "$fixture_tls"
           openssl req -x509 -newkey rsa:2048 -noenc -days 1 \
             -subj /CN=localhost -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' \
+            -addext 'basicConstraints=critical,CA:TRUE' \
             -keyout "$fixture_tls/key.pem" -out "$fixture_tls/cert.pem"
           mkdir -p app/src/debug/res/raw
           cp "$fixture_tls/cert.pem" app/src/debug/res/raw/animal_ci_ca.pem
@@ -303,8 +317,8 @@ jobs:
           api="$(timeout 10s "$adb" -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')"
           abi="$(timeout 10s "$adb" -s "$serial" shell getprop ro.product.cpu.abi | tr -d '\r')"
           report "- Booted API: $api / ABI: $abi"
-          test "$api" = 36
-          test "$abi" = x86_64
+          test "$api" = "$EXPECTED_API"
+          test "$abi" = "$EXPECTED_ABI"
 
           start=$SECONDS
           install_status=0
@@ -313,6 +327,16 @@ jobs:
             install_status=$?
           report "- APK install elapsed: $((SECONDS - start))s"
           test "$install_status" = 0
+
+          report "- Debug APK bytes: $(stat -c %s app/build/outputs/apk/debug/app-debug.apk)"
+          report "- CI release APK bytes: $(stat -c %s app/build/outputs/apk/ciRelease/app-ciRelease-unsigned.apk)"
+          if [[ "$api" == 26 ]]; then
+            scripts/android-ci-ssh "$serial" "$ANDROID_AVD_HOME" "$api" &
+            instrument_pid=$!
+            wait "$instrument_pid"
+            instrument_pid=
+            exit 0
+          fi
 
           # Boot Android with both APKs already installed so AudioFlinger receives
           # the package UID in its initial map before the first instrumentation.
@@ -344,6 +368,10 @@ jobs:
           scripts/android-ci-instrument "$serial" "$ANDROID_AVD_HOME" &
           instrument_pid=$!
           instrument_status=0
+          wait "$instrument_pid" || instrument_status=$?
+          instrument_pid=
+          scripts/android-ci-ssh "$serial" "$ANDROID_AVD_HOME" "$api" &
+          instrument_pid=$!
           wait "$instrument_pid" || instrument_status=$?
           instrument_pid=
           exit "$instrument_status"
