@@ -45,6 +45,9 @@ class Summary:
         return self.completed == 3
 
 
+MAX_CHAT_TURNS = 3
+
+
 class Session:
     """Call on one serial dispatcher. One instance owns one click session."""
 
@@ -61,6 +64,7 @@ class Session:
         self.game_results = []
         self.terminal_receipt = None
         self.heard = []
+        self.chat_history = []
         self.turn_id = 0
         self._stage(deepcopy(self.game), Game.next_card)
 
@@ -76,6 +80,7 @@ class Session:
         self.turn_id += 1
         self.reply = Reply(TurnKey(self.session_id, self.turn_id), segments)
         self.proposed = proposed
+        self.chat_input = None
         self.sent = 0
         self.confirmed = 0
         self.declared = False
@@ -112,6 +117,14 @@ class Session:
             if not self.switching:
                 self.heard.append(self.reply.segments[number - 1].text)
                 del self.heard[:-9]
+            if self.chat_input is not None:
+                # Only a new contiguous ACK can create or extend this turn's pair.
+                turn = (self.chat_input, "".join(segment.text for segment in self.reply.segments[:number]))
+                if number == 1:
+                    self.chat_history.append(turn)
+                    del self.chat_history[:-MAX_CHAT_TURNS]
+                else:
+                    self.chat_history[-1] = turn
         return Result(key, number, self._commit_reply())
 
     def _commit_reply(self):
@@ -123,6 +136,7 @@ class Session:
             if self.restarting:
                 self.game_results.append(Summary("complete", self.game.completed))
             if self.switching:
+                self.chat_history.clear()
                 self.heard[:] = [segment.text for segment in self.reply.segments]
             self.game = self.proposed
             if self.next_action == "end":
@@ -160,7 +174,7 @@ class Session:
     def chat_request(self, key, text):
         if (self._current(key) and self.consumed == "start"
                 and isinstance(self.game, Chat) and route(text, True) == "answer"):
-            return tuple(self.heard)
+            return tuple(self.chat_history)
         return None
 
     def transcript(self, key, text, *, reliable=True, answer=(), needs_adult=False):
@@ -175,6 +189,8 @@ class Session:
                     self._stage(Game(self.seed + self.game_number), Game.next_card)
                 else:
                     self._stage(deepcopy(self.game), lambda chat: chat.respond(intent, answer))
+                    if intent == "answer":
+                        self.chat_input = text
             elif intent == "chat":
                 self._stage(Chat(), lambda chat: chat.respond(intent, ()))
             elif intent == "help":
@@ -193,6 +209,7 @@ class Session:
         self.proposed.reason = "usage_limit"
         self.reply = Reply(self.reply.key, (Segment("今天先聊到这里吧。"),))
         self.next_action = "end"
+        self.chat_input = None
         self.switching = self.restarting = False
         return self.reply
 
@@ -204,6 +221,8 @@ class Session:
         self.game_results.append(self.summary)
         self.reply = self.game = self.proposed = self.commit = self.consumed = None
         self.heard.clear()
+        self.chat_history.clear()
+        self.chat_input = None
 
 
 class Playback:

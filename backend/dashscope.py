@@ -191,7 +191,7 @@ class DashScope:
                 await recognition.close()
 
     @asynccontextmanager
-    async def answer(self, transcript, *, on_first_text=None, heard=None):
+    async def answer(self, transcript, *, on_first_text=None, history=None):
         async def trace(event, _):
             marker = {
                 "connection.connect_tcp.complete": "llm_tcp_ready",
@@ -201,7 +201,7 @@ class DashScope:
             if marker:
                 mark(marker)
 
-        if heard is None:
+        if history is None:
             messages = [{"role": "system", "content": "请只用这两句话打招呼：你好！我是瓦力。"}]
         else:
             messages = [{
@@ -210,8 +210,11 @@ class DashScope:
                             "每句不超过三十字。用词简单友善，不索要或复述个人信息，"
                             "不提供危险、医疗或成人话题的建议，有风险只引导找家长。"),
             }]
-            if heard:
-                messages.append({"role": "assistant", "content": "".join(heard)})
+            for question, played_reply in history:
+                messages.extend((
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": played_reply},
+                ))
         messages.append({"role": "user", "content": transcript})
 
         try:

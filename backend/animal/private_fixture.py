@@ -34,7 +34,7 @@ class Fixture(Demo):
         return "告诉我答案"
 
     @asynccontextmanager
-    async def answer(self, transcript, *, heard=None):
+    async def answer(self, transcript, *, history=None):
         async def segments():
             yield "小猫软软的。"
             yield "它会轻轻地喵喵叫。"

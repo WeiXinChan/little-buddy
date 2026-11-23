@@ -1,4 +1,5 @@
 import unittest
+from copy import deepcopy
 from itertools import product
 from unittest.mock import patch
 
@@ -41,17 +42,31 @@ class AnimalTest(unittest.TestCase):
         self.assertEqual(chat.mode, "chat")
         self.assertTrue(session.consume(chat.key, chat.listen_id, "start"))
         reply = session.transcript(chat.key, "聊小猫", answer=("猫咪会喵喵叫。", "它喜欢晒太阳。"))
-        for number in (1, 2):
-            self.assertTrue(session.segment_sent(reply.key, number))
+        self.assertEqual(session.chat_history, [])
+        self.assertIsNone(session.ack(reply.key, 1))  # Unsent segment.
+        self.assertTrue(session.segment_sent(reply.key, 1))
+        self.assertEqual(session.chat_history, [])
         self.assertIsNone(session.ack(reply.key, 2))
         self.assertIsNone(session.ack(game.key, 1))
         for _ in range(2):
             self.assertIsNone(session.ack(reply.key, 1).commit)
         self.assertEqual(session.heard, ["好呀，你想聊什么？", "猫咪会喵喵叫。"])
-        self.assertIsNone(session.reply_end(reply.key, 2))
-        session.cancel("disconnect")
-        self.assertIsNone(session.ack(reply.key, 2))
-        self.assertEqual(session.heard, [])
+        self.assertEqual(session.chat_history, [("聊小猫", "猫咪会喵喵叫。")])
+        self.assertIsNone(session.reply_end(reply.key, 2))  # Second segment hasn't finished sending.
+        self.assertTrue(session.segment_sent(reply.key, 2))
+        self.assertIsNone(session.reply_end(reply.key, 2))  # Second segment hasn't played.
+        for reason in ("stop", "disconnect"):
+            with self.subTest(reason=reason):
+                ended = deepcopy(session)
+                ended.cancel(reason)
+                self.assertIsNone(ended.ack(reply.key, 2))
+                self.assertEqual(ended.heard, [])
+                self.assertEqual(ended.chat_history, [])
+                self.assertIsNone(ended.chat_input)
+
+        fresh = Session(SEED, conversation=True)
+        self.assertIsNone(fresh.ack(reply.key, 2))
+        self.assertEqual(fresh.chat_history, [])
 
     def test_catalog_and_version(self):
         self.assertEqual(len(CARDS), 6)

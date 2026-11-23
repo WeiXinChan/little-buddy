@@ -25,9 +25,9 @@ class Demo:
         return "synthetic"
 
     @asynccontextmanager
-    async def answer(self, transcript, *, heard=None):
+    async def answer(self, transcript, *, history=None):
         async def segments():
-            if heard is None:
+            if history is None:
                 yield "first"
                 yield "second"
             else:
