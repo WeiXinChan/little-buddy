@@ -132,6 +132,20 @@ jobs:
             app/src/debug/res/xml/voice_debug_network_security.xml
           ANIMAL_RELEASE_PROBE=1 ./gradlew --no-daemon \
             :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          from xml.etree import ElementTree
+
+          probe = "com.littlebuddy.GameReleaseIntegrationTest"
+          suite = ElementTree.parse(f"app/build/test-results/testDebugUnitTest/TEST-{probe}.xml")
+          cases = suite.findall(
+              f"./testcase[@classname='{probe}'][@name='ackCanTraverseTheSocketWhileTheNextSegmentHasNoConsumer']"
+          )
+          skipped = sum(case.find("skipped") is not None for case in cases)
+          failed = sum(case.find("failure") is not None or case.find("error") is not None for case in cases)
+          if len(cases) != 1 or skipped or failed:
+              raise SystemExit(f"Unexpected TLS release probe result: {len(cases)} recorded, {skipped} skipped, {failed} failed")
+          print(f"- JVM TLS release probe: {len(cases) - skipped}/1 executed, {failed} failed, {skipped} skipped")
+          PY
           echo "::notice::JVM debug unit tests including TLS release probe and debug APK builds passed"
           echo "- JVM debug unit tests (including TLS release probe) passed" >> "$GITHUB_STEP_SUMMARY"
 
@@ -269,7 +283,8 @@ jobs:
           api="$(timeout 10s "$adb" -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')"
           abi="$(timeout 10s "$adb" -s "$serial" shell getprop ro.product.cpu.abi | tr -d '\r')"
           report "- Booted API: $api / ABI: $abi"
-          test "$api" = 36 && test "$abi" = x86_64
+          test "$api" = 36
+          test "$abi" = x86_64
 
           start=$SECONDS
           install_status=0
