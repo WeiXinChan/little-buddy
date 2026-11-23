@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.TextView
 import androidx.test.platform.app.InstrumentationRegistry
 import com.littlebuddy.AnimalEvent.CAPTURE_DISPATCH
 import com.littlebuddy.AnimalEvent.CAPTURE_FRAME
@@ -107,6 +108,45 @@ class BuddyActivityTest {
             assertEquals(BuddyMood.IDLE, face().mood)
         }
     }
+
+    @Test fun switchesModesAndReturnsToIdle() {
+        val url = InstrumentationRegistry.getArguments().getString("animalUrl")
+        assumeNotNull(url)
+        launch()
+        onMain {
+            field("WSS 服务地址").setText(checkNotNull(url))
+            field("设备令牌").setText("offlinefixture".repeat(3))
+            button("保存并进入").performClick()
+            activity.probe = gates
+            button("开始猜动物").performClick()
+        }
+
+        await { progress().text == "完成 0 / 3" && button("结束录音").isEnabled }
+        onMain { activity.injectSyntheticCapture() }
+        await { progress().text == "完成 1 / 3" && button("结束录音").isEnabled }
+        onMain {
+            gates.held = setOf(AnimalEvent.TURN_COMMIT)
+            activity.injectSyntheticCapture()
+        }
+        await { gates.ready(AnimalEvent.TURN_COMMIT) }
+        onMain {
+            assertEquals(View.VISIBLE, progress().visibility)
+            assertFalse(button("结束录音").isEnabled)
+            gates.held = emptySet()
+            gates.release(AnimalEvent.TURN_COMMIT)
+        }
+        await { progress().visibility == View.GONE && button("结束录音").isEnabled }
+
+        onMain { activity.injectSyntheticCapture() }
+        await { progress().visibility == View.GONE && button("结束录音").isEnabled }
+        onMain { activity.injectSyntheticCapture() }
+        await { progress().visibility == View.VISIBLE && progress().text == "完成 0 / 3" &&
+            button("结束录音").isEnabled }
+        onMain { activity.injectSyntheticCapture() }
+        await { face().mood == BuddyMood.IDLE && !button("停止").isEnabled }
+    }
+
+    private fun progress() = views().filterIsInstance<TextView>().single { it.text.startsWith("完成 ") }
 
     private fun launch() {
         activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, BuddyActivity::class.java)

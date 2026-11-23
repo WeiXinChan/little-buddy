@@ -3,6 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from uuid import uuid4
 
+from .chat import HELP, Chat, route
 from .rules import CATALOG_VERSION, Game, Segment
 
 
@@ -24,6 +25,7 @@ class Commit:
     count: int
     next_action: str
     listen_id: str | None
+    mode: str = "game"
 
 
 @dataclass(frozen=True)
@@ -46,11 +48,12 @@ class Summary:
 class Session:
     """Call on one serial dispatcher. One instance owns one click session."""
 
-    def __init__(self, seed, catalog_version=CATALOG_VERSION, *, session_id=None):
+    def __init__(self, seed, catalog_version=CATALOG_VERSION, *, session_id=None, conversation=False):
         if catalog_version != CATALOG_VERSION:
             raise ValueError("unsupported animal catalog")
         self.session_id = session_id if session_id is not None else uuid4().hex
         self.seed = seed
+        self.conversation = conversation
         self.game_number = 0
         self.game = Game(seed)
         self.reply = None
@@ -63,6 +66,7 @@ class Session:
 
     def _stage(self, proposed, decide):
         segments, self.next_action = decide(proposed)
+        self.switching = type(proposed) is not type(self.game)
         restarting = self.next_action == "restart"
         if restarting:
             self.game_number += 1
@@ -105,16 +109,21 @@ class Session:
             return None
         if number == self.confirmed + 1:
             self.confirmed = number
-            self.heard.append(self.reply.segments[number - 1].text)
+            if not self.switching:
+                self.heard.append(self.reply.segments[number - 1].text)
+                del self.heard[:-9]
         return Result(key, number, self._commit_reply())
 
     def _commit_reply(self):
         if self.commit is None and self.declared and self.confirmed == len(self.reply.segments):
             key = self.reply.key
             listen_id = f"{key.session_id}:{key.turn_id}" if self.next_action == "listen" else None
-            receipt = Commit(key, self.confirmed, self.next_action, listen_id)
+            mode = "chat" if isinstance(self.proposed, Chat) else "game"
+            receipt = Commit(key, self.confirmed, self.next_action, listen_id, mode)
             if self.restarting:
                 self.game_results.append(Summary("complete", self.game.completed))
+            if self.switching:
+                self.heard[:] = [segment.text for segment in self.reply.segments]
             self.game = self.proposed
             if self.next_action == "end":
                 self.cancel(self.game.reason)
@@ -139,17 +148,53 @@ class Session:
             return False
         self.consumed = outcome
         if outcome == "silence":
-            self._stage(deepcopy(self.game), Game.silence)
+            self._stage(deepcopy(self.game), self._silence)
         return True
 
-    def transcript(self, key, text, *, reliable=True):
+    def _silence(self, state):
+        if self.conversation and state.silences == 1:
+            state.reason = "silence"
+            return (), "end"
+        return state.silence()
+
+    def chat_request(self, key, text):
+        if (self._current(key) and self.consumed == "start"
+                and isinstance(self.game, Chat) and route(text, True) == "answer"):
+            return tuple(self.heard)
+        return None
+
+    def transcript(self, key, text, *, reliable=True, answer=(), needs_adult=False):
         """Accept one final ASR result for a consumed start, including empty results."""
         if self._current(key) and self.consumed == "start":
-            self._stage(deepcopy(self.game), lambda game: game.respond(text, reliable))
+            intent = route(text, reliable) if self.conversation else None
+            if needs_adult:
+                intent = "help"
+            if isinstance(self.game, Chat):
+                if intent == "game":
+                    self.game_number += 1
+                    self._stage(Game(self.seed + self.game_number), Game.next_card)
+                else:
+                    self._stage(deepcopy(self.game), lambda chat: chat.respond(intent, answer))
+            elif intent == "chat":
+                self._stage(Chat(), lambda chat: chat.respond(intent, ()))
+            elif intent == "help":
+                self._stage(deepcopy(self.game), lambda game: game.finish("help", HELP))
+            else:
+                self._stage(deepcopy(self.game), lambda game: game.respond(text, reliable))
             if self.restarting:
                 self.heard.clear()
             return self.reply
         return None
+
+    def limit(self):
+        # Replace the staged reply before transport observes its turn key.
+        assert self.sent == 0
+        self.proposed = deepcopy(self.game)
+        self.proposed.reason = "usage_limit"
+        self.reply = Reply(self.reply.key, (Segment("今天先聊到这里吧。"),))
+        self.next_action = "end"
+        self.switching = self.restarting = False
+        return self.reply
 
     def cancel(self, reason):
         self.terminal_receipt = None

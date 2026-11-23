@@ -54,7 +54,7 @@ open class AnimalActivity : Activity() {
     }
 
     private data class Segment(val text: String, val image: Int?)
-    private data class Receipt(val action: String, val permit: String, val completed: Int)
+    private data class Receipt(val action: String, val permit: String, val completed: Int, val mode: String)
     private class Reply(val key: JSONObject, val segments: List<Segment>) {
         val streams = mutableListOf<CloudPcm>()
         var played = 0
@@ -407,6 +407,7 @@ open class AnimalActivity : Activity() {
                 override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) = dispatch(webSocket) {
                     val start = JSONObject().put("event", "session.start").put("v", 1)
                         .put("catalog", "animal-click-1").put("images", JSONArray(images.keys.toList()))
+                    if (product) start.put("conversation", true)
                     if (!product) start.put("ack_first", regression).put("duplicate", regression)
                         .put("hold_reveal", suppressRevealReceipt?.isChecked == true)
                     send(start)
@@ -429,7 +430,7 @@ open class AnimalActivity : Activity() {
                                             key.getInt("turn_id") <= previous.getInt("turn_id"))) return
                                     check(stream == null && !discardSegment)
                                     wireSegments = message.getJSONArray("segments").length()
-                                    check(wireSegments in 1..8)
+                                    check(wireSegments in (if (product) 0 else 1)..8)
                                     wireSegmentIndex = 0
                                     wireReplyKey = key
                                 }
@@ -539,7 +540,7 @@ open class AnimalActivity : Activity() {
             }
             require(slot == null)
             val segments = message.getJSONArray("segments")
-            require(segments.length() in 1..8)
+            require(segments.length() in (if (product) 0 else 1)..8)
             reply = Reply(key, List(segments.length()) { index ->
                 val item = segments.getJSONObject(index)
                 Segment(if (cloudMode) "" else item.getString("text"), if (item.isNull("image_id")) null else
@@ -578,8 +579,11 @@ open class AnimalActivity : Activity() {
                 }
             }
             "turn.committed" -> if (message.getInt("count") == current.segments.size && current.receipt == null) {
-                current.receipt = Receipt(message.getString("next_action"),
-                    message.optString("listen_id"), message.getInt("completed"))
+                val action = message.getString("next_action")
+                val mode = message.optString("mode", "game")
+                require(mode == "chat" || mode == "game")
+                require(current.segments.isNotEmpty() || action == "end")
+                current.receipt = Receipt(action, message.optString("listen_id"), message.getInt("completed"), mode)
             }
         }
         proceed(current)
@@ -678,6 +682,7 @@ open class AnimalActivity : Activity() {
         val receipt = current.receipt ?: return
         if (slot != null || !current.ended || current.confirmed != current.segments.size || current.scheduled) return
         current.scheduled = true
+        count.visibility = if (receipt.mode == "chat") View.GONE else View.VISIBLE
         count.text = "完成 ${receipt.completed} / 3"
         val delay = if (receipt.action == "advance") 1100L else 250L
         val advance = {
@@ -715,7 +720,7 @@ open class AnimalActivity : Activity() {
                 picture.visibility = View.GONE
                 if (send(event("turn.advance", current))) timeout(if (cloudMode) 12_000 else 5_000) { reset("等待下一题超时") }
             }
-            "end" -> reset("本局已结束", keepCaption = true)
+            "end" -> if (product) reset() else reset("本局已结束", keepCaption = true)
             else -> reset("模拟协议错误")
         }
     }
@@ -789,6 +794,7 @@ open class AnimalActivity : Activity() {
         reply?.streams?.forEach(CloudPcm::abort)
         reply = null
         picture.visibility = View.GONE
+        count.visibility = View.VISIBLE
         count.text = "完成 0 / 3"
         if (!keepCaption) caption.text = ""
         input?.text?.clear()

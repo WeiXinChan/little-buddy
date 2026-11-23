@@ -25,10 +25,13 @@ class Demo:
         return "synthetic"
 
     @asynccontextmanager
-    async def answer(self, transcript):
+    async def answer(self, transcript, *, heard=None):
         async def segments():
-            yield "first"
-            yield "second"
+            if heard is None:
+                yield "first"
+                yield "second"
+            else:
+                yield "我们来聊聊小动物吧。"
         yield segments()
 
     @asynccontextmanager

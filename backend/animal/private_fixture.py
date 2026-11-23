@@ -10,7 +10,7 @@ from backend.animal.cloud import game_server
 from backend.demo import Demo
 
 
-CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect")
+CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect", "conversation")
 
 
 class Fixture(Demo):
@@ -28,7 +28,17 @@ class Fixture(Demo):
     async def finish(self):
         if self.scenario == "asr" and self.recognitions == 1:
             await asyncio.Future()
+        if self.scenario == "conversation":
+            turns = ("告诉我答案", "我想聊天", "我喜欢小猫", "玩猜动物", "再见")
+            return turns[(self.recognitions - 1) % len(turns)]
         return "告诉我答案"
+
+    @asynccontextmanager
+    async def answer(self, transcript, *, heard=None):
+        async def segments():
+            yield "小猫软软的。"
+            yield "它会轻轻地喵喵叫。"
+        yield segments()
 
     @asynccontextmanager
     async def synthesize(self, segment, sample_rate):

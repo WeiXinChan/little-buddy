@@ -29,6 +29,30 @@ class AnimalTest(unittest.TestCase):
         self.receipt = play(self.session, self.playback)
         self.assertIsNone(self.playback.image)
 
+    def test_conversation_context_accepts_only_current_consecutive_acks(self):
+        session = Session(SEED, conversation=True)
+        playback = Playback()
+        playback.activate(session.session_id)
+        game = play(session, playback)
+        switch = say(session, game, "我想聊天")
+        self.assertIsNone(session.chat_request(switch.key, "聊小猫"))
+        self.assertFalse(session.consume(switch.key, game.listen_id, "start"))
+        chat = play(session, playback)
+        self.assertEqual(chat.mode, "chat")
+        self.assertTrue(session.consume(chat.key, chat.listen_id, "start"))
+        reply = session.transcript(chat.key, "聊小猫", answer=("猫咪会喵喵叫。", "它喜欢晒太阳。"))
+        for number in (1, 2):
+            self.assertTrue(session.segment_sent(reply.key, number))
+        self.assertIsNone(session.ack(reply.key, 2))
+        self.assertIsNone(session.ack(game.key, 1))
+        for _ in range(2):
+            self.assertIsNone(session.ack(reply.key, 1).commit)
+        self.assertEqual(session.heard, ["好呀，你想聊什么？", "猫咪会喵喵叫。"])
+        self.assertIsNone(session.reply_end(reply.key, 2))
+        session.cancel("disconnect")
+        self.assertIsNone(session.ack(reply.key, 2))
+        self.assertEqual(session.heard, [])
+
     def test_catalog_and_version(self):
         self.assertEqual(len(CARDS), 6)
         self.assertEqual(len({card.animal_id for card in CARDS}), 6)
