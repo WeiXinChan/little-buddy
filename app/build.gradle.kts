@@ -16,6 +16,10 @@ android {
         versionName = "0.1.12-animal-private"
         testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
+    buildTypes.getByName("release") {
+        ndk.abiFilters += "arm64-v8a"
+    }
+    packaging.jniLibs.excludes += setOf("**/libsherpa-onnx-c-api.so", "**/libsherpa-onnx-cxx-api.so")
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -29,6 +33,7 @@ android {
 kotlin { jvmToolchain(17) }
 
 dependencies {
+    implementation(files("libs/sherpa-onnx-1.12.27.aar"))
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.6.2")

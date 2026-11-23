@@ -67,8 +67,8 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message["event"], event)
         return message
 
-    async def start(self, ws, conversation=False):
-        await ws.send(json.dumps(dict(event="session.start", v=1, catalog=CATALOG_VERSION, conversation=conversation,
+    async def start(self, ws, conversation=False, wake=False):
+        await ws.send(json.dumps(dict(event="session.start", v=1, catalog=CATALOG_VERSION, conversation=conversation, wake=wake,
                                       images=[card.image_id for card in CARDS])))
 
     async def reply(self, ws, reveal=False):
@@ -105,6 +105,19 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.receive(ws, "turn.ready"))["key"], key)
         await ws.send(HEADER.pack(1, 1, 0) + b"\0\0" * 320)
         await ws.send(json.dumps({"v": 1, "type": "turn.end", "samples": 320}))
+
+    async def test_wake_has_silent_permit_and_routes_first_command(self):
+        demo = SpeechFixture(["瓦力瓦力，玩猜动物"])
+        async with game_server(0, self.tls, self.token, demo, seed=0, report=lambda _: None) as server:
+            async with self.open(server) as ws:
+                await self.start(ws, conversation=True, wake=True)
+                permit = await self.reply(ws)
+                self.assertEqual((permit["mode"], permit["next_action"]), ("chat", "listen"))
+                self.assertEqual((demo.requests, demo.spoken), (0, []))
+                await self.speech(ws, permit)
+                game = await self.reply(ws)
+                self.assertEqual((game["mode"], game["completed"]), ("game", 0))
+        self.assertEqual(demo.requests, 1)
 
     async def test_three_reveals_then_restart(self):
         demo = SpeechFixture(["告诉我答案"] * 3 + ["是"])

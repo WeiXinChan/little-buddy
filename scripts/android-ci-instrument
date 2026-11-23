@@ -210,6 +210,9 @@ else
 fi
 stop_fixture || failures=1
 
+run_test com.littlebuddy.WakeUploadTest pendingAndLiveFramesSealInOrderAndCancellationDropsPendingFrames wake-upload || failures=1
+run_test com.littlebuddy.WakeUploadTest packagedNativeModelLoadsAndRejectsSilence wake-native || failures=1
+
 report ''
 report "- Game scenarios: $game_passed/8 verified, $game_started/8 instrumentation invocations"
 if [[ -s "$scratch/diagnostics" ]]; then

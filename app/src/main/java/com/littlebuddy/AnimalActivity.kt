@@ -46,6 +46,16 @@ open class AnimalActivity : Activity() {
     private var face: BuddyFace? = null
     private var connection: BuddyConnection? = null
     private var restartPending = false
+    private var wakeCapture = false
+    private var wakePrompt = false
+    private var wakeEntry = false
+    private var focusHeld = false
+    private var wakePermissionAsked = false
+    private val screenOff = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+            if (intent.action == android.content.Intent.ACTION_SCREEN_OFF) reset()
+        }
+    }
     internal var probe: AnimalProbe? = null
 
     private fun deliver(event: AnimalEvent, action: () -> Unit) {
@@ -81,7 +91,7 @@ open class AnimalActivity : Activity() {
     private val focus by lazy {
         AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build())
-            .setOnAudioFocusChangeListener({ if (it < 0 && socket != null) reset("音频焦点丢失，请重新开始") }, handler)
+            .setOnAudioFocusChangeListener({ if (it < 0 && focusHeld) reset("音频焦点丢失，请重新开始") }, handler)
             .build()
     }
     private var socket: WebSocket? = null
@@ -144,13 +154,14 @@ open class AnimalActivity : Activity() {
                 handler.post { if (upload === current) reset("语音上传超出限制，请重新开始") }
             }
         } else null)
+        if (product) registerReceiver(screenOff, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF))
         render()
     }
 
     private fun createProduct() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val configuration = BuddySetup(this)
-        val screen = BuddyScreen(this, ::startProduct, { reset() }, ::sealCloud)
+        val screen = BuddyScreen(this, ::startProduct, ::resetToWake, ::sealCloud)
         face = screen.face
         status = screen.status
         count = screen.count
@@ -167,6 +178,7 @@ open class AnimalActivity : Activity() {
                 connection = config
                 setContentView(screen.root)
                 window.clearFlags(secure)
+                prepareWake()
             })
         } else {
             setContentView(screen.root)
@@ -175,13 +187,91 @@ open class AnimalActivity : Activity() {
 
     private fun startProduct() {
         if (!resumed) return
-        if (socket != null) reset()
+        if (socket != null || wakeCapture || wakePrompt) reset()
         if (slot != null) {
             restartPending = true
             render("稍等一下", BuddyMood.WAITING)
         } else {
             requestStart()
         }
+    }
+
+    private fun prepareWake() {
+        if (!product || !resumed || connection == null || permissionPending) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            if (slot != null && slotGeneration != generation) rearmAfterRelease = true
+            else armWake()
+        } else if (!wakePermissionAsked) {
+            wakePermissionAsked = true
+            permissionPending = true
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 2)
+        }
+    }
+
+    private fun armWake(afterPrompt: Boolean = false) {
+        if (!product || connection == null || !eligible() || slot != null ||
+            socket != null || probe?.syntheticCapture == true) return
+        if (!holdFocus()) return
+        val id = occupy()
+        val epoch = generation
+        val pending = AnimalUpload(id, null, synthetic = false)
+        upload = pending
+        wakeCapture = true
+        wakeEntry = false
+        captureSealed = false
+        captureReleased = false
+        speech = false
+        cloudReady = false
+        audio.captureWake(id) {
+            val keyword = if (afterPrompt) null else try {
+                SherpaWake(assets)
+            } catch (error: LinkageError) {
+                throw IllegalStateException("Wake model unavailable", error)
+            }
+            WakeReader(keyword, command = {
+                handler.post {
+                    if (upload === pending && epoch == generation && eligible()) {
+                        wakeEntry = true
+                        speech = true
+                        capturing = true
+                        frames = true
+                        connect()
+                    }
+                }
+            }, solo = {
+                handler.post {
+                    if (upload === pending && epoch == generation && eligible()) wakePrompt = true
+                }
+            }, frame = { samples, count ->
+                val accepted = pending.frame(samples, count)
+                if (!accepted) handler.post {
+                    if (upload === pending) reset("语音上传超出限制，请重新开始")
+                }
+                accepted
+            })
+        }
+        if (afterPrompt) {
+            render("正在听", BuddyMood.LISTENING)
+            timeout(12_000, ::resetToWake)
+        } else render()
+    }
+
+    private var rearmAfterRelease = false
+
+    private fun playWakePrompt() {
+        val bytes = assets.open("wake/prompt.pcm").use { it.readBytes() }
+        val buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        val samples = ShortArray(bytes.size / 2) { buffer.short }
+        render("我在听", BuddyMood.SPEAKING)
+        audio.play(occupy(), samples)
+        timeout(3_000) { reset("播放超时，请重新开始") }
+    }
+
+    private fun holdFocus(): Boolean {
+        if (focusHeld) return true
+        focusHeld = manager.requestAudioFocus(focus) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        if (!focusHeld) render("音频暂不可用，请重新开始", BuddyMood.ERROR)
+        return focusHeld
     }
 
     private fun createDebug() {
@@ -297,7 +387,7 @@ open class AnimalActivity : Activity() {
 
     private fun played(id: Long) {
         val current = reply ?: return
-        if (id != slot || slotGeneration != generation || capturing) return
+        if (id != slot || slotGeneration != generation || capturing || wakeCapture || wakePrompt) return
         if (product) render("稍等一下", BuddyMood.WAITING)
         val number = ++current.played
         if (cloudMode) {
@@ -324,6 +414,7 @@ open class AnimalActivity : Activity() {
             startAfterPermission = false
             requestStart()
         }
+        prepareWake()
         render()
     }
 
@@ -334,6 +425,7 @@ open class AnimalActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (product) unregisterReceiver(screenOff)
         audio.close()
         handler.removeCallbacksAndMessages(null)
         client.dispatcher.executorService.shutdown()
@@ -341,7 +433,8 @@ open class AnimalActivity : Activity() {
     }
 
     private fun eligible() = resumed && checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
-        PackageManager.PERMISSION_GRANTED && getSystemService(android.os.PowerManager::class.java).isInteractive
+        PackageManager.PERMISSION_GRANTED && getSystemService(android.os.PowerManager::class.java).isInteractive &&
+        !getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked
 
     private fun requestStart() {
         if (!resumed || socket != null || slot != null || permissionPending) return
@@ -355,7 +448,11 @@ open class AnimalActivity : Activity() {
 
     override fun onRequestPermissionsResult(code: Int, permissions: Array<out String>, results: IntArray) {
         super.onRequestPermissionsResult(code, permissions, results)
-        if (code == 1) {
+        if (code == 2) {
+            permissionPending = false
+            prepareWake()
+            render()
+        } else if (code == 1) {
             permissionPending = false
             if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
                 if (resumed) requestStart() else startAfterPermission = true
@@ -377,10 +474,7 @@ open class AnimalActivity : Activity() {
             }
             request.url(config.url).header("Authorization", "Bearer ${config.token}")
         } else request.url("ws://127.0.0.1:8765/animal")
-        if (manager.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            render("音频暂不可用，请重新开始", BuddyMood.ERROR)
-            return
-        }
+        if (!holdFocus()) return
         val regression = permutations?.isChecked == true
         socket = client.newWebSocket(request.build(),
             object : WebSocketListener() {
@@ -408,6 +502,7 @@ open class AnimalActivity : Activity() {
                     val start = JSONObject().put("event", "session.start").put("v", 1)
                         .put("catalog", "animal-click-1").put("images", JSONArray(images.keys.toList()))
                     if (product) start.put("conversation", true)
+                    if (wakeEntry) start.put("wake", true)
                     if (!product) start.put("ack_first", regression).put("duplicate", regression)
                         .put("hold_reveal", suppressRevealReceipt?.isChecked == true)
                     send(start)
@@ -538,9 +633,10 @@ open class AnimalActivity : Activity() {
                 next != current.key.getInt("turn_id") + 1) {
                 return
             }
-            require(slot == null)
+            require(slot == null || wakeEntry && current == null)
             val segments = message.getJSONArray("segments")
             require(segments.length() in (if (product) 0 else 1)..8)
+            if (wakeEntry && current == null) require(segments.length() == 0)
             reply = Reply(key, List(segments.length()) { index ->
                 val item = segments.getJSONObject(index)
                 Segment(if (cloudMode) "" else item.getString("text"), if (item.isNull("image_id")) null else
@@ -657,6 +753,31 @@ open class AnimalActivity : Activity() {
             restartPending = false
             render()
             if (restart) requestStart()
+            if (rearmAfterRelease) {
+                rearmAfterRelease = false
+                armWake()
+            }
+            return
+        }
+        if (wakeCapture) {
+            wakeCapture = false
+            if (wakePrompt) {
+                upload?.close()
+                upload = null
+                playWakePrompt()
+            } else if (wakeEntry) {
+                captureReleased = true
+                captureSealed = true
+                capturing = false
+                finishCloudCapture()
+                reply?.let(::proceed)
+            } else reset()
+            return
+        }
+        if (wakePrompt) {
+            wakePrompt = false
+            deadline?.let(handler::removeCallbacks)
+            armWake(afterPrompt = true)
             return
         }
         val current = reply ?: return
@@ -680,7 +801,8 @@ open class AnimalActivity : Activity() {
 
     private fun proceed(current: Reply) {
         val receipt = current.receipt ?: return
-        if (slot != null || !current.ended || current.confirmed != current.segments.size || current.scheduled) return
+        val firstWakeReply = wakeEntry && current.key.getInt("turn_id") == 1
+        if ((!firstWakeReply && slot != null) || !current.ended || current.confirmed != current.segments.size || current.scheduled) return
         current.scheduled = true
         count.visibility = if (receipt.mode == "chat") View.GONE else View.VISIBLE
         count.text = "完成 ${receipt.completed} / 3"
@@ -694,6 +816,17 @@ open class AnimalActivity : Activity() {
 
     private fun completeAction(current: Reply, receipt: Receipt) {
         if (current !== reply || current.claimed) return
+        if (wakeEntry && current.key.getInt("turn_id") == 1) {
+            if (!eligible() || receipt.action != "listen" || receipt.mode != "chat") {
+                reset("唤醒会话不可用，请重新开始")
+                return
+            }
+            current.claimed = true
+            val start = event("turn.start", current).put("listen_id", receipt.permit)
+            if (upload?.start(start, socket) != true) reset("语音连接已断开，请重新开始")
+            else timeout(18_000) { reset("等待语音回复超时") }
+            return
+        }
         if (!eligible() || slot != null) {
             reset("音频条件变化，请重新开始")
             return
@@ -720,7 +853,7 @@ open class AnimalActivity : Activity() {
                 picture.visibility = View.GONE
                 if (send(event("turn.advance", current))) timeout(if (cloudMode) 12_000 else 5_000) { reset("等待下一题超时") }
             }
-            "end" -> if (product) reset() else reset("本局已结束", keepCaption = true)
+            "end" -> if (product) resetToWake() else reset("本局已结束", keepCaption = true)
             else -> reset("模拟协议错误")
         }
     }
@@ -738,7 +871,7 @@ open class AnimalActivity : Activity() {
     }
 
     private fun finishCloudCapture() {
-        if (!captureSealed || !captureReleased || (speech && !cloudReady)) return
+        if (!captureSealed || !captureReleased || (speech && !cloudReady) || upload == null) return
         val current = checkNotNull(reply)
         val sent = if (speech) upload?.end() == true else
             send(event("listen.silence", current).put("listen_id", checkNotNull(current.receipt).permit))
@@ -775,21 +908,31 @@ open class AnimalActivity : Activity() {
         deadline = Runnable(action).also { handler.postDelayed(it, ms) }
     }
 
+    private fun resetToWake() {
+        reset()
+        prepareWake()
+    }
+
     private fun reset(message: String = "点按开始猜动物", keepCaption: Boolean = false) {
         generation++
         restartPending = false
+        rearmAfterRelease = false
+        wakeCapture = false
+        wakeEntry = false
+        wakePrompt = false
+        upload?.close()
         face?.clearTouch()
         deadline?.let(handler::removeCallbacks)
         deadline = null
         val previous = socket
         socket = null
         previous?.cancel()
-        if (previous != null) manager.abandonAudioFocusRequest(focus)
+        if (focusHeld) manager.abandonAudioFocusRequest(focus)
+        focusHeld = false
         slot?.let(audio::stop)
         capturing = false
         frames = false
         answer = null
-        upload?.close()
         upload = null
         reply?.streams?.forEach(CloudPcm::abort)
         reply = null
@@ -808,8 +951,8 @@ open class AnimalActivity : Activity() {
         mood?.let { face?.mood = it }
         val active = socket != null
         start.isEnabled = resumed && !permissionPending &&
-            (if (product) !restartPending && (active || slot == null) else !active && slot == null)
-        stop.isEnabled = active || restartPending
+            (if (product) !restartPending && (active || wakeCapture || wakePrompt || slot == null) else !active && slot == null)
+        stop.isEnabled = active || restartPending || wakeCapture || wakePrompt
         sendAnswer.isEnabled = active && capturing && frames && answer == null
         if (cloudMode) {
             sendAnswer.isEnabled = active && capturing && frames && !captureSealed

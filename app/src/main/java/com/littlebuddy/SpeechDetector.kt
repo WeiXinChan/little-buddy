@@ -4,7 +4,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /** Energy-based endpoint detector for 20 ms mono PCM16 windows. */
-internal class SpeechDetector(private val windowSamples: Int) {
+internal class SpeechDetector(private val windowSamples: Int, initialFloor: Double? = null) {
     enum class Event { NONE, SPEECH, END }
 
     private val sliceSamples = windowSamples / 4
@@ -14,8 +14,8 @@ internal class SpeechDetector(private val windowSamples: Int) {
     private var squares = 0L
     private var sliceSum = 0L
     private var sliceSquares = 0L
-    private var calibrationWindows = 0
-    private var floor = Double.POSITIVE_INFINITY
+    private var calibrationWindows = if (initialFloor == null) 0 else 8
+    private var floor = initialFloor ?: Double.POSITIVE_INFINITY
     private var voicedWindows = 0
     private var onsetRms = 0.0
     private var previousRms = 0.0

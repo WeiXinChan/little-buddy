@@ -1,0 +1,15 @@
+本地唤醒模型和运行库
+
+sherpa-onnx 1.12.27，Apache License 2.0。随附 sherpa-onnx-LICENSE.txt。
+https://github.com/k2-fsa/sherpa-onnx/releases/tag/v1.12.27
+ONNX Runtime 1.17.1，Microsoft Corporation，MIT License。随附许可证和第三方声明。
+
+中英 Zipformer 权重和原始 tokens.txt 来自 k2-fsa 的 2025-12-20 发布包。
+按作者与维护者声明适用 Apache License 2.0，模型文件和词表原样复制。
+https://github.com/k2-fsa/sherpa-onnx/issues/3802
+https://www.modelscope.cn/models/pkufool/icefall-kws-zipformer-zh-en-3M-2025-12-20
+keywords.txt 是瓦力项目新增的词条文件。
+
+语音提示「宝宝，我在。」为本项目通过阿里云百炼 CosyVoice 系统音色生成的合成音频。
+使用依据为阿里云产品服务协议及百炼服务协议，随附音频用于瓦力的本地播放。
+https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud201802281451_77479.html

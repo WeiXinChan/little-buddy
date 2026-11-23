@@ -9,32 +9,39 @@ import java.nio.ByteOrder
 /** Audio worker writes frames. The activity authorizes and seals on its dispatcher. */
 internal class AnimalUpload(
     val operation: Long,
-    private val socket: WebSocket,
+    private var socket: WebSocket?,
     val synthetic: Boolean,
 ) {
     private val pending = ArrayDeque<ShortArray>()
     private var started = false
     private var ready = false
     private var closed = false
+    private var ended = false
     private var position = 0
+    private var pendingSamples = 0
+    private val deferred = socket == null
 
     @Synchronized
     fun frame(samples: ShortArray, count: Int): Boolean {
-        if (closed) return true
+        if (closed || ended) return true
         if (ready) return write(samples, count)
-        if (pending.size >= if (started) 250 else 25) {
+        if (deferred && pendingSamples + count > 80_000) return false
+        if (!deferred && pending.size >= if (started) 250 else 25) {
             if (started) return false
+            pendingSamples -= pending.first().size
             pending.removeFirst().fill(0)
         }
+        pendingSamples += count
         pending.addLast(samples.copyOf(count))
         return true
     }
 
     @Synchronized
-    fun start(message: JSONObject): Boolean {
+    fun start(message: JSONObject, connection: WebSocket? = socket): Boolean {
         check(!started && !closed)
+        socket = checkNotNull(connection)
         started = true
-        return socket.send(message.toString())
+        return connection.send(message.toString())
     }
 
     @Synchronized
@@ -47,12 +54,18 @@ internal class AnimalUpload(
             frame.fill(0)
             if (!sent) return false
         }
+        pendingSamples = 0
         return true
     }
 
     @Synchronized
-    fun end(): Boolean = ready && !closed && position > 0 &&
-        socket.send(JSONObject().put("v", 1).put("type", "turn.end").put("samples", position).toString())
+    fun end(): Boolean {
+        if (!ready || closed || ended || position == 0) return false
+        ended = true
+        return checkNotNull(socket).send(
+            JSONObject().put("v", 1).put("type", "turn.end").put("samples", position).toString(),
+        )
+    }
 
     @Synchronized
     fun close() {
@@ -62,6 +75,7 @@ internal class AnimalUpload(
     }
 
     private fun write(samples: ShortArray, count: Int): Boolean {
+        val socket = checkNotNull(socket)
         if (position + count > 320_000 || socket.queueSize() > 160_000) return false
         val packet = ByteBuffer.allocate(6 + 2 * count)
         packet.put(1).put(1).putInt(position).order(ByteOrder.LITTLE_ENDIAN)
