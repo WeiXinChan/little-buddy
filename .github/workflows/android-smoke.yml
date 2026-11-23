@@ -43,6 +43,14 @@ jobs:
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
           test -r /dev/kvm && test -w /dev/kvm
 
+      - name: Prepare virtual audio dependency
+        run: |
+          if ! command -v pulseaudio >/dev/null || ! command -v pactl >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends libpulse0 pulseaudio pulseaudio-utils
+          fi
+          pulseaudio --version | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Install SDK and verify acceleration
         run: |
           export JAVA_HOME="$JAVA_HOME_17_X64"
@@ -57,8 +65,8 @@ jobs:
             "$sdkmanager" --version
             printf '%s\n' 'SDK platform: 36; build tools: 35.0.0'
             "$ANDROID_HOME/platform-tools/adb" version
-            "$ANDROID_HOME/emulator/emulator" -version
             "$ANDROID_HOME/emulator/emulator" -accel-check
+            "$ANDROID_HOME/emulator/emulator" -version
             ./gradlew --no-daemon --version
           } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
@@ -68,14 +76,6 @@ jobs:
           "$RUNNER_TEMP/smoke-venv/bin/pip" install --no-cache-dir -r backend/requirements.txt
           PYTHONPATH=.:backend "$RUNNER_TEMP/smoke-venv/bin/python" -B -m unittest discover -s backend/tests
           ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
-
-      - name: Prepare virtual audio dependency
-        run: |
-          if ! command -v pulseaudio >/dev/null || ! command -v pactl >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils
-          fi
-          pulseaudio --version | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Boot, install and run StreamingAudioTest
         run: |
