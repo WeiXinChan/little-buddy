@@ -1,8 +1,11 @@
 """Run only inside the disposable systemd guest created by rehearse."""
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
+import runpy
+import signal
 import socket
 import subprocess as sp
 import sys
@@ -52,10 +55,73 @@ def denied():
     assert result.returncode and b"Permission denied" in result.stderr, result.stderr
 
 
+def pause_publication(mode):
+    replace = os.replace
+
+    def intercept(source, destination):
+        if Path(destination).name != "device.pub":
+            return replace(source, destination)
+        if mode == "stalled-published":
+            replace(source, destination)
+        os.kill(os.getpid(), signal.SIGSTOP)
+        if mode == "stalled-publish":
+            replace(source, destination)
+
+    os.replace = intercept
+    sys.argv = [WINDOW[-1], "open"]
+    runpy.run_path(WINDOW[-1], run_name="__main__")
+
+
+def stalled(mode, management, inherited, hashes):
+    key = STATE.parent / "device.pub"
+    armed = time.monotonic()
+    call("systemctl", "start", "tita-ssh-window.timer")
+    opener = sp.Popen(["setsid", sys.executable, __file__, "pause-publication", mode])
+    stopped, status = os.waitpid(opener.pid, os.WUNTRACED)
+    assert stopped == opener.pid and os.WIFSTOPPED(status) and os.WSTOPSIG(status) == signal.SIGSTOP
+    with (STATE / "lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            pass
+        else:
+            raise AssertionError("opener was not stopped while holding the lock")
+    assert key.exists() == (mode == "stalled-published")
+    if key.exists():
+        device = sp.Popen(ssh("labdevice", "device", "-o", "BatchMode=yes", "-N"))
+        wait(lambda: "Accepted publickey for labdevice " in
+             call("journalctl", "-u", "ssh.service", "-o", "cat", "--no-pager"))
+    else:
+        device = None
+    management()
+    wait(lambda: (STATE / "draining").exists(), max(1, armed + 65 - time.monotonic()))
+    elapsed = time.monotonic() - armed
+    assert 59 <= elapsed <= 65 and not key.exists()
+    assert (STATE / "rollback-started").exists()
+    denied()
+    if device:
+        wait(lambda: device.poll() is not None)
+    wait(lambda: call("systemctl", "show", ROLLBACK, "-p", "Result", "--value") == "success"
+         and call("systemctl", "show", ROLLBACK, "-p", "ActiveState", "--value") == "inactive")
+    assert (STATE / "result").read_text().strip() == "0"
+    assert opener.poll() is None
+    opener.send_signal(signal.SIGCONT)
+    assert opener.wait(timeout=5) == 1
+    assert not key.exists()
+    denied()
+    assert listen() == inherited
+    assert hashes == {path: hashlib.sha256(Path(path).read_bytes()).hexdigest() for path in hashes}
+    management()
+    print(call("journalctl", "-u", ROLLBACK, "-o", "cat", "--no-pager"), flush=True)
+    print(f"{mode}: opener stopped with lock; timer restored baseline after {elapsed:.1f}s; "
+          "resumed opener could not publish; old/new management and inherited FDs verified", flush=True)
+
+
 def main():
     assert Path("/proc/1/comm").read_text().strip() == "systemd"
+    mode = sys.argv[1]
     for key in ("admin", "device"):
-        call("ssh-keygen", "-q", "-t", "ed25519", "-N", "lab-only" if key == "device" else "",
+        call("ssh-keygen", "-q", "-t", "ed25519", "-N", "lab-only" if key == "device" and not mode.startswith("stalled-") else "",
              "-f", str(LAB / key))
     admin_key = Path("/run/synthetic-admin.pub")
     admin_key.write_bytes((LAB / "admin.pub").read_bytes())
@@ -80,6 +146,9 @@ def main():
             assert ipv6.recv(256).startswith(b"SSH-2.0-")
 
     management()
+    if mode.startswith("stalled-"):
+        stalled(mode, management, inherited, hashes)
+        return
     with unknown() as pending:
         # The same timer and service are used, with a separate initiating session.
         initiator = LAB / "initiator"
@@ -167,5 +236,8 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.argv[1] == "pause-publication":
+        pause_publication(sys.argv[2])
+        sys.exit(0)
     main()
     Path("/run/rehearsal-output/result").write_text("0\n")

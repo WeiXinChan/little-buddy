@@ -32,7 +32,7 @@ sudo /usr/bin/python3 -I /usr/local/libexec/tita-ssh-window.py open
 
 ## 回滚与清理
 
-等待 timer 到期或提前执行 `sudo systemctl start --no-block tita-ssh-window.service`。服务加锁后先撤专用公钥，再按备份散列原子恢复配置并重读 `ssh.service`。重载由 journal 中的 SIGHUP 及两条监听记录确认，同时复核主进程及两个继承 FD。排空只向仍符合监听父进程、启动时间、设备身份标题和服务端连接归属的 pidfd 发送 TERM。未知身份等待 120 秒认证宽限。135 秒截止时仍有设备或未分类连接，返回 42 并保留残留数量。systemd 回滚运行上限为 155 秒。
+等待 timer 到期或提前执行 `sudo systemctl start --no-block tita-ssh-window.service`。回滚独立于开窗锁。服务先写下回滚墓碑，再移除本代际暂存公钥和已发布公钥。随后移除本代际暂存配置，按备份散列原子恢复配置并重读 `ssh.service`。重载由 journal 中的 SIGHUP 及两条监听记录确认，同时复核主进程及两个继承 FD。排空只向仍符合监听父进程、启动时间、设备身份标题和服务端连接归属的 pidfd 发送 TERM。未知身份等待 120 秒认证宽限。每次预备生成唯一代际。开窗只能原子移动该代际的暂存文件，恢复执行的旧进程无法重建被移除的源文件。135 秒截止时仍有设备或未分类连接，返回 42 并保留残留数量。systemd 回滚运行上限为 155 秒。
 
 ```bash
 sudo systemctl show tita-ssh-window.service -p Result -p ExecMainStatus
@@ -41,7 +41,7 @@ sudo /usr/sbin/sshd -t
 sudo systemctl show ssh.socket -p ActiveState -p Listen
 ```
 
-退出 0 后，核对主配置和 Include 散列、既有和独立新管理登录、双栈监听、设备新认证被拒及既有设备传输关闭。退出 42、其他非零或 systemd 超时均判窗口失败。保留私有证据和备份，从管理连接核对授权文件已撤、实际配置及残留。遇配置漂移时，保留新的配置字节与备份供人工比对。仅在复核恢复状态后清理。先停 timer 并确认回滚服务已退出，再移除专用状态目录、安装的脚本和单元，执行 `systemctl daemon-reload`，回收独立的健康服务。
+退出 0 后，核对主配置和 Include 散列、既有和独立新管理登录、双栈监听、设备新认证被拒及既有设备传输关闭。退出 42、其他非零或 systemd 超时均判窗口失败。保留私有证据和备份，从管理连接核对授权文件已撤、实际配置及残留。遇配置漂移时，保留新的配置字节与备份供人工比对。仅在复核恢复状态后清理。先停 timer 并确认回滚服务及开窗进程已退出。确认本代际在 `/etc/ssh/.tita-ssh-window-<generation>.next` 的暂存文件已回收，再移除专用状态目录、安装的脚本和单元，执行 `systemctl daemon-reload`，回收独立的健康服务。
 
 ## 隔离演练
 
@@ -53,3 +53,10 @@ sudo scripts/ssh-window/rehearse timeout
 ```
 
 每条路径使用有硬时限的独立 mount、network、PID 和 cgroup namespace，在其中启动 systemd 并使用发行版实际的 `ssh.service` 和 `ssh.socket`。SSH 配置、账号、公钥和 TLS 服务均为合成材料。外层对照宿主配置散列和生产监听 socket。时序检查涵盖发起会话退出、已登录设备、暂停签名的认证请求及尚未声明身份的连接。超时路径在开始排空 25 秒后建立一条未知连接，在 135 秒截止时验证它仍存活。测试仅在验证单元实际返回 42 且其它断言通过时视该超时用例为成功。
+
+锁停滞回归使用同一 timer 和 service。下列两条路径分别在公钥发布后和发布前的原子移动边界暂停持锁开窗进程。演练验证回滚完成、随后恢复原进程仍无法发布、既有和独立新管理登录可用。
+
+```bash
+sudo scripts/ssh-window/rehearse stalled-published
+sudo scripts/ssh-window/rehearse stalled-publish
+```

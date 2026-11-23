@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 
 STATE = Path("/run/tita-ssh-window")
 PRIVATE = STATE / "private"
@@ -165,7 +166,16 @@ def matrix(candidate, device, contexts):
           f"{len(RULES)} device restrictions per context", flush=True)
 
 
+def staged_paths(plan):
+    generation = plan["generation"]
+    require(re.fullmatch(r"[0-9a-f]{32}", generation), "invalid window generation")
+    return (CONFIG.parent / f".tita-ssh-window-{generation}.next",
+            PRIVATE / f"key-{generation}")
+
+
 def prepare(device, key_path, context_path, manifest_path):
+    require(not (PRIVATE / "rollback-started").exists()
+            and not (PRIVATE / "plan").exists() and not KEY.exists(), "window already used")
     require(re.fullmatch(r"[a-z_][a-z0-9_-]{0,30}", device) and device != "root",
             "dedicated device login required")
     require(int(output("id", "-u", device)) >= 1000, "device must be unprivileged")
@@ -192,17 +202,19 @@ def prepare(device, key_path, context_path, manifest_path):
     metadata = CONFIG.stat()
     candidate = baseline + (f"\nMatch User {device}\n" +
                             "".join(f"    {key} {value}\n" for key, value in RULES.items())).encode()
-    require(not (PRIVATE / "plan").exists() and not KEY.exists(), "window already prepared")
+    plan = {"device": device, "hashes": hashes, "daemon": daemon,
+            "mode": stat.S_IMODE(metadata.st_mode), "group": metadata.st_gid,
+            "candidate": digest(candidate), "key": digest(public_key),
+            "generation": uuid.uuid4().hex}
+    staged_config, staged_key = staged_paths(plan)
     atomic(PRIVATE / "baseline", baseline, 0o600)
     atomic(PRIVATE / "candidate", candidate, 0o600)
-    atomic(PRIVATE / "staged-key", public_key, 0o600)
     for path in (PRIVATE / "baseline", PRIVATE / "candidate"):
         output(SSHD, "-t", "-D", "-f", str(path))
     matrix(PRIVATE / "candidate", device, contexts)
     require(config_files() == hashes and listener() == daemon, "preflight drift")
-    plan = {"device": device, "hashes": hashes, "daemon": daemon,
-            "mode": stat.S_IMODE(metadata.st_mode), "group": metadata.st_gid,
-            "candidate": digest(candidate), "key": digest(public_key)}
+    atomic(staged_config, candidate, plan["mode"], plan["group"])
+    atomic(staged_key, public_key, 0o644)
     atomic(PRIVATE / "plan", json.dumps(plan).encode(), 0o600)
 
 
@@ -304,20 +316,29 @@ def open_window(plan):
             and not (PRIVATE / "opening").exists(), "window already used")
     require(config_files() == plan["hashes"] and listener() == plan["daemon"], "preflight drift")
     verify_arm()
-    candidate = (PRIVATE / "candidate").read_bytes()
-    key = (PRIVATE / "staged-key").read_bytes()
-    require(digest(candidate) == plan["candidate"] and digest(key) == plan["key"],
-            "staged artifact drift")
+    staged_config, staged_key = staged_paths(plan)
+    require(digest(staged_config.read_bytes()) == plan["candidate"]
+            and digest(staged_key.read_bytes()) == plan["key"], "staged artifact drift")
     (PRIVATE / "opening").touch(exist_ok=False)
-    atomic(CONFIG, candidate, plan["mode"], plan["group"])
+    # Rollback can consume either source even while this process holds the lock.
+    # Renames are the only publication path and never recreate a consumed source.
+    os.replace(staged_config, CONFIG)
     reload_ssh(plan["daemon"])
     verify_arm()
-    atomic(KEY, key, 0o644)
+    os.replace(staged_key, KEY)
+    require(not (PRIVATE / "rollback-started").exists(), "window expired during publication")
     print("device key published", flush=True)
 
 
-def rollback(plan):
+def rollback():
     (PRIVATE / "rollback-started").touch()
+    try:
+        plan = json.loads((PRIVATE / "plan").read_text())
+        staged_config, staged_key = staged_paths(plan)
+        staged_key.unlink(missing_ok=True)
+    finally:
+        KEY.unlink(missing_ok=True)
+    staged_config.unlink(missing_ok=True)
     restored = False
     try:
         hashes = config_files()
@@ -352,18 +373,14 @@ def main():
         metadata = path.lstat()
         require(stat.S_ISDIR(metadata.st_mode) and metadata.st_uid == 0
                 and stat.S_IMODE(metadata.st_mode) == mode, "unsafe state directory")
+    if action == "rollback" and not args:
+        return rollback()
     with (PRIVATE / "lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if action == "prepare" and len(args) == 4:
             prepare(*args)
-        elif action in {"open", "rollback"} and not args:
-            if action == "rollback":
-                KEY.unlink(missing_ok=True)
-            plan = json.loads((PRIVATE / "plan").read_text())
-            if action == "open":
-                open_window(plan)
-            else:
-                return rollback(plan)
+        elif action == "open" and not args:
+            open_window(json.loads((PRIVATE / "plan").read_text()))
         elif action == "verify-arm" and not args:
             verify_arm()
         else:
