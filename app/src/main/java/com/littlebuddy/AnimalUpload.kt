@@ -6,33 +6,35 @@ import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** Audio worker writes frames. The activity authorizes and seals on its dispatcher. */
+/** The recorder appends samples. The activity drains small batches on its dispatcher. */
 internal class AnimalUpload(
     val operation: Long,
     private var socket: WebSocket?,
     val synthetic: Boolean,
 ) {
-    private val pending = ArrayDeque<ShortArray>()
+    enum class Drain { IDLE, MORE, BLOCKED, ENDED, FAILED }
+
+    private val deferred = socket == null
+    private val pending = ShortArray(CAPACITY)
+    private var head = 0
+    private var size = 0
     private var started = false
     private var ready = false
     private var closed = false
     private var ended = false
     private var position = 0
-    private var pendingSamples = 0
-    private val deferred = socket == null
 
     @Synchronized
     fun frame(samples: ShortArray, count: Int): Boolean {
         if (closed || ended) return true
-        if (ready) return write(samples, count)
-        if (deferred && pendingSamples + count > 80_000) return false
-        if (!deferred && pending.size >= if (started) 250 else 25) {
-            if (started) return false
-            pendingSamples -= pending.first().size
-            pending.removeFirst().fill(0)
+        require(count in 1..minOf(PACKET_SAMPLES, samples.size))
+        if (!deferred && !started) {
+            val discard = (size + count - 8000).coerceAtLeast(0)
+            remove(discard)
         }
-        pendingSamples += count
-        pending.addLast(samples.copyOf(count))
+        if (size + count > CAPACITY || position + size + count > 320_000) return false
+        for (i in 0 until count) pending[(head + size + i) % CAPACITY] = samples[i]
+        size += count
         return true
     }
 
@@ -48,40 +50,51 @@ internal class AnimalUpload(
     fun ready(): Boolean {
         if (!started || ready || closed) return false
         ready = true
-        while (pending.isNotEmpty()) {
-            val frame = pending.removeFirst()
-            val sent = write(frame, frame.size)
-            frame.fill(0)
-            if (!sent) return false
-        }
-        pendingSamples = 0
         return true
     }
 
     @Synchronized
-    fun end(): Boolean {
-        if (!ready || closed || ended || position == 0) return false
-        ended = true
-        return checkNotNull(socket).send(
-            JSONObject().put("v", 1).put("type", "turn.end").put("samples", position).toString(),
-        )
+    fun drain(sealed: Boolean): Drain {
+        if (!ready || closed || ended) return Drain.IDLE
+        val connection = checkNotNull(socket)
+        repeat(16) {
+            if (size < PACKET_SAMPLES && !sealed) return Drain.IDLE
+            if (size == 0) {
+                if (position == 0) return Drain.FAILED
+                val end = JSONObject().put("v", 1).put("type", "turn.end").put("samples", position).toString()
+                if (connection.queueSize() + end.length > WIRE_BUDGET) return Drain.BLOCKED
+                ended = true
+                return if (connection.send(end)) Drain.ENDED else Drain.FAILED
+            }
+            val count = minOf(size, PACKET_SAMPLES)
+            val bytes = HEADER_BYTES + count * Short.SIZE_BYTES
+            if (connection.queueSize() + bytes > WIRE_BUDGET) return Drain.BLOCKED
+            val packet = ByteBuffer.allocate(bytes)
+            packet.put(1).put(1).putInt(position).order(ByteOrder.LITTLE_ENDIAN)
+            repeat(count) { packet.putShort(pending[(head + it) % CAPACITY]) }
+            if (!connection.send(packet.array().toByteString())) return Drain.FAILED
+            position += count
+            remove(count)
+        }
+        return Drain.MORE
     }
 
     @Synchronized
     fun close() {
         closed = true
-        pending.forEach { it.fill(0) }
-        pending.clear()
+        remove(size)
     }
 
-    private fun write(samples: ShortArray, count: Int): Boolean {
-        val socket = checkNotNull(socket)
-        if (position + count > 320_000 || socket.queueSize() > 160_000) return false
-        val packet = ByteBuffer.allocate(6 + 2 * count)
-        packet.put(1).put(1).putInt(position).order(ByteOrder.LITTLE_ENDIAN)
-        repeat(count) { packet.putShort(samples[it]) }
-        if (!socket.send(packet.array().toByteString())) return false
-        position += count
-        return true
+    private fun remove(count: Int) {
+        repeat(count) { pending[(head + it) % CAPACITY] = 0 }
+        head = (head + count) % CAPACITY
+        size -= count
+    }
+
+    companion object {
+        private const val PACKET_SAMPLES = 320
+        private const val HEADER_BYTES = 6
+        private const val CAPACITY = 80_000
+        internal const val WIRE_BUDGET = CAPACITY / PACKET_SAMPLES * (HEADER_BYTES + PACKET_SAMPLES * 2)
     }
 }

@@ -31,6 +31,7 @@ import kotlin.math.sin
 
 internal enum class AnimalEvent {
     REPLY_END, FINAL_ACK, SEGMENT_CONFIRMATION, TURN_COMMIT, PLAYBACK_RELEASE,
+    WAKE_CAPTURE, WAKE_CAPTURE_RELEASED, WAKE_PROMPT, WAKE_PROMPT_RELEASED, OPEN_SOCKET,
     CAPTURE_FRAME, ASR_UPLOAD_END, PCM_HEAD_ADVANCED, TONE, TONE_DISPATCH, TAIL_TIMER, IMAGE_TIMER, CAPTURE_DISPATCH, IMAGE_SHOWN,
 }
 
@@ -38,6 +39,7 @@ internal enum class AnimalEvent {
 internal interface AnimalProbe {
     fun deliver(event: AnimalEvent, action: () -> Unit)
     fun observe(event: AnimalEvent)
+    fun wakeInput(): ((ShortArray, Int) -> Unit)? = null
     val syntheticCapture: Boolean get() = false
 }
 
@@ -47,6 +49,8 @@ open class AnimalActivity : Activity() {
     private var connection: BuddyConnection? = null
     private var restartPending = false
     private var wakeCapture = false
+    private var wakeCaptureId: Long? = null
+    private var wakePromptId: Long? = null
     private var wakePrompt = false
     private var wakeEntry = false
     private var focusHeld = false
@@ -84,6 +88,8 @@ open class AnimalActivity : Activity() {
     private var captureSealed = false
     private var captureReleased = false
     private var cloudReady = false
+    private var uploadBlockedSince: Long? = null
+    private val uploadPump = Runnable { drainUpload() }
     private var endpointField: EditText? = null
     private var tokenField: EditText? = null
     private lateinit var audio: AndroidAudio
@@ -217,12 +223,14 @@ open class AnimalActivity : Activity() {
         val pending = AnimalUpload(id, null, synthetic = false)
         upload = pending
         wakeCapture = true
+        wakeCaptureId = id
         wakeEntry = false
         captureSealed = false
         captureReleased = false
         speech = false
         cloudReady = false
-        audio.captureWake(id) {
+        probe?.observe(AnimalEvent.WAKE_CAPTURE)
+        audio.captureWake(id, probe?.wakeInput()) {
             val keyword = if (afterPrompt) null else try {
                 SherpaWake(assets)
             } catch (error: LinkageError) {
@@ -263,7 +271,10 @@ open class AnimalActivity : Activity() {
         val buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
         val samples = ShortArray(bytes.size / 2) { buffer.short }
         render("我在听", BuddyMood.SPEAKING)
-        audio.play(occupy(), samples)
+        probe?.observe(AnimalEvent.WAKE_PROMPT)
+        val id = occupy()
+        wakePromptId = id
+        audio.play(id, samples)
         timeout(3_000) { reset("播放超时，请重新开始") }
     }
 
@@ -476,6 +487,7 @@ open class AnimalActivity : Activity() {
         } else request.url("ws://127.0.0.1:8765/animal")
         if (!holdFocus()) return
         val regression = permutations?.isChecked == true
+        probe?.observe(AnimalEvent.OPEN_SOCKET)
         socket = client.newWebSocket(request.build(),
             object : WebSocketListener() {
                 private var stream: CloudPcm? = null
@@ -654,7 +666,8 @@ open class AnimalActivity : Activity() {
                     return
                 }
                 cloudReady = true
-                finishCloudCapture()
+                uploadBlockedSince = null
+                drainUpload()
             }
             return
         }
@@ -747,6 +760,14 @@ open class AnimalActivity : Activity() {
 
     private fun released(id: Long) {
         if (slot != id) return
+        if (wakeCaptureId == id) {
+            wakeCaptureId = null
+            probe?.observe(AnimalEvent.WAKE_CAPTURE_RELEASED)
+        }
+        if (wakePromptId == id) {
+            wakePromptId = null
+            probe?.observe(AnimalEvent.WAKE_PROMPT_RELEASED)
+        }
         slot = null
         if (slotGeneration != generation) {
             val restart = restartPending
@@ -870,16 +891,47 @@ open class AnimalActivity : Activity() {
         timeout(5_000) { reset("麦克风清理或语音服务超时") }
     }
 
+    private fun drainUpload() {
+        handler.removeCallbacks(uploadPump)
+        val pending = upload ?: return
+        if (!cloudReady) return
+        if (!eligible()) {
+            reset()
+            return
+        }
+        val result = pending.drain(captureSealed && captureReleased)
+        if (result == AnimalUpload.Drain.BLOCKED) {
+            val now = android.os.SystemClock.elapsedRealtime()
+            val since = uploadBlockedSince ?: now.also { uploadBlockedSince = it }
+            if (now - since >= 2_000) {
+                reset("语音上传拥塞，请重新开始")
+                return
+            }
+        } else uploadBlockedSince = null
+        when (result) {
+            AnimalUpload.Drain.FAILED -> reset("语音上传失败，请重新开始")
+            AnimalUpload.Drain.ENDED -> {
+                pending.close()
+                upload = null
+                probe?.observe(AnimalEvent.ASR_UPLOAD_END)
+                timeout(12_000) { reset("等待语音回复超时") }
+            }
+            else -> handler.postDelayed(uploadPump, if (result == AnimalUpload.Drain.MORE) 1 else 20)
+        }
+    }
+
     private fun finishCloudCapture() {
-        if (!captureSealed || !captureReleased || (speech && !cloudReady) || upload == null) return
+        if (!captureSealed || !captureReleased || upload == null) return
+        if (speech) {
+            drainUpload()
+            return
+        }
         val current = checkNotNull(reply)
-        val sent = if (speech) upload?.end() == true else
-            send(event("listen.silence", current).put("listen_id", checkNotNull(current.receipt).permit))
         upload?.close()
         upload = null
-        if (sent && speech) probe?.observe(AnimalEvent.ASR_UPLOAD_END)
-        if (sent) timeout(12_000) { reset("等待语音回复超时") }
-        else reset("语音服务已断开，请重新开始")
+        if (send(event("listen.silence", current).put("listen_id", checkNotNull(current.receipt).permit))) {
+            timeout(12_000) { reset("等待语音回复超时") }
+        }
     }
 
     private fun seal(text: String?) {
@@ -920,6 +972,7 @@ open class AnimalActivity : Activity() {
         wakeCapture = false
         wakeEntry = false
         wakePrompt = false
+        handler.removeCallbacks(uploadPump)
         upload?.close()
         face?.clearTouch()
         deadline?.let(handler::removeCallbacks)

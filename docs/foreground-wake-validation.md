@@ -38,3 +38,27 @@ TITA-42 基于 `main@cb208b45`。装有配套后端的正式入口在配置后�
 Gradle 8.13、JDK 17、Android SDK 36、Build Tools 35.0.0。同工具链下原始未签名 Release 为 1,134,967 字节，本阶段为 26,300,340 字节，增加 25,165,373 字节（24.00 MiB）。其中唤醒 assets 压缩后 4,161,091 字节，两个 arm64 原生库合计 20,871,056 字节。APK 只有 arm64-v8a。Build Tools 的 `zipalign -c -P 16 4` 检查通过。
 
 后端 69/69。Debug、Android 测试 APK、未签名 Release 构建通过。3 个新增 JVM 测试通过，其中合成回放的独占样本区间逐样本相等。连续句、分句零间隔、120 ms 和 300 ms 停顿均走同流；单独唤醒和 750 ms 间隔走回应分支。零间隔及两条短停顿样本的回读起点覆盖程序记录的指令起点。首字能否真实转写、锁屏后设备行为、扬声器音质、OPPO 上的唤醒延迟和误报仍待设备验证。设备用例运行以 PR 的模拟器 CI 结果为准。
+
+## TITA-50 复验输入与剩余边界
+
+上传环缓冲保留最多 80,000 个样本，并把短读合并为 320 样本的线上包。仅封口允许短包。WebSocket 预算为 161,500 字节，等于 250 个最大包（含每包 6 字节头）。发送前检查加入本包后的队列长度。主线程每次最多排送 16 包，队列满时以 20 ms 间隔检查，连续阻塞 2 秒即撤销采集代。封口沿相同队列等待剩余数据依序排送和结束包的空间。旧代取消会移除排送回调、擦除未送样本并取消 WebSocket。
+
+设备回归新增容量和取消检查，并用正式 BuddyActivity、Android 真实录放句柄、Sherpa JNI 和回环 TLS 假 ASR 串接。测试在 AudioRecord 读返回后替换样本值，保留读长度和实际资源生命周期。假 ASR 比对完整「玩猜动物」音频及它所在的逐字节连续区间。用例覆盖待机、单独回应、续听、停止、退后台和设备睡眠。Android 设备执行结果以当前 PR 的 CI 为准。测试 APK 中的三段 gzip 资产从以下命令生成的 PCM 压缩得到，采用无时间戳 gzip，正式 APK 不含测试语料。
+
+```bash
+python3 scripts/test-wake-model.py --fixtures /path/to/fixtures
+python3 scripts/compare-wake-models.py /path/to/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01
+```
+
+WenetSpeech 对照用官方归档，SHA-256 `b2f7c89690dc8ce4c6ed6afeab7cd800c36ad1421fb6b6302b4a4b194cf7f35f`，使用 epoch 12 的三个 INT8 图和同包 tokens。两组使用同一固定参数。验证集变更了语速、音高、指令和近音组合，仍由同一合成器产生。脚本逐条输出哈希和检测索引。
+
+| 候选 | 调参集正例 | 调参集反例 | 验证集正例 | 验证集反例 |
+| --- | --- | --- | --- | --- |
+| 中英现用 | 6/6 | 3/4 | 4/4 | 3/5 |
+| WenetSpeech | 4/6 | 4/4 | 2/4 | 3/5 |
+
+中英在调参集误报「瓦力玛丽」，在验证集误报 `wa3 li4 fa3 li4` 和 `wa3 li4 wa3 ni4`。WenetSpeech 在验证集误报 `wa3 li4 na3 li4` 和 `wa3 li4 wa3 ni4`。两者均命中同音文本边界样本，统计排除该样本。保留现用模型作为本 PR 的复核基线，因为对照降低了召回且未改善独立验证集拒绝率。真实童声、音量距离和环境噪声仍待验收。
+
+### 百炼素材使用证据
+
+现有账号通过北京业务空间的已配 CosyVoice 推理 API 产生该片段。生成链路没有调用控制台体验入口、声音克隆或第三方音色。产品服务协议第 85.1 条指向百炼专门协议。专门协议将 API 集成纳入适用范围，并要求使用方对输出商业化、第三方权利及合成标识承担责任。体验条款对体验输出的分发另有限制，其范围为体验入口。当前服务器能核验推理配置和已生成素材，缺少该账号的订购单和可能覆盖公开再分发的补充条款，公开分发权利仍待账号持有人核对。包内已保留来源、参数与合成音标识说明。 [产品服务协议](https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud201802281451_77479.html) · [百炼服务协议](https://terms.alicdn.com/legal-agreement/terms/common_platform_service/20230728213935489/20230728213935489.html) · [体验功能特别说明](https://terms.alicdn.com/legal-agreement/terms/common_platform_service/20260716114753386/20260716114753386.html)

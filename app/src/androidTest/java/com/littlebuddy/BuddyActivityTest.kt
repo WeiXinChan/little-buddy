@@ -146,6 +146,86 @@ class BuddyActivityTest {
         await { face().mood == BuddyMood.IDLE && !button("停止").isEnabled }
     }
 
+    @Test fun nativeWakeFlowsThroughProductAudioAndTlsAsr() {
+        val url = checkNotNull(InstrumentationRegistry.getArguments().getString("animalUrl"))
+        val events = mutableListOf<AnimalEvent>()
+        val readsStarted = java.util.concurrent.atomic.AtomicInteger()
+        val inputs = ArrayDeque(listOf("gap-120", "wake", "command-alone"))
+        val assets = instrumentation.context.assets
+        val fixtures = inputs.associateWith { name ->
+            val bytes = java.util.zip.GZIPInputStream(assets.open("wake/$name.pcm.gz")).use { it.readBytes() }
+            val buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            ShortArray(bytes.size / 2) { buffer.short }
+        }
+        launch()
+        onMain {
+            activity.probe = object : AnimalProbe {
+                override fun deliver(event: AnimalEvent, action: () -> Unit) = action()
+                override fun observe(event: AnimalEvent) { events.add(event) }
+                override fun wakeInput(): (ShortArray, Int) -> Unit {
+                    val pcm = if (inputs.isEmpty()) ShortArray(0) else fixtures.getValue(inputs.removeFirst())
+                    var offset = 0
+                    return { samples, count ->
+                        if (offset == 0) readsStarted.incrementAndGet()
+                        repeat(count) { i -> samples[i] = pcm.getOrElse(offset++) { 0 } }
+                    }
+                }
+            }
+            field("WSS 服务地址").setText(url)
+            field("设备令牌").setText("offlinefixture".repeat(3))
+            button("保存并进入").performClick()
+        }
+
+        // The 500 ms leading silence is inside the native input fixture.
+        SystemClock.sleep(300)
+        onMain { assertFalse(AnimalEvent.OPEN_SOCKET in events) }
+        await { events.count { it == AnimalEvent.ASR_UPLOAD_END } == 1 && button("结束录音").isEnabled }
+        onMain {
+            assertFalse(AnimalEvent.WAKE_PROMPT in events)
+            button("停止").performClick()
+        }
+        await { events.count { it == AnimalEvent.ASR_UPLOAD_END } == 2 && button("结束录音").isEnabled }
+        onMain {
+            val prompt = events.indexOf(AnimalEvent.WAKE_PROMPT)
+            val promptReleased = events.indexOf(AnimalEvent.WAKE_PROMPT_RELEASED)
+            val secondConnection = events.lastIndexOf(AnimalEvent.OPEN_SOCKET)
+            assertTrue(prompt > 0 && events[prompt - 1] == AnimalEvent.WAKE_CAPTURE_RELEASED)
+            assertTrue(promptReleased > prompt && events[promptReleased + 1] == AnimalEvent.WAKE_CAPTURE)
+            assertTrue(secondConnection > promptReleased)
+            assertEquals(2, events.count { it == AnimalEvent.OPEN_SOCKET })
+            button("停止").performClick()
+        }
+        fun shell(command: String): String = android.os.ParcelFileDescriptor.AutoCloseInputStream(
+            instrumentation.uiAutomation.executeShellCommand(command),
+        ).bufferedReader().use { it.readText() }
+
+        await { readsStarted.get() == 4 }
+        onMain { assertTrue(activity.moveTaskToBack(true)) }
+        await { events.count { it == AnimalEvent.WAKE_CAPTURE_RELEASED } == 4 }
+        val automation = instrumentation.uiAutomation
+        automation.adoptShellPermissionIdentity("android.permission.START_ACTIVITIES_FROM_BACKGROUND")
+        try {
+            onMain {
+                activity.startActivity(Intent(activity, BuddyActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+        } finally {
+            automation.dropShellPermissionIdentity()
+        }
+        await { readsStarted.get() == 5 }
+        try {
+            shell("input keyevent KEYCODE_SLEEP")
+            await { events.count { it == AnimalEvent.WAKE_CAPTURE_RELEASED } == 5 }
+            onMain {
+                assertEquals(2, events.count { it == AnimalEvent.OPEN_SOCKET })
+                assertFalse(button("结束录音").isEnabled)
+            }
+        } finally {
+            shell("input keyevent KEYCODE_WAKEUP")
+            shell("wm dismiss-keyguard")
+        }
+    }
+
     private fun progress() = views().filterIsInstance<TextView>().single { it.text.startsWith("完成 ") }
 
     private fun launch() {

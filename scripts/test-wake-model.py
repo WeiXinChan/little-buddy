@@ -10,8 +10,8 @@ import sherpa_onnx
 ASSETS = Path(__file__).resolve().parents[1] / "app/src/main/assets/wake"
 
 
-def phrase(text):
-    wav = subprocess.check_output(["espeak-ng", "-v", "cmn-latn-pinyin", "-s", "150", "-p", "50",
+def phrase(text, speed=150, pitch=50):
+    wav = subprocess.check_output(["espeak-ng", "-v", "cmn-latn-pinyin", "-s", str(speed), "-p", str(pitch),
                                    "-a", "100", "--stdout", text])
     pcm = subprocess.check_output(["ffmpeg", "-loglevel", "error", "-i", "pipe:0",
                                    "-ac", "1", "-ar", "16000", "-f", "s16le", "pipe:1"], input=wav)

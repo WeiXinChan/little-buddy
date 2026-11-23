@@ -2,7 +2,9 @@
 import argparse
 import asyncio
 from contextlib import asynccontextmanager
+import gzip
 import math
+from pathlib import Path
 import ssl
 import struct
 
@@ -10,12 +12,14 @@ from backend.animal.cloud import game_server
 from backend.demo import Demo
 
 
-CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect", "conversation")
+CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect", "conversation", "wake")
 
 
 class Fixture(Demo):
-    def __init__(self, scenario):
+    def __init__(self, scenario, report):
         self.scenario = scenario
+        self.report = report
+        self.pcm = bytearray()
         self.recognitions = 0
         self.segments = 0
         self.network_fault = asyncio.Event()
@@ -23,11 +27,30 @@ class Fixture(Demo):
     @asynccontextmanager
     async def recognize(self, sample_rate):
         self.recognitions += 1
+        self.pcm.clear()
         yield self
+
+    async def write(self, pcm16le):
+        if self.scenario == "wake":
+            self.pcm.extend(pcm16le)
 
     async def finish(self):
         if self.scenario == "asr" and self.recognitions == 1:
             await asyncio.Future()
+        if self.scenario == "wake":
+            assets = Path("app/src/androidTest/assets/wake")
+            command_pcm = gzip.decompress((assets / "command-alone.pcm.gz").read_bytes())
+            command = command_pcm[16000:-64000]
+            source_file = "gap-120.pcm.gz" if self.recognitions == 1 else "command-alone.pcm.gz"
+            source = gzip.decompress((assets / source_file).read_bytes()) + b"\0" * 64000
+            received = bytes(self.pcm)
+            offset = source.find(received)
+            valid = offset >= 0 and offset % 2 == 0 and command in received
+            self.report(f"wake_fixture_pcm turn={self.recognitions} exact={int(valid)}")
+            self.pcm.clear()
+            if not valid:
+                raise ValueError("Wake capture did not preserve the synthetic command")
+            return "玩猜动物"
         if self.scenario == "conversation":
             turns = ("告诉我答案", "我想聊天", "我喜欢小猫", "玩猜动物", "再见")
             return turns[(self.recognitions - 1) % len(turns)]
@@ -63,13 +86,15 @@ class Fixture(Demo):
 
 @asynccontextmanager
 async def fixture_server(port, tls, token, scenario, *, report=lambda _: None):
-    fixture = Fixture(scenario)
+    fixture = Fixture(scenario, report)
     async with game_server(0, tls, token, fixture, seed=0, report=report) as backend:
         destination = backend.sockets[0].getsockname()[1]
         first = True
 
         async def proxy(reader, writer):
             nonlocal first
+            if scenario == "wake":
+                report("wake_fixture_connection")
             inject = first and scenario in {"blackhole", "disconnect"}
             first = False
             upstream, transport = await asyncio.open_connection("127.0.0.1", destination)
