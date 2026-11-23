@@ -1,0 +1,159 @@
+name: Android emulator smoke
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/android-smoke.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-smoke-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: github.event.repository.private == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SYSTEM_IMAGE: system-images;android-36;google_apis;x86_64
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Verify runner and KVM
+        run: |
+          {
+            echo "## Android emulator smoke"
+            echo "- Source: $(git rev-parse HEAD)"
+            echo "- Runner: ubuntu-24.04 / $(uname -m), image ${ImageVersion:-unknown}"
+            echo "- AVD image: $SYSTEM_IMAGE"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$(uname -m)" = x86_64
+          test -c /dev/kvm
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+
+      - name: Install SDK and verify acceleration
+        run: |
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME/bin" >> "$GITHUB_PATH"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --install 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0' 'emulator' "$SYSTEM_IMAGE"
+          {
+            java -version
+            python3 --version
+            "$sdkmanager" --version
+            printf '%s\n' 'SDK platform: 36; build tools: 35.0.0'
+            "$ANDROID_HOME/platform-tools/adb" version
+            "$ANDROID_HOME/emulator/emulator" -version
+            "$ANDROID_HOME/emulator/emulator" -accel-check
+            ./gradlew --no-daemon --version
+          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Backend and JVM checks and debug APKs
+        run: |
+          python3 -m venv "$RUNNER_TEMP/smoke-venv"
+          "$RUNNER_TEMP/smoke-venv/bin/pip" install --no-cache-dir -r backend/requirements.txt
+          PYTHONPATH=.:backend "$RUNNER_TEMP/smoke-venv/bin/python" -B -m unittest discover -s backend/tests
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
+
+      - name: Boot, install and run StreamingAudioTest
+        shell: bash
+        run: |
+          adb="$ANDROID_HOME/platform-tools/adb"
+          emulator="$ANDROID_HOME/emulator/emulator"
+          serial=emulator-5554
+          test_class=com.littlebuddy.StreamingAudioTest
+          test_case=nativePlaybackHeadAdvancesBeforeEndAndReleaseFollowsDrain
+          export ANDROID_AVD_HOME
+          ANDROID_AVD_HOME="$(mktemp -d "$RUNNER_TEMP/smoke-avd.XXXXXX")"
+          emulator_pid=
+          test_result="$ANDROID_AVD_HOME/instrumentation.txt"
+          report() { echo "$*" | tee -a "$GITHUB_STEP_SUMMARY"; }
+          cleanup() {
+            local result=$?
+            if (( result != 0 )); then
+              report "- Smoke failed (exit $result)"
+              if [[ -n "$emulator_pid" ]]; then
+                timeout 5s "$adb" -s "$serial" logcat -d -s AndroidRuntime:E AudioTrack:E TestRunner:E | tail -60 || true
+                tail -30 "$ANDROID_AVD_HOME/emulator.log" || true
+              fi
+            fi
+            if [[ -n "$emulator_pid" ]]; then
+              timeout 5s "$adb" -s "$serial" emu kill >/dev/null 2>&1 || true
+              kill "$emulator_pid" 2>/dev/null || true
+              wait "$emulator_pid" 2>/dev/null || true
+            fi
+            rm -rf -- "$ANDROID_AVD_HOME"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          report "- Case: $test_class#$test_case"
+
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n smoke -k "$SYSTEM_IMAGE"
+          start=$SECONDS
+          QEMU_AUDIO_DRV=none "$emulator" -avd smoke -port 5554 -accel on -no-window -no-snapshot -no-boot-anim \
+            -gpu swiftshader_indirect -no-metrics >"$ANDROID_AVD_HOME/emulator.log" 2>&1 &
+          emulator_pid=$!
+          booted=
+          while (( SECONDS - start < 240 )) && kill -0 "$emulator_pid" 2>/dev/null; do
+            if [[ "$(timeout 5s "$adb" -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; then
+              booted=1
+              break
+            fi
+            sleep 2
+          done
+          report "- Boot elapsed: $((SECONDS - start))s"
+          test "$booted" = 1
+          api="$(timeout 10s "$adb" -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')"
+          abi="$(timeout 10s "$adb" -s "$serial" shell getprop ro.product.cpu.abi | tr -d '\r')"
+          report "- Booted API: $api / ABI: $abi"
+          test "$api" = 36 && test "$abi" = x86_64
+
+          start=$SECONDS
+          install_status=0
+          timeout 60s "$adb" -s "$serial" install -g app/build/outputs/apk/debug/app-debug.apk &&
+            timeout 60s "$adb" -s "$serial" install -g app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk ||
+            install_status=$?
+          report "- APK install elapsed: $((SECONDS - start))s"
+          test "$install_status" = 0
+
+          start=$SECONDS
+          instrument_status=0
+          timeout --kill-after=5s 90s "$adb" -s "$serial" shell am instrument -w -r \
+            -e class "$test_class#$test_case" com.littlebuddy.sim.test/com.littlebuddy.SimUiRunner |
+            tr -d '\r' | tee "$test_result" || instrument_status=$?
+          report "- Instrumentation elapsed: $((SECONDS - start))s, exit: $instrument_status"
+          python3 - "$test_result" "$test_class" "$test_case" "$instrument_status" <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import re
+          import sys
+          from pathlib import Path
+
+          path, test_class, test_case, exit_code = sys.argv[1:]
+          output = Path(path).read_text(errors="replace")
+          codes = re.findall(r"^INSTRUMENTATION_STATUS_CODE: (-?\d+)$", output, re.M)
+          passed = codes.count("0")
+          failed = codes.count("-1") + codes.count("-2")
+          skipped = codes.count("-3") + codes.count("-4")
+          print(f"- Instrumentation status: started {codes.count('1')}, passed {passed}, failed {failed}, skipped {skipped}")
+          valid = (
+              exit_code == "0"
+              and codes == ["1", "0"]
+              and re.findall(r"^INSTRUMENTATION_STATUS: class=(.+)$", output, re.M) == [test_class] * 2
+              and re.findall(r"^INSTRUMENTATION_STATUS: test=(.+)$", output, re.M) == [test_case] * 2
+              and re.findall(r"^INSTRUMENTATION_STATUS: numtests=(\d+)$", output, re.M) == ["1", "1"]
+              and re.findall(r"^INSTRUMENTATION_CODE: (-?\d+)$", output, re.M) == ["-1"]
+              and re.search(r"^OK \(1 test\)$", output, re.M)
+              and not re.search(r"^INSTRUMENTATION_(?:FAILED|ABORTED|RESULT: (?:shortMsg|longMsg)=)", output, re.M)
+          )
+          sys.exit(0 if valid else "No verified successful completion of the selected test")
+          PY
