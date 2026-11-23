@@ -156,8 +156,8 @@ class AnimalTest(unittest.TestCase):
         for utterances, feedback in (
             ((("猫", True),), "你猜对啦！"),
             ((("猫咪", False), ("是", True)), "你猜对啦！"),
-            ((("告诉我答案", True),), "我们看看它的样子，再玩下一题吧。"),
-            ((("鸡", True), ("鹅", True), ("是", True)), "我们看看它的样子，再玩下一题吧。"),
+            ((("告诉我答案", True),), "我们看看它的样子吧。"),
+            ((("鸡", True), ("鹅", True), ("是", True)), "我们看看它的样子吧。"),
         ):
             with self.subTest(utterances=utterances):
                 self.setUp()
@@ -172,6 +172,27 @@ class AnimalTest(unittest.TestCase):
                     Segment(feedback),
                 ))
                 self.assertEqual(self.receipt.next_action, "advance")
+
+    def test_third_answer_reveal_asks_whether_to_replay(self):
+        self.solve()
+        self.solve()
+        card = self.session.game.card
+
+        reply = self.speak("告诉我答案")
+        self.assertEqual(reply.segments, (
+            Segment(f"答案是{card.name}！", card.image_id, 3),
+            Segment("我们看看它的样子吧。"),
+        ))
+        self.assertEqual(self.playback.image, (3, card.image_id))
+        self.assertEqual(self.session.game.completed, 3)
+        self.assertEqual(self.receipt.next_action, "advance")
+
+        replay = self.session.advance(self.receipt.key)
+        self.assertEqual(replay.segments, (Segment("我们猜完三道题啦！还想再玩一次吗？"),))
+        self.receipt = play(self.session, self.playback)
+        self.assertEqual(self.session.game.phase, "replay")
+        self.speak("再玩一次")
+        self.assertEqual(self.session.game.completed, 0)
 
     def test_skip_resets_refusal_and_pending(self):
         self.speak("鸡")

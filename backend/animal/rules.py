@@ -126,7 +126,7 @@ class Game:
     def reveal(self, *, guessed_correctly):
         self.pending = None
         self.completed += 1
-        follow_up = "你猜对啦！" if guessed_correctly else "我们看看它的样子，再玩下一题吧。"
+        follow_up = "你猜对啦！" if guessed_correctly else "我们看看它的样子吧。"
         return (
             Segment(f"答案是{self.card.name}！", self.card.image_id, len(self.used)),
             Segment(follow_up),
