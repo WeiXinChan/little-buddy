@@ -22,7 +22,9 @@ failures=0
 game_started=0
 game_passed=0
 
-report() { printf '%s\n' "$*" | tee -a "$GITHUB_STEP_SUMMARY"; }
+report() {
+    printf '%s\n' "$*" | tee -a "$GITHUB_STEP_SUMMARY" "$scratch/report"
+}
 
 stop_fixture() {
     local result=0
@@ -210,6 +212,26 @@ else
 fi
 stop_fixture || failures=1
 
+rotation_class=com.littlebuddy.BuddyActivityTest
+rotation_case=unauthorizedHandshakeClearsOldGameAndAllowsManualStartWithRotatedToken
+rotation_log="$scratch/token-rotation.fixture"
+if (( transport_healthy )) && reset_app && start_fixture rotate "$rotation_log"; then
+    run_test "$rotation_class" "$rotation_case" token-rotation \
+        -e animalUrl "wss://127.0.0.1:$guest_port/v1/animal" || failures=1
+    original=$(grep -Fxc 'rotation_fixture_connection credential_epoch=1' "$rotation_log") || true
+    rotated=$(grep -Fxc 'rotation_fixture_connection credential_epoch=2' "$rotation_log") || true
+    report "- Token rotation transport: original=$original rotated=$rotated (expected 1 and 3)"
+    if [[ "$original" != 1 || "$rotated" != 3 ]]; then
+        failures=1
+    fi
+else
+    row="| token-rotation | $rotation_class#$rotation_case | 0/1 | 0 | 0 | 0 | 0 | 0s | NOT RUN (fixture setup failed) |"
+    report "$row"
+    echo "::error::$row"
+    failures=1
+fi
+stop_fixture || failures=1
+
 run_test com.littlebuddy.WakeUploadTest pendingAndLiveFramesSealInOrderAndCancellationDropsPendingFrames wake-upload || failures=1
 run_test com.littlebuddy.WakeUploadTest fullBudgetCoalescesShortReadsAndResumesOrCancelsUnderBackpressure wake-pressure || failures=1
 run_test com.littlebuddy.WakeUploadTest cancellationWhileAudioIsQueuedPreventsFurtherPackets wake-cancel || failures=1
@@ -273,6 +295,20 @@ stop_fixture || failures=1
 
 report ''
 report "- Game scenarios: $game_passed/8 verified, $game_started/8 instrumentation invocations"
+expected_device_cases=36
+read -r started passed failed skipped < <(
+    awk -F'|' '$4 ~ /^[[:space:]]*[0-9]+\/[0-9]+[[:space:]]*$/ {
+        split($4, count, "/")
+        started += count[1]
+        passed += $5
+        failed += $6
+        skipped += $7
+    } END { print started+0, passed+0, failed+0, skipped+0 }' "$scratch/report"
+)
+report "- Android device cases: started=$started/$expected_device_cases passed=$passed/$expected_device_cases failed=$failed skipped=$skipped"
+if (( started != expected_device_cases || passed != expected_device_cases || failed || skipped )); then
+    failures=1
+fi
 if [[ -s "$scratch/diagnostics" ]]; then
     tee -a "$GITHUB_STEP_SUMMARY" <"$scratch/diagnostics"
 fi

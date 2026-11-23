@@ -1,7 +1,7 @@
 """Loopback TLS fault fixture for AnimalPrivateActivityTest. No cloud calls."""
 import argparse
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 import math
 from pathlib import Path
 import ssl
@@ -11,7 +11,7 @@ from backend.animal.cloud import game_server
 from backend.demo import Demo
 
 
-CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect", "conversation", "wake", "wake-revoke")
+CASES = ("asr", "first-pcm", "between", "playing", "release", "late", "blackhole", "disconnect", "conversation", "wake", "wake-revoke", "rotate")
 
 
 class Fixture(Demo):
@@ -88,8 +88,15 @@ class Fixture(Demo):
 @asynccontextmanager
 async def fixture_server(port, tls, token, scenario, *, report=lambda _: None):
     fixture = Fixture(scenario, report)
-    async with game_server(0, tls, token, fixture, seed=0, report=report) as backend:
+    async with AsyncExitStack() as stack:
+        backend = await stack.enter_async_context(game_server(0, tls, token, fixture, seed=0, report=report))
         destination = backend.sockets[0].getsockname()[1]
+        rotated_destination = destination
+        if scenario == "rotate":
+            rotated = await stack.enter_async_context(game_server(
+                0, tls, "rotatedfixture" * 3, Fixture(scenario, report), seed=0, report=report,
+            ))
+            rotated_destination = rotated.sockets[0].getsockname()[1]
         first = True
 
         async def proxy(reader, writer):
@@ -97,8 +104,11 @@ async def fixture_server(port, tls, token, scenario, *, report=lambda _: None):
             if scenario in {"wake", "wake-revoke"}:
                 report("wake_fixture_connection")
             inject = first and scenario in {"blackhole", "disconnect"}
+            target = destination if first else rotated_destination
+            if scenario == "rotate":
+                report(f"rotation_fixture_connection credential_epoch={1 if first else 2}")
             first = False
-            upstream, transport = await asyncio.open_connection("127.0.0.1", destination)
+            upstream, transport = await asyncio.open_connection("127.0.0.1", target)
 
             async def relay(source, target, *, keep_blackhole=False):
                 while data := await source.read(8192):

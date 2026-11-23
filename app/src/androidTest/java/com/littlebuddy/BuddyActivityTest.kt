@@ -146,6 +146,95 @@ class BuddyActivityTest {
         await { face().mood == BuddyMood.IDLE && !button("停止").isEnabled }
     }
 
+    @Test fun unauthorizedHandshakeClearsOldGameAndAllowsManualStartWithRotatedToken() {
+        val url = checkNotNull(InstrumentationRegistry.getArguments().getString("animalUrl"))
+        val oldToken = "offlinefixture".repeat(3)
+        val newToken = "rotatedfixture".repeat(3)
+        val secure = android.view.WindowManager.LayoutParams.FLAG_SECURE
+
+        fun setupVisible() = views().filterIsInstance<EditText>()
+            .any { it.hint.toString() == "设备令牌" }
+        fun assertRecoveryForm() {
+            assertEquals(url, field("WSS 服务地址").text.toString())
+            assertEquals("", field("设备令牌").text.toString())
+            assertTrue(activity.window.attributes.flags and secure != 0)
+            assertFalse(views().any { it is BuddyFace })
+        }
+        fun save(token: String) {
+            field("设备令牌").setText(token)
+            button("保存并进入").performClick()
+        }
+
+        launch()
+        onMain {
+            activity.probe = gates
+            field("WSS 服务地址").setText(url)
+            save(oldToken)
+            button("开始猜动物").performClick()
+        }
+        await { button("结束录音").isEnabled }
+        onMain { activity.injectSyntheticCapture() }
+        await { progress().text == "完成 1 / 3" && button("结束录音").isEnabled }
+
+        val segment = AnimalEvent.PCM_SEGMENT
+        val bufferedEvent = AnimalEvent.PCM_BUFFERED
+        var bufferedBefore = 0
+        onMain {
+            bufferedBefore = gates.count(bufferedEvent)
+            gates.held = setOf(segment)
+            activity.injectSyntheticCapture()
+        }
+        await { gates.ready(segment) && gates.count(bufferedEvent) > bufferedBefore }
+
+        lateinit var staleSegment: () -> Unit
+        var oldHeads = 0
+        onMain {
+            staleSegment = gates.take(segment)
+            oldHeads = gates.count(PCM_HEAD_ADVANCED)
+            assertTrue(oldHeads > 0)
+            // Restart an active game. Only the new TLS upgrade can receive HTTP 401.
+            button("开始猜动物").performClick()
+        }
+        await { setupVisible() }
+        onMain {
+            assertRecoveryForm()
+            assertEquals(2, gates.count(AnimalEvent.OPEN_SOCKET))
+            save(oldToken)
+            assertEquals(2, gates.count(AnimalEvent.OPEN_SOCKET))
+            button("开始猜动物").performClick()
+        }
+        await { setupVisible() }
+        onMain {
+            assertRecoveryForm()
+            assertEquals(3, gates.count(AnimalEvent.OPEN_SOCKET))
+            save(newToken)
+            assertEquals(0, activity.window.attributes.flags and secure)
+            assertEquals("完成 0 / 3", progress().text)
+            assertEquals(BuddyMood.IDLE, face().mood)
+            assertTrue(views().filterIsInstance<TextView>().any { it.text == "准备好了" })
+            assertFalse(button("结束录音").isEnabled)
+            assertFalse(button("停止").isEnabled)
+            assertEquals(3, gates.count(AnimalEvent.OPEN_SOCKET))
+            staleSegment()
+        }
+        SystemClock.sleep(400)
+        onMain {
+            assertEquals(oldHeads, gates.count(PCM_HEAD_ADVANCED))
+            assertEquals(3, gates.count(AnimalEvent.OPEN_SOCKET))
+            assertEquals("完成 0 / 3", progress().text)
+            assertEquals(BuddyMood.IDLE, face().mood)
+            assertTrue(button("开始猜动物").isEnabled)
+            gates.held = emptySet()
+            button("开始猜动物").performClick()
+        }
+        await { button("结束录音").isEnabled && gates.count(PCM_HEAD_ADVANCED) > oldHeads }
+        onMain {
+            assertEquals(4, gates.count(AnimalEvent.OPEN_SOCKET))
+            assertEquals("完成 0 / 3", progress().text)
+            button("停止").performClick()
+        }
+    }
+
     @Test fun nativeWakeFlowsThroughProductAudioAndTlsAsr() {
         val url = checkNotNull(InstrumentationRegistry.getArguments().getString("animalUrl"))
         val events = mutableListOf<AnimalEvent>()

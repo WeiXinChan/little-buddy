@@ -5,6 +5,30 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.2.21"
 }
 
+val releaseVersionCode = providers.gradleProperty("buddyVersionCode").map {
+    require((it.toIntOrNull() ?: 0) in 14..2_100_000_000) { "buddyVersionCode must be between 14 and 2100000000" }
+    it.toInt()
+}
+val releaseVersionName = providers.gradleProperty("buddyVersionName").map {
+    require(it.matches(Regex("[0-9]+[.][0-9]+[.][0-9]+(?:-[a-zA-Z0-9.]+)?"))) {
+        "buddyVersionName must be a semantic version"
+    }
+    it
+}
+require(releaseVersionCode.isPresent == releaseVersionName.isPresent) {
+    "Provide buddyVersionCode and buddyVersionName together"
+}
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.outputs.forEach { output ->
+            if (releaseVersionCode.isPresent) {
+                output.versionCode.set(releaseVersionCode)
+                output.versionName.set(releaseVersionName)
+            }
+        }
+    }
+}
+
 val wakeProbe = providers.gradleProperty("wakeProbe").map(String::toBoolean).orElse(false)
 val familyPrompt = providers.environmentVariable("LITTLE_BUDDY_FAMILY_PROMPT")
 val familyAssets = layout.buildDirectory.dir("generated/family-wake-assets")

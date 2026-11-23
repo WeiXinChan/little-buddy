@@ -48,6 +48,7 @@ open class AnimalActivity : Activity() {
     private val product get() = this is BuddyActivity
     private var face: BuddyFace? = null
     private var connection: BuddyConnection? = null
+    private lateinit var openSetup: (BuddyConnection?) -> Unit
     private var restartPending = false
     private var wakeCapture = false
     private var wakeCaptureId: Long? = null
@@ -178,18 +179,18 @@ open class AnimalActivity : Activity() {
         stop = screen.stop
         sendAnswer = screen.finish
         connection = configuration.load()
-        if (connection == null) {
+        openSetup = { previous ->
+            connection = null
             val secure = android.view.WindowManager.LayoutParams.FLAG_SECURE
             window.addFlags(secure)
-            setContentView(configuration.form { config ->
+            setContentView(configuration.form(previous?.url) { config ->
                 connection = config
                 setContentView(screen.root)
                 window.clearFlags(secure)
-                prepareWake()
+                resetToWake()
             })
-        } else {
-            setContentView(screen.root)
         }
+        if (connection == null) openSetup(null) else setContentView(screen.root)
     }
 
     private fun startProduct() {
@@ -627,6 +628,7 @@ open class AnimalActivity : Activity() {
                     dispatch(webSocket) {
                         wakeOperation?.let { traceCloud("wake_connection_failed", it) }
                         reset(if (product) "连不上了，请再试一次" else "连接失败，请检查服务和 USB 转发")
+                        if (product && response?.code == 401) openSetup(connection)
                     }
             })
         render("正在连接游戏服务", BuddyMood.WAITING)

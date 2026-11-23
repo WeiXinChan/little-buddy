@@ -1,5 +1,6 @@
 """Private game transport. Run on a separate loopback TLS listener."""
 import argparse
+from collections import deque
 import asyncio
 from dataclasses import asdict
 import hmac
@@ -10,7 +11,9 @@ import os
 from pathlib import Path
 import re
 import secrets
+import signal
 import ssl
+import time
 
 from websockets.asyncio.server import serve
 
@@ -245,22 +248,33 @@ async def play_game(socket, providers, *, seed=None, report=print, trial_limits=
         await socket.close(1008 if reason == "protocol_error" else 1011, reason)
 
 
-def game_server(port, tls, token, providers, *, seed=None, report=print, trial_limits=False):
+def game_server(port, tls, token, providers, *, seed=None, report=print, trial_limits=False,
+                bind="127.0.0.1", authority=None, expires_at=None):
     if tls is None or not 32 <= len(token) <= 256 or not token.isascii() or not token.isalnum():
         raise ValueError("TLS and a 32–256 ASCII alphanumeric device token are required")
     expected = ("Bearer " + token).encode("ascii")
     active = False
+    attempts = deque()
     logger = logging.Logger("little_buddy.animal")
     logger.addHandler(logging.NullHandler())
 
     async def handshake(socket, request):
-        if request.path == "/healthz":
+        if request.path == "/healthz" and socket.remote_address[0] in {"127.0.0.1", "::1"}:
             return socket.respond(HTTPStatus.OK, "ok\n")
-        if request.path != "/v1/animal":
+        if (request.path != "/v1/animal" or
+                (authority is not None and request.headers.get_all("Host") != [authority])):
             return socket.respond(HTTPStatus.NOT_FOUND, "not found\n")
         values = request.headers.get_all("Authorization")
-        if len(values) != 1 or not hmac.compare_digest(values[0].encode(), expected):
+        if (len(values) != 1 or not hmac.compare_digest(values[0].encode(), expected)
+                or (expires_at is not None and time.time() >= expires_at)):
             return socket.respond(HTTPStatus.UNAUTHORIZED, "unauthorized\n")
+        if expires_at is not None:
+            now = time.monotonic()
+            while attempts and attempts[0] <= now - 60:
+                attempts.popleft()
+            if len(attempts) >= 6:
+                return socket.respond(HTTPStatus.TOO_MANY_REQUESTS, "slow down\n")
+            attempts.append(now)
         if active:
             return socket.respond(HTTPStatus.SERVICE_UNAVAILABLE, "busy\n")
 
@@ -274,7 +288,10 @@ def game_server(port, tls, token, providers, *, seed=None, report=print, trial_l
                                                trial_limits=trial_limits)),
                  asyncio.create_task(socket.wait_closed()))
         try:
-            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            remaining = None if expires_at is None else max(0, expires_at - time.time())
+            done, _ = await asyncio.wait(tasks, timeout=remaining, return_when=asyncio.FIRST_COMPLETED)
+            if not done:
+                await socket.close(1008, "device credential expired")
         finally:
             for task in tasks:
                 if not task.done():
@@ -282,9 +299,9 @@ def game_server(port, tls, token, providers, *, seed=None, report=print, trial_l
             await asyncio.gather(*tasks, return_exceptions=True)
             active = False
 
-    return serve(handler, "127.0.0.1", port, ssl=tls, process_request=handshake,
+    return serve(handler, bind, port, ssl=tls, process_request=handshake,
                  origins=[None], compression=None, max_size=6406, max_queue=4,
-                 open_timeout=4, close_timeout=1, ping_interval=5, ping_timeout=5,
+                 ssl_handshake_timeout=4, open_timeout=4, close_timeout=1, ping_interval=5, ping_timeout=5,
                  server_header=None, logger=logger)
 
 
@@ -295,6 +312,7 @@ async def main():
     parser.add_argument("--key", required=True)
     parser.add_argument("--provider", choices=("dashscope", "fake"), default="dashscope")
     parser.add_argument("--trial-limits", action="store_true", help="enable per-session trial quotas")
+    parser.add_argument("--standalone", action="store_true")
     args = parser.parse_args()
     if args.port == 8443:
         parser.error("8443 is reserved for the single-turn service")
@@ -304,16 +322,35 @@ async def main():
     credential_dir = os.environ.get("CREDENTIALS_DIRECTORY")
     token_file = Path(credential_dir) / "animal-device-token" if credential_dir else None
     token = token_file.read_text(encoding="ascii").strip() if token_file else os.environ.get("ANIMAL_DEVICE_TOKEN", "")
+    options = {}
+    if args.standalone:
+        # Only the standalone unit requires these credentials. Legacy private fixtures
+        # continue to use their original invocation and listener.
+        if not credential_dir or args.port in {80, 8444, 9444}:
+            parser.error("standalone requires dedicated credentials and a dedicated port")
+        expiry_file = Path(credential_dir) / "animal-device-expiry"
+        expiry = expiry_file.read_text(encoding="ascii").strip()
+        authority = os.environ.get("LITTLE_BUDDY_AUTHORITY", "")
+        if (not re.fullmatch(r"[a-z0-9.-]+(?::[1-9][0-9]{0,4})?", authority)
+                or (":" in authority and not 1 <= int(authority.rsplit(":", 1)[1]) <= 65535)
+                or authority.endswith(":443")
+                or not re.fullmatch(r"[0-9]{1,12}", expiry) or int(expiry) <= time.time()
+                or not re.fullmatch(r"[0-9a-f]{64}", token)):
+            parser.error("invalid standalone authority, device expiry or device credential")
+        options = dict(authority=authority, expires_at=int(expiry),
+                       bind=os.environ.get("LITTLE_BUDDY_BIND", "127.0.0.1"))
+    stopped = asyncio.Event()
+    asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, stopped.set)
     async with http_client() as http:
         if args.provider == "fake":
             from backend.demo import Demo
             providers = Demo()
         else:
             providers = DashScope.from_environment(http)
-        async with game_server(args.port, tls, token, providers, trial_limits=args.trial_limits,
-                               report=lambda line: print(line, flush=True)):
+        async with game_server(args.port, tls, token, providers, trial_limits=args.trial_limits or args.standalone,
+                               report=lambda line: print(line, flush=True), **options):
             print(f"animal_ready port={args.port}", flush=True)
-            await asyncio.Future()
+            await stopped.wait()
 
 
 if __name__ == "__main__":

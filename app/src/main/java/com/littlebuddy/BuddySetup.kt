@@ -75,7 +75,7 @@ internal class BuddySetup(private val context: Context) {
         check(load() != null)
     }
 
-    fun form(complete: (BuddyConnection) -> Unit): View {
+    fun form(previousAddress: HttpUrl?, complete: (BuddyConnection) -> Unit): View {
         val body = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -95,8 +95,10 @@ internal class BuddySetup(private val context: Context) {
             textSize = 26f
         })
         val address = field("WSS 服务地址", InputType.TYPE_TEXT_VARIATION_URI)
+        previousAddress?.let { address.setText(it.toString().replaceFirst("https:", "wss:")) }
         val token = field("设备令牌", InputType.TYPE_TEXT_VARIATION_PASSWORD)
         val feedback = TextView(context).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        if (previousAddress != null) feedback.text = "设备令牌已失效，请输入新令牌"
         body.addView(feedback)
         body.addView(Button(context).apply {
             text = "保存并进入"
