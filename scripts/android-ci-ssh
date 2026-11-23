@@ -41,6 +41,8 @@ openssl req -x509 -newkey rsa:2048 -noenc -days 1 -subj /CN=Untrusted -addext 'b
 app_file() {
     timeout 10s "${adb[@]}" shell -T run-as com.littlebuddy.sim tee "files/$1" > /dev/null
 }
+timeout 10s "${adb[@]}" shell pm clear com.littlebuddy.sim | grep -qx Success
+timeout 10s "${adb[@]}" shell pm grant com.littlebuddy.sim android.permission.RECORD_AUDIO
 timeout 10s "${adb[@]}" shell run-as com.littlebuddy.sim mkdir -p files
 app_file ssh-ca.pem < "$tls/cert.pem"
 app_file ssh-wrong-ca.pem < "$fixture/wrong.pem"
