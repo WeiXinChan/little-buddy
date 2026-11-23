@@ -309,6 +309,33 @@ jobs:
           report "- APK install elapsed: $((SECONDS - start))s"
           test "$install_status" = 0
 
+          # Boot Android with both APKs already installed so AudioFlinger receives
+          # the package UID in its initial map before the first instrumentation.
+          guest_boot_id() {
+            timeout 5s "$adb" -s "$serial" shell cat /proc/sys/kernel/random/boot_id | tr -d '\r'
+          }
+          previous_boot="$(guest_boot_id)"
+          test -n "$previous_boot"
+          timeout 10s "$adb" -s "$serial" reboot
+          start=$SECONDS
+          audio_booted=
+          while (( SECONDS - start < 180 )) && kill -0 "$emulator_pid" 2>/dev/null; do
+            current_boot="$(guest_boot_id 2>/dev/null || true)"
+            if [[ -n "$current_boot" && "$current_boot" != "$previous_boot" ]] &&
+               [[ "$(timeout 5s "$adb" -s "$serial" shell getprop sys.boot_completed | tr -d '\r')" == 1 ]] &&
+               [[ "$(timeout 5s "$adb" -s "$serial" shell service check media.audio_flinger | tr -d '\r')" == 'Service media.audio_flinger: found' ]]; then
+              audio_booted=1
+              break
+            fi
+            sleep 2
+          done
+          report "- Post-install boot and AudioFlinger readiness: ${audio_booted:-failed} ($((SECONDS - start))s)"
+          test "$audio_booted" = 1
+          timeout 2s pactl get-default-sink | grep -Fx smoke_playback
+          timeout 5s "$adb" -s "$serial" shell pm list packages -U com.littlebuddy.sim
+          free -m
+          nproc
+
           scripts/android-ci-instrument "$serial" "$ANDROID_AVD_HOME" &
           instrument_pid=$!
           instrument_status=0
