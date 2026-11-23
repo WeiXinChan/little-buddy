@@ -1,0 +1,101 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+here=$(cd -- "$(dirname -- "$0")" && pwd)
+if [[ ${1:-} != inside ]]; then
+    [[ $# == 1 && $1 =~ ^(normal|timeout)$ && $EUID == 0 ]]
+    scratch=$(mktemp -d /run/tita-rehearsal.XXXXXXXX)
+    unit=tita-rehearsal-${scratch##*.}
+    snapshot() {
+        find /etc/ssh/sshd_config /etc/ssh/sshd_config.d -type f -exec sha256sum {} + | sort
+        ss -Hlnte '( sport = :22 or sport = :2222 or sport = :443 )'
+    }
+    before=$(snapshot)
+    cleanup() {
+        systemctl stop "$unit.service" 2>/dev/null || true
+        find "$scratch" -depth -delete
+    }
+    trap cleanup EXIT
+    # Delegate a disposable cgroup and keep the host's real units and sockets out of the guest.
+    systemd-run --quiet --wait --pipe --collect --unit="$unit" -p Delegate=yes \
+      -p RuntimeMaxSec=220s -p TimeoutStopSec=2s \
+      unshare --mount --net --pid --cgroup --fork --mount-proc --kill-child \
+      --propagation private "$here/rehearse" inside "$scratch" "$1" &
+    runner=$!
+    while [[ ! -s $scratch/result ]] && kill -0 "$runner" 2>/dev/null; do sleep .2; done
+    systemctl stop "$unit.service" 2>/dev/null || true
+    wait "$runner" || true
+    cat "$scratch/log"
+    [[ $(cat "$scratch/result") == 0 ]]
+    [[ $before == "$(snapshot)" ]]
+    echo 'host comparison: SSH config and production listener sockets unchanged'
+    exit
+fi
+
+[[ $$ == 1 ]]
+scratch=$2
+mode=$3
+exec 9<"$scratch"
+mount -t tmpfs tmpfs /run -o mode=755
+mkdir /run/rehearsal-output
+mount --bind /proc/self/fd/9 /run/rehearsal-output
+exec 9<&-
+exec >> /run/rehearsal-output/log 2>&1
+trap 'echo 1 > /run/rehearsal-output/result' ERR
+umount /sys/fs/cgroup
+mount -t cgroup2 cgroup2 /sys/fs/cgroup
+mount -t tmpfs tmpfs /etc/ssh -o mode=755
+mount -t tmpfs tmpfs /usr/local -o mode=755
+mount -t tmpfs tmpfs /var/log -o mode=755
+mount -t tmpfs tmpfs /tmp -o mode=1777
+ip link set lo up
+mkdir -p /run/synthetic /run/systemd/system /usr/local/libexec /etc/ssh/sshd_config.d
+cat >/run/synthetic/passwd <<'DATA'
+root:x:0:0::/root:/bin/sh
+sshd:x:61199:61199::/run/sshd:/usr/sbin/nologin
+labadmin:x:61200:61200::/nonexistent:/bin/sh
+labdevice:x:61201:61201::/nonexistent:/usr/sbin/nologin
+DATA
+for item in root:0 sshd:61199 labadmin:61200 labdevice:61201; do
+    echo "${item%:*}:x:${item#*:}:" >>/run/synthetic/group
+    echo "${item%:*}:x:20000:0:99999:7:::" >>/run/synthetic/shadow
+done
+printf 'passwd: files\ngroup: files\nshadow: files\nhosts: files dns\n' >/run/synthetic/nsswitch.conf
+for item in passwd group shadow nsswitch.conf; do
+    mount --bind "/run/synthetic/$item" "/etc/$item"
+done
+cat >/etc/ssh/sshd_config <<'DATA'
+Include /etc/ssh/sshd_config.d/*.conf
+HostKey /etc/ssh/ssh_host_ed25519_key
+UsePAM no
+UseDNS no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+LoginGraceTime 120
+AuthorizedKeysFile /run/synthetic-admin.pub
+LogLevel VERBOSE
+DATA
+echo 'PermitRootLogin no' >/etc/ssh/sshd_config.d/fixture.conf
+ssh-keygen -q -t ed25519 -N '' -f /etc/ssh/ssh_host_ed25519_key
+install -m 755 "$here/window.py" /usr/local/libexec/tita-ssh-window.py
+install -m 644 "$here"/tita-ssh-window.{service,timer} /run/systemd/system/
+install -m 700 "$here/rehearse.py" /usr/local/libexec/rehearse.py
+cat >/run/systemd/system/rehearsal.target <<'DATA'
+[Unit]
+Requires=ssh.socket ssh.service rehearsal.service
+After=ssh.socket ssh.service
+DATA
+cat >/run/systemd/system/rehearsal.service <<DATA
+[Unit]
+After=ssh.socket ssh.service systemd-journald.service
+Requires=ssh.socket ssh.service systemd-journald.service
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 /usr/local/libexec/rehearse.py $mode
+StandardOutput=append:/run/rehearsal-output/log
+StandardError=inherit
+ExecStopPost=/bin/sh -c 'test -s /run/rehearsal-output/result || echo 1 > /run/rehearsal-output/result'
+DATA
+export container=tita-rehearsal SYSTEMD_LOG_TARGET=console
+exec /usr/lib/systemd/systemd --system --unit=rehearsal.target

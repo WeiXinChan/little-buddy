@@ -1,0 +1,9 @@
+[Unit]
+Description=Revoke dedicated device SSH access and restore ssh.service
+After=ssh.service ssh.socket
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 -I /usr/local/libexec/tita-ssh-window.py rollback
+RuntimeMaxSec=155s
+TimeoutStopSec=1s

@@ -1,0 +1,8 @@
+[Unit]
+Description=Expire the dedicated SSH device window
+
+[Timer]
+OnActiveSec=60s
+AccuracySec=1s
+Unit=tita-ssh-window.service
+RemainAfterElapse=yes
