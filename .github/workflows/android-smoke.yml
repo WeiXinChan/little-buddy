@@ -128,6 +128,7 @@ jobs:
 
       - name: Backend and JVM checks and debug APKs
         run: |
+          python3 -B scripts/android-ci-result-test.py
           python3 -m venv "$RUNNER_TEMP/smoke-venv"
           "$RUNNER_TEMP/smoke-venv/bin/pip" install --no-cache-dir -r backend/requirements.txt
           PYTHONPATH=.:backend "$RUNNER_TEMP/smoke-venv/bin/python" -B -m unittest discover -s backend/tests

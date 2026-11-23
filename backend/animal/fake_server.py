@@ -1,4 +1,5 @@
 """USB-only simulated game transport. One rule Session per connection."""
+import argparse
 import asyncio
 from dataclasses import asdict
 import json
@@ -87,11 +88,14 @@ async def game(socket):
             session.cancel("disconnect")
 
 
-async def main():
-    async with serve(game, "127.0.0.1", 8765, max_size=4096, max_queue=4):
-        print(f"瓦力假服务 ws://127.0.0.1:8765 · {CATALOG_VERSION}", flush=True)
+async def main(port=8765):
+    async with serve(game, "127.0.0.1", port, max_size=4096, max_queue=4) as server:
+        bound_port = server.sockets[0].getsockname()[1]
+        print(f"瓦力假服务 ws://127.0.0.1:{bound_port} · {CATALOG_VERSION}", flush=True)
         await asyncio.Future()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=8765)
+    asyncio.run(main(parser.parse_args().port))
