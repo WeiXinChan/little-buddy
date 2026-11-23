@@ -19,7 +19,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocket
@@ -42,7 +41,11 @@ internal interface AnimalProbe {
     val syntheticCapture: Boolean get() = false
 }
 
-class AnimalActivity : Activity() {
+open class AnimalActivity : Activity() {
+    private val product get() = this is BuddyActivity
+    private var face: BuddyFace? = null
+    private var connection: BuddyConnection? = null
+    private var restartPending = false
     internal var probe: AnimalProbe? = null
 
     private fun deliver(event: AnimalEvent, action: () -> Unit) {
@@ -65,14 +68,14 @@ class AnimalActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private val client = OkHttpClient.Builder().pingInterval(java.time.Duration.ofSeconds(3))
         .retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false).build()
-    private val cloudMode by lazy { intent.getBooleanExtra("privateGame", false) }
+    private val cloudMode by lazy { product || intent.getBooleanExtra("privateGame", false) }
     @Volatile private var upload: AnimalUpload? = null
     private var speech = false
     private var captureSealed = false
     private var captureReleased = false
     private var cloudReady = false
-    private lateinit var endpointField: EditText
-    private lateinit var tokenField: EditText
+    private var endpointField: EditText? = null
+    private var tokenField: EditText? = null
     private lateinit var audio: AndroidAudio
     private val manager by lazy { getSystemService(AudioManager::class.java) }
     private val focus by lazy {
@@ -100,91 +103,20 @@ class AnimalActivity : Activity() {
     private lateinit var caption: TextView
     private lateinit var count: TextView
     private lateinit var picture: ImageView
-    private lateinit var buddy: Button
+    private var buddy: Button? = null
     private lateinit var start: Button
     private lateinit var stop: Button
-    private lateinit var input: EditText
+    private var input: EditText? = null
     private lateinit var sendAnswer: Button
-    private lateinit var silence: Button
-    private lateinit var fault: Button
-    private lateinit var permutations: CheckBox
-    private lateinit var suppressRevealReceipt: CheckBox
+    private var silence: Button? = null
+    private var fault: Button? = null
+    private var permutations: CheckBox? = null
+    private var suppressRevealReceipt: CheckBox? = null
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        launchPending = state == null && intent.getBooleanExtra("startGame", false)
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(32, 24, 32, 24)
-        }
-        fun label(value: String) = TextView(this).apply {
-            text = value
-            textSize = 20f
-            layout.addView(this)
-        }
-        fun button(value: String, action: () -> Unit) = Button(this).apply {
-            text = value
-            setOnClickListener { action() }
-            layout.addView(this)
-        }
-        label(if (cloudMode) "瓦力 · 私有猜动物" else "瓦力 · 猜动物模拟")
-        if (!cloudMode) label("假转写由按钮提交。麦克风仅在本机检测声音。回复用字幕和提示音，无 ASR、LLM 或语音合成。")
-        if (cloudMode) {
-            fun field(hintText: String, type: Int) = EditText(this).apply {
-                hint = hintText
-                inputType = InputType.TYPE_CLASS_TEXT or type or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-                isSingleLine = true
-                isSaveEnabled = false
-                importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-                layout.addView(this, LinearLayout.LayoutParams(-1, -2))
-            }
-            label("有效语音会送往私有服务。看到「正在听」后再说话。")
-            endpointField = field("私有 WSS 地址", InputType.TYPE_TEXT_VARIATION_URI)
-            endpointField.setText("wss://127.0.0.1:8444/v1/animal")
-            tokenField = field("游戏设备令牌", InputType.TYPE_TEXT_VARIATION_PASSWORD)
-        }
-        buddy = button("摸摸瓦力") {
-            buddy.text = "瓦力眯眼笑"
-            val epoch = generation
-            handler.postDelayed({ if (epoch == generation) buddy.text = "摸摸瓦力" }, 500)
-        }
-        status = label("点按开始猜动物").apply {
-            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-        }
-        count = label("完成 0 / 3")
-        caption = label("")
-        picture = ImageView(this).apply {
-            contentDescription = "揭晓示意图"
-            visibility = View.GONE
-            layout.addView(this, LinearLayout.LayoutParams(180, 180))
-        }
-        start = button("开始猜动物", ::requestStart)
-        stop = button("停止") { reset() }
-        input = EditText(this).apply {
-            hint = "模拟回答，例如「告诉我答案」"
-            isSingleLine = true
-            isSaveEnabled = false
-            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-            layout.addView(this, LinearLayout.LayoutParams(-1, -2))
-        }
-        sendAnswer = button(if (cloudMode) "结束说话" else "结束录音并提交模拟回答") {
-            if (cloudMode) sealCloud() else seal(input.text.toString())
-        }
-        silence = button("注入静默") { seal(null) }
-        fault = button("注入断线") { reset("模拟服务断开，请重新开始") }
-        permutations = CheckBox(this).apply {
-            text = "末 ACK 先到并重复回执"
-            layout.addView(this)
-        }
-        suppressRevealReceipt = CheckBox(this).apply {
-            text = "故障注入：扣留揭晓段确认"
-            layout.addView(this)
-        }
-        if (cloudMode) {
-            listOf(input, silence, fault, permutations, suppressRevealReceipt).forEach { it.visibility = View.GONE }
-        }
-        setContentView(ScrollView(this).apply { addView(layout) })
+        launchPending = !product && state == null && intent.getBooleanExtra("startGame", false)
+        if (product) createProduct() else createDebug()
         audio = AndroidAudio(handler, frame = { id, detected, endpoint ->
             deliver(AnimalEvent.CAPTURE_FRAME) {
                 val synthetic = upload?.synthetic == true
@@ -215,15 +147,126 @@ class AnimalActivity : Activity() {
         render()
     }
 
+    private fun createProduct() {
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val configuration = BuddySetup(this)
+        val screen = BuddyScreen(this, ::startProduct, { reset() }, ::sealCloud)
+        face = screen.face
+        status = screen.status
+        count = screen.count
+        caption = screen.caption
+        picture = screen.picture
+        start = screen.start
+        stop = screen.stop
+        sendAnswer = screen.finish
+        connection = configuration.load()
+        if (connection == null) {
+            val secure = android.view.WindowManager.LayoutParams.FLAG_SECURE
+            window.addFlags(secure)
+            setContentView(configuration.form { config ->
+                connection = config
+                setContentView(screen.root)
+                window.clearFlags(secure)
+            })
+        } else {
+            setContentView(screen.root)
+        }
+    }
+
+    private fun startProduct() {
+        if (!resumed) return
+        if (socket != null) reset()
+        if (slot != null) {
+            restartPending = true
+            render("稍等一下", BuddyMood.WAITING)
+        } else {
+            requestStart()
+        }
+    }
+
+    private fun createDebug() {
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(32, 24, 32, 24)
+        }
+        fun label(value: String) = TextView(this).apply {
+            text = value
+            textSize = 20f
+            layout.addView(this)
+        }
+        fun button(value: String, action: () -> Unit) = Button(this).apply {
+            text = value
+            setOnClickListener { action() }
+            layout.addView(this)
+        }
+        label(if (cloudMode) "瓦力 · 私有猜动物" else "瓦力 · 猜动物模拟")
+        if (!cloudMode) label("假转写由按钮提交。麦克风仅在本机检测声音。回复用字幕和提示音，无 ASR、LLM 或语音合成。")
+        if (cloudMode) {
+            fun field(hintText: String, type: Int) = EditText(this).apply {
+                hint = hintText
+                inputType = InputType.TYPE_CLASS_TEXT or type or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                isSingleLine = true
+                isSaveEnabled = false
+                importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                layout.addView(this, LinearLayout.LayoutParams(-1, -2))
+            }
+            label("有效语音会送往私有服务。看到「正在听」后再说话。")
+            endpointField = field("私有 WSS 地址", InputType.TYPE_TEXT_VARIATION_URI)
+            endpointField?.setText("wss://127.0.0.1:8444/v1/animal")
+            tokenField = field("游戏设备令牌", InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        }
+        buddy = button("摸摸瓦力") {
+            buddy?.text = "瓦力眯眼笑"
+            val epoch = generation
+            handler.postDelayed({ if (epoch == generation) buddy?.text = "摸摸瓦力" }, 500)
+        }
+        status = label("点按开始猜动物").apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        count = label("完成 0 / 3")
+        caption = label("")
+        picture = ImageView(this).apply {
+            contentDescription = "揭晓示意图"
+            visibility = View.GONE
+            layout.addView(this, LinearLayout.LayoutParams(180, 180))
+        }
+        start = button("开始猜动物", ::requestStart)
+        stop = button("停止") { reset() }
+        input = EditText(this).apply {
+            hint = "模拟回答，例如「告诉我答案」"
+            isSingleLine = true
+            isSaveEnabled = false
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            layout.addView(this, LinearLayout.LayoutParams(-1, -2))
+        }
+        sendAnswer = button(if (cloudMode) "结束说话" else "结束录音并提交模拟回答") {
+            if (cloudMode) sealCloud() else seal(input?.text.toString())
+        }
+        silence = button("注入静默") { seal(null) }
+        fault = button("注入断线") { reset("模拟服务断开，请重新开始") }
+        permutations = CheckBox(this).apply {
+            text = "末 ACK 先到并重复回执"
+            layout.addView(this)
+        }
+        suppressRevealReceipt = CheckBox(this).apply {
+            text = "故障注入：扣留揭晓段确认"
+            layout.addView(this)
+        }
+        if (cloudMode) {
+            listOfNotNull(input, silence, fault, permutations, suppressRevealReceipt).forEach { it.visibility = View.GONE }
+        }
+        setContentView(ScrollView(this).apply { addView(layout) })
+    }
+
     private fun captureFrame(id: Long, detected: Boolean, endpoint: Boolean) {
-        if (id != slot || slotGeneration != generation || !capturing || answer != null) return
+        if (id != slot || slotGeneration != generation || !capturing || answer != null || (cloudMode && captureSealed)) return
         if (!frames) {
             frames = true
-            render(if (cloudMode) "正在听" else "正在听 · 等待模拟输入")
+            render(if (cloudMode) "正在听" else "正在听 · 等待模拟输入", BuddyMood.LISTENING)
             timeout(12_000) { if (cloudMode) sealCloud() else seal(null) }
         }
         if (cloudMode) {
-            if (captureSealed) return
             if (detected && !speech) {
                 val current = checkNotNull(reply)
                 speech = true
@@ -235,7 +278,7 @@ class AnimalActivity : Activity() {
                 timeout(18_000) { sealCloud() }
             }
             if (endpoint) sealCloud()
-        } else if (endpoint && input.text.isNotBlank()) seal(input.text.toString())
+        } else if (endpoint && !input?.text.isNullOrBlank()) seal(input?.text.toString())
     }
 
     // Instrumentation can send a fixed in-memory PCM frame to the fake provider.
@@ -255,6 +298,7 @@ class AnimalActivity : Activity() {
     private fun played(id: Long) {
         val current = reply ?: return
         if (id != slot || slotGeneration != generation || capturing) return
+        if (product) render("稍等一下", BuddyMood.WAITING)
         val number = ++current.played
         if (cloudMode) {
             traceCloud("segment_drained", id, number)
@@ -316,7 +360,7 @@ class AnimalActivity : Activity() {
             if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
                 if (resumed) requestStart() else startAfterPermission = true
             } else {
-                render("请允许麦克风权限")
+                render("请允许麦克风权限", BuddyMood.ERROR)
             }
         }
     }
@@ -324,23 +368,20 @@ class AnimalActivity : Activity() {
     private fun connect() {
         val request = Request.Builder()
         if (cloudMode) {
-            val address = endpointField.text.toString().trim()
-            val url = address.removePrefix("wss://").let { "https://$it".toHttpUrlOrNull() }
-            val token = tokenField.text.toString()
-            if (!address.startsWith("wss://") || url == null || url.host !in setOf("127.0.0.1", "localhost") ||
-                url.encodedPath != "/v1/animal" || url.port == 8443 || url.username.isNotEmpty() ||
-                url.password.isNotEmpty() || url.query != null || url.fragment != null ||
-                !token.matches(Regex("[a-zA-Z0-9]{32,256}"))) {
-                render("请检查私有 WSS 地址和游戏设备令牌")
+            val config = if (product) connection else BuddyConnection.parse(
+                endpointField?.text.toString().trim(), tokenField?.text.toString(),
+            )?.takeIf { it.url.host in setOf("127.0.0.1", "localhost") && it.url.port != 8443 }
+            if (config == null) {
+                render(if (product) "设备尚未配置" else "请检查私有 WSS 地址和游戏设备令牌", BuddyMood.ERROR)
                 return
             }
-            request.url(url).header("Authorization", "Bearer $token")
+            request.url(config.url).header("Authorization", "Bearer ${config.token}")
         } else request.url("ws://127.0.0.1:8765/animal")
         if (manager.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            render("音频暂不可用，请重新开始")
+            render("音频暂不可用，请重新开始", BuddyMood.ERROR)
             return
         }
-        val regression = permutations.isChecked
+        val regression = permutations?.isChecked == true
         socket = client.newWebSocket(request.build(),
             object : WebSocketListener() {
                 private var stream: CloudPcm? = null
@@ -364,9 +405,11 @@ class AnimalActivity : Activity() {
                 }
 
                 override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) = dispatch(webSocket) {
-                    send(JSONObject().put("event", "session.start").put("v", 1).put("catalog", "animal-click-1")
-                        .put("images", JSONArray(images.keys.toList())).put("ack_first", regression)
-                        .put("duplicate", regression).put("hold_reveal", suppressRevealReceipt.isChecked))
+                    val start = JSONObject().put("event", "session.start").put("v", 1)
+                        .put("catalog", "animal-click-1").put("images", JSONArray(images.keys.toList()))
+                    if (!product) start.put("ack_first", regression).put("duplicate", regression)
+                        .put("hold_reveal", suppressRevealReceipt?.isChecked == true)
+                    send(start)
                 }
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     val message = try {
@@ -408,6 +451,9 @@ class AnimalActivity : Activity() {
                                             android.os.SystemClock.elapsedRealtime())
                                         if (name == "playback_head_first_advance") dispatch(webSocket) {
                                             if (slot == operation && slotGeneration == generation) {
+                                                if (product && !capturing && cloudPlayback == operation) {
+                                                    render("正在说话", BuddyMood.SPEAKING)
+                                                }
                                                 probe?.observe(AnimalEvent.PCM_HEAD_ADVANCED)
                                             }
                                         }
@@ -456,9 +502,9 @@ class AnimalActivity : Activity() {
                         if (code != 1000 || reply?.receipt?.action != "end") reset("游戏服务已断开")
                     }
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) =
-                    dispatch(webSocket) { reset("连接失败，请检查服务和 USB 转发") }
+                    dispatch(webSocket) { reset(if (product) "连不上了，请再试一次" else "连接失败，请检查服务和 USB 转发") }
             })
-        render("正在连接游戏服务")
+        render("正在连接游戏服务", BuddyMood.WAITING)
         timeout(if (cloudMode) 12_000 else 5_000) { reset("连接或回复超时，请重新开始") }
     }
 
@@ -568,7 +614,7 @@ class AnimalActivity : Activity() {
                 return
             }
             capturing = false
-            render("正在播放回复")
+            render(if (product) "稍等一下" else "正在播放回复", BuddyMood.WAITING)
             timeout(18_000) { reset("播放或回执超时，请重新开始") }
             val operation = occupy()
             cloudPlayback = operation
@@ -603,7 +649,10 @@ class AnimalActivity : Activity() {
         if (slot != id) return
         slot = null
         if (slotGeneration != generation) {
+            val restart = restartPending
+            restartPending = false
             render()
+            if (restart) requestStart()
             return
         }
         val current = reply ?: return
@@ -620,7 +669,7 @@ class AnimalActivity : Activity() {
         } else if (current.played < current.segments.size) {
             playNext(current)
         } else {
-            render("正在等待播放回执")
+            render("正在等待播放回执", BuddyMood.WAITING)
             proceed(current)
         }
     }
@@ -659,7 +708,7 @@ class AnimalActivity : Activity() {
                 }
                 audio.capture(operation)
                 probe?.observe(AnimalEvent.CAPTURE_DISPATCH)
-                render("正在打开麦克风")
+                render("正在打开麦克风", BuddyMood.WAITING)
                 timeout(3_000) { reset("麦克风没有返回采集帧") }
             }
             "advance" -> {
@@ -679,7 +728,7 @@ class AnimalActivity : Activity() {
         if (speech) android.util.Log.i("AnimalTiming", "event=capture_sealed op=$id ms=" +
             android.os.SystemClock.elapsedRealtime())
         audio.stop(id)
-        render("正在等待回复")
+        render("正在等待回复", BuddyMood.WAITING)
         timeout(5_000) { reset("麦克风清理或语音服务超时") }
     }
 
@@ -702,7 +751,7 @@ class AnimalActivity : Activity() {
         answer = event(if (text == null) "listen.silence" else "turn.start", current)
             .put("listen_id", checkNotNull(current.receipt).permit)
         if (text != null) answer?.put("text", text.take(80))
-        input.text.clear()
+        input?.text?.clear()
         audio.stop(id)
         render("正在等待模拟回复")
         timeout(4_000) { reset("麦克风清理超时") }
@@ -723,6 +772,8 @@ class AnimalActivity : Activity() {
 
     private fun reset(message: String = "点按开始猜动物", keepCaption: Boolean = false) {
         generation++
+        restartPending = false
+        face?.clearTouch()
         deadline?.let(handler::removeCallbacks)
         deadline = null
         val previous = socket
@@ -740,26 +791,29 @@ class AnimalActivity : Activity() {
         picture.visibility = View.GONE
         count.text = "完成 0 / 3"
         if (!keepCaption) caption.text = ""
-        input.text.clear()
-        buddy.text = "摸摸瓦力"
-        render(message)
+        input?.text?.clear()
+        buddy?.text = "摸摸瓦力"
+        render(if (product && message == "点按开始猜动物") "准备好了" else message,
+            if (message == "点按开始猜动物" || keepCaption) BuddyMood.IDLE else BuddyMood.ERROR)
     }
 
-    private fun render(message: String? = null) {
+    private fun render(message: String? = null, mood: BuddyMood? = null) {
         if (message != null) status.text = message
+        mood?.let { face?.mood = it }
         val active = socket != null
-        start.isEnabled = resumed && !active && slot == null && !permissionPending
-        stop.isEnabled = active
+        start.isEnabled = resumed && !permissionPending &&
+            (if (product) !restartPending && (active || slot == null) else !active && slot == null)
+        stop.isEnabled = active || restartPending
         sendAnswer.isEnabled = active && capturing && frames && answer == null
         if (cloudMode) {
             sendAnswer.isEnabled = active && capturing && frames && !captureSealed
-            endpointField.isEnabled = !active
-            tokenField.isEnabled = !active
+            endpointField?.isEnabled = !active
+            tokenField?.isEnabled = !active
         }
-        silence.isEnabled = sendAnswer.isEnabled
-        fault.isEnabled = active
-        permutations.isEnabled = !active && slot == null
-        suppressRevealReceipt.isEnabled = permutations.isEnabled
+        silence?.isEnabled = sendAnswer.isEnabled
+        fault?.isEnabled = active
+        permutations?.isEnabled = !active && slot == null
+        suppressRevealReceipt?.isEnabled = !active && slot == null
     }
 
     private companion object {

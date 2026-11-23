@@ -192,6 +192,15 @@ else
     failures=1
 fi
 
+if (( transport_healthy )) && reset_app && start_fixture asr "$scratch/buddy.fixture"; then
+    run_test com.littlebuddy.BuddyActivityTest firstRunTouchAndStopFollowCurrentAudioState buddy \
+        -e animalUrl "wss://127.0.0.1:$guest_port/v1/animal" || failures=1
+else
+    report "- Buddy UI regression not run (previous cleanup, app reset or fixture startup failed)"
+    failures=1
+fi
+stop_fixture || failures=1
+
 report ''
 report "- Game scenarios: $game_passed/8 verified, $game_started/8 instrumentation invocations"
 if [[ -s "$scratch/diagnostics" ]]; then
