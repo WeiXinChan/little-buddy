@@ -107,6 +107,8 @@ jobs:
           emulator_pid=
           adb_pid=
           pulse_pid=
+          instrument_pid=
+          ulimit -c 0
           export ANDROID_ADB_SERVER_PORT=15037
           report() { echo "$*" | tee -a "$GITHUB_STEP_SUMMARY"; }
           stop_process() {
@@ -125,6 +127,9 @@ jobs:
           }
           cleanup() {
             local result=$?
+            if [[ -n "$instrument_pid" ]]; then
+              kill -TERM "$instrument_pid" 2>/dev/null || true
+            fi
             if (( result != 0 )); then
               report "- Emulator step failed (exit $result)"
               if [[ -n "$emulator_pid" ]]; then
@@ -137,6 +142,9 @@ jobs:
               stop_process "-$emulator_pid" || { report "- Emulator required SIGKILL"; result=1; }
               wait "$emulator_pid" 2>/dev/null || true
             fi
+            if [[ -n "$instrument_pid" ]]; then
+              wait "$instrument_pid" 2>/dev/null || true
+            fi
             if [[ -n "$adb_pid" ]]; then
               kill -TERM "$adb_pid" 2>/dev/null || true
               stop_process "$adb_pid" || { report "- ADB required SIGKILL"; result=1; }
@@ -148,6 +156,9 @@ jobs:
               wait "$pulse_pid" 2>/dev/null || true
             fi
             rm -rf -- "$ANDROID_AVD_HOME"
+            if (( result == 0 )); then
+              report "- Emulator, ADB and PulseAudio cleanup completed"
+            fi
             exit "$result"
           }
           trap cleanup EXIT
@@ -186,7 +197,7 @@ jobs:
           # teardown has handles for the child processes even on failure.
           adb_listener() { ss -Hlt "sport = :$ANDROID_ADB_SERVER_PORT"; }
           test -z "$(adb_listener)"
-          "$adb" -L "tcp:127.0.0.1:$ANDROID_ADB_SERVER_PORT" nodaemon server \
+          "$adb" -P "$ANDROID_ADB_SERVER_PORT" nodaemon server \
             >"$ANDROID_AVD_HOME/adb.log" 2>&1 &
           adb_pid=$!
           for attempt in {1..20}; do
@@ -228,4 +239,9 @@ jobs:
           report "- APK install elapsed: $((SECONDS - start))s"
           test "$install_status" = 0
 
-          scripts/android-ci-instrument "$serial" "$ANDROID_AVD_HOME"
+          scripts/android-ci-instrument "$serial" "$ANDROID_AVD_HOME" &
+          instrument_pid=$!
+          instrument_status=0
+          wait "$instrument_pid" || instrument_status=$?
+          instrument_pid=
+          exit "$instrument_status"
