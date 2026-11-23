@@ -92,7 +92,8 @@ class AnimalTest(unittest.TestCase):
         self.assertEqual(self.session.game.phase, "offer")
         self.assertEqual(self.session.game.clue_index, 2)
         self.speak("不要")
-        self.speak("提示")
+        reply = self.speak("再提示一下")
+        self.assertEqual(reply.segments, (Segment(self.session.game.card.clues[2]),))
         self.assertEqual(self.session.game.clue_index, 3)
         self.speak("小鸡")
         self.speak("是")
@@ -115,6 +116,62 @@ class AnimalTest(unittest.TestCase):
         self.assertEqual(self.session.game.phase, "offer")
         self.speak("是")
         self.assertEqual(self.session.game.completed, 1)
+
+    def test_natural_hint_advances_to_unused_clues_then_offers_answer(self):
+        clues = self.session.game.card.clues
+        for index in (1, 2):
+            reply = self.speak("再提示一下。")
+            self.assertEqual(reply.segments, (Segment(clues[index]),))
+            self.assertEqual(self.session.game.clue_index, index + 1)
+        for _ in range(2):
+            reply = self.speak("再提示一下")
+            self.assertEqual(reply.segments, (Segment("想知道答案吗？"),))
+            self.assertEqual(self.session.game.clue_index, len(clues))
+            self.assertEqual(self.session.game.completed, 0)
+            self.assertIsNone(self.playback.image)
+
+    def test_non_commands_do_not_advance_or_reveal(self):
+        inputs = (
+            ("不要提示", True), ("不要告诉我", True), ("不要告诉我答案", True),
+            ("再提示一下还是告诉我答案", True), ("再提示一下，换题", True),
+            ("提示猫还是狗", True), ("猫还是狗", True), ("今天的提示很有趣", True),
+            ("再提示一下", False), ("告诉我答案", False), ("今天天气好", True),
+        )
+        for phase in ("guess", "offer"):
+            for text, reliable in inputs:
+                with self.subTest(phase=phase, text=text):
+                    self.setUp()
+                    if phase == "offer":
+                        for _ in range(3):
+                            self.speak("提示")
+                    game = self.session.game
+                    before = (game.used[:], game.clue_index, game.wrong, game.refused)
+                    self.speak(text, reliable=reliable)
+                    game = self.session.game
+                    self.assertEqual((game.used, game.clue_index, game.wrong, game.refused), before)
+                    self.assertEqual(game.completed, 0)
+                    self.assertIsNone(self.playback.image)
+
+    def test_reveal_feedback_matches_how_the_answer_was_reached(self):
+        for utterances, feedback in (
+            ((("猫", True),), "你猜对啦！"),
+            ((("猫咪", False), ("是", True)), "你猜对啦！"),
+            ((("告诉我答案", True),), "我们看看它的样子，再玩下一题吧。"),
+            ((("鸡", True), ("鹅", True), ("是", True)), "我们看看它的样子，再玩下一题吧。"),
+        ):
+            with self.subTest(utterances=utterances):
+                self.setUp()
+                for text, reliable in utterances:
+                    self.assertEqual(self.session.game.completed, 0)
+                    self.assertIsNone(self.playback.image)
+                    reply = self.speak(text, reliable=reliable)
+                self.assertEqual(self.session.game.completed, 1)
+                self.assertEqual(self.playback.image, (1, "animal-cat"))
+                self.assertEqual(reply.segments, (
+                    Segment("答案是猫！", "animal-cat", 1),
+                    Segment(feedback),
+                ))
+                self.assertEqual(self.receipt.next_action, "advance")
 
     def test_skip_resets_refusal_and_pending(self):
         self.speak("鸡")
@@ -294,8 +351,8 @@ class AnimalTest(unittest.TestCase):
         s, p = self.session, self.playback
         reveal = Game.reveal
 
-        def three_segments(game):
-            segments, action = reveal(game)
+        def three_segments(game, *, guessed_correctly):
+            segments, action = reveal(game, guessed_correctly=guessed_correctly)
             return segments + (Segment("尚未播放"),), action
 
         with patch.object(Game, "reveal", three_segments):

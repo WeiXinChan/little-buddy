@@ -5,7 +5,7 @@ import unicodedata
 from dataclasses import dataclass
 
 CATALOG_VERSION = "animal-click-1"
-RULE_VERSION = "animal-rules-2"
+RULE_VERSION = "animal-rules-3"
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,10 @@ CARDS = (
 ALIASES = {alias: card for card in CARDS for alias in card.aliases}
 OTHER_ANIMALS = frozenset({"鸡", "小鸡", "鹅", "鹿", "熊", "老虎", "狮子", "猪", "鱼", "马", "牛", "羊"})
 COMMANDS = {
-    "hint": ("提示", "给我提示", "再给一个提示", "再说一个提示", "我不知道", "不知道"),
+    "hint": (
+        "提示", "给我提示", "再给一个提示", "再说一个提示",
+        "再提示一下", "提示一下", "再给我一点提示", "我不知道", "不知道",
+    ),
     "answer": ("告诉我答案", "我想知道答案", "说答案", "公布答案", "是什么动物"),
     "skip": ("换一个", "换题", "下一题"),
     "yes": ("是", "对", "好", "可以", "要"),
@@ -67,7 +70,7 @@ def classify(text, reliable):
     candidate = match[1] if match else ""
     if candidate in ALIASES or candidate in OTHER_ANIMALS:
         return ("guess" if reliable else "unclear"), candidate
-    if not phrase or not reliable or any(word in phrase for word in ("还是", "不是", "或者", "不对")):
+    if not phrase or not reliable or any(word in phrase for word in ("还是", "不是", "或者", "不对", "提示", "答案")):
         return "unclear", None
     if any(alias in phrase for alias in ALIASES) or any(item in INTENTS for item in phrases):
         return "unclear", None
@@ -120,12 +123,13 @@ class Game:
         self.resume = self.phase = "guess"
         return self.say("猜猜它是谁？" + self.card.clues[0])
 
-    def reveal(self):
+    def reveal(self, *, guessed_correctly):
         self.pending = None
         self.completed += 1
+        follow_up = "你猜对啦！" if guessed_correctly else "我们看看它的样子，再玩下一题吧。"
         return (
             Segment(f"答案是{self.card.name}！", self.card.image_id, len(self.used)),
-            Segment("你认真猜了，真棒！"),
+            Segment(follow_up),
         ), "advance"
 
     def advance(self):
@@ -204,7 +208,7 @@ class Game:
 
         if self.phase == "offer":
             if intent == "yes":
-                return self.reveal()
+                return self.reveal(guessed_correctly=False)
             self.phase = "guess"
             if intent == "no":
                 self.refused = True
@@ -213,10 +217,10 @@ class Game:
         if intent == "skip":
             return self.next_card()
         if intent == "answer":
-            return self.reveal()
+            return self.reveal(guessed_correctly=False)
         if intent == "guess":
             if ALIASES.get(candidate) == self.card:
-                return self.reveal()
+                return self.reveal(guessed_correctly=True)
             self.wrong += 1
             return self.clue(requested=False)
         if intent == "hint":
