@@ -1,10 +1,16 @@
-name: Android emulator smoke
+name: Android emulator regression
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/android-smoke.yml'
+      - 'app/**'
+      - 'backend/**'
+      - 'scripts/android-ci-*'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
 
 defaults:
   run:
@@ -14,14 +20,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: android-smoke-${{ github.event.pull_request.number }}
+  group: android-emulator-${{ github.event.pull_request.head.ref }}
   cancel-in-progress: true
 
 jobs:
   smoke:
     if: github.event.repository.private == false && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 32
     env:
       SYSTEM_IMAGE: system-images;android-36;google_apis;x86_64
     steps:
@@ -33,7 +39,7 @@ jobs:
       - name: Verify runner and KVM
         run: |
           {
-            echo "## Android emulator smoke"
+            echo "## Android emulator regression"
             echo "- Source: $(git rev-parse HEAD)"
             echo "- Runner: ubuntu-24.04 / $(uname -m), image ${ImageVersion:-unknown}"
             echo "- AVD image: $SYSTEM_IMAGE"
@@ -75,25 +81,36 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/smoke-venv"
           "$RUNNER_TEMP/smoke-venv/bin/pip" install --no-cache-dir -r backend/requirements.txt
           PYTHONPATH=.:backend "$RUNNER_TEMP/smoke-venv/bin/python" -B -m unittest discover -s backend/tests
-          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
+          echo "- Backend unittest passed" >> "$GITHUB_STEP_SUMMARY"
+          export PATH="$RUNNER_TEMP/smoke-venv/bin:$PATH"
+          export PYTHONPATH="$PWD:$PWD/backend"
+          fixture_tls="$RUNNER_TEMP/animal-ci-tls"
+          mkdir -m 700 "$fixture_tls"
+          openssl req -x509 -newkey rsa:2048 -noenc -days 1 \
+            -subj /CN=localhost -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' \
+            -keyout "$fixture_tls/key.pem" -out "$fixture_tls/cert.pem"
+          mkdir -p app/src/debug/res/raw
+          cp "$fixture_tls/cert.pem" app/src/debug/res/raw/animal_ci_ca.pem
+          sed -i '/<certificates src="user"/a\            <certificates src="@raw/animal_ci_ca" />' \
+            app/src/debug/res/xml/voice_debug_network_security.xml
+          ANIMAL_RELEASE_PROBE=1 ./gradlew --no-daemon \
+            :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
+          echo "- JVM debug unit tests (including TLS release probe) passed" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Boot, install and run StreamingAudioTest
+      - name: Boot, install and run smoke and game scenarios
         run: |
           adb="$ANDROID_HOME/platform-tools/adb"
           emulator="$ANDROID_HOME/emulator/emulator"
           serial=emulator-5554
-          test_class=com.littlebuddy.StreamingAudioTest
-          test_case=nativePlaybackHeadAdvancesBeforeEndAndReleaseFollowsDrain
           export ANDROID_AVD_HOME
           ANDROID_AVD_HOME="$(mktemp -d "$RUNNER_TEMP/smoke-avd.XXXXXX")"
           emulator_pid=
           pulse_pid=
-          test_result="$ANDROID_AVD_HOME/instrumentation.txt"
           report() { echo "$*" | tee -a "$GITHUB_STEP_SUMMARY"; }
           cleanup() {
             local result=$?
             if (( result != 0 )); then
-              report "- Smoke failed (exit $result)"
+              report "- Emulator step failed (exit $result)"
               if [[ -n "$emulator_pid" ]]; then
                 timeout 5s "$adb" -s "$serial" logcat -d -s AndroidRuntime:E AudioTrack:E AudioFlinger:E AudioPolicyManager:E TestRunner:E | tail -60 || true
                 tail -30 "$ANDROID_AVD_HOME/emulator.log" || true
@@ -113,7 +130,6 @@ jobs:
           trap cleanup EXIT
           trap 'exit 130' INT
           trap 'exit 143' TERM
-          report "- Case: $test_class#$test_case"
 
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n smoke -k "$SYSTEM_IMAGE"
           # The guest gets a real playback route. The host sink discards PCM and
@@ -169,33 +185,4 @@ jobs:
           report "- APK install elapsed: $((SECONDS - start))s"
           test "$install_status" = 0
 
-          start=$SECONDS
-          instrument_status=0
-          timeout --kill-after=5s 90s "$adb" -s "$serial" shell am instrument -w -r \
-            -e class "$test_class#$test_case" com.littlebuddy.sim.test/com.littlebuddy.SimUiRunner |
-            tr -d '\r' | tee "$test_result" || instrument_status=$?
-          report "- Instrumentation elapsed: $((SECONDS - start))s, exit: $instrument_status"
-          python3 - "$test_result" "$test_class" "$test_case" "$instrument_status" <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
-          import re
-          import sys
-          from pathlib import Path
-
-          path, test_class, test_case, exit_code = sys.argv[1:]
-          output = Path(path).read_text(errors="replace")
-          codes = re.findall(r"^INSTRUMENTATION_STATUS_CODE: (-?\d+)$", output, re.M)
-          passed = codes.count("0")
-          failed = codes.count("-1") + codes.count("-2")
-          skipped = codes.count("-3") + codes.count("-4")
-          print(f"- Instrumentation status: started {codes.count('1')}, passed {passed}, failed {failed}, skipped {skipped}")
-          valid = (
-              exit_code == "0"
-              and codes == ["1", "0"]
-              and re.findall(r"^INSTRUMENTATION_STATUS: class=(.+)$", output, re.M) == [test_class] * 2
-              and re.findall(r"^INSTRUMENTATION_STATUS: test=(.+)$", output, re.M) == [test_case] * 2
-              and re.findall(r"^INSTRUMENTATION_STATUS: numtests=(\d+)$", output, re.M) == ["1", "1"]
-              and re.findall(r"^INSTRUMENTATION_CODE: (-?\d+)$", output, re.M) == ["-1"]
-              and re.search(r"^OK \(1 test\)$", output, re.M)
-              and not re.search(r"^INSTRUMENTATION_(?:FAILED|ABORTED|RESULT: (?:shortMsg|longMsg)=)", output, re.M)
-          )
-          sys.exit(0 if valid else "No verified successful completion of the selected test")
-          PY
+          scripts/android-ci-instrument "$serial" "$ANDROID_AVD_HOME"
