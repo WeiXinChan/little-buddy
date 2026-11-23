@@ -12,7 +12,8 @@ from uuid import uuid4
 import httpx
 from websockets.asyncio.client import connect
 
-from backend.voice import ProtocolError
+from backend.timing import mark
+from backend.voice import ProviderError
 
 
 def upstream_details(code, message, request_id):
@@ -40,14 +41,14 @@ def upstream_details(code, message, request_id):
     return details
 
 
-class SpeechTaskError(ProtocolError):
+class SpeechTaskError(ProviderError):
     def __init__(self, code, message=None, request_id=None):
         self.details = upstream_details(code, message, request_id)
         self.code = self.details.get("code", "Unknown")
         super().__init__("speech task failed")
 
 
-class ChatStatusError(ProtocolError):
+class ChatStatusError(ProviderError):
     def __init__(self, status, details):
         self.status = status
         self.details = details
@@ -57,7 +58,10 @@ class ChatStatusError(ProtocolError):
 class GreetingPolicy:
     # Restrict live testing to the documented greeting. Canonicalize before sending to a model.
     def input(self, transcript):
-        if re.fullmatch(r"你好[，,。！!\s]*瓦力[。！!\s]*", transcript):
+        # Explicit greeting forms and homophones only. Preserve the original
+        # exact form and canonicalize all approved input before model access.
+        separator = r"[，,。！!？?、\s]*"
+        if re.fullmatch(rf"(?:你好|您好){separator}(?:瓦力|瓦利|瓦里){separator}", transcript):
             return "你好，瓦力。"
         return None
 
@@ -83,7 +87,7 @@ class SpeechTask:
         response = json.loads(message)
         header = response["header"]
         if header["task_id"] != self.id:
-            raise ProtocolError("speech task ID mismatch")
+            raise ProviderError("speech task ID mismatch")
         if header["event"] == "task-failed":
             raise SpeechTaskError(header.get("error_code"), header.get("error_message"),
                                   header.get("request_id") or response.get("request_id"))
@@ -94,7 +98,7 @@ class SpeechTask:
                            function=function, model=model, parameters=parameters)
         event, _ = self.event(await self.socket.recv())
         if event != "task-started":
-            raise ProtocolError("speech task not ready")
+            raise ProviderError("speech task not ready")
 
 
 class Recognition:
@@ -116,18 +120,19 @@ class Recognition:
                 text = sentence["text"]
                 length += len(text)
                 if length > 1024 or len(sentences) >= 64:
-                    raise ProtocolError("oversized transcript")
+                    raise ProviderError("oversized transcript")
                 sentences.append(text)
-        raise ProtocolError("unfinished recognition")
+        raise ProviderError("unfinished recognition")
 
     async def write(self, pcm16le):
         if self.results.done():
             self.results.result()
-            raise ProtocolError("recognizer stopped before seal")
+            raise ProviderError("recognizer stopped before seal")
         await self.task.socket.send(pcm16le)
 
     async def finish(self):
         await self.task.command("finish-task")
+        mark("asr_finish_sent")
         return await self.results
 
     async def close(self):
@@ -187,31 +192,45 @@ class DashScope:
 
     @asynccontextmanager
     async def answer(self, transcript, *, on_first_text=None):
-        async with self.http.stream("POST", self.chat_url, headers=self.headers, json={
-            "model": self.llm,
-            "messages": [
-                {"role": "system", "content": "请只用这两句话打招呼：你好！我是瓦力。"},
-                {"role": "user", "content": transcript},
-            ],
-            "stream": True,
-            "enable_thinking": False,
-            "max_tokens": 64,
-        }) as response:
-            if not response.is_success:
-                body = await anext(response.aiter_bytes(chunk_size=4096), b"")
-                try:
-                    payload = json.loads(body)
-                    error = payload.get("error", payload)
-                    details = upstream_details(error.get("code"), error.get("message"),
-                                               payload.get("request_id") or error.get("request_id") or
-                                               response.headers.get("x-request-id"))
-                except (ValueError, AttributeError):
-                    details = upstream_details(None, None, response.headers.get("x-request-id"))
-                raise ChatStatusError(response.status_code, details)
-            yield self.sentences(response, on_first_text)
+        async def trace(event, _):
+            marker = {
+                "connection.connect_tcp.complete": "llm_tcp_ready",
+                "connection.start_tls.complete": "llm_tls_ready",
+                "http11.send_request_body.complete": "llm_body_sent",
+            }.get(event)
+            if marker:
+                mark(marker)
+
+        try:
+            async with self.http.stream("POST", self.chat_url, headers=self.headers,
+                                        extensions={"trace": trace}, json={
+                "model": self.llm,
+                "messages": [
+                    {"role": "system", "content": "请只用这两句话打招呼：你好！我是瓦力。"},
+                    {"role": "user", "content": transcript},
+                ],
+                "stream": True,
+                "enable_thinking": False,
+                "max_tokens": 64,
+            }) as response:
+                if not response.is_success:
+                    body = await anext(response.aiter_bytes(chunk_size=4096), b"")
+                    try:
+                        payload = json.loads(body)
+                        error = payload.get("error", payload)
+                        details = upstream_details(error.get("code"), error.get("message"),
+                                                   payload.get("request_id") or error.get("request_id") or
+                                                   response.headers.get("x-request-id"))
+                    except (ValueError, AttributeError):
+                        details = upstream_details(None, None, response.headers.get("x-request-id"))
+                    raise ChatStatusError(response.status_code, details)
+                yield self.sentences(response, on_first_text)
+        except httpx.TimeoutException:
+            raise TimeoutError("model response timed out") from None
 
     async def sentences(self, response, on_first_text=None):
         pending = ""
+        first_text = True
         async for line in response.aiter_lines():
             if not line.startswith("data:"):
                 continue
@@ -226,26 +245,30 @@ class DashScope:
             content = choices[0]["delta"].get("content")
             if not content:
                 continue
-            if on_first_text is not None and content.strip():
-                on_first_text()
-                on_first_text = None
+            if first_text and content.strip():
+                mark("llm_first_text")
+                if on_first_text is not None:
+                    on_first_text()
+                first_text = False
             pending += content
             if len(pending) > 240:
-                raise ProtocolError("oversized model segment")
+                raise ProviderError("oversized model segment")
             while match := re.match(r"^.*?[。！？!?\n]", pending, re.S):
                 text, pending = pending[:match.end()].strip(), pending[match.end():]
                 if text:
                     yield text
-        raise ProtocolError("unfinished model response")
+        raise ProviderError("unfinished model response")
 
     @asynccontextmanager
     async def synthesize(self, segment, sample_rate):
         async with self.speech_socket() as socket:
+            mark("tts_socket_ready")
             task = SpeechTask(socket)
             await task.start("tts", "SpeechSynthesizer", self.tts, {
                 "text_type": "PlainText", "voice": self.voice, "format": "pcm",
                 "sample_rate": sample_rate, "enable_ssml": False,
             })
+            mark("tts_task_ready")
             await task.command("continue-task", input={"text": segment})
             await task.command("finish-task")
             yield self.audio(task)
@@ -256,7 +279,7 @@ class DashScope:
                 yield message
             elif task.event(message)[0] == "task-finished":
                 return
-        raise ProtocolError("unfinished synthesis")
+        raise ProviderError("unfinished synthesis")
 
 
 def http_client():

@@ -4,14 +4,24 @@ import asyncio
 import hmac
 import json
 import logging
+import re
 import ssl
 from http import HTTPStatus
+from uuid import uuid4
 
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
-from backend.voice import ContentPolicy, End, ProtocolError, Providers, run_turn
+from backend.timing import mark as mark_stage
+from backend.voice import ContentPolicy, EmptyTranscript, End, GreetingMismatch, ProtocolError, Providers, run_turn
 from backend.wire import VERSION, decode_input, playback_frame
+
+
+TURN_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+
+
+class DeviceDisconnected(Exception):
+    """Closure observed on the authenticated device transport."""
 
 
 class Channel:
@@ -20,14 +30,26 @@ class Channel:
         self.sealed = asyncio.Event()
         self.position = 0
 
+    async def send(self, data: str | bytes) -> None:
+        try:
+            await self.socket.send(data)
+        except ConnectionClosed:
+            raise DeviceDisconnected from None
+
+    async def recv(self) -> str | bytes:
+        try:
+            return await self.socket.recv()
+        except ConnectionClosed:
+            raise DeviceDisconnected from None
+
     async def control(self, kind: str, **fields: int) -> None:
-        await self.socket.send(json.dumps({"v": VERSION, "type": kind, **fields}))
+        await self.send(json.dumps({"v": VERSION, "type": kind, **fields}))
 
     async def ready(self) -> None:
         await self.control("turn.ready")
 
     async def receive(self):
-        event = decode_input(await self.socket.recv())
+        event = decode_input(await self.recv())
         if isinstance(event, End):
             self.sealed.set()
         return event
@@ -39,7 +61,9 @@ class Channel:
     async def audio(self, pcm16le: bytes) -> None:
         for offset in range(0, len(pcm16le), 6400):
             frame = pcm16le[offset:offset + 6400]
-            await self.socket.send(playback_frame(self.position, frame))
+            await self.send(playback_frame(self.position, frame))
+            if self.position == 0:
+                mark_stage("first_pcm_sent")
             self.position += len(frame) // 2
 
     async def segment_ended(self, number: int, samples: int) -> None:
@@ -50,12 +74,12 @@ class Channel:
 
     async def reject_after_seal(self) -> None:
         await self.sealed.wait()
-        await self.socket.recv()
+        await self.recv()
         raise ProtocolError("unexpected input after seal")
 
 
 def voice_server(host: str, port: int, tls: ssl.SSLContext, token: str,
-                 providers: Providers, policy: ContentPolicy):
+                 providers: Providers, policy: ContentPolicy, *, timings: bool = False):
     if tls is None or not 32 <= len(token) <= 256 or not token.isascii() or not token.isalnum():
         raise ValueError("TLS and a random device token (32–256 ASCII alphanumerics) are required")
     expected = ("Bearer " + token).encode("ascii")
@@ -72,6 +96,9 @@ def voice_server(host: str, port: int, tls: ssl.SSLContext, token: str,
         credentials = request.headers.get_all("Authorization")
         if len(credentials) != 1 or not hmac.compare_digest(credentials[0].encode(), expected):
             return socket.respond(HTTPStatus.UNAUTHORIZED, "unauthorized\n")
+        ids = request.headers.get_all("X-Voice-Turn-ID")
+        if ids and (len(ids) != 1 or not TURN_ID.fullmatch(ids[0])):
+            return socket.respond(HTTPStatus.BAD_REQUEST, "invalid turn identifier\n")
         if active:
             return socket.respond(HTTPStatus.SERVICE_UNAVAILABLE, "busy\n")
 
@@ -82,28 +109,57 @@ def voice_server(host: str, port: int, tls: ssl.SSLContext, token: str,
             return
         active = True
         channel = Channel(socket)
-        turn = asyncio.create_task(run_turn(channel, providers, policy))
+        clock = asyncio.get_running_loop().time
+        started = clock()
+
+        connection_id = uuid4()
+        turn_id = socket.request.headers.get("X-Voice-Turn-ID", "-")
+
+        def mark(event: str, segment: int = 0) -> None:
+            if timings:
+                elapsed = round((clock() - started) * 1000)
+                print(f"voice_timing {event} turn_id={turn_id} connection_id={connection_id} "
+                      f"segment={segment} since_connect_ms={elapsed}", flush=True)
+
+        mark("connected")
+        turn = asyncio.create_task(run_turn(channel, providers, policy, timing=mark if timings else None))
         disconnected = asyncio.create_task(socket.wait_closed())
         extra_input = asyncio.create_task(channel.reject_after_seal())
         tasks = (turn, disconnected, extra_input)
+        outcome = "disconnected"
+
+        async def fail(code: int, reason: str) -> str:
+            # If the device already sent a close, keep that outcome even when
+            # its provider fails in the same event-loop cycle.
+            if socket.protocol.close_rcvd is not None or disconnected.done():
+                return "disconnected"
+            await socket.close(code, reason)
+            return reason
+
         try:
             finished, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            if extra_input in finished:
-                extra_input.result()
             if turn in finished:
                 turn.result()
-        except ConnectionClosed:
+                outcome = "completed"
+            if extra_input in finished:
+                extra_input.result()
+        except DeviceDisconnected:
             pass
+        except EmptyTranscript:
+            outcome = await fail(4401, "empty_transcript")
+        except GreetingMismatch:
+            outcome = await fail(4402, "greeting_mismatch")
         except ProtocolError:
-            await socket.close(1008, "invalid turn")
+            outcome = await fail(1008, "protocol_error")
         except TimeoutError:
-            await socket.close(1013, "turn timed out")
+            outcome = await fail(1013, "timeout")
         except Exception:
-            await socket.close(1011, "turn failed")
+            outcome = await fail(1011, "provider_error")
         finally:
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
+            mark("user_stopped" if outcome == "disconnected" and socket.close_code == 4403 else outcome)
             active = False
 
     return serve(handler, host, port, ssl=tls, process_request=handshake,

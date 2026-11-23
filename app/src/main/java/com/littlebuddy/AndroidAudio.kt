@@ -6,9 +6,11 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Handler
 import android.os.SystemClock
 import com.littlebuddy.voice.AudioPort
+import com.littlebuddy.voice.PcmStream
 
 internal class AndroidAudio(
     private val dispatcher: Handler,
@@ -18,13 +20,20 @@ internal class AndroidAudio(
     released: (Long) -> Unit,
     private val diagnostics: ((Int, String) -> Unit)?,
     private val pcm: ((Long, ShortArray, Int) -> Unit)? = null,
+    private val captureStarted: ((Long) -> Unit)? = null,
+    private val speechDetected: ((Long) -> Unit)? = null,
+    startupBufferMs: Int = 120,
 ) : AudioPort {
+    private val startupFrames = PLAY_RATE * startupBufferMs.also { require(it in 40..300) } / 1000
     private val worker = AudioWorker({ action -> dispatcher.post { action() } }, failed, played, released)
 
     override fun capture(operation: Long) = worker.submit(operation, ::record)
 
     override fun play(operation: Long, samples: ShortArray) =
         worker.submit(operation) { playTone(it, samples) }
+
+    override fun playStream(operation: Long, stream: PcmStream) =
+        worker.submit(operation) { playPcm(it, stream) }
 
     override fun stop(operation: Long) = worker.stop(operation)
 
@@ -44,6 +53,7 @@ internal class AndroidAudio(
             if (!operation.commitStart()) return
             recorder.startRecording()
             check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+            captureStarted?.invoke(operation.id)
             var opening = true
             var nextDiagnostic = 0L
             val detector = SpeechDetector(samples.size)
@@ -56,6 +66,7 @@ internal class AndroidAudio(
                 }
                 pcm?.invoke(operation.id, samples, count)
                 val event = detector.accept(samples, count)
+                if (detector.detectedSpeechInRead && !operation.cancelled) speechDetected?.invoke(operation.id)
                 val speech = event == SpeechDetector.Event.SPEECH
                 val endpoint = event == SpeechDetector.Event.END
                 val now = if (diagnostics != null) SystemClock.elapsedRealtime() else 0L
@@ -106,12 +117,51 @@ internal class AndroidAudio(
             check(track.write(samples, 0, samples.size) == samples.size)
             if (!operation.commitStart()) return
             track.play()
-            while (!operation.cancelled && track.playbackHeadPosition < samples.size) {
+            while (!operation.cancelled) {
+                val position = track.playbackHeadPosition
+                if (position >= samples.size) break
                 Thread.sleep(10)
             }
         } finally {
             try {
                 if (track.playState == AudioTrack.PLAYSTATE_PLAYING) track.stop()
+            } finally {
+                track.release()
+            }
+        }
+    }
+
+    private fun playPcm(operation: AudioWorker.Operation, stream: PcmStream) {
+        val minimum = AudioTrack.getMinBufferSize(PLAY_RATE, AudioFormat.CHANNEL_OUT_MONO, PCM)
+        check(minimum > 0)
+        val track = AudioTrack.Builder()
+            .setAudioAttributes(AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build())
+            .setAudioFormat(AudioFormat.Builder().setSampleRate(PLAY_RATE)
+                .setEncoding(PCM).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+            .setBufferSizeInBytes(maxOf(minimum, startupFrames * Short.SIZE_BYTES))
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .build()
+        try {
+            check(track.state == AudioTrack.STATE_INITIALIZED)
+            val threshold = if (Build.VERSION.SDK_INT >= 31) {
+                track.setStartThresholdInFrames(minOf(startupFrames, track.bufferSizeInFrames))
+            } else track.bufferSizeInFrames
+            // Bound the native queue even if a device reports an unusual minimum.
+            check(threshold in 1..PLAY_RATE && track.bufferSizeInFrames in 1..PLAY_RATE)
+
+            pumpPcm(operation, stream, threshold, object : PcmOutput {
+                override val head get() = track.playbackHeadPosition
+                override fun write(samples: ShortArray, offset: Int) =
+                    track.write(samples, offset, samples.size - offset, AudioTrack.WRITE_NON_BLOCKING)
+                override fun start() = track.play()
+            }, SystemClock::elapsedRealtime) { Thread.sleep(5) }
+        } finally {
+            try {
+                if (track.playState == AudioTrack.PLAYSTATE_PLAYING) track.pause()
+                track.flush()
             } finally {
                 track.release()
             }

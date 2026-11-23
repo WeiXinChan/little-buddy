@@ -1,13 +1,17 @@
 package com.littlebuddy
 
 import android.os.Handler
+import android.os.SystemClock
+import android.util.Log
 import com.littlebuddy.voice.AudioPort
 import com.littlebuddy.voice.ReplyPort
-import com.littlebuddy.voice.Segment
+import com.littlebuddy.voice.PcmStream
 import com.littlebuddy.voice.Turn
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,14 +26,15 @@ internal class CloudVoice(
     private val dispatcher: Handler,
     private val audio: AudioPort,
     private val config: () -> Pair<String, String>,
-    private val failed: (Long, Turn?) -> Unit,
+    private val failed: (Long, Turn?, VoiceFailure) -> Unit,
     private val released: (Long) -> Unit,
-    private val segment: (Turn, Segment) -> Unit,
+    private val segment: (Turn, Int, PcmStream) -> Unit,
     private val ended: (Turn, Int) -> Unit,
 ) : AudioPort, ReplyPort {
     @Volatile private var active: Attempt? = null
     private var nativeCapture: Long? = null
     private val client = OkHttpClient.Builder()
+        .retryOnConnectionFailure(false)
         .followRedirects(false)
         .followSslRedirects(false)
         .connectTimeout(4, TimeUnit.SECONDS)
@@ -51,7 +56,10 @@ internal class CloudVoice(
             return
         }
         attempt.socket = client.newWebSocket(
-            Request.Builder().url(url).header("Authorization", "Bearer $token").build(), attempt,
+            Request.Builder().url(url)
+                .header("Authorization", "Bearer $token")
+                .header("X-Voice-Turn-ID", attempt.trace.id)
+                .build(), attempt,
         )
     }
 
@@ -64,7 +72,7 @@ internal class CloudVoice(
         val packet = ByteBuffer.allocate(6 + 2 * size)
         packet.put(1).put(1).putInt(attempt.position).order(ByteOrder.LITTLE_ENDIAN)
         repeat(size) { packet.putShort(samples[it]) }
-        val socket = checkNotNull(attempt.socket)
+        val socket = attempt.socket ?: return
         if (socket.queueSize() > 64_000 || !socket.send(packet.array().toByteString())) {
             attempt.fail()
             return
@@ -79,6 +87,20 @@ internal class CloudVoice(
             attempt.fail()
         }
     }
+
+    fun captureStarted(id: Long) {
+        active?.takeIf { it.operation == id }?.trace?.started()
+    }
+
+    fun speechDetected(id: Long) {
+        active?.takeIf { it.operation == id }?.trace?.speechDetected()
+    }
+
+    fun captureSealed(id: Long) {
+        active?.takeIf { it.operation == id }?.trace?.endpointConfirmed()
+    }
+
+    override fun playStream(operation: Long, stream: PcmStream) = audio.playStream(operation, stream)
 
     override fun play(operation: Long, samples: ShortArray) = audio.play(operation, samples)
 
@@ -97,29 +119,51 @@ internal class CloudVoice(
         if (active?.turn == turn) close()
     }
 
-    fun close() {
+    override fun finished(turn: Turn) {
+        if (active?.turn == turn) close(success = true)
+    }
+
+    fun stopByUser() {
+        active?.terminate(code = VoiceFailure.USER_STOPPED)
+    }
+
+    fun close(success: Boolean = false) {
         val old = active
         active = null
-        old?.socket?.cancel()
+        old?.terminate(success)
     }
 
     private inner class Attempt(val operation: Long) : WebSocketListener() {
         @Volatile var socket: WebSocket? = null
         var position = 0
         @Volatile var turn: Turn? = null
+        val trace = VoiceTrace(operation, SystemClock::elapsedRealtime) { Log.d("LittleBuddyVoice", it) }
+        private val terminated = AtomicBoolean()
+        private val streams = ConcurrentLinkedQueue<CloudPcm>()
         private var ready = false
         private var finished = false
         private var next = 1
-        private var samples: ShortArray? = null
-        private var received = 0
+        private var current: CloudPcm? = null
 
         private fun dispatch(action: () -> Unit) {
-            dispatcher.post { if (active === this) action() }
+            dispatcher.post { if (active === this && !terminated.get()) action() }
         }
 
-        fun fail() {
-            socket?.cancel()
-            dispatch { failed(operation, turn) }
+        fun terminate(success: Boolean = false, code: VoiceFailure? = null, notify: () -> Unit = {}) {
+            if (!terminated.compareAndSet(false, true)) return
+            trace.finish(success, code)
+            notify()
+            streams.forEach { it.abort() }
+            val connection = socket ?: return
+            if (code == VoiceFailure.USER_STOPPED && connection.close(code.closeCode, null)) {
+                dispatcher.postDelayed({ connection.cancel() }, 350)
+            } else connection.cancel()
+        }
+
+        fun fail(code: VoiceFailure = VoiceFailure.CONNECTION_ERROR) {
+            terminate(code = code) {
+                dispatcher.post { if (active === this) failed(operation, turn, code) }
+            }
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -127,12 +171,13 @@ internal class CloudVoice(
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-            if (!finished) fail()
+            if (!finished) fail(VoiceFailure.fromClose(code))
             webSocket.close(1000, null)
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
             try {
+                if (terminated.get()) return
                 check(text.length <= 256 && !finished)
                 val control = JSONObject(text)
                 check(control.getInt("v") == 1)
@@ -146,22 +191,23 @@ internal class CloudVoice(
                         }
                     }
                     "segment.start" -> {
-                        check(turn != null && next <= 8 && samples == null && control.getInt("number") == next)
-                        samples = ShortArray(240_000)
-                        received = 0
+                        check(turn != null && next <= 8 && current == null && control.getInt("number") == next)
+                        val number = next
+                        val source = CloudPcm({ event, op -> trace.playback(event, op, number) })
+                        streams.add(source)
+                        if (terminated.get()) source.abort()
+                        current = source
                     }
                     "segment.end" -> {
-                        val id = checkNotNull(turn)
-                        check(control.getInt("number") == next && control.getInt("samples") == received)
-                        check(received > 0)
-                        val result = Segment(next++, checkNotNull(samples).copyOf(received))
-                        samples = null
-                        dispatch { segment(id, result) }
+                        check(control.getInt("number") == next)
+                        checkNotNull(current).seal(control.getInt("samples"))
+                        next++
+                        current = null
                     }
                     "reply.end" -> {
                         val id = checkNotNull(turn)
                         val count = control.getInt("count")
-                        check(samples == null && count > 0 && count == next - 1)
+                        check(current == null && count > 0 && count == next - 1)
                         finished = true
                         dispatch { ended(id, count) }
                         webSocket.close(1000, null)
@@ -169,23 +215,23 @@ internal class CloudVoice(
                     else -> error("Unexpected control")
                 }
             } catch (_: Exception) {
-                fail()
+                fail(VoiceFailure.PROTOCOL_ERROR)
             }
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
             try {
-                val target = checkNotNull(samples)
-                check(bytes.size in 8..6406 && bytes.size % 2 == 0)
-                val packet = ByteBuffer.wrap(bytes.toByteArray())
-                check(packet.get().toInt() == 1 && packet.get().toInt() == 2 && packet.int == received)
-                packet.order(ByteOrder.LITTLE_ENDIAN)
-                val count = packet.remaining() / 2
-                check(received + count <= target.size)
-                packet.asShortBuffer().get(target, received, count)
-                received += count
+                if (terminated.get()) return
+                check(bytes.size in 8..6406)
+                val source = checkNotNull(current)
+                if (source.push(bytes.toByteArray())) {
+                    val id = checkNotNull(turn)
+                    val number = next
+                    trace.pcm(number)
+                    dispatch { segment(id, number, source) }
+                }
             } catch (_: Exception) {
-                fail()
+                fail(VoiceFailure.PROTOCOL_ERROR)
             }
         }
     }

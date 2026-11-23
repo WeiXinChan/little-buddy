@@ -7,6 +7,7 @@ import os
 import ssl
 import struct
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from backend.dashscope import DashScope, GreetingPolicy, http_client
 from backend.server import voice_server
@@ -54,20 +55,26 @@ async def main():
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8443, type=int)
     parser.add_argument("--provider", choices=("fake", "dashscope"), default="fake")
+    parser.add_argument("--timings", action="store_true")
     parser.add_argument("--cert", required=True)
     parser.add_argument("--key", required=True)
     args = parser.parse_args()
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
     tls.load_cert_chain(args.cert, args.key)
-    token = os.environ.get("VOICE_DEVICE_TOKEN", "")
+    directory = os.environ.get("CREDENTIALS_DIRECTORY")
+    token_path = Path(directory) / "voice-device-token" if directory else None
+    if token_path and token_path.is_file():
+        token = token_path.read_text(encoding="ascii").strip()
+    else:
+        token = os.environ.get("VOICE_DEVICE_TOKEN", "")
     async with http_client() as http:
         demo = Demo()
         if args.provider == "dashscope":
             providers, policy = DashScope.from_environment(http), GreetingPolicy()
         else:
             providers, policy = demo, demo
-        async with voice_server(args.host, args.port, tls, token, providers, policy):
+        async with voice_server(args.host, args.port, tls, token, providers, policy, timings=args.timings):
             await asyncio.Future()
 
 
