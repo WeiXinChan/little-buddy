@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# Run with sudo on a systemd Linux test host. All fixture sockets are loopback.
+set -Eeuo pipefail
+umask 077
+
+if (( EUID != 0 )); then
+    echo "Run with sudo on a systemd Linux test host." >&2
+    exit 2
+fi
+exec 9</run/lock/little-buddy/heavy.lock
+flock -n 9 || { echo "Server build lock is busy." >&2; exit 2; }
+
+ssh_port=22457
+tls_port=24457
+client_port=25457
+for port in "$ssh_port" "$tls_port" "$client_port"; do
+    if [[ -n $(ss -Hlt "sport = :$port") ]]; then
+        echo "Fixture port $port is already in use." >&2
+        exit 2
+    fi
+done
+
+fixture=$(mktemp -d /run/lb-ssh-probe.XXXXXXXX)
+unit="lb-ssh-probe-${fixture##*.}"
+account="lbssh${fixture##*.}"
+client=
+backend=
+account_created=
+unit_started=
+cleanup() {
+    local result=$?
+    trap - EXIT
+    set +e
+    if [[ -n $client ]]; then kill "$client" 2>/dev/null; wait "$client" 2>/dev/null; fi
+    if [[ -n $unit_started ]]; then
+        systemctl stop "$unit" || result=1
+        systemctl reset-failed "$unit" 2>/dev/null
+    fi
+    if [[ -n $backend ]]; then kill "$backend" 2>/dev/null; wait "$backend" 2>/dev/null; fi
+    if [[ -n $account_created ]]; then userdel "$account" || result=1; fi
+    if (( result != 0 )); then
+        tail -n 20 "$fixture/sshd.log" "$fixture/client.log" 2>/dev/null
+    fi
+    rm -rf -- "$fixture" || result=1
+    exit "$result"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# The account cannot log in with a password and has a nologin shell.
+useradd --password '*' --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin "$account"
+account_created=yes
+for key in host device wrong; do
+    ssh-keygen -q -t ed25519 -N '' -f "$fixture/$key"
+done
+# sshd reads the key file as the login user. Its parent permits traversal
+# while private keys remain root-only.
+chmod 0711 "$fixture"
+printf 'restrict,port-forwarding,permitopen="127.0.0.1:%s" %s\n' \
+    "$tls_port" "$(cat "$fixture/device.pub")" > "$fixture/authorized_keys"
+chmod 0644 "$fixture/authorized_keys"
+for key in host wrong; do
+    printf '[127.0.0.1]:%s %s\n' "$ssh_port" "$(cat "$fixture/$key.pub")" > "$fixture/known_$key"
+done
+
+cat > "$fixture/sshd_config" <<CONFIG
+AddressFamily inet
+ListenAddress 127.0.0.1:$ssh_port
+HostKey $fixture/host
+PidFile $fixture/sshd.pid
+AuthorizedKeysFile $fixture/authorized_keys
+AllowUsers $account
+PermitRootLogin no
+UsePAM no
+AuthenticationMethods publickey
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+MaxSessions 0
+AllowTcpForwarding local
+PermitOpen 127.0.0.1:$tls_port
+PermitListen none
+AllowAgentForwarding no
+X11Forwarding no
+PermitTTY no
+PermitTunnel no
+AllowStreamLocalForwarding no
+CONFIG
+
+/usr/sbin/sshd -t -f "$fixture/sshd_config"
+effective=$(/usr/sbin/sshd -T -f "$fixture/sshd_config")
+for rule in "maxsessions 0" "allowtcpforwarding local" "permitopen 127.0.0.1:$tls_port" \
+    "permitlisten none" "allowagentforwarding no" "x11forwarding no" \
+    "permittty no" "permittunnel no" "allowstreamlocalforwarding no"; do
+    grep -Fxq "$rule" <<< "$effective"
+done
+echo 'PASS effective forwarding and session policy'
+
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 \
+    -subj /CN=FixtureCA -keyout "$fixture/ca.key" -out "$fixture/ca.pem" 2>/dev/null
+openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+    -subj /CN=FixtureBackend -keyout "$fixture/tls.key" -out "$fixture/tls.csr" 2>/dev/null
+printf 'basicConstraints=critical,CA:FALSE\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:127.0.0.1\n' > "$fixture/extensions"
+openssl x509 -req -in "$fixture/tls.csr" -CA "$fixture/ca.pem" -CAkey "$fixture/ca.key" \
+    -CAcreateserial -days 1 -extfile "$fixture/extensions" -out "$fixture/tls.pem" 2>/dev/null
+
+wait_listener() {
+    local port=$1
+    for ((attempt=0; attempt<50; attempt++)); do
+        [[ -n $(ss -Hlt "sport = :$port") ]] && return
+        sleep 0.1
+    done
+    echo "Listener $port failed to start." >&2
+    return 1
+}
+
+openssl s_server -quiet -accept "127.0.0.1:$tls_port" -cert "$fixture/tls.pem" \
+    -key "$fixture/tls.key" -www > "$fixture/backend.log" 2>&1 9<&- &
+backend=$!
+wait_listener "$tls_port"
+systemd-run --quiet --unit "$unit" --property RuntimeMaxSec=120 --property KillMode=control-group \
+    /usr/sbin/sshd -D -E "$fixture/sshd.log" -f "$fixture/sshd_config"
+unit_started=yes
+wait_listener "$ssh_port"
+
+ssh_base=(ssh -F /dev/null -p "$ssh_port" -i "$fixture/device" -o BatchMode=yes
+    -o ConnectTimeout=3 -o ServerAliveInterval=1 -o ServerAliveCountMax=2
+    -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o GlobalKnownHostsFile=/dev/null
+    -o ExitOnForwardFailure=yes)
+ssh_client=("${ssh_base[@]}" -o "UserKnownHostsFile=$fixture/known_host")
+destination="$account@127.0.0.1"
+
+expect_rejection() {
+    local label=$1 pattern=$2
+    shift 2
+    if timeout 6 "$@" > "$fixture/rejection.log" 2>&1 || ! grep -Eq "$pattern" "$fixture/rejection.log"; then
+        cat "$fixture/rejection.log" >&2
+        echo "FAIL $label" >&2
+        exit 1
+    fi
+    echo "PASS $label"
+}
+
+expect_rejection 'shell/exec channel' 'channel .*open failed' "${ssh_client[@]}" "$destination" true
+expect_rejection 'PTY/agent/X11 session' 'channel .*open failed' \
+    env DISPLAY=:99 "${ssh_client[@]}" -tt -A -X "$destination" true
+expect_rejection 'reverse forward' 'remote port forwarding failed' "${ssh_client[@]}" \
+    -N -R "127.0.0.1:$client_port:127.0.0.1:$tls_port" "$destination"
+expect_rejection 'network tunnel' 'Tunnel forwarding failed' "${ssh_client[@]}" \
+    -N -w any:any "$destination"
+expect_rejection 'wrong SSH host key' 'Host key verification failed' "${ssh_base[@]}" \
+    -o "UserKnownHostsFile=$fixture/known_wrong" -N "$destination"
+
+start_forward() {
+    "${ssh_client[@]}" -N -L "127.0.0.1:$client_port:$1" "$destination" 9<&- \
+        > "$fixture/client.log" 2>&1 &
+    client=$!
+    wait_listener "$client_port"
+    kill -0 "$client"
+}
+stop_forward() {
+    kill "$client"
+    wait "$client" || [[ $? == 255 || $? == 143 ]]
+    client=
+    [[ -z $(ss -Hlt "sport = :$client_port") ]]
+}
+tls_check=(curl -q --noproxy '*' -fsS --max-time 4 --cacert "$fixture/ca.pem")
+url="https://127.0.0.1:$client_port/"
+assert_tls_ok() {
+    local code
+    code=$("${tls_check[@]}" -o /dev/null -w '%{http_code}' "$url")
+    [[ $code == 200 ]]
+}
+
+start_forward "localhost:$tls_port"
+# A second loopback name for the same live backend is also denied.
+if "${tls_check[@]}" "$url" > /dev/null 2>&1; then exit 1; fi
+grep -q 'administratively prohibited' "$fixture/client.log"
+stop_forward
+echo 'PASS alternate forwarding target'
+
+start_forward "127.0.0.1:$tls_port"
+assert_tls_ok
+echo 'PASS permitted target with strict TLS and HTTP 200'
+expect_rejection 'untrusted TLS chain' 'SSL certificate problem' \
+    curl -q --noproxy '*' -fsS --max-time 4 "$url"
+expect_rejection 'wrong TLS identity' 'subject.*name|no alternative certificate' "${tls_check[@]}" \
+    --connect-to "localhost:$client_port:127.0.0.1:$client_port" "https://localhost:$client_port/"
+stop_forward
+echo 'PASS client cancellation closes local listener'
+
+start_forward "127.0.0.1:$tls_port"
+systemctl restart "$unit"
+wait_listener "$ssh_port"
+if wait "$client"; then exit 1; fi
+client=
+[[ -z $(ss -Hlt "sport = :$client_port") ]]
+start_forward "127.0.0.1:$tls_port"
+assert_tls_ok
+echo 'PASS server disconnect and fresh verified connection'
+
+: > "$fixture/revoked_keys"
+chmod 0644 "$fixture/revoked_keys"
+mv "$fixture/revoked_keys" "$fixture/authorized_keys"
+expect_rejection 'revoked key denies new transport' 'Permission denied \(publickey\)' \
+    "${ssh_client[@]}" -N "$destination"
+assert_tls_ok
+systemctl restart "$unit"
+wait_listener "$ssh_port"
+if wait "$client"; then exit 1; fi
+client=
+[[ -z $(ss -Hlt "sport = :$client_port") ]]
+expect_rejection 'revocation persists after active transport termination' 'Permission denied \(publickey\)' \
+    "${ssh_client[@]}" -N "$destination"
