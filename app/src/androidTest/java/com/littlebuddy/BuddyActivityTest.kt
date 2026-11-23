@@ -261,6 +261,8 @@ class BuddyActivityTest {
                 assertEquals(uploadsEnded, gate.count(AnimalEvent.ASR_UPLOAD_END))
                 assertEquals(playbackHeads, gate.count(AnimalEvent.PCM_HEAD_ADVANCED))
                 assertFalse(button("结束录音").isEnabled)
+                android.util.Log.i("WakeProbe",
+                    "late_gate=$marker revoke=$revoke delivered=1 connections_delta=0 seals_delta=0 playback_delta=0")
             }
         } finally {
             if (revoke == "sleep") {

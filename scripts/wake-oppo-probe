@@ -107,10 +107,12 @@ run_case() {
 }
 
 verify_fixture() {
-    local scenario=$1 connections=$2 recognized=$3
+    local scenario=$1 connections=$2 ready=$3 recognized=$4
     tr -d '\r' < "$results/$scenario.fixture.txt" > "$results/$scenario.events.txt"
     local logfile="$results/$scenario.events.txt"
     [[ $(grep -c '^wake_fixture_connection$' "$logfile") == "$connections" ]]
+    [[ $(grep -c '^animal_timing event=asr_ready ' "$logfile") == "$ready" ]]
+    [[ $(grep -c '^animal_timing event=capture_sealed ' "$logfile") == "$recognized" ]]
     [[ $(grep -c '^wake_fixture_first_pcm turn=[0-9][0-9]*$' "$logfile") == "$recognized" ]]
     [[ $(grep -c '^wake_fixture_pcm turn=[0-9][0-9]* exact=1$' "$logfile") == "$recognized" ]]
     ! grep -q 'exact=0' "$logfile"
@@ -118,7 +120,7 @@ verify_fixture() {
 
 start_fixture wake
 run_case flow nativeWakeFlowsThroughProductAudioAndTlsAsr
-verify_fixture wake 2 2
+verify_fixture wake 2 2 2
 stop_fixture
 "${adb[@]}" reverse --remove "tcp:$reverse_owned"
 reverse_owned=
@@ -130,6 +132,6 @@ for revoke in stop background sleep; do
         run_case "$revoke-$gate" nativeWakeRejectsRevokedCallbacks -e wakeGate "$gate" -e wakeRevoke "$revoke"
     done
 done
-verify_fixture wake-revoke 6 3
+verify_fixture wake-revoke 6 6 3
 "${adb[@]}" logcat -d -t 1000 -s WakeProbe:I | grep -F "run=$run_id " > "$results/screen-state.txt"
 [[ $(wc -l < "$results/screen-state.txt") -eq 3 ]]

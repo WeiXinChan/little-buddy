@@ -77,3 +77,11 @@ unzip -p app/build/outputs/apk/release/app-release-unsigned.apk assets/wake/prom
 ```
 
 公开 CI 编译 `ciRelease`，其包名为 `com.littlebuddy.sim.ci`。Debug 和 `ciRelease` 使用工程生成的两段正弦音，CC0-1.0。家庭 Release 仅从独立生成目录读取已校验 PCM。OPPO 工程探针使用可分发测试音，家庭暖声听感保留给成品验收。
+
+## 首轮静默许可复验
+
+`c534ea2` 的 [CI 45242873512](https://github.com/WeiXinChan/little-buddy/actions/runs/45242873512) 构建成功，35 项设备用例中 28 过、7 败。三项扣留 KWS 的撤销在建连前通过，贯通和六项建连后的撤销都缺少后续事件。后端首轮按既定协议发零段 `reply`、零段 `reply.end` 和 chat/listen 的 `turn.committed`。Android 接受了空 reply，却只允许零段回执结束会话，拒绝了这个有效聆听许可，连接在 `turn.start` 以前关闭。
+
+修复只允许当前端上唤醒会话首轮、chat/listen、带非空许可的零段聆听回执。保留测试时限及原断言。新设备 CI 另校验回环侧计数。贯通应为连接 2、ready 2、封口 2、首 PCM 2、逐字节一致 2。九项撤销应为连接 6、ready 6、封口 3、首 PCM 3、逐字节一致 3，三项已扣留 ready 的连接各在首 PCM 前撤销。Activity 记录连接尝试、握手、静默许可、ready 生效和封口事件，旧代事件实际释放后的三项副作用计数均应为零。记录不含地址、令牌或 PCM。
+
+复验使用当前提交的 APK 与配套回环 fixture，`scripts/check-wake-fixtures` 核对测试 APK 三份样本。之前基于 `c534ea2` 的 OPPO 工件仅供该 SHA 的历史复现。正式设备工程包在最终窗口按新固定提交重编。

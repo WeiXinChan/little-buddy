@@ -33,6 +33,6 @@ scp -r "$result" "$OPPO_SSH:$remote/results/"
 
 ## 结果判定
 
-- `flow.instrumentation.txt` 一项通过。贯通使用真实 Sherpa JNI 和正式 Activity。待机零连接，紧接「玩猜动物」和单独回应后的「玩猜动物」均完整保留首字样本。回环日志恰有两次连接、两次首 PCM、两条 `exact=1`。本地回应前麦克风已释放，播放释放后才进入续听。
-- 九个撤销用例分别在停止、退后台、设备睡眠三个窗口释放迟到的真实 KWS 后续指令回调、已接收的 `turn.ready` 或完整云端音频段。每项只执行一条 instrumentation 测试。旧代不得新建连接、发送结束或启动播放。聚合回环日志恰有六次连接、三次首 PCM 和三条 `exact=1`，音频段场景在撤销前完成三次假 ASR。锁屏结果以日志中 `keyguard_locked` 另记，屏灭而未进入系统锁屏时仅计屏灭撤销。
+- `flow.instrumentation.txt` 一项通过。贯通使用真实 Sherpa JNI 和正式 Activity。待机零连接，紧接「玩猜动物」和单独回应后的「玩猜动物」均完整保留首字样本。回环日志恰有两次连接、两次 ready、两次封口、两次首 PCM、两条 `exact=1`。本地回应前麦克风已释放，播放释放后才进入续听。
+- 九个撤销用例分别在停止、退后台、设备睡眠三个窗口释放迟到的真实 KWS 后续指令回调、已接收的 `turn.ready` 或完整云端音频段。每项只执行一条 instrumentation 测试。旧代不得新建连接、发送结束或启动播放。聚合回环日志恰有六次连接、六次 ready、三次封口、三次首 PCM 和三条 `exact=1`，音频段场景在撤销前完成三次假 ASR。锁屏结果以日志中 `keyguard_locked` 另记，屏灭而未进入系统锁屏时仅计屏灭撤销。
 - 夹具来源、生成步骤与样本哈希由 [前台唤醒验证](foreground-wake-validation.md) 和 `scripts/wake-fixtures.sha256` 固定。APK 安装前同源与 APK 内 PCM 要逐个匹配。只回传用例计数、版本、音频操作状态及测试结果。OPPO 工程测量无法替代家庭暖声、童声和长期误报验收。

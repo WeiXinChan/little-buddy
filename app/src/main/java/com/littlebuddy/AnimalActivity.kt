@@ -490,6 +490,8 @@ open class AnimalActivity : Activity() {
         } else request.url("ws://127.0.0.1:8765/animal")
         if (!holdFocus()) return
         val regression = permutations?.isChecked == true
+        val wakeOperation = if (wakeEntry) upload?.operation else null
+        wakeOperation?.let { traceCloud("wake_connection_attempt", it) }
         probe?.observe(AnimalEvent.OPEN_SOCKET)
         socket = client.newWebSocket(request.build(),
             object : WebSocketListener() {
@@ -514,6 +516,7 @@ open class AnimalActivity : Activity() {
                 }
 
                 override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) = dispatch(webSocket) {
+                    wakeOperation?.let { traceCloud("wake_connection_open", it) }
                     val start = JSONObject().put("event", "session.start").put("v", 1)
                         .put("catalog", "animal-click-1").put("images", JSONArray(images.keys.toList()))
                     if (product) start.put("conversation", true)
@@ -621,7 +624,10 @@ open class AnimalActivity : Activity() {
                         if (code != 1000 || reply?.receipt?.action != "end") reset("游戏服务已断开")
                     }
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) =
-                    dispatch(webSocket) { reset(if (product) "连不上了，请再试一次" else "连接失败，请检查服务和 USB 转发") }
+                    dispatch(webSocket) {
+                        wakeOperation?.let { traceCloud("wake_connection_failed", it) }
+                        reset(if (product) "连不上了，请再试一次" else "连接失败，请检查服务和 USB 转发")
+                    }
             })
         render("正在连接游戏服务", BuddyMood.WAITING)
         timeout(if (cloudMode) 12_000 else 5_000) { reset("连接或回复超时，请重新开始") }
@@ -677,6 +683,9 @@ open class AnimalActivity : Activity() {
                     return
                 }
                 cloudReady = true
+                if (wakeEntry && key.getInt("turn_id") == 1) {
+                    upload?.let { traceCloud("wake_ready_applied", it.operation) }
+                }
                 uploadBlockedSince = null
                 drainUpload()
             }
@@ -702,8 +711,13 @@ open class AnimalActivity : Activity() {
                 val action = message.getString("next_action")
                 val mode = message.optString("mode", "game")
                 require(mode == "chat" || mode == "game")
-                require(current.segments.isNotEmpty() || action == "end")
-                current.receipt = Receipt(action, message.optString("listen_id"), message.getInt("completed"), mode)
+                val permit = message.optString("listen_id")
+                val silentWakePermit = current.segments.isEmpty() && wakeEntry &&
+                    current.key.getInt("turn_id") == 1 && action == "listen" && mode == "chat" &&
+                    (message.opt("listen_id") as? String)?.isNotBlank() == true
+                require(current.segments.isNotEmpty() || action == "end" || silentWakePermit)
+                if (silentWakePermit) upload?.let { traceCloud("wake_silent_permit", it.operation) }
+                current.receipt = Receipt(action, permit, message.getInt("completed"), mode)
             }
         }
         proceed(current)
@@ -922,6 +936,9 @@ open class AnimalActivity : Activity() {
         when (result) {
             AnimalUpload.Drain.FAILED -> reset("语音上传失败，请重新开始")
             AnimalUpload.Drain.ENDED -> {
+                if (wakeEntry && reply?.key?.optInt("turn_id") == 1) {
+                    traceCloud("wake_upload_end", pending.operation)
+                }
                 pending.close()
                 upload = null
                 probe?.observe(AnimalEvent.ASR_UPLOAD_END)
