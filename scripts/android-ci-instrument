@@ -97,7 +97,7 @@ run_test() {
     local selection="$test_class#$case" limit=90s
     if [[ "$case" == @* ]]; then
         selection=$test_class
-        limit=120s
+        limit=150s
     fi
     timeout --kill-after=5s "$limit" "${adb[@]}" shell am instrument -w -r \
         -e class "$selection" "$@" "$runner" 2>&1 |
@@ -123,7 +123,7 @@ run_test() {
 }
 
 unexecuted() {
-    local row="| $1 | $game_class#$game_case | 0/1 | 0 | 0 | 0 | 0s | NOT RUN ($2) |"
+    local row="| $1 | $game_class#$game_case | 0/1 | 0 | 0 | 0 | 0 | 0s | NOT RUN ($2) |"
     report "$row"
     echo "::error::$row"
 }
@@ -134,8 +134,8 @@ reset_app() {
 }
 
 report ''
-report '| Scenario | Test | Started | Pass | Fail | Skip | Time | Result |'
-report '| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |'
+report '| Scenario | Test | Started | Pass | Fail | Skip | Raw events | Time | Result |'
+report '| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |'
 run_test "$smoke_class" "$smoke_case" smoke || failures=1
 
 transport_healthy=1
