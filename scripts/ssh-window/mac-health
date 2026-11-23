@@ -1,0 +1,56 @@
+#!/bin/bash
+# Use only the endpoint and public trust material from the private handoff.
+set -euo pipefail
+
+if [[ $# != 7 || ( $1 != preflight && $1 != probe ) ]]; then
+    echo "Usage: mac-health preflight|probe SSH_HOST DEVICE_USER IDENTITY KNOWN_HOSTS TLS_CA TLS_NAME" >&2
+    exit 2
+fi
+mode=$1
+host=$2
+user=$3
+identity=$4
+known=$5
+ca=$6
+tls_name=$7
+[[ $host =~ ^[a-zA-Z0-9][a-zA-Z0-9.:-]*$ &&
+   $user =~ ^[a-z_][a-z0-9_-]*$ &&
+   $tls_name =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+for file in "$identity" "$known" "$ca"; do
+    [[ -f $file && -r $file && -s $file ]]
+done
+ssh-keygen -F "$host" -f "$known" >/dev/null
+openssl x509 -in "$ca" -noout
+if [[ $mode == preflight ]]; then
+    echo 'Local trust files found; no network probe performed.'
+    exit
+fi
+
+umask 077
+state=$(mktemp -d /tmp/tita-mac-health.XXXXXXXX)
+control=$state/ssh
+cleanup() {
+    if [[ -S $control ]]; then
+        ssh -F /dev/null -S "$control" -O exit -l "$user" "$host" >/dev/null 2>&1 || true
+        unlink "$control" 2>/dev/null || true
+    fi
+    rmdir "$state"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+local_port=24561
+ssh -F /dev/null -M -S "$control" -fNT -p 22 -l "$user" -i "$identity" \
+    -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=5 \
+    -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o GlobalKnownHostsFile=/dev/null \
+    -o "UserKnownHostsFile=\"$known\"" -o ExitOnForwardFailure=yes \
+    -L "127.0.0.1:$local_port:127.0.0.1:24457" "$host"
+status=$(curl -q --silent --show-error --noproxy '*' --proto '=https' \
+    --max-time 8 --cacert "$ca" --resolve "$tls_name:$local_port:127.0.0.1" \
+    --output /dev/null --write-out '%{http_code}' "https://$tls_name:$local_port/")
+if [[ $status != 200 ]]; then
+    printf 'TLS health probe expected HTTP 200, received %s.\n' "$status" >&2
+    exit 1
+fi
+echo 'SSH host key and TLS verified; health returned HTTP 200.'

@@ -60,3 +60,18 @@ sudo scripts/ssh-window/rehearse timeout
 sudo scripts/ssh-window/rehearse stalled-published
 sudo scripts/ssh-window/rehearse stalled-publish
 ```
+
+## Mac 提前准备
+
+沿用已核验的私密材料。Mac 按目标地址将已有 host key 写入单独的 known_hosts，保留既有 CA PEM、证书 DNS SAN 和设备私钥。材料通过既有私密交接流转。健康检查使用已核的 HTTPS 根路径和 HTTP 200 判据。脚本默认用本机回环端口 24561，遇占用会拒绝建立转发。设备私钥若有口令，运行前由 Mac 用户加载到本机 SSH agent。
+
+```bash
+scripts/ssh-window/mac-health preflight "$SSH_HOST" "$DEVICE_USER" \
+  "$DEVICE_IDENTITY" "$KNOWN_HOSTS" "$TLS_CA" "$TLS_NAME"
+scripts/ssh-window/mac-health probe "$SSH_HOST" "$DEVICE_USER" \
+  "$DEVICE_IDENTITY" "$KNOWN_HOSTS" "$TLS_CA" "$TLS_NAME"
+```
+
+`preflight` 只检查本地文件。协调方给出实际开窗和截止后才执行 `probe`，只汇报 UTC 时间、结果和网络路径。
+
+如需给 Mac 留出切换网络路径的时间，建议评审固定 300 秒，从武装开始计时。600 秒作为可评审的硬上限，超过即拒绝武装。300 秒和 600 秒的配置计时预算分别为武装后 455 秒和 755 秒，另计 timer 的 1 秒调度精度，现场仍以实际验臂记录为准。该评估沿用 135 秒排空截止和 155 秒单元运行上限。若采纳，timer 与验臂必须使用同一审定值，并重验计时和逾期拒绝发布。本提交仍使用 60 秒窗口。
