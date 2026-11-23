@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One emulator and one fresh fixture per game scenario. Run from the repo root.
+# One emulator with a fresh loopback fixture for each game scenario. Run from the repo root.
 set -euo pipefail
 
 serial=$1
@@ -10,6 +10,8 @@ tls="$RUNNER_TEMP/animal-ci-tls"
 fixture_pid=
 reverse=
 guest_port=19444
+normal_class=com.littlebuddy.AnimalActivityTest
+normal_source=app/src/androidTest/java/com/littlebuddy/AnimalActivityTest.kt
 runner=com.littlebuddy.sim.test/com.littlebuddy.SimUiRunner
 smoke_class=com.littlebuddy.StreamingAudioTest
 smoke_case=nativePlaybackHeadAdvancesBeforeEndAndReleaseFollowsDrain
@@ -60,13 +62,23 @@ trap 'exit 130' INT
 trap 'exit 143' HUP TERM
 
 start_fixture() {
-    local scenario=$1 log=$2 port
-    "$python" -u -B -m backend.animal.private_fixture "$scenario" --port 0 --timing \
-        --cert "$tls/cert.pem" --key "$tls/key.pem" >"$log" 2>&1 &
+    local scenario=$1 log=$2 port ready
+    local fixture
+    if [[ "$scenario" == normal ]]; then
+        guest_port=8765
+        fixture=(backend.animal.fake_server --port 0)
+        ready='瓦力假服务 ws://127[.]0[.]0[.]1:([0-9]+) · .+'
+    else
+        guest_port=19444
+        fixture=(backend.animal.private_fixture "$scenario" --port 0 --timing
+            --cert "$tls/cert.pem" --key "$tls/key.pem")
+        ready="animal_fixture_ready scenario=$scenario port=([0-9]+)"
+    fi
+    "$python" -u -B -m "${fixture[@]}" >"$log" 2>&1 &
     fixture_pid=$!
     for attempt in {1..25}; do
         kill -0 "$fixture_pid" 2>/dev/null || return 1
-        port=$(sed -n "s/^animal_fixture_ready scenario=$scenario port=\([0-9][0-9]*\)$/\1/p" "$log")
+        port=$(sed -nE "s|^$ready$|\1|p" "$log")
         if [[ -n "$port" ]]; then
             # A TCP health probe would use the first connection earmarked for the fault.
             reverse=1
@@ -82,8 +94,13 @@ run_test() {
     local test_class=$1 case=$2 scenario=$3
     shift 3
     local start=$SECONDS status=0 result="$scratch/$scenario.instrumentation" verdict
-    timeout --kill-after=5s 90s "${adb[@]}" shell am instrument -w -r \
-        -e class "$test_class#$case" "$@" "$runner" 2>&1 |
+    local selection="$test_class#$case" limit=90s
+    if [[ "$case" == @* ]]; then
+        selection=$test_class
+        limit=120s
+    fi
+    timeout --kill-after=5s "$limit" "${adb[@]}" shell am instrument -w -r \
+        -e class "$selection" "$@" "$runner" 2>&1 |
         tr -d '\r' >"$result" || status=$?
     verdict=$("$python" scripts/android-ci-result.py "$result" "$test_class" "$case" \
         "$scenario" "$((SECONDS - start))" "$status") || {
@@ -111,6 +128,11 @@ unexecuted() {
     echo "::error::$row"
 }
 
+reset_app() {
+    timeout 10s "${adb[@]}" shell pm clear com.littlebuddy.sim | grep -qx Success &&
+        timeout 10s "${adb[@]}" shell pm grant com.littlebuddy.sim android.permission.RECORD_AUDIO
+}
+
 report ''
 report '| Scenario | Test | Started | Pass | Fail | Skip | Time | Result |'
 report '| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |'
@@ -124,8 +146,7 @@ for scenario in "${scenarios[@]}"; do
     fi
 
     # Reset the activity, settings and any instrumentation left after an ADB timeout.
-    if ! timeout 10s "${adb[@]}" shell pm clear com.littlebuddy.sim | grep -qx Success ||
-       ! timeout 10s "${adb[@]}" shell pm grant com.littlebuddy.sim android.permission.RECORD_AUDIO; then
+    if ! reset_app; then
         unexecuted "$scenario" 'app reset failed'
         failures=1
         transport_healthy=0
@@ -155,6 +176,21 @@ for scenario in "${scenarios[@]}"; do
         transport_healthy=0
     fi
 done
+
+if (( transport_healthy )) && reset_app && start_fixture normal "$scratch/normal.fixture"; then
+    run_test "$normal_class" "@$normal_source" normal || failures=1
+else
+    report "- Normal gameplay not run (previous cleanup, app reset or fixture startup failed)"
+    "$python" scripts/android-ci-result.py /dev/null "$normal_class" "@$normal_source" normal 0 1 |
+        tee -a "$GITHUB_STEP_SUMMARY" || true
+    failures=1
+fi
+if stop_fixture; then
+    report "- Normal gameplay fixture cleanup completed (ADB reverse removed and server reaped if started)"
+else
+    report "- Normal gameplay fixture cleanup failed"
+    failures=1
+fi
 
 report ''
 report "- Game scenarios: $game_passed/8 verified, $game_started/8 instrumentation invocations"
