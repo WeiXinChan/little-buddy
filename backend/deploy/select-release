@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=${LITTLE_BUDDY_RELEASE_ROOT:-/opt/little-buddy-v1}
+sha=${1:-}
+if [[ ! $sha =~ ^[0-9a-f]{40}$ || ! -d $root/releases/$sha/backend ||
+      ! -x $root/releases/$sha/.venv/bin/python ]]; then
+    echo "Provide an installed release SHA" >&2
+    exit 2
+fi
+
+staging=$(mktemp -d "$root/.release.XXXXXX")
+trap 'rmdir "$staging" 2>/dev/null || true' EXIT
+ln -s "releases/$sha" "$staging/link"
+if ! mv -Tf "$staging/link" "$root/current"; then
+    unlink "$staging/link"
+    exit 1
+fi
