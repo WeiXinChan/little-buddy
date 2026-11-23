@@ -1,7 +1,7 @@
 package com.littlebuddy
 
 /** Main-thread fixture. Delivery can be reordered independently of native audio and USB latency. */
-internal class AnimalGates : AnimalProbe {
+internal class AnimalGates(override val syntheticCapture: Boolean = false) : AnimalProbe {
     var held = setOf<AnimalEvent>()
     val trace = mutableListOf<AnimalEvent>()
     private val pending = mutableMapOf<AnimalEvent, ArrayDeque<() -> Unit>>()

@@ -12,8 +12,8 @@ android {
         applicationId = "com.littlebuddy.sim"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.1.9-animal-sim"
+        versionCode = 13
+        versionName = "0.1.12-animal-private"
         testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
     compileOptions {
