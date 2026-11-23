@@ -99,6 +99,8 @@ WSS 混合版本化 JSON 控制帧和二进制 PCM。控制帧含 `v`、`session
 
 ### 童声云测放行记录
 
+[TITA-71 数据处理证据](bailian-data-evidence.md)记录北京 ASR、LLM、TTS 的公开条款、逐数据项未知及服务器只读检查。当前童声云测继续暂停。
+
 百炼中国站 FAQ 说明调用数据可能存储，国际站零留存能力仅适用于符合条件的客户及模型。两项说明只作为核验线索。 [中国站 FAQ](https://help.aliyun.com/zh/model-studio/faq-about-alibaba-cloud-model-studio) · [国际站数据留存说明](https://www.alibabacloud.com/help/en/model-studio/data-retention-policy)
 
 工程侧按试验和生产环境分别建表。每行绑定供应商、实际账号/工作空间、地域/处理地、API、模型快照、数据项和用途。至少覆盖 ASR 原始音频及转写、LLM 请求与回答文本、TTS 输入及音频，以及错误样本、遥测、代理和供应商分处理方可能另存的副本。记录是否落盘、各副本默认/配置后留存时长、训练及人工访问、地域转移、法定/备份例外、删除方式/权限/范围/时限及验证方式。附当前适用条款、书面答复或控制台佐证，记录证据日期、核对人和结论，证据去除密钥和内容。声称零留存时也需记录适用账号、接口和例外。
