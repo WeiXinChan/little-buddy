@@ -18,8 +18,23 @@ from backend.server import Channel, DeviceDisconnected
 from backend.timing import observer
 from backend.voice import End, Limits, ProtocolError, deliver, recognize
 from backend.wire import decode_input
+from .chat import FALLBACK, RISK, approved, normalized
 from .rules import CARDS
 from .session import Session, TurnKey
+
+
+async def chat_answer(providers, text, history, counts):
+    counts["llm"] += 1
+    async with asyncio.timeout(4):
+        async with providers.answer(text, history=history) as response:
+            sentences = []
+            async for sentence in response:
+                if RISK.search(normalized("".join((*sentences, sentence)))):
+                    return True, ()
+                if len(sentences) == 3 or not approved(sentence):
+                    return False, (FALLBACK,)
+                sentences.append(sentence)
+            return False, tuple(sentences)
 
 
 class GameChannel(Channel):
@@ -56,10 +71,10 @@ class GameChannel(Channel):
 
 class RuleSpeech:
     def segment(self, text):
-        return text  # Only Session-authored templates enter this pipeline.
+        return text  # Templates and pre-screened model sentences.
 
 
-async def play_game(socket, providers, *, seed=None, report=print):
+async def play_game(socket, providers, *, seed=None, report=print, trial_limits=False):
     channel = GameChannel(socket)
     session = None
     limits = Limits()
@@ -86,7 +101,7 @@ async def play_game(socket, providers, *, seed=None, report=print):
         if receipt:
             await channel.control("turn.committed", count=receipt.count,
                                   next_action=receipt.next_action, listen_id=receipt.listen_id,
-                                  completed=(session.game or session.summary).completed)
+                                  mode=receipt.mode, completed=(session.game or session.summary).completed)
 
     async def acknowledge(key, number):
         if type(number) is not int:
@@ -98,6 +113,9 @@ async def play_game(socket, providers, *, seed=None, report=print):
                 await commit(result.commit)
 
     async def send_reply(reply, cleanup=None):
+        if (trial_limits and session.next_action != "end" and
+                (counts["tts"] + len(reply.segments) >= 64 or counts["asr"] >= 24 or counts["llm"] >= 12)):
+            reply = session.limit()
         channel.key = reply.key
         started_at = clock()
         await channel.control("reply", segments=[dict(image_id=s.image_id) for s in reply.segments])
@@ -159,7 +177,10 @@ async def play_game(socket, providers, *, seed=None, report=print):
                     or set(hello["images"]) != {card.image_id for card in CARDS}):
                 raise ProtocolError("catalog mismatch")
             try:
-                session = channel.session = Session(secrets.randbits(32) if seed is None else seed, hello["catalog"])
+                session = channel.session = Session(
+                    secrets.randbits(32) if seed is None else seed, hello["catalog"],
+                    conversation=hello.get("conversation") is True,
+                )
             except ValueError as exc:
                 raise ProtocolError("unsupported catalog") from exc
         pending = await send_reply(session.reply)
@@ -188,8 +209,12 @@ async def play_game(socket, providers, *, seed=None, report=print):
                             async with recognize(channel, providers, limits, allow_empty=True) as (text, cleanup):
                                 # The provider delivers text without calibrated confidence.
                                 # Apply exact phrases and context guards. Empty or ambiguous text clarifies.
-                                reply = session.transcript(key, text)
-                                del text
+                                history = session.chat_request(key, text)
+                                needs_adult, answer = False, ()
+                                if history is not None:
+                                    needs_adult, answer = await chat_answer(providers, text, history, counts)
+                                reply = session.transcript(key, text, answer=answer, needs_adult=needs_adult)
+                                del text, history, answer
                                 pending = await send_reply(reply, cleanup)
                     else:
                         pending = await send_reply(session.reply)
@@ -216,7 +241,7 @@ async def play_game(socket, providers, *, seed=None, report=print):
         await socket.close(1008 if reason == "protocol_error" else 1011, reason)
 
 
-def game_server(port, tls, token, providers, *, seed=None, report=print):
+def game_server(port, tls, token, providers, *, seed=None, report=print, trial_limits=False):
     if tls is None or not 32 <= len(token) <= 256 or not token.isascii() or not token.isalnum():
         raise ValueError("TLS and a 32–256 ASCII alphanumeric device token are required")
     expected = ("Bearer " + token).encode("ascii")
@@ -241,7 +266,8 @@ def game_server(port, tls, token, providers, *, seed=None, report=print):
             await socket.close(1013, "busy")
             return
         active = True
-        tasks = (asyncio.create_task(play_game(socket, providers, seed=seed, report=report)),
+        tasks = (asyncio.create_task(play_game(socket, providers, seed=seed, report=report,
+                                               trial_limits=trial_limits)),
                  asyncio.create_task(socket.wait_closed()))
         try:
             await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -264,6 +290,7 @@ async def main():
     parser.add_argument("--cert", required=True)
     parser.add_argument("--key", required=True)
     parser.add_argument("--provider", choices=("dashscope", "fake"), default="dashscope")
+    parser.add_argument("--trial-limits", action="store_true", help="enable per-session trial quotas")
     args = parser.parse_args()
     if args.port == 8443:
         parser.error("8443 is reserved for the single-turn service")
@@ -279,7 +306,8 @@ async def main():
             providers = Demo()
         else:
             providers = DashScope.from_environment(http)
-        async with game_server(args.port, tls, token, providers, report=lambda line: print(line, flush=True)):
+        async with game_server(args.port, tls, token, providers, trial_limits=args.trial_limits,
+                               report=lambda line: print(line, flush=True)):
             print(f"animal_ready port={args.port}", flush=True)
             await asyncio.Future()
 

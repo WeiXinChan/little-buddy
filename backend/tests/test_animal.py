@@ -1,4 +1,5 @@
 import unittest
+from copy import deepcopy
 from itertools import product
 from unittest.mock import patch
 
@@ -28,6 +29,44 @@ class AnimalTest(unittest.TestCase):
         self.assertIsNone(self.session.advance(self.receipt.key))
         self.receipt = play(self.session, self.playback)
         self.assertIsNone(self.playback.image)
+
+    def test_conversation_context_accepts_only_current_consecutive_acks(self):
+        session = Session(SEED, conversation=True)
+        playback = Playback()
+        playback.activate(session.session_id)
+        game = play(session, playback)
+        switch = say(session, game, "我想聊天")
+        self.assertIsNone(session.chat_request(switch.key, "聊小猫"))
+        self.assertFalse(session.consume(switch.key, game.listen_id, "start"))
+        chat = play(session, playback)
+        self.assertEqual(chat.mode, "chat")
+        self.assertTrue(session.consume(chat.key, chat.listen_id, "start"))
+        reply = session.transcript(chat.key, "聊小猫", answer=("猫咪会喵喵叫。", "它喜欢晒太阳。"))
+        self.assertEqual(session.chat_history, [])
+        self.assertIsNone(session.ack(reply.key, 1))  # Unsent segment.
+        self.assertTrue(session.segment_sent(reply.key, 1))
+        self.assertEqual(session.chat_history, [])
+        self.assertIsNone(session.ack(reply.key, 2))
+        self.assertIsNone(session.ack(game.key, 1))
+        for _ in range(2):
+            self.assertIsNone(session.ack(reply.key, 1).commit)
+        self.assertEqual(session.heard, ["好呀，你想聊什么？", "猫咪会喵喵叫。"])
+        self.assertEqual(session.chat_history, [("聊小猫", "猫咪会喵喵叫。")])
+        self.assertIsNone(session.reply_end(reply.key, 2))  # Second segment hasn't finished sending.
+        self.assertTrue(session.segment_sent(reply.key, 2))
+        self.assertIsNone(session.reply_end(reply.key, 2))  # Second segment hasn't played.
+        for reason in ("stop", "disconnect"):
+            with self.subTest(reason=reason):
+                ended = deepcopy(session)
+                ended.cancel(reason)
+                self.assertIsNone(ended.ack(reply.key, 2))
+                self.assertEqual(ended.heard, [])
+                self.assertEqual(ended.chat_history, [])
+                self.assertIsNone(ended.chat_input)
+
+        fresh = Session(SEED, conversation=True)
+        self.assertIsNone(fresh.ack(reply.key, 2))
+        self.assertEqual(fresh.chat_history, [])
 
     def test_catalog_and_version(self):
         self.assertEqual(len(CARDS), 6)

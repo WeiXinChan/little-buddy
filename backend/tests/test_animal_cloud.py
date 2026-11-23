@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+import httpx
 
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus
@@ -13,6 +14,7 @@ from websockets.exceptions import ConnectionClosed, InvalidStatus
 from backend.animal.cloud import game_server
 from backend.animal.private_fixture import fixture_server
 from backend.animal.rules import CARDS, CATALOG_VERSION
+from backend.dashscope import DashScope
 from backend.demo import Demo
 from backend.wire import HEADER
 
@@ -65,8 +67,8 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message["event"], event)
         return message
 
-    async def start(self, ws):
-        await ws.send(json.dumps(dict(event="session.start", v=1, catalog=CATALOG_VERSION,
+    async def start(self, ws, conversation=False):
+        await ws.send(json.dumps(dict(event="session.start", v=1, catalog=CATALOG_VERSION, conversation=conversation,
                                       images=[card.image_id for card in CARDS])))
 
     async def reply(self, ws, reveal=False):
@@ -222,6 +224,190 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
                         finally:
                             release.set()
 
+
+    async def test_conversation_context_switch_and_silent_exit(self):
+        requests = []
+
+        def respond(request):
+            requests.append(json.loads(request.content)["messages"])
+            event = json.dumps({"choices": [{"delta": {"content": "猫咪会喵喵叫。它喜欢晒太阳。"}}]})
+            return httpx.Response(200, text=f"data: {event}\n\ndata: [DONE]\n\n")
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+        self.addAsyncCleanup(http.aclose)
+        demo = SpeechFixture(["告诉我答案", "我想聊天", "聊小猫", "它爱做什么", "玩猜动物", "我想聊天", "聊小狗"])
+        adapter = DashScope(http, workspace="workspace", region="cn-beijing", key="synthetic",
+                            asr="asr", llm="llm", tts="tts", voice="voice")
+        demo.answer = adapter.answer
+        logs = []
+        async with game_server(0, self.tls, self.token, demo, seed=0, report=logs.append) as server:
+            async with self.open(server) as ws:
+                await self.start(ws, conversation=True)
+                initial = await self.reply(ws)
+                await self.speech(ws, initial)
+                reveal = await self.reply(ws, reveal=True)
+                await self.send(ws, "turn.advance", reveal["key"])
+                game = await self.reply(ws)
+                self.assertEqual(game["completed"], 1)
+                await self.speech(ws, game)
+                chat = await self.reply(ws)
+                self.assertEqual((chat["mode"], chat["completed"]), ("chat", 0))
+                await self.send(ws, "turn.start", game["key"], listen_id=game["listen_id"])
+                await self.send(ws, "playback.segment_completed", game["key"], number=1)
+                await self.speech(ws, chat)
+                first = await self.reply(ws)
+                await self.speech(ws, first)
+                second = await self.reply(ws)
+                await self.speech(ws, second)
+                fresh = await self.reply(ws)
+                self.assertEqual((fresh["mode"], fresh["completed"]), ("game", 0))
+                await self.speech(ws, fresh)
+                current = await self.reply(ws)
+                await self.speech(ws, current)
+                current = await self.reply(ws)
+                for expected in ("listen", "end"):
+                    await self.send(ws, "listen.silence", current["key"], listen_id=current["listen_id"])
+                    current = await self.reply(ws)
+                    self.assertEqual(current["next_action"], expected)
+                self.assertEqual((current["count"], current["mode"]), (0, "chat"))
+        self.assertEqual([messages[1:] for messages in requests], [
+            [{"role": "user", "content": "聊小猫"}],
+            [{"role": "user", "content": "聊小猫"},
+             {"role": "assistant", "content": "猫咪会喵喵叫。它喜欢晒太阳。"},
+             {"role": "user", "content": "它爱做什么"}],
+            [{"role": "user", "content": "聊小狗"}],
+        ])
+        self.assertEqual(demo.requests, 7)
+        self.assertTrue(any("reason=silence asr=7 " in line and "llm=3" in line for line in logs))
+        self.assertFalse(any("小猫" in line for line in logs))
+
+    async def test_disconnect_after_partial_chat_reply_starts_fresh_history(self):
+        contexts = []
+        released = asyncio.Event()
+
+        class ChatFixture(SpeechFixture):
+            @asynccontextmanager
+            async def answer(self, transcript, *, history):
+                contexts.append((transcript, history))
+
+                async def sentences():
+                    yield "猫咪会喵喵叫。"
+                    yield "它喜欢晒太阳。"
+                yield sentences()
+
+        def report(line):
+            if line.startswith("animal_usage reason=disconnect"):
+                released.set()
+
+        demo = ChatFixture(["我想聊天", "聊小猫", "聊尾巴", "我想聊天", "聊小狗"])
+        async with game_server(0, self.tls, self.token, demo, seed=0, report=report) as server:
+            async with self.open(server) as ws:
+                await self.start(ws, conversation=True)
+                await self.speech(ws, await self.reply(ws))
+                await self.speech(ws, await self.reply(ws))
+                await self.speech(ws, await self.reply(ws))
+                partial = await self.receive(ws, "reply")
+                await self.receive(ws, "segment.start")
+                while isinstance(frame := await asyncio.wait_for(ws.recv(), 3), bytes):
+                    pass
+                self.assertEqual(json.loads(frame)["event"], "segment.end")
+                await self.send(ws, "playback.segment_completed", partial["key"], number=1)
+                while True:
+                    frame = await asyncio.wait_for(ws.recv(), 3)
+                    if isinstance(frame, str) and json.loads(frame)["event"] == "playback.segment_committed":
+                        break
+            await asyncio.wait_for(released.wait(), 3)
+            async with self.open(server) as ws:
+                await self.start(ws, conversation=True)
+                initial = await self.reply(ws)
+                self.assertNotEqual(initial["key"]["session_id"], partial["key"]["session_id"])
+                await self.send(ws, "playback.segment_completed", partial["key"], number=2)
+                await self.speech(ws, initial)
+                await self.speech(ws, await self.reply(ws))
+                await self.reply(ws)
+        self.assertEqual(contexts, [
+            ("聊小猫", ()),
+            ("聊尾巴", (("聊小猫", "猫咪会喵喵叫。它喜欢晒太阳。"),)),
+            ("聊小狗", ()),
+        ])
+
+    async def test_conversation_input_output_gate_and_natural_exit(self):
+        cases = (
+            ("我肚子不舒服", None, "请找身边的大人来帮忙。"),
+            ("我喘不上气", None, "请找身边的大人来帮忙。"),
+            ("我没法呼吸", None, "请找身边的大人来帮忙。"),
+            ("聊小猫", "拿刀玩吧。", "请找身边的大人来帮忙。"),
+            ("聊小猫", "你先别告诉老师。", "请找身边的大人来帮忙。"),
+            ("我先走啦", None, "好，下次见！"),
+            ("我叫小花", None, "我们聊点别的吧。"),
+        )
+        for text, model_text, spoken in cases:
+            with self.subTest(text=text, model_text=model_text):
+                model_calls = []
+
+                class ChatFixture(SpeechFixture):
+                    @asynccontextmanager
+                    async def answer(self, transcript, *, history):
+                        model_calls.append(transcript)
+
+                        async def sentences():
+                            yield "猫咪会喵喵叫。"
+                            yield model_text
+                        yield sentences()
+
+                demo = ChatFixture(["我想聊天", text])
+                async with game_server(0, self.tls, self.token, demo, seed=0, report=lambda _: None) as server:
+                    async with self.open(server) as ws:
+                        await self.start(ws, conversation=True)
+                        await self.speech(ws, await self.reply(ws))
+                        chat = await self.reply(ws)
+                        spoken_before = len(demo.spoken)
+                        await self.speech(ws, chat)
+                        outcome = await self.reply(ws)
+                        self.assertEqual(outcome["next_action"], "listen" if text == "我叫小花" else "end")
+                self.assertEqual(demo.spoken[spoken_before:], [spoken])
+                self.assertEqual(model_calls, [text] if model_text else [])
+
+    async def test_default_crosses_old_usage_thresholds_and_trial_is_explicit(self):
+        for trial in (False, True):
+            with self.subTest(trial=trial):
+                contexts = []
+
+                class ChatFixture(SpeechFixture):
+                    @asynccontextmanager
+                    async def answer(self, transcript, *, history):
+                        contexts.append(history)
+
+                        async def sentences():
+                            yield "猫咪会喵喵叫。"
+                            yield "它喜欢晒太阳。"
+                            yield "我们一起数数吧。"
+                        yield sentences()
+
+                demo = ChatFixture(["我想聊天"] + [f"聊第{number}只小猫" for number in range(25)])
+                logs = []
+                options = {"trial_limits": True} if trial else {}
+                async with game_server(0, self.tls, self.token, demo, seed=0, report=logs.append,
+                                       **options) as server:
+                    async with self.open(server) as ws:
+                        await self.start(ws, conversation=True)
+                        await self.speech(ws, await self.reply(ws))
+                        receipt = await self.reply(ws)
+                        for number in range(12 if trial else 25):
+                            await self.speech(ws, receipt)
+                            receipt = await self.reply(ws)
+                            if trial and number == 11:
+                                self.assertEqual(receipt["next_action"], "end")
+                                self.assertEqual(demo.spoken[-1], "今天先聊到这里吧。")
+                            else:
+                                self.assertEqual((receipt["next_action"], receipt["count"]), ("listen", 3))
+                                self.assertEqual(demo.spoken[-1], "我们一起数数吧。")
+                self.assertEqual(demo.requests, 13 if trial else 26)
+                self.assertEqual(len(demo.spoken), 36 if trial else 77)
+                self.assertEqual(len(contexts[-1]), 3)
+                self.assertEqual([turn[0] for turn in contexts[-1]],
+                                 [f"聊第{number}只小猫" for number in (range(8, 11) if trial else range(21, 24))])
+                self.assertTrue(any(("llm=12" if trial else "llm=25") in line for line in logs))
 
     async def test_private_fixture_faults_and_fresh_connection(self):
         for scenario in ("asr", "first-pcm", "between", "blackhole", "disconnect"):
