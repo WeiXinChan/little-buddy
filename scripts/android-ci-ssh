@@ -171,6 +171,10 @@ if [[ "$api" == 36 ]]; then
         start_backend "$tls/cert.pem" "$tls/key.pem" "$scenario"
         run_test activeSshSessionReleasesForwardingAndRejectsLateAudio "active-$revoke" "$activity_test" \
             -e sshCase "$revoke" || failures=1
+        if [[ "$revoke" == background ]]; then
+            timeout 5s "${adb[@]}" logcat -d -s BuddySshLifecycle:I '*:S' |
+                awk '/BuddySshLifecycle: stage=/{print}' || true
+        fi
         stop_backend
     done
     start_backend "$tls/cert.pem" "$tls/key.pem" asr

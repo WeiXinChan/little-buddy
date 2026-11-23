@@ -290,24 +290,59 @@ class BuddyActivityTest {
         require(revoke in setOf("stop", "background", "sleep", "disconnect"))
         val recording = revoke == "background"
         val marker = if (recording) CAPTURE_FRAME else AnimalEvent.PLAYBACK_RELEASE
+        fun recordBackgroundStage(stage: String) {
+            if (!recording) return
+            android.util.Log.i("BuddySshLifecycle", "stage=$stage " +
+                "socket_attempts=${gates.count(AnimalEvent.OPEN_SOCKET)} " +
+                "capture_dispatches=${gates.count(CAPTURE_DISPATCH)} " +
+                "frames_held=${gates.queued(CAPTURE_FRAME)} " +
+                "frames_delivered=${gates.count(CAPTURE_FRAME)} " +
+                "forwarding_bound=${!forwardingPortFree()}")
+        }
+        fun awaitStage(stage: String, condition: () -> Boolean) {
+            try {
+                await(condition)
+            } catch (failure: AssertionError) {
+                onMain { recordBackgroundStage("${stage}_timeout") }
+                throw failure
+            }
+            onMain { recordBackgroundStage(stage) }
+        }
+
         observeNextActivity(gates)
         launch()
         onMain {
             field("WSS 服务地址").setText(checkNotNull(args.getString("animalUrl")))
             field("设备令牌").setText("offlinefixture".repeat(3))
             button("保存并进入").performClick()
+            if (recording) {
+                // The first positive AudioRecord read can be the only frame posted in silence.
+                gates.held = setOf(CAPTURE_FRAME)
+                recordBackgroundStage("armed")
+            }
             button("开始猜动物").performClick()
         }
-        await { button("结束录音").isEnabled }
-        var oldHeads = 0
-        onMain {
-            oldHeads = gates.count(PCM_HEAD_ADVANCED)
-            gates.held = setOf(marker)
-            if (!recording) activity.injectSyntheticCapture()
-        }
-        await {
-            if (recording) gates.ready(marker)
-            else gates.count(PCM_HEAD_ADVANCED) > oldHeads && face().mood == BuddyMood.SPEAKING
+        if (recording) {
+            // The held frame would enable Finish. Use the capture dispatch and active
+            // SSH forwarding as independent evidence that recording was requested over WSS.
+            awaitStage("capture_dispatched") {
+                gates.count(CAPTURE_DISPATCH) == 1 && !forwardingPortFree()
+            }
+            awaitStage("native_frame_held") { gates.ready(CAPTURE_FRAME) }
+            onMain {
+                assertEquals(0, gates.count(CAPTURE_FRAME))
+                assertTrue(button("停止").isEnabled)
+                assertFalse(button("结束录音").isEnabled)
+            }
+        } else {
+            await { button("结束录音").isEnabled }
+            var oldHeads = 0
+            onMain {
+                oldHeads = gates.count(PCM_HEAD_ADVANCED)
+                gates.held = setOf(marker)
+                activity.injectSyntheticCapture()
+            }
+            await { gates.count(PCM_HEAD_ADVANCED) > oldHeads && face().mood == BuddyMood.SPEAKING }
         }
         onMain { assertFalse(forwardingPortFree()) }
         val power = activity.getSystemService(android.os.PowerManager::class.java)
@@ -320,18 +355,28 @@ class BuddyActivityTest {
                     await { !power.isInteractive }
                 }
             }
-            await { !button("停止").isEnabled && gates.ready(marker) && forwardingPortFree() }
+            awaitStage("revoked") {
+                val backgrounded = !recording ||
+                    ActivityLifecycleMonitorRegistry.getInstance().getLifecycleStageOf(activity) == Stage.STOPPED
+                backgrounded && !button("停止").isEnabled && gates.ready(marker) && forwardingPortFree()
+            }
             onMain {
                 val heads = gates.count(PCM_HEAD_ADVANCED)
                 val uploads = gates.count(AnimalEvent.ASR_UPLOAD_END)
                 val captures = gates.count(CAPTURE_DISPATCH)
+                val delivered = gates.count(marker)
+                val queued = gates.queued(marker)
+                assertTrue(queued > 0)
                 gates.held = emptySet()
                 while (gates.ready(marker)) gates.release(marker)
+                assertEquals(delivered + queued, gates.count(marker))
                 assertEquals(heads, gates.count(PCM_HEAD_ADVANCED))
                 assertEquals(uploads, gates.count(AnimalEvent.ASR_UPLOAD_END))
                 assertEquals(captures, gates.count(CAPTURE_DISPATCH))
                 assertEquals(1, gates.count(AnimalEvent.OPEN_SOCKET))
                 assertFalse(button("结束录音").isEnabled)
+                assertTrue(forwardingPortFree())
+                recordBackgroundStage("late_frame_released")
             }
         } finally {
             if (revoke == "sleep") {
@@ -346,13 +391,13 @@ class BuddyActivityTest {
         }
         await { button("开始猜动物").isEnabled }
         onMain { button("开始猜动物").performClick() }
-        await { button("结束录音").isEnabled }
+        awaitStage("new_session_recording") { button("结束录音").isEnabled }
         onMain {
             assertEquals(2, gates.count(AnimalEvent.OPEN_SOCKET))
             assertFalse(forwardingPortFree())
             button("停止").performClick()
         }
-        await { forwardingPortFree() }
+        awaitStage("new_session_closed") { forwardingPortFree() }
     }
 
     private fun observeNextActivity(probe: AnimalProbe) {
