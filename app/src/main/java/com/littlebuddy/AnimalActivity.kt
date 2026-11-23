@@ -64,6 +64,7 @@ open class AnimalActivity : Activity() {
         }
     }
     internal var probe: AnimalProbe? = null
+    internal var fixtureSshProfile: BuddySshProfile? = null
 
     private fun deliver(event: AnimalEvent, action: () -> Unit) {
         val inspector = probe
@@ -494,15 +495,17 @@ open class AnimalActivity : Activity() {
             request.url(config.url).header("Authorization", "Bearer ${config.token}")
         } else request.url("ws://127.0.0.1:8765/animal")
         if (!holdFocus()) return
-        val transport = if (product && BuildConfig.BUDDY_SSH) {
-            try {
-                val profile = BuddySshProfile.load(this)
-                BuddySsh(profile).also { tunnel = it }.client(client)
-            } catch (_: Exception) {
-                reset("设备连接配置不可用")
-                return
+        val transport = try {
+            val profile = when {
+                product && BuildConfig.BUDDY_SSH -> BuddySshProfile.load(this)
+                product && BuildConfig.DEBUG -> fixtureSshProfile
+                else -> null
             }
-        } else client
+            if (profile == null) client else BuddySsh(profile).also { tunnel = it }.client(client)
+        } catch (_: Exception) {
+            reset("设备连接配置不可用")
+            return
+        }
         val regression = permutations?.isChecked == true
         val wakeOperation = if (wakeEntry) upload?.operation else null
         wakeOperation?.let { traceCloud("wake_connection_attempt", it) }

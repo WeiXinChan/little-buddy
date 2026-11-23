@@ -168,6 +168,16 @@ class BuddyActivityTest {
         launch()
         onMain {
             activity.probe = gates
+            val args = InstrumentationRegistry.getArguments()
+            args.getString("sshKey")?.let { key ->
+                activity.fixtureSshProfile = BuddySshProfile(
+                    BuddySshProfile.LOOPBACK,
+                    checkNotNull(args.getString("sshUser")),
+                    key,
+                    BuddySshProfile.trustFor(activity.filesDir.resolve("ssh-ca.pem").readBytes()),
+                    19442,
+                )
+            }
             field("WSS 服务地址").setText(url)
             save(oldToken)
             button("开始猜动物").performClick()
