@@ -87,7 +87,9 @@ run_test() {
         tr -d '\r' >"$result" || status=$?
     verdict=$("$python" scripts/android-ci-result.py "$result" "$test_class" "$case" \
         "$scenario" "$((SECONDS - start))" "$status") || {
-        report "${verdict%%$'\n'*}"
+        local row="${verdict%%$'\n'*}"
+        report "$row"
+        echo "::error::$row"
         if [[ "$verdict" == *$'\n'* ]]; then
             printf '%s\n' "${verdict#*$'\n'}" >>"$scratch/diagnostics"
         fi
@@ -100,10 +102,13 @@ run_test() {
         return 1
     }
     report "$verdict"
+    echo "::notice::$verdict"
 }
 
 unexecuted() {
-    report "| $1 | $game_class#$game_case | 0/1 | 0 | 0 | 0 | 0s | NOT RUN ($2) |"
+    local row="| $1 | $game_class#$game_case | 0/1 | 0 | 0 | 0 | 0s | NOT RUN ($2) |"
+    report "$row"
+    echo "::error::$row"
 }
 
 report ''
