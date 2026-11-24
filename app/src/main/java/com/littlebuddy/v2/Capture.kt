@@ -27,17 +27,21 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                        private val trace: (String,RecorderProof,String)->Unit = { _,_,_-> },
                        private val hooks: CaptureHooks = CaptureHooks(),
                        private val disposed: ()->Unit = {},
-                       private val managementPrompt: (String,()->Unit)->Unit = {_,_->}) {
-    companion object { private val lease=AtomicBoolean(false) }
+                       private val managementPrompt: (String,()->Boolean,(Boolean)->Unit)->Unit = {_,_,_->}) {
+    companion object { private val lease=java.util.concurrent.atomic.AtomicReference<String?>(null) }
+    private val captureId=java.util.UUID.randomUUID().toString()
+    val leaseReturned get()=!ownsLease && lease.get()!=captureId
     @Volatile private var operation="NOT_STARTED"
     @Volatile private var progressAt=0L
-    private fun progress(value:String){operation=value;progressAt=android.os.SystemClock.elapsedRealtime()}
-    fun workerEvidence()="operation=$operation lastProgressMs=$progressAt cancelled=${cancelled.get()} workerAlive=${thread?.isAlive} stack="+(thread?.stackTrace?.take(12)?.joinToString("|") ?: "none")
-    private var ownsLease=false
+    private fun progress(value:String){operation=value;progressAt=android.os.SystemClock.elapsedRealtime();if(value.contains("MODEL_") || value.contains("STREAM_"))trace(value,nativeProof,"capture=$captureId")}
+    fun workerEvidence()="operation=$operation lastProgressMs=$progressAt cancelled=${cancelled.get()} workerAlive=${thread?.isAlive} captureId=$captureId leaseOwner=${lease.get()} ownsLease=$ownsLease stack="+(thread?.stackTrace?.take(12)?.joinToString("|") ?: "none")
+    @Volatile private var ownsLease=false
+    private val closeWaited=AtomicBoolean(false)
     private val nativeLock=Any()
     @Volatile private var nativeRecorder: AudioRecord? = null
     @Volatile private var capturedSamples=0L
-    private data class PromptAck(val nonce:Long,val nano:Long,val generation:Long)
+    private data class PromptAck(val nonce:Long,val nano:Long,val generation:Long,val success:Boolean,val completedAtMs:Long)
+    private val promptPermit=ManagementPromptPermit(android.os.SystemClock::elapsedRealtime)
     private val promptAck=java.util.concurrent.atomic.AtomicReference<PromptAck?>(null)
     private val commandGeneration = AtomicLong(0)
     @Volatile private var management = false
@@ -57,8 +61,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     val workerDone get() = thread?.isAlive != true
     fun start(): Boolean {
         if(thread != null || quarantined || cancelled.get() || !allowed()) { trace("START_REJECTED",nativeProof,phase.name); return false }
-        if(!lease.compareAndSet(false,true)) { trace("START_LEASE_BUSY",nativeProof,phase.name); return false }
+        if(!lease.compareAndSet(null,captureId)) { trace("START_LEASE_BUSY",nativeProof,phase.name); return false }
         ownsLease=true
+        trace("LEASE_ACQUIRE",nativeProof,captureId)
         phase = CapturePhase.THREAD_START
         thread = Thread({ record() }, "v2-capture").apply { start() }
         return true
@@ -72,6 +77,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         val commandBoundary=CommandBoundary()
         val buffered = WakeSamples()
         val frame = ShortArray(320)
+        var activePromptNonce=-1L
+        var suppressPrompt=false
+        var suppressStartedAt=0L
         var awaitingPrompt:PromptAck?=null
         val captureTimestamp=android.media.AudioTimestamp()
         var position = 0L
@@ -139,6 +147,30 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 }
                 if(!accept)break
                 progress("BEFORE_DECODE")
+                capturedSamples+=count
+                val completedPrompt=promptAck.getAndSet(null)?.takeIf{it.nonce==activePromptNonce && it.generation==commandGeneration.get()}
+                if(completedPrompt!=null)promptPermit.revoke(completedPrompt.nonce,completedPrompt.generation)
+                if(completedPrompt?.success==false){
+                    commandBoundary.rejectConfirmation();suppressPrompt=false
+                    if(!checkNotNull(commands).resetAt(capturedSamples))break
+                    commandBoundary.skip(count);frame.fill(0);continue
+                }
+                if(suppressPrompt){
+                    val published=completedPrompt!=null && commandBoundary.awaitingPromptCompletion && commandBoundary.promptComplete(completedPrompt.nonce,completedPrompt.generation,completedPrompt.completedAtMs)
+                    commandBoundary.skip(count)
+                    if(completedPrompt!=null){
+                        if(!checkNotNull(commands).resetAt(capturedSamples))break
+                        if(published && commandBoundary.confirmationPending)awaitingPrompt=completedPrompt
+                        suppressPrompt=false
+                        trace("PROMPT_FEATURES_DROPPED",nativeProof,"origin=$capturedSamples")
+                    } else if(android.os.SystemClock.elapsedRealtime()-suppressStartedAt>=8000){
+                        commandBoundary.rejectConfirmation();suppressPrompt=false
+                        if(!checkNotNull(commands).resetAt(capturedSamples))break
+                        trace("PROMPT_PREPARATION_TIMEOUT",nativeProof,"local")
+                    }
+                    frame.fill(0);continue
+                }
+                if(completedPrompt?.success==true && commandBoundary.promptComplete(completedPrompt.nonce,completedPrompt.generation,completedPrompt.completedAtMs))awaitingPrompt=completedPrompt
                 hooks.beforeDecode()
                 if(cancelled.get() || !allowed())break
                 val commandTail=commands?.accept(frame,count)
@@ -146,8 +178,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 hooks.beforeCommandDecision(hit?.name)
                 if(cancelled.get() || !allowed())break
                 progress("COMMAND_BOUNDARY")
-                capturedSamples+=count
-                promptAck.getAndSet(null)?.let{awaitingPrompt=it}
+
                 awaitingPrompt?.let{ack ->
                     progress("CONFIRM_NATIVE_TIMESTAMP")
                     val result=native.getTimestamp(captureTimestamp,android.media.AudioTimestamp.TIMEBASE_MONOTONIC)
@@ -160,8 +191,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 }
                 val command=commandBoundary.frame(frame,count,hit,management,commandGeneration.get())
                 if(command in listOf("确认退出提示","继续管理")) {
-                    val ticket=commandGeneration.get();val nonce=commandBoundary.confirmationNonce
-                    owner.post {if(!cancelled.get() && allowed() && management && ticket==commandGeneration.get())managementPrompt(if(command=="确认退出提示")"要退出吗？请说确认退出，或点取消按钮。" else "继续管理") {if(!cancelled.get() && allowed() && ticket==commandGeneration.get())promptAck.set(PromptAck(nonce,System.nanoTime(),ticket))}}
+                    suppressPrompt=true;suppressStartedAt=android.os.SystemClock.elapsedRealtime()
+                    val ticket=commandGeneration.get();val nonce=commandBoundary.confirmationNonce;activePromptNonce=nonce;promptPermit.offer(nonce,ticket)
+                    owner.post {if(!cancelled.get() && allowed() && management && ticket==commandGeneration.get())managementPrompt(if(command=="确认退出提示")"要退出吗？请说确认退出，或点取消按钮。" else "继续管理",{!cancelled.get() && allowed() && ticket==commandGeneration.get() && promptPermit.valid(nonce,ticket)}) {success ->if(!cancelled.get() && allowed() && ticket==commandGeneration.get()){promptAck.set(PromptAck(nonce,System.nanoTime(),ticket,success,android.os.SystemClock.elapsedRealtime()))}}}
                     frame.fill(0);continue
                 }
                 if (command!=null) {
@@ -173,9 +205,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                         management = entering
                         buffered.clear(); awake = false; voiced = false; uploadSamples = 0
                         if(cancelled.get() || !allowed())break
-                        progress("WAKE_CLOSE");wake?.close()
-                        if(cancelled.get() || !allowed())break
-                        progress("WAKE_CREATE");wake = SherpaWake(assets, allowed={ !cancelled.get() && allowed() }, progress={progress("WAKE_$it")}); wakeBase = buffered.position
+                        progress("WAKE_STREAM_RESET")
+                        if(wake?.resetAt(buffered.position)!=true)break; wakeBase = 0
                         owner.post { if (!cancelled.get() && allowed()) {
                             client.management(entering); managementChanged(entering)
                         } }
@@ -189,11 +220,11 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     idle = client.idleSerial
                     buffered.clear()
                     awake = false; voiced = false; uploadSamples = 0
-                    detector = SpeechDetector(320, initialFloor = 36.0); wakeBase = position
+                    detector = SpeechDetector(320, initialFloor = 36.0); wakeBase = 0
                     if(cancelled.get() || !allowed())break
-                        progress("WAKE_CLOSE");wake?.close()
-                        if(cancelled.get() || !allowed())break
-                        progress("WAKE_CREATE");wake = SherpaWake(assets, allowed={ !cancelled.get() && allowed() }, progress={progress("WAKE_$it")})
+                        progress("WAKE_STREAM_RESET")
+                        if(wake?.resetAt(buffered.position)!=true)break
+                    continue
                 }
                 if (!awake) {
                     val tail = wake?.accept(frame, count) ?: continue
@@ -201,15 +232,14 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                         // Unconfigured local KWS never builds/uploads child expressions.
                         owner.post { if (!cancelled.get() && allowed()) client.wake() }
                         if(cancelled.get() || !allowed())break
-                        progress("WAKE_CLOSE");wake?.close()
-                        if(cancelled.get() || !allowed())break
-                        progress("WAKE_CREATE");wake = SherpaWake(assets, allowed={ !cancelled.get() && allowed() }, progress={progress("WAKE_$it")})
-                        wakeBase = position; buffered.clear()
+                        progress("WAKE_STREAM_RESET")
+                        if(wake?.resetAt(buffered.position)!=true)break
+                        wakeBase = 0; buffered.clear()
                         continue
                     }
                     awake = true
                     if(cancelled.get() || !allowed())break
-                    progress("WAKE_CLOSE");wake?.close(); wake = null
+                    // Keep the model; the next idle/management boundary resets its stream.
                     detector = SpeechDetector(320, initialFloor = 36.0)
                     val wakeBoundary = (android.os.SystemClock.elapsedRealtime() -
                         ((position - (wakeBase + tail).coerceIn(0, position)) * 1000 / 16000)).coerceAtLeast(0)
@@ -258,6 +288,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if (uploadSamples >= 300000) error("input capacity")
             }
         } catch (_: Exception) {
+            if(operation.contains("STREAM_") || operation.contains("MODEL_"))resourceFault=true
             failedPhase = phase
             if (!cancelled.get()) owner.post { failed() }
         } finally {
@@ -286,8 +317,13 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             trace("MODELS_DISPOSE_END",nativeProof,phase.name)
             pendingDisposal=false
             phase = if (quarantined) CapturePhase.QUARANTINED else CapturePhase.RELEASED
-            if(ownsLease && !resourceFault) { ownsLease=false; lease.set(false) }
-            disposed()
+            val completedWorker=Thread.currentThread()
+            Thread({
+                completedWorker.join()
+                // No JNI here: model/native cleanup is over and worker really ended.
+                if(ownsLease && !resourceFault){check(lease.compareAndSet(captureId,null));ownsLease=false;trace("LEASE_RETURN",nativeProof,captureId)}
+                disposed()
+            },"v2-capture-completion").start()
             if (!cancelled.get()) owner.post { failed() }
         }
     }
@@ -303,13 +339,15 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     } }
     /** Immediate caller-thread cancellation, independent of owner/decode/destructors. */
     fun requestStop() {
-        cancelled.set(true); commandGeneration.incrementAndGet()
+        if(!cancelled.compareAndSet(false,true))return
+        commandGeneration.incrementAndGet()
         trace("CANCEL_REQUEST",nativeProof,phase.name)
         stopNative()
     }
     fun close() {
         requestStop()
         val old = thread ?: return
+        if(!closeWaited.compareAndSet(false,true))return
         old.join(500)
         if (old.isAlive) { pendingDisposal = true; trace("DISPOSE_QUARANTINE",nativeProof,operation) }
         // Never permit another recorder when the original has no release confirmation.

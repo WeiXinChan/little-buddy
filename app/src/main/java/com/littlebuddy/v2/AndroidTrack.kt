@@ -32,6 +32,7 @@ internal class AndroidTrack(handler: Handler, routeLost: () -> Unit) : TrackPort
             track.addOnRoutingChangedListener(listener, handler)
         } catch (failure: Exception) { track.release(); throw failure }
     }
+    internal val hasRoute get()=track.routedDevice!=null
     override val head get() = track.playbackHeadPosition.toLong() and 0xffffffffL
     override fun write(pcm: ShortArray, offset: Int) =
         track.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_NON_BLOCKING)

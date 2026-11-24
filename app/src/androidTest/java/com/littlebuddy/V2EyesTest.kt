@@ -205,6 +205,7 @@ class V2EyesTest {
             }
             activity.mark("HOME_STOP_BUDGET_END")
             saveTimeline(activity,"home-stop-result")
+            File(context.filesDir,"m06/home-worker-stack.txt").writeText(activity.captureWorkerEvidence())
             File(context.filesDir,"m06/home-proof.txt").writeText("before=$before after=$stopped "+activity.captureWorkerEvidence()+" "+diagnostics(activity))
             assertEquals(before.session,stopped.session)
             assertTrue("old native stop/release budget failed: $stopped",stopped.stopped && stopped.released && !stopped.recording)

@@ -8,6 +8,10 @@ paths={name:root/(name+'.wav') for name in allowed}
 protocol=Path('app/src/androidTest/assets/m06-protocol-v2')
 for row in json.loads((protocol/'provenance.json').read_text()):
  name='v2_'+row['name'];allowed[name]=row['sha256'];paths[name]=protocol/(row['name']+'.wav')
+short=json.loads((protocol/'derived-confirm.json').read_text());allowed[short['name']]=short['sha256'];paths[short['name']]=protocol/'confirm_exit_short.wav'
+production=Path('app/src/main/assets/management')
+for row in json.loads((production/'provenance.json').read_text())['rows']:
+ name='prod_'+row['name'];allowed[name]=row['sha256'];paths[name]=production/(row['name']+'.wav')
 p=subprocess.Popen(['adb','shell','am','instrument','-w','-r','-e','class','com.littlebuddy.V2MicrophoneCommandTest','com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
 output=[]
 try:

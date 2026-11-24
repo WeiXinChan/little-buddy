@@ -40,7 +40,7 @@ class V2VoiceActivity : Activity() {
     private val life=LifecycleGate()
     private val timeline=StopTimeline(SystemClock::elapsedRealtime)
     internal fun captureWorkerEvidence()=capture?.workerEvidence() ?: "no_capture"
-    internal val captureWorkerDone get()=capture?.workerDone != false
+    internal val captureWorkerDone get()=capture?.let{it.workerDone && it.leaseReturned} ?: true
     internal fun immediateRecorder()=capture?.nativeProof ?: releasedRecorder
     internal fun mark(name: String) { timeline.add(name,life.state.generation,immediateRecorder(),capture?.phase?.name ?: lastCapturePhase) }
     internal fun timelineJson(): String = JSONArray(timeline.snapshot().map {
@@ -54,7 +54,9 @@ class V2VoiceActivity : Activity() {
     private fun eligible(ticket: Long)=life.allows(ticket) &&
         checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED &&
         !getSystemService(KeyguardManager::class.java).isKeyguardLocked
-    private var explicitConnectionStarted = false
+    private class ConnectionIntent(val id:Long,val generation:Long,val address:String,val credential:String)
+    private val connectionSequence=java.util.concurrent.atomic.AtomicLong()
+    private val pendingConnection=com.littlebuddy.v2.PendingConnection<ConnectionIntent>()
     @Volatile private var releasedRecorder = RecorderProof()
     private var releasedPlayer = PlayerProof()
     private var lastCapturePhase = "NOT_STARTED"
@@ -73,17 +75,59 @@ class V2VoiceActivity : Activity() {
         result(NativeEvidence(capture?.nativeProof ?: releasedRecorder, voice?.nativeProof() ?: releasedPlayer))
     } }
     internal fun withVoice(action: (VoiceClient) -> Unit) { owner.post { voice?.let(action) } }
+    private val promptSequence=java.util.concurrent.atomic.AtomicLong()
+    @Volatile private var promptNative:com.littlebuddy.v2.AndroidTrack?=null
+    private var promptOutput:com.littlebuddy.v2.ManagedPromptPlayback?=null
+    private fun stopManagementPrompt(){
+        promptSequence.incrementAndGet()
+        try{promptNative?.mute()}catch(_:Exception){mark("LOCAL_PROMPT_MUTE_FAILED")}
+        owner.post{promptOutput?.let{it.cancel();timeline.add("LOCAL_PROMPT_CANCELLED",life.state.generation,immediateRecorder(),"head=${it.proof.observedHead} stop=${it.proof.stop}")};if(promptOutput?.quarantined!=true){promptOutput=null;promptNative=null}}
+    }
+    private fun playManagementPrompt(text:String,valid:()->Boolean,done:(Boolean)->Unit){
+        val sequence=promptSequence.incrementAndGet();val ticket=life.state.generation
+        owner.post {
+            promptOutput?.cancel()
+            if(promptOutput?.quarantined==true || !eligible(ticket) || !scene.management || !valid()){done(false);return@post}
+            var routeSeen=false
+            promptNative=null
+            val manager=getSystemService(android.media.AudioManager::class.java)
+            val cue=com.littlebuddy.v2.ManagedPromptPlayback(
+                {com.littlebuddy.v2.AndroidTrack(owner){stopManagementPrompt()}.also{promptNative=it}},
+                SystemClock::elapsedRealtime,
+                {val native=promptNative;val routed=native==null || native.head==0L || native.hasRoute;if(native!=null && native.head>0 && routed)routeSeen=true;manager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)>0 && !manager.isStreamMute(android.media.AudioManager.STREAM_MUSIC) && routed})
+            promptOutput=cue
+            try {
+                val path=if(text.startsWith("要退出"))"management/confirm_prompt.wav" else "management/stay_prompt.wav"
+                val bytes=assets.open(path).use{it.readBytes()}
+                val b=java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                check(bytes.size>44 && String(bytes,0,4)=="RIFF" && String(bytes,36,4)=="data" && b.getInt(24)==24000 && b.getShort(22).toInt()==1 && b.getShort(34).toInt()==16)
+                val pcm=ShortArray((bytes.size-44)/2);b.position(44);b.asShortBuffer().get(pcm)
+                cue.begin(pcm);mark("LOCAL_PROMPT_BEGIN")
+            }catch(_:Exception){cue.cancel()}
+            fun pump(){
+                if(sequence!=promptSequence.get() || !eligible(ticket) || !scene.management || !valid()){cue.cancel();done(false);return}
+                cue.tick()
+                val result=cue.result
+                if(result==null){owner.postDelayed({pump()},10);return}
+                timeline.add(if(result)"LOCAL_PROMPT_NATIVE_COMPLETE" else "LOCAL_PROMPT_FAILED",ticket,immediateRecorder(),"head=${cue.proof.observedHead} stop=${cue.proof.stop} audibleRoute=$routeSeen")
+                if(!cue.quarantined){promptOutput=null;promptNative=null}
+                if(result){owner.postDelayed({done(sequence==promptSequence.get() && eligible(ticket) && scene.management && valid())},200)}else done(false)
+            }
+            pump()
+        }
+    }
     @Volatile internal var beforeManagementPrompt: (((()->Unit))->Unit)?=null
+    @Volatile internal var beforeCaptureDispose:()->Unit={}
     @Volatile internal var beforeManagementCommand: (String?)->Unit={}
     @Volatile internal var managementPromptSerial=0L;private set
-    private fun showManagementPrompt(text:String,ack:()->Unit){val hook=beforeManagementPrompt;if(hook!=null)hook{drawManagementPrompt(text,ack)} else drawManagementPrompt(text,ack)}
-    private fun drawManagementPrompt(text:String,ack:()->Unit){runOnUiThread{
+    private fun showManagementPrompt(text:String,valid:()->Boolean,ack:(Boolean)->Unit){val hook=beforeManagementPrompt;if(hook!=null)hook{drawManagementPrompt(text,valid,ack)} else drawManagementPrompt(text,valid,ack)}
+    private fun drawManagementPrompt(text:String,valid:()->Boolean,ack:(Boolean)->Unit){runOnUiThread{
         val view=managementPromptView ?: return@runOnUiThread
         val generation=scene.generation
-        if(!scene.management)return@runOnUiThread
+        if(!scene.management || !valid()){ack(false);return@runOnUiThread}
         view.text=text
         val listener=object:android.view.ViewTreeObserver.OnDrawListener {var sent=false
-            override fun onDraw(){if(sent)return;sent=true;view.post{if(view.viewTreeObserver.isAlive)view.viewTreeObserver.removeOnDrawListener(this);if(scene.management && scene.generation==generation && managementPromptView===view){managementPromptSerial++;ack()}}}
+            override fun onDraw(){if(sent)return;sent=true;view.post{if(view.viewTreeObserver.isAlive)view.viewTreeObserver.removeOnDrawListener(this);if(scene.management && scene.generation==generation && managementPromptView===view && valid()){managementPromptSerial++;playManagementPrompt(text,valid,ack)}}}
         }
         view.viewTreeObserver.addOnDrawListener(listener);view.invalidate()
     }}
@@ -136,7 +180,7 @@ class V2VoiceActivity : Activity() {
             })
         }
     }
-    internal fun exitManagement() { owner.post {
+    internal fun exitManagement() { stopManagementPrompt();owner.post {
         capture?.exitManagement(); voice?.management(false); manage(false)
     } }
     private fun immersive() {
@@ -155,30 +199,29 @@ class V2VoiceActivity : Activity() {
     internal fun startVoice(address: String, credential: String) {
         check(hasWindowFocus() && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
         check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked)
-        val ticket=life.state.generation
-        val deadline=SystemClock.elapsedRealtime()+3000
-        explicitConnectionStarted=true
-        fun attempt() { owner.post {
-            if(!eligible(ticket)) { mark("STALE_CONNECT_REJECTED"); return@post }
+        val ticket=life.state.generation;val id=connectionSequence.incrementAndGet()
+        owner.post {
+            if(id!=connectionSequence.get() || !eligible(ticket)){mark("STALE_CONNECT_REJECTED");return@post}
             afterEligible()
-            if(!eligible(ticket)) { mark("STALE_CONNECT_REJECTED"); return@post }
-            voice?.close(); capture?.close()
-            if(voice?.quarantined==true || capture?.resourceFailed==true) { mark("RECONNECT_RESOURCE_FAULT"); return@post }
-            if(capture?.quarantined==true) {
-                mark("RECONNECT_DISPOSAL_WAIT")
-                if(SystemClock.elapsedRealtime()<deadline)owner.postDelayed({if(eligible(ticket))attempt() else mark("STALE_CONNECT_REJECTED")},50)
-                else { mark("RECONNECT_DISPOSAL_EXPIRED"); explicitConnectionStarted=false; displayEvent("failure"); localCommands() }
-                return@post
-            }
-            voice = null; capture = null
-            explicitConnectionStarted = true
-            releaseState = "active"
-            val client = newClient()
-            voice = client
-            if(!installCapture(client,ticket))return@post
-            if(eligible(ticket))client.connect(address,credential) else { capture?.requestStop(); stopVoice() }
-        } }
-        attempt()
+            if(id!=connectionSequence.get() || !eligible(ticket)){mark("STALE_CONNECT_REJECTED");return@post}
+            pendingConnection.offer(id,ticket,ConnectionIntent(id,ticket,address,credential))
+            voice?.close();voice?.let{releasedPlayer=it.nativeProof()}
+            if(voice?.quarantined!=true)voice=null
+            capture?.requestStop();capture?.close()
+            resumeConnection()
+        }
+    }
+    private fun resumeConnection() {
+        if(!pendingConnection.present)return
+        val held=capture
+        if(voice?.quarantined==true || held?.resourceFailed==true){pendingConnection.invalidate();mark("RECONNECT_RESOURCE_FAULT");return}
+        val ready=held==null || (held.workerDone && held.nativeProof.released && held.leaseReturned && !held.quarantined)
+        val intent=pendingConnection.take(connectionSequence.get(),::eligible,ready)
+        if(intent==null){if(pendingConnection.present){releaseState="waiting_disposal";mark("CONNECTION_PENDING_DISPOSAL")};return}
+        held?.let{releasedRecorder=it.nativeProof};capture=null
+        val client=newClient();voice=client;releaseState="active"
+        if(!installCapture(client,intent.generation))return
+        if(intent.id==connectionSequence.get() && eligible(intent.generation))client.connect(intent.address,intent.credential) else stopVoice()
     }
     private fun makeCapture(client: VoiceClient,ticket: Long): Capture {
         lateinit var created: Capture
@@ -187,10 +230,14 @@ class V2VoiceActivity : Activity() {
             { entering -> if(capture===created && life.allows(ticket))manage(entering) },
             { life.allows(ticket) },
             { event,proof,phase -> timeline.add(event,ticket,proof,phase) },
-            hooks=com.littlebuddy.v2.CaptureHooks(beforeCommandDecision={beforeManagementCommand(it)}),
+            hooks=com.littlebuddy.v2.CaptureHooks(beforeDispose={beforeCaptureDispose()},beforeCommandDecision={beforeManagementCommand(it)}),
             disposed = { owner.post {
                 mark("DISPOSE_CONSUME")
-                if(capture===created && !created.quarantined && eligible(life.state.generation))localCommands()
+                if(capture===created && created.workerDone && created.nativeProof.released && created.leaseReturned && !created.quarantined){
+                    voice?.close();voice?.let{releasedPlayer=it.nativeProof()};if(voice?.quarantined!=true)voice=null
+                    releasedRecorder=created.nativeProof;capture=null;releaseState="released"
+                    if(pendingConnection.present)resumeConnection() else if(eligible(life.state.generation))localCommands()
+                }
             } }, managementPrompt=::showManagementPrompt)
         return created
     }
@@ -211,35 +258,31 @@ class V2VoiceActivity : Activity() {
     private fun newClient(): VoiceClient { val ticket=life.state.generation; return VoiceClient(owner, { if(life.allows(ticket))handleStatus(it) },
         ::hideImage, ::revealImage,
         { displayEvent("failure"); stopVoice() }, socketFactory=transportOverride) }
-    private fun localCommands(retryUntil: Long=SystemClock.elapsedRealtime()+1500) {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
-            getSystemService(KeyguardManager::class.java).isKeyguardLocked) return
+    private fun localCommands() {
         val ticket=life.state.generation
         owner.post {
-            if(!eligible(ticket)) { mark("STALE_LOCAL_START_REJECTED"); return@post }
+            if(!eligible(ticket)){mark("STALE_LOCAL_START_REJECTED");return@post}
             afterEligible()
-            if(!eligible(ticket)) { mark("STALE_LOCAL_START_REJECTED"); return@post }
+            if(!eligible(ticket)){mark("STALE_LOCAL_START_REJECTED");return@post}
+            if(pendingConnection.present){resumeConnection();return@post}
             val held=capture
-            if(held?.closing==true) {
-                if(held.workerDone && !held.quarantined && held.nativeProof.released) { releasedRecorder=held.nativeProof; capture=null }
-                else { if(SystemClock.elapsedRealtime()<retryUntil) owner.postDelayed({if(eligible(ticket))localCommands(retryUntil)},50)
-                    else mark("DISPOSAL_WAIT_EXPIRED")
-                    return@post
-                }
+            if(held?.closing==true){
+                if(held.workerDone && held.nativeProof.released && held.leaseReturned && !held.quarantined){releasedRecorder=held.nativeProof;capture=null}
+                else {mark("LOCAL_PENDING_DISPOSAL");return@post}
             }
-            if (explicitConnectionStarted || voice != null || capture != null || scene.management) return@post
-            val client = newClient(); voice = client
-            releaseState = "local_kws"
-            if(!installCapture(client,ticket) && eligible(ticket) && SystemClock.elapsedRealtime()<retryUntil)owner.postDelayed({if(eligible(ticket))localCommands(retryUntil)},50)
+            if(voice!=null || capture!=null || scene.management)return@post
+            val client=newClient();voice=client;releaseState="local_kws";installCapture(client,ticket)
         }
     }
     private fun stopVoice() {
-        explicitConnectionStarted=false
+        stopManagementPrompt()
+        val cancelledRequest=connectionSequence.incrementAndGet()
         val stopping=capture; val stoppingVoice=voice
         mark("STOP_ENQUEUE")
         stopping?.requestStop() // before owner queue or model destruction
         owner.post {
         mark("STOP_CONSUME")
+        pendingConnection.invalidateThrough(cancelledRequest)
         if(capture!==stopping || voice!==stoppingVoice) { mark("STALE_STOP_REJECTED"); return@post }
         scene.invalidate()
         voice?.close(); voice?.let { releasedPlayer = it.nativeProof() }
@@ -252,16 +295,6 @@ class V2VoiceActivity : Activity() {
         val mood = scene.mood
         runOnUiThread { if (scene.accepts(ticket)) eyes.mood = mood }
         mark("STOP_FINISH")
-        if(stopping!=null && stopping.quarantined && stopping.nativeProof.released) {
-            val generation=life.state.generation; val deadline=SystemClock.elapsedRealtime()+1500
-            fun reap() {
-                if(capture!==stopping || !eligible(generation))return
-                if(stopping.workerDone && !stopping.quarantined) { releasedRecorder=stopping.nativeProof; capture=null; localCommands() }
-                else if(SystemClock.elapsedRealtime()<deadline)owner.postDelayed({reap()},50)
-                else mark("DISPOSAL_WAIT_EXPIRED")
-            }
-            owner.postDelayed({reap()},50)
-        }
     } }
     override fun onResume() { super.onResume(); life.resume(); mark("LIFE_RESUME"); if(hasWindowFocus()) { life.focus(true); localCommands() } }
     override fun onPause() { life.pause(); mark("LIFE_PAUSE"); owner.post { scene.exit(); runOnUiThread { setContentView(eyes); eyes.mood = scene.mood } }; stopVoice(); super.onPause() }

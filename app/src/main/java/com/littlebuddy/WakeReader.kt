@@ -19,11 +19,13 @@ internal class SherpaWake(assets: AssetManager, private val keyword: String = "ç
     private val reportProgress=progress
     private val spotter: KeywordSpotter
     private var deliveredTail=-1L
+    private var origin=0L
     var matchedStart=0L; private set
-    private var stream: com.k2fsa.sherpa.onnx.OnlineStream
+    private var stream: com.k2fsa.sherpa.onnx.OnlineStream?
 
     init {
         val suffix = "epoch-13-avg-2-chunk-16-left-64"
+        reportProgress("MODEL_CREATE_BEGIN")
         spotter = KeywordSpotter(assets, KeywordSpotterConfig(
             modelConfig = OnlineModelConfig(
                 transducer = OnlineTransducerModelConfig(
@@ -42,28 +44,30 @@ internal class SherpaWake(assets: AssetManager, private val keyword: String = "ç
             maxActivePaths = maxPaths,
         ))
         stream = spotter.createStream()
+        reportProgress("MODEL_CREATE_END")
     }
 
     var detectedKeyword: String? = null; private set
     override fun accept(samples: ShortArray, count: Int): Long? {
         if(!canDecode())return null
+        val current=stream ?: return null
         reportProgress("ACCEPT_WAVEFORM")
-        stream.acceptWaveform(FloatArray(count) { samples[it] / 32768f }, 16_000)
+        current.acceptWaveform(FloatArray(count) { samples[it] / 32768f }, 16_000)
         while (canDecode()) {
             reportProgress("IS_READY")
-            if(!spotter.isReady(stream))break
+            if(!spotter.isReady(current))break
             if(!canDecode())return null
             reportProgress("DECODE")
-            spotter.decode(stream)
+            spotter.decode(current)
             if(!canDecode())return null
             reportProgress("GET_RESULT")
-            val result = spotter.getResult(stream)
+            val result = spotter.getResult(current)
             if(!canDecode())return null
             if (result.keyword.isNotEmpty() && (keyword == "*" || result.keyword == keyword)) {
                 detectedKeyword = result.keyword
                 val last = result.timestamps.lastOrNull() ?: error("Missing wake timestamp")
-                matchedStart=((result.timestamps.firstOrNull() ?: 0f)*16000).toLong()
-                val tail=((last+0.12f)*16000).toLong()
+                matchedStart=origin+((result.timestamps.firstOrNull() ?: 0f)*16000).toLong()
+                val tail=origin+((last+0.12f)*16000).toLong()
                 // Native no-reset replay did not reproduce duplicate hits. Keep its
                 // absolute clock and defensively consume each timestamp once.
                 if(tail<=deliveredTail)continue
@@ -74,9 +78,25 @@ internal class SherpaWake(assets: AssetManager, private val keyword: String = "ç
         return null
     }
 
+    /** Worker only: same model, fresh features, preserved absolute capture/ring clock. */
+    fun resetAt(absoluteOrigin:Long):Boolean {
+        if(!canDecode())return false
+        require(absoluteOrigin>=origin)
+        reportProgress("STREAM_RELEASE")
+        val old=stream;old?.release();stream=null
+        if(!canDecode())return false
+        origin=absoluteOrigin;detectedKeyword=null
+        reportProgress("STREAM_CREATE")
+        stream=spotter.createStream()
+        reportProgress("STREAM_READY")
+        return canDecode()
+    }
     override fun close() {
-        stream.release()
+        reportProgress("STREAM_RELEASE")
+        val old=stream;old?.release();stream=null
+        reportProgress("MODEL_RELEASE_BEGIN")
         spotter.release()
+        reportProgress("MODEL_RELEASE_END")
     }
 }
 

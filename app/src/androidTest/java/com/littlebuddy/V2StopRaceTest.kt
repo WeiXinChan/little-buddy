@@ -25,8 +25,8 @@ class V2StopRaceTest {
    assertTrue("native release precedes blocked model disposal",capture.nativeProof.released)
    releaseDisposal.countDown()
    val deadline=SystemClock.elapsedRealtime()+2000
-   while(!capture.workerDone && SystemClock.elapsedRealtime()<deadline)Thread.sleep(10)
-   assertTrue(capture.workerDone);assertFalse("pending disposal clears only when worker done",capture.quarantined)
+   while((!capture.workerDone || !capture.leaseReturned) && SystemClock.elapsedRealtime()<deadline)Thread.sleep(10)
+   assertTrue(capture.workerDone);assertTrue("lease returns only after worker completion",capture.leaseReturned);assertFalse("pending disposal clears only when worker done",capture.quarantined)
   } finally {releaseDecode.countDown();releaseDisposal.countDown();capture.close();owner.post{client.close();thread.quitSafely()};thread.join(2000)}
  }
  @Test fun expiredAfterEligibilityDoesNotKillOwnerOrStartCapture() {

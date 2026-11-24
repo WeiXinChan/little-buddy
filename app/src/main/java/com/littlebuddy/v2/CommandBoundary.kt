@@ -9,6 +9,11 @@ import com.littlebuddy.SpeechDetector
 internal class CommandBoundary(now:()->Long=android.os.SystemClock::elapsedRealtime) {
     data class Hit(val name: String,val start: Long,val end: Long)
     private val protocol=ManagementExitProtocol(now)
+    val awaitingPromptCompletion get()=protocol.state==ManagementExitProtocol.State.PREPARING
+    val confirmationPending get()=protocol.state in listOf(ManagementExitProtocol.State.PREPARING,ManagementExitProtocol.State.CONFIRM)
+    fun promptComplete(nonce:Long,generation:Long,completedAtMs:Long)=protocol.promptComplete(nonce,generation,completedAtMs)
+    fun skip(count:Int){position+=count;protocol.tick(position);clear()}
+    fun rejectConfirmation(){protocol.uncertain();clear()}
     val confirmationNonce get()=protocol.confirmationNonce
     fun armConfirmation(nonce:Long,samples:Long,generation:Long)=protocol.arm(nonce,samples,generation)
     private var ticket=Long.MIN_VALUE

@@ -1,0 +1,35 @@
+{
+  "calls": 2,
+  "rows": [
+    {
+      "name": "confirm_prompt",
+      "text": "要退出吗？请说确认退出。",
+      "source": "existing authorized CosyVoice WebSocket direct rate; no DSP time stretch",
+      "model": "cosyvoice-v3-flash",
+      "voice": "longanyang",
+      "rate": 1.0,
+      "requested_sample_rate": 24000,
+      "duration_s": 3.82,
+      "sha256": "be9e8f170360d65dacdbdff2d8635f998aec3c48f0f8673ba1c2a26d497ef6d8",
+      "status": "generated",
+      "purpose": "static production management-only local playback; not test sampling",
+      "sample_rate": 24000,
+      "license_scope": "existing authorized project service; agent-authored text; no human recording; no new service"
+    },
+    {
+      "name": "stay_prompt",
+      "text": "还在管理中。",
+      "source": "existing authorized CosyVoice WebSocket direct rate; no DSP time stretch",
+      "model": "cosyvoice-v3-flash",
+      "voice": "longanyang",
+      "rate": 1.0,
+      "requested_sample_rate": 24000,
+      "duration_s": 1.94,
+      "sha256": "d4e7c71ac9d6c4d9e2c103f5fb5ecc567c06599011be1457ca46edc10f638406",
+      "status": "generated",
+      "purpose": "static production management-only local playback; not test sampling",
+      "sample_rate": 24000,
+      "license_scope": "existing authorized project service; agent-authored text; no human recording; no new service"
+    }
+  ]
+}

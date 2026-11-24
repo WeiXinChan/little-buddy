@@ -23,7 +23,7 @@ class ProtocolV2ReplayTest {
    }
    val bufferedMarker=hits.values.firstOrNull{it.name=="确认退出"}?.end?.plus(1)
    val boundary=CommandBoundary{0L};val results=mutableListOf<String>();val all=pcm+ShortArray(19200)
-   for(pos in all.indices step 320) {val f=all.copyOfRange(pos,minOf(pos+320,all.size));boundary.frame(f,f.size,hits[pos/320],managed)?.let{results+=it;if(it=="确认退出提示")boundary.armConfirmation(boundary.confirmationNonce,(if(name=="buffered_old_confirm_rejected")checkNotNull(bufferedMarker) else (pos+f.size).toLong()),0)}}
+   for(pos in all.indices step 320) {val f=all.copyOfRange(pos,minOf(pos+320,all.size));boundary.frame(f,f.size,hits[pos/320],managed)?.let{results+=it;if(it=="确认退出提示"){assertTrue(boundary.awaitingPromptCompletion);check(boundary.promptComplete(boundary.confirmationNonce,0,0));boundary.armConfirmation(boundary.confirmationNonce,(if(name=="buffered_old_confirm_rejected")checkNotNull(bufferedMarker) else (pos+f.size).toLong()),0)}}}
    if(results!=expected)failures+="$name expected=$expected actual=$results"
    cases++
   }

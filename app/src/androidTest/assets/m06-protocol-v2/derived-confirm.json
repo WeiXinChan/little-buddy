@@ -1,0 +1,9 @@
+{
+  "name": "v2_confirm_exit_short",
+  "source_sha256": "9df61ed155b7dc3d2aadeb3032c1202e00e0bd0a28a75709a6dde55c81639b58",
+  "trim_leading_samples": 8000,
+  "trim_trailing_samples": 32000,
+  "append_quiet_samples": 4800,
+  "sha256": "8249ce1d2023382a83af62233098a6d1ed98eb3b601456bb1ce00333d2a237fa",
+  "purpose": "same authorized synthetic utterance; remove known fixture padding; no new cloud sample"
+}

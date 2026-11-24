@@ -61,7 +61,7 @@ class V2MicrophoneCommandTest {
   val root=inst.targetContext.filesDir
   check(root.mkdirs() || root.isDirectory)
   check(root.canWrite())
-  val bytes=inst.context.assets.open(if(name.startsWith("v2_"))"m06-protocol-v2/${name.removePrefix("v2_")}.wav" else "m06-commands/$name.wav").use{it.readBytes()}
+  val bytes=(if(name.startsWith("prod_"))inst.targetContext.assets else inst.context.assets).open(if(name.startsWith("prod_"))"management/${name.removePrefix("prod_")}.wav" else if(name.startsWith("v2_"))"m06-protocol-v2/${name.removePrefix("v2_")}.wav" else "m06-commands/$name.wav").use{it.readBytes()}
   val hash=java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
   val q=JSONObject().put("name",name).put("sha256",hash).put("nonce",java.util.UUID.randomUUID().toString()).put("root",root.canonicalPath).put("package",inst.targetContext.packageName).put("user",android.os.Process.myUid()/100000)
   requests[name]=q
@@ -101,30 +101,15 @@ class V2MicrophoneCommandTest {
     play(name);await("audio playback completed: $name"){completed(name)};Thread.sleep(1200)
     assertTrue("negative command must stay managed: $name",activity.isManaging);assertEquals(before,wire.inputs.get());assertFalse(activity.showingImage)
    }
-   val pendingPrompt=java.util.concurrent.atomic.AtomicReference<()->Unit>()
-   val queuedPrompt=java.util.concurrent.CountDownLatch(1)
-   val oldDecoded=java.util.concurrent.CountDownLatch(1)
-   val releaseOldDecode=java.util.concurrent.CountDownLatch(1)
-   val hookTimedOut=java.util.concurrent.atomic.AtomicBoolean(false)
-   val holdOld=java.util.concurrent.atomic.AtomicBoolean(true)
-   activity.beforeManagementPrompt={show ->pendingPrompt.set(show);queuedPrompt.countDown()}
-   activity.beforeManagementCommand={name ->if(name=="确认退出" && holdOld.compareAndSet(true,false)){oldDecoded.countDown();if(!releaseOldDecode.await(6,java.util.concurrent.TimeUnit.SECONDS))hookTimedOut.set(true)}}
-   val prompt=activity.managementPromptSerial
-   try {
-    play("cancel");assertTrue("new confirmation request queued before display",queuedPrompt.await(12,java.util.concurrent.TimeUnit.SECONDS))
-    play("v2_confirm_exit");assertTrue("old real microphone confirmation decoded before new prompt",oldDecoded.await(12,java.util.concurrent.TimeUnit.SECONDS))
-    assertFalse("old decoded hit remains held before new display",hookTimedOut.get())
-    val oldFrames=activity.immediateRecorder().frames
-    fun barriers():Int {val a=org.json.JSONArray(activity.timelineJson());return (0 until a.length()).count{a.getJSONObject(it).getString("event")=="CONFIRM_NATIVE_BARRIER"}}
-    val barrierCount=barriers()
-    pendingPrompt.get().invoke()
-    await("new prompt actually drawn"){activity.managementPromptSerial>prompt}
-    releaseOldDecode.countDown()
-    await("real native timestamp barrier established"){barriers()>barrierCount && activity.immediateRecorder().frames>oldFrames}
-    assertFalse("decode barrier did not time out",hookTimedOut.get())
-    assertTrue("releasing pre-prompt decoded confirmation must not exit",activity.isManaging)
-   } finally {releaseOldDecode.countDown();activity.beforeManagementPrompt=null;activity.beforeManagementCommand={}}
-   play("v2_confirm_exit");await("real post-prompt confirmation returns WAKE"){!activity.isManaging && activity.currentMood==EyeMood.WAKE};assertEquals(before,wire.inputs.get())
+   play("v2_confirm_exit_short");await("pre-prompt confirmation really played"){completed("v2_confirm_exit_short")};Thread.sleep(1600)
+   assertTrue("confirmation without a newly published window cannot exit",activity.isManaging)
+   fun events(name:String):Int {val a=org.json.JSONArray(activity.timelineJson());return (0 until a.length()).count{a.getJSONObject(it).getString("event")==name}}
+   val beforeBarrier=events("CONFIRM_NATIVE_BARRIER");val beforePrompt=events("LOCAL_PROMPT_NATIVE_COMPLETE");val serial=activity.managementPromptSerial
+   play("cancel");await("new prompt drawn"){activity.managementPromptSerial>serial}
+   play("prod_confirm_prompt");await("captured prompt feedback fixture completed"){completed("prod_confirm_prompt")}
+   await("real prompt native completion before new capture barrier"){events("LOCAL_PROMPT_NATIVE_COMPLETE")>beforePrompt && events("CONFIRM_NATIVE_BARRIER")>beforeBarrier}
+   assertTrue("prompt feedback must not confirm itself",activity.isManaging);assertEquals(before,wire.inputs.get())
+   play("v2_confirm_exit_short");await("real post-audible-prompt new confirmation returns WAKE"){!activity.isManaging && activity.currentMood==EyeMood.WAKE};assertEquals(before,wire.inputs.get())
    play("exit");await("outside exit fixture done"){completed("exit")};assertFalse(activity.isManaging)
    play("enter_polite");await("fresh enter through real mic"){activity.isManaging}
    play("exit");await("real exit returns WAKE"){!activity.isManaging && activity.currentMood==EyeMood.WAKE};assertEquals(before,wire.inputs.get())
