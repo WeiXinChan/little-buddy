@@ -11,12 +11,18 @@ import com.littlebuddy.SherpaWake
 import com.littlebuddy.SpeechDetector
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /** One recorder throughout wake/continuation and full-duplex interaction.
  * No idle upload. Finite pre-roll preserves the KWS tail and short input onset.
  */
 internal class Capture(private val assets: AssetManager, private val owner: Handler,
-                       private val client: VoiceClient, private val failed: () -> Unit) {
+                       private val client: VoiceClient, private val failed: () -> Unit,
+                       private val managementChanged: (Boolean) -> Unit = {}) {
+    private val commandGeneration = AtomicLong(0)
+    @Volatile private var management = false
+    fun enterManagement() { commandGeneration.incrementAndGet(); management = true }
+    fun exitManagement() { commandGeneration.incrementAndGet(); management = false }
     private val cancelled = AtomicBoolean(false)
     private val pending = AtomicInteger(0)
     private var thread: Thread? = null
@@ -32,6 +38,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var recorder: AudioRecord? = null
         var aec: AcousticEchoCanceler? = null
         var wake: SherpaWake? = null
+        var commands: SherpaWake? = null
         val buffered = WakeSamples()
         val frame = ShortArray(320)
         var position = 0L
@@ -45,12 +52,13 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var detector = SpeechDetector(320, initialFloor = 36.0)
         var uploadSamples = 0
         fun upload(data: ShortArray, speech: Boolean) {
+            val ticket = commandGeneration.get()
             val capturedAt = android.os.SystemClock.elapsedRealtime()
             if (uploadSamples + data.size > 320000) error("input bound")
             uploadSamples += data.size
             check(pending.incrementAndGet() <= 20)
             owner.post {
-                try { if (!cancelled.get()) client.frame(data, speech, capturedAt) }
+                try { if (!cancelled.get() && !management && ticket == commandGeneration.get()) client.frame(data, speech, capturedAt) }
                 finally { data.fill(0); pending.decrementAndGet() }
             }
         }
@@ -67,6 +75,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 aec?.enabled = true // Availability/enabled are diagnostics, not acoustic PASS.
             }
             wake = SherpaWake(assets)
+            commands = SherpaWake(assets, "*", "wake/manage.txt")
             if (cancelled.get()) return
             native.startRecording()
             check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
@@ -77,13 +86,31 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if (count == 0) { Thread.sleep(5); continue }
                 check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
                 nativeProof = nativeProof.copy(recording=true, frames=nativeProof.frames+count)
+                if (commands?.accept(frame, count) != null) {
+                    val command = commands?.detectedKeyword
+                    commands?.close(); commands = SherpaWake(assets, "*", "wake/manage.txt")
+                    val entering = !management && command == "进入管理"
+                    val exiting = management && command in listOf("取消", "退出管理")
+                    if (entering || exiting) {
+                        commandGeneration.incrementAndGet()
+                        management = entering
+                        buffered.clear(); awake = false; voiced = false; uploadSamples = 0
+                        wake?.close(); wake = SherpaWake(assets); wakeBase = buffered.position
+                        owner.post { if (!cancelled.get()) {
+                            client.management(entering); managementChanged(entering)
+                        } }
+                        continue
+                    }
+                }
+                if (management) { frame.fill(0); continue }
                 buffered.push(frame, count)
                 position = buffered.position
-                if (awake && idle != client.idleSerial) {
+                if (idle != client.idleSerial) {
                     idle = client.idleSerial
+                    buffered.clear()
                     awake = false; voiced = false; uploadSamples = 0
                     detector = SpeechDetector(320, initialFloor = 36.0); wakeBase = position
-                    wake = SherpaWake(assets)
+                    wake?.close(); wake = SherpaWake(assets)
                 }
                 if (!awake) {
                     val tail = wake?.accept(frame, count) ?: continue
@@ -140,7 +167,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             if (!cancelled.get()) owner.post { failed() }
         } finally {
             frame.fill(0); buffered.clear()
-            try { wake?.close() } catch (_: Exception) { quarantined = true }
+            try { commands?.close(); wake?.close() } catch (_: Exception) { quarantined = true }
             try { aec?.release() } catch (_: Exception) { quarantined = true }
             try {
                 if (recorder?.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder?.stop()

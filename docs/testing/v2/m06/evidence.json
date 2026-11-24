@@ -1,0 +1,32 @@
+{
+  "source_sha": "973121e7ac012cbae1469e1a374f2e329b0f9807",
+  "app_tree": "f45e63ad6d674026bebaa6b3cb1f55a58f86a816",
+  "environment": "Linux x86_64; JDK17; SDK36/build-tools35; no local emulator; arm64 APK",
+  "jvm": {
+    "tests": 70,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2
+  },
+  "python": {
+    "tests": 77,
+    "failures": 0,
+    "skipped": 0
+  },
+  "artifacts": [
+    {
+      "name": "app-v2Debug.apk",
+      "bytes": 27236914,
+      "sha256": "8921879123df3f178398d853a237cb931476cf1194c99a57f045ad9a27ff4d9c"
+    },
+    {
+      "name": "app-v2Debug-androidTest.apk",
+      "bytes": 665024,
+      "sha256": "3678dec63c45a9ea5e913a9a9a7610d2b241ffa37a5c870c26d4440fc75fd753"
+    }
+  ],
+  "device": "OPPO NOT_RUN",
+  "acoustic": "NOT_RUN",
+  "ci_rendering": "pending",
+  "open": "R14/F01; M07 catalog; M08 PIN"
+}

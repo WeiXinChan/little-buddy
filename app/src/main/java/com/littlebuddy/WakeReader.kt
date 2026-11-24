@@ -11,7 +11,8 @@ internal interface WakeKeyword : AutoCloseable {
     fun accept(samples: ShortArray, count: Int): Long?
 }
 
-internal class SherpaWake(assets: AssetManager) : WakeKeyword {
+internal class SherpaWake(assets: AssetManager, private val keyword: String = "瓦力瓦力",
+                          keywordFile: String = "wake/keywords.txt") : WakeKeyword {
     private val spotter: KeywordSpotter
     private val stream: com.k2fsa.sherpa.onnx.OnlineStream
 
@@ -28,17 +29,19 @@ internal class SherpaWake(assets: AssetManager) : WakeKeyword {
                 modelType = "zipformer2",
                 numThreads = 1,
             ),
-            keywordsFile = "wake/keywords.txt",
+            keywordsFile = keywordFile,
         ))
         stream = spotter.createStream()
     }
 
+    var detectedKeyword: String? = null; private set
     override fun accept(samples: ShortArray, count: Int): Long? {
         stream.acceptWaveform(FloatArray(count) { samples[it] / 32768f }, 16_000)
         while (spotter.isReady(stream)) {
             spotter.decode(stream)
             val result = spotter.getResult(stream)
-            if (result.keyword == "瓦力瓦力") {
+            if (result.keyword.isNotEmpty() && (keyword == "*" || result.keyword == keyword)) {
+                detectedKeyword = result.keyword
                 val last = result.timestamps.lastOrNull() ?: error("Missing wake timestamp")
                 return ((last + 0.12f) * 16_000).toLong()
             }

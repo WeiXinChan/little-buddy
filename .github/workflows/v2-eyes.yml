@@ -1,0 +1,59 @@
+name: V2 eyes rendering
+on:
+  pull_request:
+    paths: ['app/**', '.github/workflows/v2-eyes.yml']
+permissions:
+  contents: read
+concurrency:
+  group: v2-eyes-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Build and render on API 36 x86_64
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0' 'emulator' 'system-images;android-36;google_apis;x86_64'
+          ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator :app:testV2DebugUnitTest :app:assembleV2Debug :app:assembleV2DebugAndroidTest
+          mkdir -p render
+          git rev-parse HEAD > render/source.txt
+          sha256sum app/build/outputs/apk/v2Debug/*.apk app/build/outputs/apk/androidTest/v2Debug/*.apk > render/apk-sha256.txt
+          echo 'no' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n v2eyes -k 'system-images;android-36;google_apis;x86_64' --force
+          "$ANDROID_HOME/emulator/emulator" -avd v2eyes -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect > render/emulator.log 2>&1 &
+          emulator_pid=$!
+          trap 'adb emu kill || true; wait "$emulator_pid" || true' EXIT
+          timeout 180s adb wait-for-device
+          timeout 180s bash -c 'until [[ $(adb shell getprop sys.boot_completed | tr -d "\r") == 1 ]]; do sleep 2; done'
+          adb shell wm size 1080x1920
+          adb shell settings put system accelerometer_rotation 0
+          adb shell settings put system user_rotation 1
+          adb install -g app/build/outputs/apk/v2Debug/app-v2Debug.apk
+          adb install app/build/outputs/apk/androidTest/v2Debug/app-v2Debug-androidTest.apk
+          adb shell am instrument -w -r -e class com.littlebuddy.V2EyesTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/instrumentation.txt
+          adb exec-out run-as com.littlebuddy.sim.v2 tar -C files -cf - m06 > render/screens.tar
+          tar -xf render/screens.tar -C render
+          test "$(find render/m06 -name '*.png' | wc -l)" -eq 16
+          python3 - <<'PYCODE'
+          import pathlib, struct
+          for path in pathlib.Path('render/m06').glob('*.png'):
+              width, height = struct.unpack('>II', path.read_bytes()[16:24])
+              assert width > height, (path.name, width, height)
+              print(path.name, width, height)
+          PYCODE
+          grep -q 'OK (1 test)' render/instrumentation.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: v2-eyes-api36
+          path: |
+            render/
+            app/build/outputs/apk/v2Debug/*.apk
+            app/build/outputs/apk/androidTest/v2Debug/*.apk
+            app/build/test-results/testV2DebugUnitTest/

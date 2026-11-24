@@ -377,6 +377,15 @@ class VoicePeer:
                 operation.ensure()
                 text = self.policy.input(text)
                 operation.ensure()
+                # A finite parent command is routed before endpoint/LLM/context.
+                # Management-only recorder audio is never sent by the Android client.
+                command = ''.join(c for c in text if c.isalnum())
+                if command in {'进入管理页面', '打开管理页面', '进入家长管理',
+                               '瓦力瓦力进入管理页面', '瓦力瓦力打开管理页面'}:
+                    self.capture.clear()
+                    self.analysis = self.prepared = None
+                    await self.owned(operation, self.send, 'management')
+                    return
                 # Only this operation's authorised session may supply context.
                 context = operation.session.context()
                 result = await self.owned(operation, self.providers.endpoint, text, context)

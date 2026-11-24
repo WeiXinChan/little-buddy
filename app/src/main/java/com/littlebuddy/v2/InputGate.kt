@@ -24,6 +24,7 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
     fun checkResponseDeadline() {
         if (responsePending && thinkingAt == null) check(now() < responseDeadline) { "first response expired" }
     }
+    fun sleep() { awake = false; hasInput = false; speaking = false; responsePending = false; thinkingAt = null }
     fun noResponseExpected() { responsePending = false }
     fun effectivePlayed() { responsePending = false }
     var revision = 0L; private set

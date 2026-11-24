@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <application android:networkSecurityConfig="@xml/voice_debug_network_security" android:label="瓦力 V2 集成" tools:replace="android:label">
-        <activity android:name=".V2VoiceActivity" android:exported="true" tools:replace="android:exported">
+        <activity android:name=".V2VoiceActivity" android:screenOrientation="sensorLandscape" android:exported="true" tools:replace="android:exported">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
