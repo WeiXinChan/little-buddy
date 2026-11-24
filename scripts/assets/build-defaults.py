@@ -53,8 +53,21 @@ def animal(k):
   if k=='fish': return path('M349 255 L419 190 L419 322 Z',GOLD)+ellipse(243,256,128,86,BLUE)+path('M226 177 L265 140 L287 181',BLUE)+path('M225 333 L265 370 L284 331',BLUE)+circle(176,238,9,INK)+line('M148 276 Q160 286 174 276')+path('M251 235 Q301 256 251 282', '#b3d4db')
   if k=='whale': return path('M345 294 Q391 289 407 240 L445 218 L439 279 Q424 340 349 349',BLUE)+ellipse(237,300,136,83,BLUE)+ellipse(227,338,111,37,'#c5dfdf')+circle(158,283,9,INK)+path('M251 318 Q316 322 283 377',BLUE)+line('M234 207 Q235 177 211 166 M236 206 Q242 175 264 163',BLUE,9)
   return ellipse(256,281,117,83,GREEN)+ellipse(384,280,43,35,'#acc997')+ellipse(187,352,30,19,'#acc997')+ellipse(309,352,30,19,'#acc997')+ellipse(184,212,28,18,'#acc997')+ellipse(308,211,28,18,'#acc997')+path('M143 270 L102 287 L143 302',GREEN)+path('M226 244 L277 242 L300 280 L277 317 L230 317 L207 279 Z','#99bc91')+circle(398,270,5,INK)
- if k=='butterfly': return ellipse(191,222,63,82,'#dba0a5')+ellipse(322,222,63,82,'#dba0a5')+ellipse(198,329,48,57,GOLD)+ellipse(314,329,48,57,GOLD)+ellipse(256,278,16,87,INK)+circle(256,191,22,INK)+line('M248 177 L225 147 M265 177 L286 147')+circle(183,212,25,CREAM)+circle(330,212,25,CREAM)
- if k=='bee': return line('M200 342 L188 379 M240 350 L233 386 M282 350 L293 381 M206 250 L191 223 M245 242 L238 215 M286 245 L299 221',w=4)+ ellipse(212,207,43,65,'#c9e0df')+ellipse(301,207,43,65,'#c9e0df')+ellipse(256,296,108,71,GOLD)+rect(217,231,25,130,INK)+rect(270,231,25,130,INK)+circle(167,279,7,INK)+line('M152 306 Q169 322 185 306')
+ if k in ['butterfly','bee']:
+  # Dorsal view: all three bilateral thoracic leg pairs remain in front of wings.
+  # Head has two separate antennae; no foot is hidden behind the abdomen.
+  if k=='butterfly':
+   wings=ellipse(172,217,68,88,'#dba0a5')+ellipse(340,217,68,88,'#dba0a5')+ellipse(184,328,55,61,GOLD)+ellipse(328,328,55,61,GOLD)+circle(151,202,23,CREAM)+circle(361,202,23,CREAM)
+   abdomen=ellipse(256,319,17,68,INK)
+  else:
+   wings=ellipse(174,225,61,84,'#c9e0df')+ellipse(338,225,61,84,'#c9e0df')+ellipse(187,307,45,50,'#dce9e1')+ellipse(325,307,45,50,'#dce9e1')
+   abdomen=ellipse(256,326,49,68,GOLD)+path('M212 300 Q256 312 300 300 L304 317 Q256 329 208 317 Z',INK,0)+path('M210 339 Q256 353 302 339 L296 358 Q256 372 216 358 Z',INK,0)
+  legs=''.join(line(d,w=6) for d in [
+   'M242 235 L216 212 L192 181','M240 252 L208 253 L180 272','M243 270 L198 312 L175 354',
+   'M270 235 L296 212 L320 181','M272 252 L304 253 L332 272','M269 270 L314 312 L337 354'])
+  antennae=line('M246 177 Q226 153 225 121 M266 177 Q286 153 287 121',w=5)+(circle(225,119,6,INK)+circle(287,119,6,INK) if k=='butterfly' else '')
+  head=circle(256,192,25,INK)+circle(248,187,3,CREAM)+circle(264,187,3,CREAM)
+  return wings+abdomen+legs+ellipse(256,251,25,38,INK)+antennae+head
  if k=='frog': return ellipse(256,303,112,83,GREEN)+circle(193,223,40,GREEN)+circle(319,223,40,GREEN)+circle(193,223,23,CREAM)+circle(319,223,23,CREAM)+circle(193,223,9,INK)+circle(319,223,9,INK)+ellipse(256,337,65,38,'#bad29a')+line('M207 287 Q256 321 305 287')+ellipse(157,371,47,23,GREEN)+ellipse(355,371,47,23,GREEN)
  if k=='snail': return path('M102 360 Q117 310 223 324 L342 323 L350 256 Q379 230 396 261 L396 359 Q302 393 102 360', '#c3cb93')+circle(245,288,84,'#d6aa7c')+line('M265 306 Q211 333 203 285 Q200 241 247 242 Q281 241 284 275 Q287 300 264 296 Q249 294 254 279',w=8)+line('M358 254 L348 218 M386 252 L402 216')+circle(348,214,9,INK)+circle(402,213,9,INK)
  raise ValueError(k)
@@ -62,7 +75,7 @@ items=[]
 def add(k,n,c,b,feature): items.append(dict(id=k,name=n,category=c,body=b,feature=feature))
 animals='cat 猫|dog 狗|rabbit 兔|bear 熊|fox 狐狸|panda 熊猫|tiger 老虎|lion 狮子|pig 猪|cow 奶牛|mouse 老鼠|monkey 猴子|elephant 大象|giraffe 长颈鹿|duck 鸭|penguin 企鹅|owl 猫头鹰|chicken 鸡|fish 鱼|whale 鲸|turtle 乌龟|butterfly 蝴蝶|bee 蜜蜂|frog 青蛙'.split('|')
 for entry in animals:
- k,n=entry.split(); add(k,n,'animal',animal(k),'形态辨识；仅表示常见卡通外观，不作物种精细分类')
+ k,n=entry.split(); add(k,n,'animal',animal(k),'背视完整主体：胸部三对共六足、头部一对触角、左右前后翅' if k in ['butterfly','bee'] else '形态辨识；仅表示常见卡通外观，不作物种精细分类')
 # Distinct silhouettes for food and everyday objects.
 add('apple','苹果','daily',path('M253 205 Q184 163 158 231 Q123 310 192 373 Q223 394 256 377 Q294 395 327 365 Q384 299 348 230 Q318 178 266 207','#d8937f')+line('M258 205 L269 160',w=10)+path('M270 179 Q302 138 330 158 Q320 195 270 179',GREEN),'果梗与叶、凹顶圆果')
 add('banana','香蕉','daily',path('M156 195 Q172 330 337 291 L375 259 Q358 366 259 379 Q161 381 130 269 L136 202 Z','#eed18a')+line('M151 225 Q174 355 338 320','#ba9658',4),'弯曲果身')
@@ -86,7 +99,13 @@ add('bus','公共汽车','tool',rect(100,181,312,172,GOLD,24)+''.join(rect(x,208
 add('train','火车','tool',rect(126,200,241,145,GREEN)+rect(242,148,125,182,GREEN)+rect(263,171,78,67,'#cce0dc')+rect(145,171,34,58,INK,4)+path('M367 306 L417 345 L367 345',GOLD)+wheels([169,240,317],351),'车头驾驶室烟囱三轮')
 add('bicycle','自行车','tool',circle(142,332,68,INK)+circle(142,332,57,CREAM)+circle(369,332,68,INK)+circle(369,332,57,CREAM)+line('M142 332 L205 224 L276 332 L142 332 M205 224 L330 224 L276 332 M369 332 L327 184 L351 165 L370 165',GREEN,10)+line('M189 215 L226 215 M331 183 L306 183',w=9)+circle(276,332,12,INK)+line('M276 332 L294 346',w=6),'三角车架双轮脚踏')
 add('boat','帆船','tool',path('M109 327 L406 327 L358 386 L160 386',BLUE)+line('M258 327 L258 139',w=8)+path('M247 157 L145 305 L247 305',CREAM)+path('M270 177 L354 294 L270 294',GOLD)+line('M100 406 Q137 388 174 406 Q211 424 248 406 Q285 388 322 406 Q359 424 405 406',BLUE,6),'桅杆帆与船体')
-add('airplane','飞机','tool',path('M102 266 L204 235 L245 132 L275 132 L276 233 L387 244 Q428 252 412 275 L279 282 L277 368 L250 368 L210 289 L116 291 Z',BLUE)+line('M344 252 L378 254',CREAM,10),'机翼机尾；卡通俯视')
+add('airplane','飞机','tool',
+ path('M240 223 L99 267 L99 296 L242 266 Z',BLUE)+path('M272 223 L413 267 L413 296 L270 266 Z',BLUE)
+ +path('M241 347 L180 371 L180 390 L245 377 Z',BLUE)+path('M271 347 L332 371 L332 390 L267 377 Z',BLUE)
+ +path('M256 104 Q234 115 234 157 L238 318 L244 395 Q256 410 268 395 L274 318 L278 157 Q278 115 256 104 Z',BLUE)
+ +path('M242 153 Q256 142 270 153 L269 178 L243 178 Z',CREAM,3)
+ +line('M256 347 L256 390',INK,5),'俯视飞机：长机身、左右主翼、分离的左右水平尾翼和尾部中线')
+
 add('rocket','火箭','tool',path('M213 329 L176 373 L177 293 L214 255',GOLD)+path('M298 329 L336 373 L335 293 L298 255',GOLD)+path('M215 340 Q191 208 256 124 Q321 208 297 340 Z',CREAM)+circle(256,238,33,BLUE)+circle(256,238,21,'#bfd9de')+path('M226 353 Q256 416 284 353',GOLD),'舷窗尾翼；探索非武器')
 add('telescope','望远镜','tool',line('M268 278 L268 298 L208 406 M268 298 L330 406 M268 298 L266 411',w=9)+path('M146 248 L335 159 L369 230 L180 319 Z',BLUE)+path('M327 149 L354 136 L399 228 L370 242',GOLD)+rect(130,270,35,46,INK,5),'三脚架斜筒镜')
 add('magnifier','放大镜','tool',line('M302 311 L381 395',GOLD,30)+circle(229,239,100,GREEN)+circle(229,239,78,'#d9e6da')+line('M185 225 Q195 190 224 187',CREAM,11),'完整圆镜与手柄')
