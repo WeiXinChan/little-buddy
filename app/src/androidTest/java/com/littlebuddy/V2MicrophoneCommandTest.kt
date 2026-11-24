@@ -39,15 +39,22 @@ class V2MicrophoneCommandTest {
   override fun close(code:Int,reason:String?)=true
   override fun cancel(){}
  }
+ private var diagnosticHost: V2VoiceActivity?=null
  private fun await(name:String,condition:()->Boolean) {
   val end=SystemClock.elapsedRealtime()+12000
   while(!condition() && SystemClock.elapsedRealtime()<end)Thread.sleep(20)
+  if(!condition()) {
+   val dir=File(inst.targetContext.filesDir,"m06").apply{mkdirs()}
+   val host=diagnosticHost
+   if(host!=null){dir.resolve("microphone-timeline.json").writeText(host.timelineJson());val latch=java.util.concurrent.CountDownLatch(1);host.observeDiagnostics{dir.resolve("microphone-diagnostics.txt").writeText(it);latch.countDown()};latch.await(2,java.util.concurrent.TimeUnit.SECONDS)}
+  }
   assertTrue(name,condition())
  }
  private fun play(name:String) {inst.uiAutomation.executeShellCommand("run-as com.littlebuddy.sim.v2 rm -f files/m06-audio-$name.done").use {java.io.FileInputStream(it.fileDescriptor).readBytes()};inst.sendStatus(30,Bundle().apply{putString("m06_audio",name)})}
  @Test fun actualMicrophoneManagementAndNegativeCommands() {
   val ctx=inst.targetContext
   val activity=inst.startActivitySync(Intent(ctx,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as V2VoiceActivity
+  diagnosticHost=activity
   lateinit var wire:Wire
   try {
    await("focused host"){activity.hasWindowFocus() && activity.resumed}
@@ -79,7 +86,15 @@ class V2MicrophoneCommandTest {
    play("enter_polite");await("fresh enter through real mic"){activity.isManaging}
    play("exit");await("real exit returns WAKE"){!activity.isManaging && activity.currentMood==EyeMood.WAKE};assertEquals(before,wire.inputs.get())
    val wakes=wire.wakes.get();play("wake");await("next actual wake only"){wire.wakes.get()>wakes}
+   val old=activity.immediateRecorder();val uploads=wire.inputs.get()
+   inst.uiAutomation.executeShellCommand("input keyevent KEYCODE_HOME").use{java.io.FileInputStream(it.fileDescriptor).readBytes()}
+   await("explicit session HOME paused/focus lost"){!activity.resumed && !activity.hasWindowFocus()}
+   await("explicit session HOME native released and worker done"){val p=activity.immediateRecorder();p.session==old.session && p.stopped && p.released && !p.recording && activity.captureWorkerDone}
+   val stoppedFrames=activity.immediateRecorder().frames;Thread.sleep(100);assertEquals(stoppedFrames,activity.immediateRecorder().frames)
+   inst.startActivitySync(Intent(ctx,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+   await("explicit session returns new local KWS READ"){val p=activity.immediateRecorder();activity.resumed && activity.hasWindowFocus() && p.session!=old.session && p.recording && p.frames>0}
+   assertEquals("return must not resume old cloud upload",uploads,wire.inputs.get())
    File(ctx.filesDir,"m06").mkdirs();File(ctx.filesDir,"m06/microphone-management.json").writeText(JSONObject().put("real_AudioRecord",true).put("KWS",true).put("network_adapter","synthetic WebSocket; cloud ASR/LLM not tested").put("managed_input_delta",wire.inputs.get()-before).put("timeline",org.json.JSONArray(activity.timelineJson())).toString(2))
-  } finally {inst.runOnMainSync{activity.finish()}}
+  } finally {inst.runOnMainSync{activity.finish()};await("Host native release before next instrumentation"){activity.immediateRecorder().released && activity.captureWorkerDone}}
  }
 }

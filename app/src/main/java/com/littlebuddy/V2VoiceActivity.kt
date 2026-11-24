@@ -39,6 +39,7 @@ class V2VoiceActivity : Activity() {
     internal var afterEligible: ()->Unit = {}
     private val life=LifecycleGate()
     private val timeline=StopTimeline(SystemClock::elapsedRealtime)
+    internal val captureWorkerDone get()=capture?.workerDone != false
     internal fun immediateRecorder()=capture?.nativeProof ?: releasedRecorder
     internal fun mark(name: String) { timeline.add(name,life.state.generation,immediateRecorder(),capture?.phase?.name ?: lastCapturePhase) }
     internal fun timelineJson(): String = JSONArray(timeline.snapshot().map {
@@ -138,12 +139,20 @@ class V2VoiceActivity : Activity() {
         check(hasWindowFocus() && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
         check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked)
         val ticket=life.state.generation
-        owner.post {
+        val deadline=SystemClock.elapsedRealtime()+3000
+        explicitConnectionStarted=true
+        fun attempt() { owner.post {
             if(!eligible(ticket)) { mark("STALE_CONNECT_REJECTED"); return@post }
             afterEligible()
             if(!eligible(ticket)) { mark("STALE_CONNECT_REJECTED"); return@post }
             voice?.close(); capture?.close()
-            if(voice?.quarantined==true || capture?.quarantined==true) { mark("RECONNECT_QUARANTINED"); return@post }
+            if(voice?.quarantined==true || capture?.resourceFailed==true) { mark("RECONNECT_RESOURCE_FAULT"); return@post }
+            if(capture?.quarantined==true) {
+                mark("RECONNECT_DISPOSAL_WAIT")
+                if(SystemClock.elapsedRealtime()<deadline)owner.postDelayed({if(eligible(ticket))attempt() else mark("STALE_CONNECT_REJECTED")},50)
+                else { mark("RECONNECT_DISPOSAL_EXPIRED"); explicitConnectionStarted=false; displayEvent("failure"); localCommands() }
+                return@post
+            }
             voice = null; capture = null
             explicitConnectionStarted = true
             releaseState = "active"
@@ -151,7 +160,8 @@ class V2VoiceActivity : Activity() {
             voice = client
             if(!installCapture(client,ticket))return@post
             if(eligible(ticket))client.connect(address,credential) else { capture?.requestStop(); stopVoice() }
-        }
+        } }
+        attempt()
     }
     private fun makeCapture(client: VoiceClient,ticket: Long): Capture {
         lateinit var created: Capture
@@ -206,6 +216,7 @@ class V2VoiceActivity : Activity() {
         }
     }
     private fun stopVoice() {
+        explicitConnectionStarted=false
         val stopping=capture; val stoppingVoice=voice
         mark("STOP_ENQUEUE")
         stopping?.requestStop() // before owner queue or model destruction

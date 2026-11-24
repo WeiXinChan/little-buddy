@@ -4,6 +4,7 @@
   "threshold": 0.25,
   "trailing_blanks": 2,
   "threads": 1,
+  "max_active_paths": 8,
   "reset": false,
   "model_type": "Python native auto-detection from same zipformer2 ONNX metadata; Android explicitly zipformer2",
   "cases": [
@@ -88,7 +89,14 @@
       "managed": false,
       "sha256": "85e7bf2ab1c7a40d5c31bd95a9ef29d81e28adeae9e3dbc87d50542bd326afa1",
       "source": "enter_polite: atempo=0.85 volume=0.5",
-      "hits": []
+      "hits": [
+        {
+          "frame": 183,
+          "name": "进入管理",
+          "start": 17279,
+          "end": 53760
+        }
+      ]
     },
     {
       "name": "enter_polite_fast",
@@ -141,7 +149,14 @@
       "managed": false,
       "sha256": "1ffe1336b11db21f21392cc62cd27d5fcf978104e84d7d41ff1c2bfb975e0984",
       "source": "enter_open: atempo=0.85 volume=0.5",
-      "hits": []
+      "hits": [
+        {
+          "frame": 167,
+          "name": "进入管理",
+          "start": 15359,
+          "end": 50559
+        }
+      ]
     },
     {
       "name": "enter_open_fast",
@@ -342,7 +357,7 @@
         {
           "frame": 135,
           "name": "否定",
-          "start": 32639,
+          "start": 33279,
           "end": 37760
         }
       ]
@@ -361,7 +376,14 @@
       "managed": false,
       "sha256": "28ddcf7c128458075369c9ae506a0f4842e6e9e272d2087d05b1af9dd03f074d",
       "source": "authorized-tts provenance.json",
-      "hits": []
+      "hits": [
+        {
+          "frame": 183,
+          "name": "进入管理",
+          "start": 23039,
+          "end": 53760
+        }
+      ]
     },
     {
       "name": "discussion_slow",
@@ -369,7 +391,14 @@
       "managed": false,
       "sha256": "e81bbe6964d1225f547ccd180222a1b640e45f6d3a90b5a025d956b87a554a1f",
       "source": "discussion: atempo=0.85 volume=0.5",
-      "hits": []
+      "hits": [
+        {
+          "frame": 215,
+          "name": "进入管理",
+          "start": 26879,
+          "end": 62719
+        }
+      ]
     },
     {
       "name": "discussion_fast",
@@ -411,7 +440,7 @@
           "frame": 87,
           "name": "否定",
           "start": 16639,
-          "end": 23039
+          "end": 22399
         },
         {
           "frame": 119,
@@ -525,7 +554,7 @@
           "frame": 279,
           "name": "退出管理",
           "start": 66559,
-          "end": 85759
+          "end": 85119
         }
       ]
     },
@@ -567,7 +596,7 @@
           "frame": 327,
           "name": "退出管理",
           "start": 81919,
-          "end": 101759
+          "end": 101119
         }
       ]
     },
@@ -640,6 +669,36 @@
           "name": "退出管理",
           "start": 10239,
           "end": 33920
+        }
+      ]
+    },
+    {
+      "name": "natural_rate_enter_polite",
+      "managed": false,
+      "expected": "进入管理",
+      "sha256": "161deceff75bcb08d1012d7ffd88c77ea5f13e1bd7996450fb7efdf2e5811eca",
+      "source": "authorized CosyVoice direct rate=.85; no DSP; natural-rate-provenance.json",
+      "hits": [
+        {
+          "frame": 167,
+          "name": "进入管理",
+          "start": 15359,
+          "end": 49920
+        }
+      ]
+    },
+    {
+      "name": "natural_rate_enter_open",
+      "managed": false,
+      "expected": "进入管理",
+      "sha256": "63d1e11cd47ab44df5581da2616998dabb364daad53e9b9dc230fdd767d09c12",
+      "source": "authorized CosyVoice direct rate=.85; no DSP; natural-rate-provenance.json",
+      "hits": [
+        {
+          "frame": 167,
+          "name": "进入管理",
+          "start": 15359,
+          "end": 46079
         }
       ]
     }

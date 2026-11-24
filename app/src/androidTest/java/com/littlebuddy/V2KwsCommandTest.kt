@@ -20,7 +20,7 @@ class V2KwsCommandTest {
   for(i in 0 until rows.length()) {
    val row=rows.getJSONObject(i);val name=row.getString("name");val expected=if(row.isNull("expected"))null else row.getString("expected")
    val boundary=CommandBoundary();val decisions=mutableListOf<String>();val audio=pcm(name)
-   SherpaWake(inst.targetContext.assets,"*","wake/manage.txt").use { kws ->
+   SherpaWake(inst.targetContext.assets,"*","wake/manage.txt",8).use { kws ->
     for(pos in audio.indices step 320) {
      val frame=audio.copyOfRange(pos,minOf(pos+320,audio.size));val tail=kws.accept(frame,frame.size)
      val hit=tail?.let {CommandBoundary.Hit(checkNotNull(kws.detectedKeyword),kws.matchedStart,it)}
@@ -37,7 +37,7 @@ class V2KwsCommandTest {
  }
  @Test fun wakeTailAndManagementSequenceDoNotRepeatInSilence() {
   val decisions=mutableListOf<String>();val boundary=CommandBoundary();var managed=false
-  SherpaWake(inst.targetContext.assets,"*","wake/manage.txt").use {kws ->
+  SherpaWake(inst.targetContext.assets,"*","wake/manage.txt",8).use {kws ->
    for(name in listOf("enter","cancel","exit","enter","exit")) {
     val data=pcm(name)+ShortArray(64000)
     for(pos in data.indices step 320) {

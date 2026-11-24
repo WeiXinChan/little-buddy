@@ -18,7 +18,7 @@ class V2StopRaceTest {
    {decode.countDown();check(releaseDecode.await(5,TimeUnit.SECONDS))},
    {disposal.countDown();check(releaseDisposal.await(5,TimeUnit.SECONDS))}))
   try {
-   assertTrue(capture.start());assertTrue(decode.await(15,TimeUnit.SECONDS))
+   assertTrue("Capture.start lease acquisition phase=${capture.phase}",capture.start());assertTrue("real read reached decode barrier phase=${capture.phase} proof=${capture.nativeProof}",decode.await(15,TimeUnit.SECONDS))
    capture.requestStop();assertTrue(capture.nativeProof.stopped);assertFalse(capture.nativeProof.recording)
    capture.close();assertTrue(capture.quarantined)
    releaseDecode.countDown();assertTrue(disposal.await(3,TimeUnit.SECONDS))
@@ -36,7 +36,8 @@ class V2StopRaceTest {
   try {
    // Real window focus transitions while the production owner is held past eligibility.
    inst.runOnMainSync {activity.afterEligible={passed.countDown();check(consume.await(5,TimeUnit.SECONDS))}}
-   val dialog=android.app.Dialog(activity)
+   lateinit var dialog: android.app.Dialog
+   inst.runOnMainSync{dialog=android.app.Dialog(activity)}
    inst.runOnMainSync{dialog.show()};inst.waitForIdleSync();inst.runOnMainSync{dialog.dismiss()}
    assertTrue(passed.await(3,TimeUnit.SECONDS))
    inst.runOnMainSync {activity.startVoice("wss://localhost:1/v2/voice","SyntheticOnly".repeat(4))}
@@ -52,6 +53,6 @@ class V2StopRaceTest {
    var lastPause=0L
    for(i in 0 until pause.length())if(pause.getJSONObject(i).getString("event")=="LIFE_PAUSE")lastPause=pause.getJSONObject(i).getLong("ms")
    for(i in 0 until pause.length()) {val e=pause.getJSONObject(i);assertFalse(e.getString("event")=="NATIVE_START" && e.getLong("ms")>lastPause)}
-  } finally {consume.countDown();inst.runOnMainSync{activity.afterEligible={};activity.finish()}}
+  } finally {consume.countDown();inst.runOnMainSync{activity.afterEligible={};activity.finish()};val until=SystemClock.elapsedRealtime()+5000;while((!activity.immediateRecorder().released || !activity.captureWorkerDone) && SystemClock.elapsedRealtime()<until)Thread.sleep(20);assertTrue("Host native release before next test",activity.immediateRecorder().released && activity.captureWorkerDone)}
  }
 }

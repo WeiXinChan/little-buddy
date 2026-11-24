@@ -1,0 +1,26 @@
+[
+  {
+    "name": "enter_polite",
+    "text": "瓦力瓦力请进入管理页面",
+    "source": "existing authorized CosyVoice WebSocket direct rate; no DSP time stretch",
+    "model": "cosyvoice-v3-flash",
+    "voice": "longanyang",
+    "rate": 0.85,
+    "requested_sample_rate": 24000,
+    "duration_s": 5.489,
+    "sha256": "161deceff75bcb08d1012d7ffd88c77ea5f13e1bd7996450fb7efdf2e5811eca",
+    "status": "generated"
+  },
+  {
+    "name": "enter_open",
+    "text": "瓦力瓦力打开管理页面",
+    "source": "existing authorized CosyVoice WebSocket direct rate; no DSP time stretch",
+    "model": "cosyvoice-v3-flash",
+    "voice": "longanyang",
+    "rate": 0.85,
+    "requested_sample_rate": 24000,
+    "duration_s": 5.26925,
+    "sha256": "63d1e11cd47ab44df5581da2616998dabb364daad53e9b9dc230fdd767d09c12",
+    "status": "generated"
+  }
+]

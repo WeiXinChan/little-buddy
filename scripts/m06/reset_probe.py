@@ -2,7 +2,7 @@ import sys,json,wave,array
 from pathlib import Path
 import sherpa_onnx
 m=Path('app/src/main/assets/wake');suffix='epoch-13-avg-2-chunk-16-left-64'
-def model():return sherpa_onnx.KeywordSpotter(tokens=str(m/'tokens.txt'),encoder=str(m/f'encoder-{suffix}.int8.onnx'),decoder=str(m/f'decoder-{suffix}.onnx'),joiner=str(m/f'joiner-{suffix}.int8.onnx'),keywords_file=str(m/'manage.txt'),num_threads=1,keywords_score=1.5,keywords_threshold=.25,num_trailing_blanks=2)
+def model():return sherpa_onnx.KeywordSpotter(tokens=str(m/'tokens.txt'),encoder=str(m/f'encoder-{suffix}.int8.onnx'),decoder=str(m/f'decoder-{suffix}.onnx'),joiner=str(m/f'joiner-{suffix}.int8.onnx'),keywords_file=str(m/'manage.txt'),num_threads=1,max_active_paths=8,keywords_score=1.5,keywords_threshold=.25,num_trailing_blanks=2)
 def main():
  rows=[]
  for reset in [False,True]:

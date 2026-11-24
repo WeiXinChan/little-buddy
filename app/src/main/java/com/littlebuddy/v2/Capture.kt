@@ -43,6 +43,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     @Volatile var nativeProof = RecorderProof(); private set
     @Volatile private var resourceFault = false
     @Volatile private var pendingDisposal = false
+    val resourceFailed get() = resourceFault
     val quarantined get() = resourceFault || (pendingDisposal && thread?.isAlive == true)
     val closing get() = cancelled.get()
     val workerDone get() = thread?.isAlive != true
@@ -101,8 +102,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             }
             phase = CapturePhase.WAKE_KWS
             wake = SherpaWake(assets)
+            if(cancelled.get() || !allowed())return
             phase = CapturePhase.MANAGEMENT_KWS
-            commands = SherpaWake(assets, "*", "wake/manage.txt")
+            commands = SherpaWake(assets, "*", "wake/manage.txt", 8)
             synchronized(nativeLock) {
                 if (cancelled.get() || !allowed()) return
                 phase = CapturePhase.START

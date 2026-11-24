@@ -192,7 +192,10 @@ class V2EyesTest {
             activity.mark("HOME_STATE_OBSERVED")
             saveTimeline(activity,"home-before-stop-check")
             val homePackage=context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
-            assertTrue("HOME must show resolved desktop, got $top",homePackage!=null && top.contains(homePackage))
+            val resolved=inst.uiAutomation.executeShellCommand("cmd package resolve-activity --brief --user 0 -a android.intent.action.MAIN -c android.intent.category.HOME").use {java.io.FileInputStream(it.fileDescriptor).bufferedReader().readText().trim()}
+            File(context.filesDir,"m06/home-resolution.txt").writeText("appVisible=$homePackage shell=$resolved")
+            val component=resolved.lineSequence().lastOrNull{it.contains('/')}
+            assertTrue("HOME must show resolved desktop: $resolved got $top",component!=null && top.contains(component))
             assertFalse("HOME must actually pause old Host: $top",activity.resumed)
             assertFalse("HOME must remove old Host focus: $top",activity.hasWindowFocus())
             val stopDeadline=SystemClock.elapsedRealtime()+1000

@@ -300,6 +300,20 @@
       "managed": true,
       "sha256": "bc2a8e1fde0f47756374e8fe9e75ddcecca7f570ae136f470d525d6eb6342dbb",
       "source": "exit +200ms+ continued discussion, padding removed"
+    },
+    {
+      "name": "natural_rate_enter_polite",
+      "managed": false,
+      "expected": "进入管理",
+      "sha256": "161deceff75bcb08d1012d7ffd88c77ea5f13e1bd7996450fb7efdf2e5811eca",
+      "source": "authorized CosyVoice direct rate=.85; no DSP; natural-rate-provenance.json"
+    },
+    {
+      "name": "natural_rate_enter_open",
+      "managed": false,
+      "expected": "进入管理",
+      "sha256": "63d1e11cd47ab44df5581da2616998dabb364daad53e9b9dc230fdd767d09c12",
+      "source": "authorized CosyVoice direct rate=.85; no DSP; natural-rate-provenance.json"
     }
   ]
 }

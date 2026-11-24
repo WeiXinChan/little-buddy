@@ -12,7 +12,7 @@ internal interface WakeKeyword : AutoCloseable {
 }
 
 internal class SherpaWake(assets: AssetManager, private val keyword: String = "瓦力瓦力",
-                          keywordFile: String = "wake/keywords.txt") : WakeKeyword {
+                          keywordFile: String = "wake/keywords.txt", maxPaths: Int = 4) : WakeKeyword {
     private val spotter: KeywordSpotter
     private var deliveredTail=-1L
     var matchedStart=0L; private set
@@ -35,7 +35,7 @@ internal class SherpaWake(assets: AssetManager, private val keyword: String = "�
             keywordsScore = 1.5f,
             keywordsThreshold = 0.25f,
             numTrailingBlanks = 2,
-            maxActivePaths = 4,
+            maxActivePaths = maxPaths,
         ))
         stream = spotter.createStream()
     }
