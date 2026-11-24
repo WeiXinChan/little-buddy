@@ -37,6 +37,9 @@ class V2VoiceActivity : Activity() {
     @Volatile private var capture: Capture? = null
     internal var transportOverride: ((okhttp3.Request,okhttp3.WebSocketListener)->okhttp3.WebSocket)? = null
     internal var afterEligible: ()->Unit = {}
+    @Volatile internal var afterCaptureStart:()->Unit={}
+    @Volatile internal var afterUploadDelivery:()->Unit={}
+    @Volatile internal var afterCaptureFirstRead:((List<ShortArray>)->Unit)->Unit={}
     private val life=LifecycleGate()
     private val timeline=StopTimeline(SystemClock::elapsedRealtime)
     internal fun captureHasResources()=capture?.let{!it.leaseReturned || !it.workerDone || it.nativeProof.session!=null} ?: (releasedRecorder.session!=null)
@@ -242,7 +245,7 @@ class V2VoiceActivity : Activity() {
             { entering -> if(capture===created && life.allows(ticket))manage(entering) },
             { life.allows(ticket) },
             { event,proof,phase -> timeline.add(event,ticket,proof,phase) },
-            hooks=com.littlebuddy.v2.CaptureHooks(syntheticPcm={data,count,proof->if(syntheticCaptureDiagnostics && syntheticProbeAllowed())syntheticPcmObserver?.invoke(data,count,proof)},syntheticEnabled={syntheticCaptureDiagnostics},syntheticTrace={detail->if(syntheticCaptureDiagnostics)timeline.add("SYNTHETIC_CAPTURE",ticket,immediateRecorder(),detail)},beforeDispose={beforeCaptureDispose()},beforeLeaseReturn={beforeCaptureLeaseReturn()},beforeCommandDecision={beforeManagementCommand(it)}),
+            hooks=com.littlebuddy.v2.CaptureHooks(afterUploadDelivery={afterUploadDelivery()},afterFirstRead={send->afterCaptureFirstRead(send)},syntheticPcm={data,count,proof->if(syntheticCaptureDiagnostics && syntheticProbeAllowed())syntheticPcmObserver?.invoke(data,count,proof)},syntheticEnabled={syntheticCaptureDiagnostics},syntheticTrace={detail->if(syntheticCaptureDiagnostics)timeline.add("SYNTHETIC_CAPTURE",ticket,immediateRecorder(),detail)},beforeDispose={beforeCaptureDispose()},beforeLeaseReturn={beforeCaptureLeaseReturn()},beforeCommandDecision={beforeManagementCommand(it)}),
             disposed = { owner.post {
                 mark("DISPOSE_CONSUME")
                 if(capture===created && created.workerDone && created.nativeProof.released && created.leaseReturned && !created.quarantined){
@@ -262,6 +265,7 @@ class V2VoiceActivity : Activity() {
             releaseState="released"; mark("STALE_CAPTURE_START_REJECTED")
             return false
         }
+        afterCaptureStart()
         return true
     }
     internal fun handleStatus(value: String) {

@@ -1,0 +1,361 @@
+{
+  "artifact_sha256": "672454e34b167a4ce4dfc197ab2520d27e46d9a8a3a0e691d18b79e9609c8377",
+  "summary": {
+    "nonce": "676ad077-a323-4e08-be6c-dc3272d7714b",
+    "source": {
+      "samples": 64960,
+      "seconds": 4.06,
+      "nonzero": 29095,
+      "clipped": 0,
+      "peak": 17905,
+      "rms": 1762.875212122517
+    },
+    "capture": {
+      "samples": 85376,
+      "seconds": 5.336,
+      "nonzero": 0,
+      "clipped": 0,
+      "peak": 0,
+      "rms": 0.0
+    },
+    "source_one_second": [
+      {
+        "samples": 16000,
+        "seconds": 1.0,
+        "nonzero": 2256,
+        "clipped": 0,
+        "peak": 17609,
+        "rms": 1122.617142078055
+      },
+      {
+        "samples": 16000,
+        "seconds": 1.0,
+        "nonzero": 15849,
+        "clipped": 0,
+        "peak": 17791,
+        "rms": 2432.8622753225263
+      },
+      {
+        "samples": 16000,
+        "seconds": 1.0,
+        "nonzero": 10990,
+        "clipped": 0,
+        "peak": 17905,
+        "rms": 2332.0145146417935
+      },
+      {
+        "samples": 16000,
+        "seconds": 1.0,
+        "nonzero": 0,
+        "clipped": 0,
+        "peak": 0,
+        "rms": 0.0
+      },
+      {
+        "samples": 960,
+        "seconds": 0.06,
+        "nonzero": 0,
+        "clipped": 0,
+        "peak": 0,
+        "rms": 0.0
+      }
+    ],
+    "capture_one_second": [
+      {
+        "samples": 16000,
+        "seconds": 1.0,
+        "nonzero": 0,
+        "clipped": 0,
+        "peak": 0,
+        "rms": 0.0
+      },
+      {
+        "samples": 16000,
+        "seconds": 1.0,
+        "nonzero": 0,
+        "clipped": 0,
+        "peak": 0,
+        "rms": 0.0
+      },
+      {
+        "samples": 16000,
+        "seconds": 1.0,
+        "nonzero": 0,
+        "clipped": 0,
+        "peak": 0,
+        "rms": 0.0
+      },
+      {
+        "samples": 16000,
+        "seconds": 1.0,
+        "nonzero": 0,
+        "clipped": 0,
+        "peak": 0,
+        "rms": 0.0
+      },
+      {
+        "samples": 16000,
+        "seconds": 1.0,
+        "nonzero": 0,
+        "clipped": 0,
+        "peak": 0,
+        "rms": 0.0
+      },
+      {
+        "samples": 5376,
+        "seconds": 0.336,
+        "nonzero": 0,
+        "clipped": 0,
+        "peak": 0,
+        "rms": 0.0
+      }
+    ],
+    "alignment": [
+      {
+        "capture_duration_ratio": 0.25,
+        "lag_ms": 4840,
+        "envelope_correlation": 0,
+        "overlap_ms": 500
+      },
+      {
+        "capture_duration_ratio": 0.5,
+        "lag_ms": 4840,
+        "envelope_correlation": 0,
+        "overlap_ms": 500
+      },
+      {
+        "capture_duration_ratio": 1,
+        "lag_ms": 4840,
+        "envelope_correlation": 0,
+        "overlap_ms": 500
+      },
+      {
+        "capture_duration_ratio": 2,
+        "lag_ms": 4840,
+        "envelope_correlation": 0,
+        "overlap_ms": 500
+      },
+      {
+        "capture_duration_ratio": 4,
+        "lag_ms": 4840,
+        "envelope_correlation": 0,
+        "overlap_ms": 500
+      }
+    ],
+    "scope": "diagnostic envelope alignment; no threshold/model alteration or format root-cause conclusion",
+    "same_installed_android_model_replay": {
+      "source": {
+        "engine": "same installed Android Sherpa AAR and production SherpaWake/CommandBoundary; offline raw replay",
+        "paths": 8,
+        "score": 1.5,
+        "threshold": 0.25,
+        "trailing": 2,
+        "tail_zero_samples": 32000,
+        "model_hashes": {
+          "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx": "408bbd740838c42d5bf6d1c5b80b3c88b616c7860b92d980328b5b068c76ae48",
+          "decoder-epoch-13-avg-2-chunk-16-left-64.onnx": "63a22dd60f40fff082ac3e09afa507f6787da36df76ded2fbe145fa233e22c21",
+          "joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx": "190d4067b4cc20b72a42a1916e69d92052000fb7051a427ebb1bc72a69207dc1",
+          "tokens.txt": "2d3f32311f9b692b964da3c90e830258d3e78e013cb0c992dbfb15cd5a1a71b0",
+          "manage.txt": "be761bd34ff091976868309f07fa6bc6604f64ba90078fb7573a6600249e3cbd"
+        },
+        "hits": [
+          {
+            "name": "进入管理",
+            "start": 15360,
+            "end": 44159,
+            "reported_at": 48640
+          }
+        ],
+        "events": [
+          "进入管理"
+        ]
+      },
+      "capture": {
+        "engine": "same installed Android Sherpa AAR and production SherpaWake/CommandBoundary; offline raw replay",
+        "paths": 8,
+        "score": 1.5,
+        "threshold": 0.25,
+        "trailing": 2,
+        "tail_zero_samples": 32000,
+        "model_hashes": {
+          "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx": "408bbd740838c42d5bf6d1c5b80b3c88b616c7860b92d980328b5b068c76ae48",
+          "decoder-epoch-13-avg-2-chunk-16-left-64.onnx": "63a22dd60f40fff082ac3e09afa507f6787da36df76ded2fbe145fa233e22c21",
+          "joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx": "190d4067b4cc20b72a42a1916e69d92052000fb7051a427ebb1bc72a69207dc1",
+          "tokens.txt": "2d3f32311f9b692b964da3c90e830258d3e78e013cb0c992dbfb15cd5a1a71b0",
+          "manage.txt": "be761bd34ff091976868309f07fa6bc6604f64ba90078fb7573a6600249e3cbd"
+        },
+        "hits": [],
+        "events": []
+      }
+    },
+    "host_monitor": {
+      "metadata": {
+        "nonce": "676ad077-a323-4e08-be6c-dc3272d7714b",
+        "name": "enter",
+        "sha256": "c53eb146203afc87fd8092f60721e49a20d30baaa0811da715788a40fe582e34",
+        "fixture_sha256": "c53eb146203afc87fd8092f60721e49a20d30baaa0811da715788a40fe582e34",
+        "source": "private m06_input.monitor, synthetic paplay only",
+        "format": "s16le",
+        "rate": 16000,
+        "channels": 1,
+        "byte_cap": 256000,
+        "wall_limit_s": 8,
+        "started_unix_ns": 1795549587920969298,
+        "started_monotonic_ns": 451836506728,
+        "bytes": 130728,
+        "samples": 65364,
+        "seconds": 4.08525,
+        "exit": 0,
+        "stderr": "",
+        "ended_unix_ns": 1795549592015537518,
+        "ended_monotonic_ns": 455931074877,
+        "reader_alive": false,
+        "capture_sha256": "94d4e5a99f9e7568222296d219c22e3f7b9c9385ad7b495d1102f7719a2574fb",
+        "file": "mic-host-676ad077-a323-4e08-be6c-dc3272d7714b.s16le",
+        "stop": "owned probe cleanup or cap; exit is diagnostic"
+      },
+      "summary": {
+        "samples": 65364,
+        "seconds": 4.08525,
+        "nonzero": 29111,
+        "clipped": 0,
+        "peak": 17974,
+        "rms": 1756.230073477586
+      },
+      "one_second": [
+        {
+          "samples": 16000,
+          "seconds": 1.0,
+          "nonzero": 2419,
+          "clipped": 0,
+          "peak": 17509,
+          "rms": 1136.5424795184736
+        },
+        {
+          "samples": 16000,
+          "seconds": 1.0,
+          "nonzero": 15856,
+          "clipped": 0,
+          "peak": 17974,
+          "rms": 2425.6811953165857
+        },
+        {
+          "samples": 16000,
+          "seconds": 1.0,
+          "nonzero": 10836,
+          "clipped": 0,
+          "peak": 17729,
+          "rms": 2329.0896390945327
+        },
+        {
+          "samples": 16000,
+          "seconds": 1.0,
+          "nonzero": 0,
+          "clipped": 0,
+          "peak": 0,
+          "rms": 0.0
+        },
+        {
+          "samples": 1364,
+          "seconds": 0.08525,
+          "nonzero": 0,
+          "clipped": 0,
+          "peak": 0,
+          "rms": 0.0
+        }
+      ]
+    },
+    "three_point_alignment": [
+      {
+        "pair": "source_to_monitor",
+        "ratio": 1,
+        "lag_ms": -10,
+        "envelope_correlation": 0.9998245295015962,
+        "overlap_ms": 4050
+      },
+      {
+        "pair": "monitor_to_guest",
+        "ratio": 1,
+        "lag_ms": 4840,
+        "envelope_correlation": 0,
+        "overlap_ms": 500
+      }
+    ]
+  },
+  "capture_metadata": {
+    "scope": "authorized synthetic enter fixture only; not environmental/child audio",
+    "nonce": "676ad077-a323-4e08-be6c-dc3272d7714b",
+    "source_sha256": "c53eb146203afc87fd8092f60721e49a20d30baaa0811da715788a40fe582e34",
+    "source_samples": 64960,
+    "capture_sha256": "df3cd0b601b8b3f4c005e45f4d153906284a3d290953e2f5453ba25d6125a6c9",
+    "sample_rate": 16000,
+    "channels": 1,
+    "encoding": "signed PCM16 little endian",
+    "session": 97,
+    "first_frame": 12864,
+    "last_frame": 98240,
+    "samples": 85376,
+    "armed_elapsed_ms": 44479,
+    "armed_monotonic_ns": 44479062767,
+    "last_read_monotonic_ns": 50598380935,
+    "window_limit_ms": 8000,
+    "sample_limit": 128000,
+    "native_format_evidence": "SYNTHETIC_CAPTURE NATIVE_FORMAT in activity timeline; requested format recorded here",
+    "actual_native_format_events": [
+      {
+        "ms": 43660,
+        "event": "SYNTHETIC_CAPTURE",
+        "generation": 2,
+        "session": 97,
+        "frames": 0,
+        "recording": true,
+        "stopped": false,
+        "released": false,
+        "phase": "NATIVE_FORMAT rate=16000 channels=1 encoding=2 bufferFrames=3200 source=7 hardware=ranchu"
+      }
+    ],
+    "source_replay": {
+      "engine": "same installed Android Sherpa AAR and production SherpaWake/CommandBoundary; offline raw replay",
+      "paths": 8,
+      "score": 1.5,
+      "threshold": 0.25,
+      "trailing": 2,
+      "tail_zero_samples": 32000,
+      "model_hashes": {
+        "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx": "408bbd740838c42d5bf6d1c5b80b3c88b616c7860b92d980328b5b068c76ae48",
+        "decoder-epoch-13-avg-2-chunk-16-left-64.onnx": "63a22dd60f40fff082ac3e09afa507f6787da36df76ded2fbe145fa233e22c21",
+        "joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx": "190d4067b4cc20b72a42a1916e69d92052000fb7051a427ebb1bc72a69207dc1",
+        "tokens.txt": "2d3f32311f9b692b964da3c90e830258d3e78e013cb0c992dbfb15cd5a1a71b0",
+        "manage.txt": "be761bd34ff091976868309f07fa6bc6604f64ba90078fb7573a6600249e3cbd"
+      },
+      "hits": [
+        {
+          "name": "进入管理",
+          "start": 15360,
+          "end": 44159,
+          "reported_at": 48640
+        }
+      ],
+      "events": [
+        "进入管理"
+      ]
+    },
+    "capture_replay": {
+      "engine": "same installed Android Sherpa AAR and production SherpaWake/CommandBoundary; offline raw replay",
+      "paths": 8,
+      "score": 1.5,
+      "threshold": 0.25,
+      "trailing": 2,
+      "tail_zero_samples": 32000,
+      "model_hashes": {
+        "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx": "408bbd740838c42d5bf6d1c5b80b3c88b616c7860b92d980328b5b068c76ae48",
+        "decoder-epoch-13-avg-2-chunk-16-left-64.onnx": "63a22dd60f40fff082ac3e09afa507f6787da36df76ded2fbe145fa233e22c21",
+        "joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx": "190d4067b4cc20b72a42a1916e69d92052000fb7051a427ebb1bc72a69207dc1",
+        "tokens.txt": "2d3f32311f9b692b964da3c90e830258d3e78e013cb0c992dbfb15cd5a1a71b0",
+        "manage.txt": "be761bd34ff091976868309f07fa6bc6604f64ba90078fb7573a6600249e3cbd"
+      },
+      "hits": [],
+      "events": []
+    }
+  }
+}

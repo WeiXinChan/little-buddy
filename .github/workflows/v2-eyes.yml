@@ -79,6 +79,9 @@ jobs:
           echo 'no' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n v2eyes -k 'system-images;android-36;google_apis;x86_64' --force
           # -no-window selects a headless emulator whose PA implementation is a stub.
           # Keep the real GUI/audio backend on our private virtual display instead.
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/v2-runtime"
+          mkdir -m 700 -p "$XDG_RUNTIME_DIR"
+          export ANDROID_EMULATOR_HOME="$XDG_RUNTIME_DIR"
           export DISPLAY=:99
           Xvfb "$DISPLAY" -screen 0 1920x1080x24 -nolisten tcp >render/xvfb.log 2>&1 &
           display_pid=$!
@@ -86,7 +89,7 @@ jobs:
           export PULSE_SOURCE=m06_input.monitor PULSE_SINK=v2_playback
           export QEMU_PA_SERVER="$PULSE_SERVER" QEMU_PA_SOURCE=m06_input.monitor QEMU_PA_SINK=v2_playback
           "$ANDROID_HOME/emulator/emulator" -version >render/emulator-version.txt 2>&1
-          "$ANDROID_HOME/emulator/emulator" -avd v2eyes -port 5554 -accel on -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
+          "$ANDROID_HOME/emulator/emulator" -avd v2eyes -port 5554 -grpc 8554 -grpc-use-token -accel on -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
           emulator_pid=$!
           test -f "$ANDROID_AVD_HOME/v2eyes.ini"
           printf '%s\n' 'avdmanager/emulator use the same explicit ANDROID_AVD_HOME; v2eyes.ini exists' >render/avd-path-check.txt
@@ -128,17 +131,26 @@ jobs:
           adb shell wm size >render/display-size.txt
           adb shell wm density >render/display-density.txt
           adb shell wm user-rotation >render/display-rotation.txt
-          adb emu avd hostmicon >render/hostmic.txt
+          adb emu avd hostmicoff >render/hostmic.txt
+          test -f "$ANDROID_HOME/emulator/lib/emulator_controller.proto"
+          cp "$ANDROID_HOME/emulator/lib/emulator_controller.proto" render/sdk-emulator_controller.proto
+          cp "$ANDROID_HOME/emulator/source.properties" render/sdk-emulator-source.properties
+          python3 -m pip install --disable-pip-version-check --index-url https://pypi.org/simple --target "$RUNNER_TEMP/grpc-deps" grpcio-tools==1.78.0
+          mkdir -p "$RUNNER_TEMP/grpc-generated"
+          PYTHONPATH="$RUNNER_TEMP/grpc-deps" python3 -m grpc_tools.protoc -I "$ANDROID_HOME/emulator/lib" --python_out="$RUNNER_TEMP/grpc-generated" --grpc_python_out="$RUNNER_TEMP/grpc-generated" "$ANDROID_HOME/emulator/lib/emulator_controller.proto"
+          export PYTHONPATH="$RUNNER_TEMP/grpc-deps:$RUNNER_TEMP/grpc-generated"
           pactl -f json list clients >render/pulse-clients-before-mic.json
           pactl -f json list source-outputs >render/pulse-source-outputs-before-mic.json
           device_result=0
           set +e
-          BUDDY_SYNTHETIC_AVD_PROBE=1 python3 scripts/m06/mic_controller.py >render/microphone.txt 2>render/microphone-stderr.txt
+          M06_AUDIO_INPUT=grpc python3 scripts/m06/mic_controller.py >render/microphone.txt 2>render/microphone-stderr.txt
           microphone_result=$?
           set -e
           printf '%s\n' "$microphone_result" >render/microphone-exit.txt
           cat render/microphone.txt
           if ((microphone_result != 0)); then device_result=1; fi
+          adb shell am instrument -w -r -e class com.littlebuddy.V2BackpressureDeadlineTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/backpressure-deadline.txt || device_result=1
+          grep -q 'OK (1 test)' render/backpressure-deadline.txt || device_result=1
           adb shell am instrument -w -r -e class com.littlebuddy.V2UploadHandoffTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/upload-handoff.txt || device_result=1
           grep -q 'OK (2 tests)' render/upload-handoff.txt || device_result=1
           adb shell am instrument -w -r -e class com.littlebuddy.V2KwsCommandTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/kws-boundary-v21.txt || device_result=1

@@ -1,0 +1,18 @@
+"""Actual SDK37310 proto serialization; no running emulator/RPC claim."""
+import importlib.util,unittest
+from pathlib import Path
+spec=importlib.util.spec_from_file_location('grpc_mic',Path(__file__).parents[1]/'grpc_mic.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+class PacketTests(unittest.TestCase):
+ def test_twenty_ms_pacing_and_exact_drain(self):
+  clock=[0.0];sleep=[]
+  def wait(t):sleep.append(t);clock[0]+=t
+  def packet(**kw):return kw
+  source=bytes(range(256))*125 #32000 bytes exactly one second
+  packets=list(m.packet_plan(source,16000,packet,'fixed',lambda:clock[0],wait))
+  self.assertEqual(65,len(packets));self.assertEqual(source+bytes(9600),b''.join(p['audio'] for p in packets));self.assertTrue(all(len(p['audio'])==640 for p in packets));self.assertAlmostEqual(1.28,clock[0]);self.assertTrue(all(t<=.020001 for t in sleep))
+ def test_no_fast_catchup_when_beyond_buffer_safety_margin(self):
+  clock=[0.0]
+  g=m.packet_plan(bytes(1280),16000,lambda **kw:kw,'fixed',lambda:clock[0],lambda _:None)
+  next(g);clock[0]=.3
+  with self.assertRaisesRegex(RuntimeError,'pacing'):next(g)
+if __name__=='__main__':unittest.main()

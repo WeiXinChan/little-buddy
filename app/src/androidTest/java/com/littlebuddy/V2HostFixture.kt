@@ -59,7 +59,7 @@ internal object V2HostFixture {
     "ownerResponded=${latch.await(2,TimeUnit.SECONDS)}"
    }
   }
-  for((suffix,command) in listOf("window" to "dumpsys window windows","top" to "dumpsys activity activities","keyguard" to "dumpsys window policy")){
+  for((suffix,command) in listOf("window" to "dumpsys window windows","top" to "dumpsys activity activities","keyguard" to "dumpsys window policy","audio" to "dumpsys audio")){
    collect(suffix){shellEvidence(command,dir.resolve("$name-$suffix.txt"),131072)}
   }
   collect("screenshot"){

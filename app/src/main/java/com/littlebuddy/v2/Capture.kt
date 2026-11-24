@@ -12,7 +12,7 @@ import com.littlebuddy.SpeechDetector
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
-internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {},val beforeCommandDecision: (String?)->Unit = {},val beforeLeaseReturn:()->Unit = {},val syntheticTrace:((String)->Unit)?=null,val syntheticEnabled:()->Boolean={false},val syntheticPcm:((ShortArray,Int,RecorderProof)->Unit)?=null)
+internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {},val beforeCommandDecision: (String?)->Unit = {},val beforeLeaseReturn:()->Unit = {},val syntheticTrace:((String)->Unit)?=null,val syntheticEnabled:()->Boolean={false},val syntheticPcm:((ShortArray,Int,RecorderProof)->Unit)?=null,val afterFirstRead:(((List<ShortArray>)->Unit)->Unit)?=null,val afterUploadDelivery:()->Unit={})
 
 internal enum class CapturePhase { NOT_STARTED, THREAD_START, AUDIO_RECORD, WAKE_KWS, MANAGEMENT_KWS, START, READ, RELEASE, RELEASED, QUARANTINED }
 
@@ -63,7 +63,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     private val uploads=CaptureUploads(
         post={task->owner.post(task)},
         eligible={ticket->!cancelled.get() && allowed() && !management && ticket==commandGeneration.get()},
-        deliver={data,speech,time->client.frame(data,speech,time)},
+        deliver={data,speech,time->hooks.afterUploadDelivery();client.frame(data,speech,time)},
         failed={e->trace("UPLOAD_DELIVERY_EXCEPTION",nativeProof,SafeFailure.describe(e));failedPhase=phase;requestStop();failed()},
         waiting={trace("UPLOAD_BACKPRESSURE",nativeProof,"sampleCapacity=16000")})
     private var thread: Thread? = null
@@ -108,12 +108,24 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var detector = SpeechDetector(320, initialFloor = 36.0)
         var uploadSamples = 0
         val meter=SyntheticCaptureMeter()
+        var firstReadHook=false
+        fun retentionBudget():Long {
+            val n=recorder?:return 0
+            val stamp=android.media.AudioTimestamp()
+            val ok=n.getTimestamp(stamp,android.media.AudioTimestamp.TIMEBASE_MONOTONIC)==AudioRecord.SUCCESS
+            val sampledNow=System.nanoTime()
+            val age=if(ok && sampledNow>=stamp.nanoTime)(sampledNow-stamp.nanoTime)/1_000_000 else -1L
+            val unread=if(ok)stamp.framePosition-nativeProof.frames else null
+            val budget=NativeRetention.budgetMs(n.bufferSizeInFrames.toLong(),unread,age)
+            trace("UPLOAD_RETENTION_BUDGET",nativeProof,"buffer=${n.bufferSizeInFrames} unread=$unread ageMs=$age budgetMs=$budget")
+            return budget
+        }
         fun upload(data: List<ShortArray>, speech: Boolean) {
             val samples=data.sumOf{it.size}
             val ticket=commandGeneration.get()
             if(uploadSamples+samples>320000)error("input bound")
             progress("UPLOAD_ENQUEUE")
-            if(uploads.submit(data,speech,ticket,android.os.SystemClock.elapsedRealtime()))uploadSamples+=samples
+            if(uploads.submit(data,speech,ticket,android.os.SystemClock.elapsedRealtime(),::retentionBudget))uploadSamples+=samples
         }
         try {
             if(cancelled.get() || !allowed())return
@@ -160,6 +172,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     }
                 }
                 if(!accept)break
+                if(!firstReadHook){firstReadHook=true;hooks.afterFirstRead?.invoke{upload(it,true)}}
                 progress("BEFORE_DECODE")
                 capturedSamples+=count
                 if(hooks.syntheticEnabled())hooks.syntheticPcm?.invoke(frame,count,nativeProof)
@@ -309,7 +322,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             trace("CAPTURE_EXCEPTION",nativeProof,"phase=${phase.name} operation=$operation ${SafeFailure.describe(e)}")
             if(operation.contains("STREAM_") || operation.contains("MODEL_"))resourceFault=true
             failedPhase = phase
-            if (!cancelled.get()) owner.post { failed() }
+            val continuity=e is InputContinuityInterrupted
+            if(continuity){trace("INPUT_INTERRUPTED",nativeProof,"reason=NATIVE_RETENTION_BUDGET");requestStop()}
+            if (continuity || !cancelled.get()) owner.post { failed() }
         } finally {
             progress("FINALLY_ENTER")
             trace("FINALLY_ENTER",nativeProof,operation)

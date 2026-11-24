@@ -1,0 +1,13 @@
+{
+  "sdk": "37.3.10",
+  "build": "16970787",
+  "official_archive": "https://dl.google.com/android/repository/emulator-linux_x64-16970787.zip",
+  "proto_sha256": "9a4b0f704b0d4cdda652f89fbd50bb3d54da3d46ec8efe6e8b2a2a135ef10e69",
+  "method": "android.emulation.control.EmulatorController.injectAudio",
+  "client_streaming": true,
+  "sample_format": 1,
+  "channels": 0,
+  "mode": 0,
+  "buffer_contract_ms": 300,
+  "scope": "actual SDK proto inspection/serialization only; no RPC/live pass"
+}

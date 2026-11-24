@@ -10,7 +10,8 @@ internal class CaptureUploads(
  private val deliver:(ShortArray,Boolean,Long)->Unit,
  private val failed:(Exception)->Unit,
  private val waiting:()->Unit={},
- private val capacity:Int=16000
+ private val capacity:Int=16000,
+ private val now:()->Long={System.nanoTime()/1_000_000}
 ) {
  private data class Batch(val frames:List<ShortArray>,val speech:Boolean,val ticket:Long,val time:Long){val samples=frames.sumOf{it.size}}
  private val lock=Object()
@@ -20,16 +21,21 @@ internal class CaptureUploads(
  private var closed=false
  val heldSamples get()=synchronized(lock){held}
  private fun wipe(batch:Batch){batch.frames.forEach{it.fill(0)}}
- fun submit(frames:List<ShortArray>,speech:Boolean,ticket:Long,time:Long):Boolean {
+ fun submit(frames:List<ShortArray>,speech:Boolean,ticket:Long,time:Long,retentionBudget:()->Long={100L}):Boolean {
   if(frames.isEmpty())return true
   val batch=Batch(frames,speech,ticket,time)
   require(batch.samples<=capacity && frames.all{it.size<=320})
   var start=false
   synchronized(lock){
+   var deadline:Long?=null
    var notified=false
    while(!closed && eligible(ticket) && held+batch.samples>capacity){
+    if(deadline==null)deadline=now()+retentionBudget().coerceIn(0,100)
+    if(closed || !eligible(ticket)){wipe(batch);return false}
+    val left=deadline-now()
+    if(left<=0){wipe(batch);close();throw InputContinuityInterrupted()}
     if(!notified){waiting();notified=true}
-    try{lock.wait(100)}catch(e:InterruptedException){wipe(batch);throw e}
+    try{lock.wait(left)}catch(e:InterruptedException){wipe(batch);throw e}
    }
    if(closed || !eligible(ticket)){wipe(batch);return false}
    held+=batch.samples;queue.addLast(batch)

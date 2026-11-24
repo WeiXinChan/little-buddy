@@ -93,6 +93,9 @@ class V2MicrophoneCommandTest {
    activity.observeNative{if(it.player.observedHead>0)ready.countDown()}
    // head is asynchronous, keep observing without replacing native progress.
    await("native output really progressed"){var head=false;val l=java.util.concurrent.CountDownLatch(1);activity.observeNative{head=it.player.observedHead>0;l.countDown()};l.await(1,java.util.concurrent.TimeUnit.SECONDS);head}
+   val audio=ctx.getSystemService(android.media.AudioManager::class.java)
+   val config=JSONObject().put("microphone_mute",audio.isMicrophoneMute).put("configs",org.json.JSONArray(audio.activeRecordingConfigurations.map{r->JSONObject().put("session",r.clientAudioSessionId).put("source",r.clientAudioSource).put("client_rate",r.clientFormat.sampleRate).put("client_channels",r.clientFormat.channelCount).put("device_rate",r.format.sampleRate).put("device_channels",r.format.channelCount).put("device",r.audioDevice?.type).put("silenced",if(android.os.Build.VERSION.SDK_INT>=29)r.isClientSilenced else "UNAVAILABLE")}))
+   File(ctx.filesDir,"m06/microphone-system-config.json").apply{parentFile?.mkdirs();writeText(config.toString(2))}
    play("enter")
    await("authorized enter fixture playback completed"){completed("enter")}
    Thread.sleep(1600);syntheticProbe?.freeze()

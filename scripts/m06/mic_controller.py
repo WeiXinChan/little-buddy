@@ -13,6 +13,13 @@ short=json.loads((protocol/'derived-confirm.json').read_text());allowed[short['n
 production=Path('app/src/main/assets/management')
 for row in json.loads((production/'provenance.json').read_text())['rows']:
  name='prod_'+row['name'];allowed[name]=row['sha256'];paths[name]=production/(row['name']+'.wav')
+virtual_mic=None
+if os.environ.get('M06_AUDIO_INPUT')=='grpc':
+ from grpc_mic import GrpcMic
+ try:virtual_mic=GrpcMic()
+ except Exception as e:
+  Path('render/grpc-mic-init-failure.json').write_text(json.dumps(dict(stage='authenticated_loopback_setup',error=type(e).__name__)))
+  raise RuntimeError('virtual mic setup '+type(e).__name__) from None
 p=subprocess.Popen(['adb','shell','am','instrument','-w','-r','-e','class','com.littlebuddy.V2MicrophoneCommandTest','com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
 output=[]
 try:
@@ -30,7 +37,8 @@ try:
    print(json.dumps(dict(event='handshake_ready',nonce=nonce,root=private,run_as_pwd=pwd)),flush=True)
    path=paths[name]
    if hashlib.sha256(path.read_bytes()).hexdigest()!=allowed[name] or q['sha256']!=allowed[name]:raise ValueError('fixture hash')
-   diagnostic=play_fixture(path,dict(nonce=nonce,name=name,sha256=allowed[name]),monitor=(name=="enter" and os.environ.get("BUDDY_SYNTHETIC_AVD_PROBE")=="1"))
+   fixture_metadata=dict(nonce=nonce,name=name,sha256=allowed[name])
+   diagnostic=virtual_mic.play(path,fixture_metadata) if virtual_mic else play_fixture(path,fixture_metadata,monitor=(name=="enter" and os.environ.get("BUDDY_SYNTHETIC_AVD_PROBE")=="1"))
    print(json.dumps(diagnostic),flush=True)
    reply=json.dumps(dict(nonce=nonce,name=name,sha256=allowed[name],state='completed',playback_exit=0))
    subprocess.run(['adb','shell','run-as',pkg,'tee',private+'/m06-'+nonce+'.json'],input=reply,text=True,stdout=subprocess.PIPE,check=True,timeout=5)
@@ -42,4 +50,5 @@ except Exception:
  except subprocess.TimeoutExpired:pass
  raise
 finally:
+ if virtual_mic:virtual_mic.close()
  if p.poll() is None:p.terminate();p.wait(timeout=10)
