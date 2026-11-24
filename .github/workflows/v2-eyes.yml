@@ -24,8 +24,11 @@ jobs:
           export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0' 'emulator' 'system-images;android-36;google_apis;x86_64'
-          ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator :app:testV2DebugUnitTest :app:assembleV2Debug :app:assembleV2DebugAndroidTest
           mkdir -p render
+          unit_result=0
+          ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator :app:testV2DebugUnitTest >render/unit.txt 2>&1 || unit_result=$?
+          printf '%s\n' "$unit_result" >render/unit-exit.txt
+          ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator :app:assembleV2Debug :app:assembleV2DebugAndroidTest
           git rev-parse HEAD > render/source.txt
           sha256sum app/build/outputs/apk/v2Debug/*.apk app/build/outputs/apk/androidTest/v2Debug/*.apk > render/apk-sha256.txt
           sudo -n apt-get -o Acquire::http::Timeout=15 -o Acquire::Retries=0 install -y --no-install-recommends libpulse0 pulseaudio pulseaudio-utils
@@ -97,10 +100,11 @@ jobs:
           adb shell wm density >render/display-density.txt
           adb shell wm user-rotation >render/display-rotation.txt
           adb emu avd hostmicon >render/hostmic.txt
-          python3 scripts/m06/mic_controller.py | tee render/microphone.txt
-          adb shell am instrument -w -r -e class com.littlebuddy.V2StopRaceTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/stop-race.txt
-          grep -q 'OK (2 tests)' render/stop-race.txt
-          adb shell am instrument -w -r -e class com.littlebuddy.V2EyesTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/instrumentation.txt
+          device_result=0
+          python3 scripts/m06/mic_controller.py | tee render/microphone.txt || device_result=1
+          adb shell am instrument -w -r -e class com.littlebuddy.V2StopRaceTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/stop-race.txt || device_result=1
+          grep -q 'OK (2 tests)' render/stop-race.txt || device_result=1
+          adb shell am instrument -w -r -e class com.littlebuddy.V2EyesTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/instrumentation.txt || device_result=1
           adb exec-out run-as com.littlebuddy.sim.v2 tar -C files -cf - m06 > render/screens.tar
           tar -xf render/screens.tar -C render
           test "$(find render/m06 -name '*.png' | wc -l)" -eq 16
@@ -113,6 +117,8 @@ jobs:
           PYCODE
           sha256sum render/m06/*.png >render/screenshot-sha256.txt
           grep -q 'OK (1 test)' render/instrumentation.txt
+          test "$device_result" -eq 0
+          test "$unit_result" -eq 0
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
