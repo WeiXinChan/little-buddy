@@ -39,7 +39,7 @@ class V2KwsCommandTest {
    if(!passed)failures++
    output.put(JSONObject().put("name",name).put("oracle","v2.1").put("legacy_expected",row[3]).put("expected",expected).put("decisions",JSONArray(decisions)).put("passed",passed))
   }
-  File(inst.targetContext.filesDir,"m06").mkdirs();File(inst.targetContext.filesDir,"m06/kws-model-boundary.json").writeText(output.toString(2))
+  V2HostFixture.evidenceDirectory().resolve("kws-model-boundary.json").writeText(output.toString(2))
   assertEquals("real same-version KWS + production boundary corpus failures",0,failures)
  }
  @Test fun wakeTailAndManagementSequenceDoNotRepeatInSilence() {

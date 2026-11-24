@@ -33,7 +33,7 @@ class V2LocalPromptTest {
    assertTrue("bounded actual native prompt execution",done.await(9,TimeUnit.SECONDS));failure.get()?.let{throw it}
    assertEquals("only full real playback can acknowledge",!mute && !cancel,result.get())
    if(!mute){assertTrue("real AudioTrack head advances",proof.get().observedHead>0);assertEquals(StopResult(true,true),proof.get().stop)}
-   val dir=java.io.File(i.targetContext.filesDir,"m06").apply{mkdirs()};java.io.File(dir,"local-prompt-$mute-$cancel.txt").writeText("result=${result.get()} proof=${proof.get()} emulator=true")
+   val dir=V2HostFixture.evidenceDirectory();java.io.File(dir,"local-prompt-$mute-$cancel.txt").writeText("result=${result.get()} proof=${proof.get()} emulator=true")
   }finally{
    manager.setStreamVolume(AudioManager.STREAM_MUSIC,old,0);manager.adjustStreamVolume(AudioManager.STREAM_MUSIC,if(muted)AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE,0)
    i.uiAutomation.dropShellPermissionIdentity();thread.quitSafely();thread.join(2000)

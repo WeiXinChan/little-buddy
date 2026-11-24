@@ -20,7 +20,7 @@ class V2UploadHandoffTest {
    assertTrue(entered.await(2,TimeUnit.SECONDS));assertTrue(q.submit(batch(8129),true,1,0));assertEquals(8129,q.heldSamples);assertEquals(1,posts.get());assertTrue(received.isEmpty())
    release.countDown();assertTrue(done.await(3,TimeUnit.SECONDS));assertEquals((0 until 8129).map{it.toShort()},received)
    val settled=CountDownLatch(1);owner.post{settled.countDown()};assertTrue(settled.await(2,TimeUnit.SECONDS));assertEquals(0,q.heldSamples)
-   val dir=java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir,"m06").apply{mkdirs()}
+   val dir=V2HostFixture.evidenceDirectory()
    dir.resolve("upload-handoff.json").writeText("{\"samples\":8129,\"blocks\":26,\"owner_posts\":1,\"scope\":\"real HandlerThread; production queue; live AudioRecord tested separately\"}")
   }finally{q.close();release.countDown();thread.quitSafely();thread.join(2000);assertFalse(thread.isAlive)}
  }

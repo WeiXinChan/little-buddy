@@ -19,7 +19,7 @@ internal class SyntheticInputProbe(private val a:V2VoiceActivity,private val non
  private val watermarks=JSONArray();private var nextWatermark=0L
  private var firstRejectedMs:Long?=null;private var firstRejectedFrame:Long?=null
  private var frozenMs:Long?=null
- private val dir=File(i.targetContext.filesDir,"m06/synthetic-$nonce")
+ private val dir=File(V2HostFixture.evidenceDirectory(),"synthetic-$nonce")
  private fun sha(bytes:ByteArray)=java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
  init {
   check(a.syntheticProbeAllowed() && a.syntheticCaptureDiagnostics)
@@ -49,7 +49,7 @@ internal class SyntheticInputProbe(private val a:V2VoiceActivity,private val non
  @Synchronized fun freeze(){if(frozenMs==null)frozenMs=SystemClock.elapsedRealtime();closed=true;a.syntheticPcmObserver=null}
  fun saveAndReplay(){
   freeze();check(used<=256000)
-  dir.mkdirs();val raw=storage.copyOf(used)
+  check(dir.mkdirs() || dir.isDirectory){"synthetic evidence path is not a directory"};check(dir.canWrite()){"synthetic evidence directory not writable"};val raw=storage.copyOf(used)
   try {
    File(dir,"capture.s16le").writeBytes(raw)
    val report=JSONObject().put("scope","authorized synthetic enter fixture only; not environmental/child audio")

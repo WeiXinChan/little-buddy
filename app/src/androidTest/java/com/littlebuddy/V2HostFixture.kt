@@ -10,6 +10,16 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 internal object V2HostFixture {
  private val i get()=InstrumentationRegistry.getInstrumentation()
+ /** Cold installs must prepare evidence before any owner barrier or file write. */
+ fun evidenceDirectory():File {
+  val root=i.targetContext.filesDir
+  check(root.mkdirs() || root.isDirectory){"target files directory unavailable"}
+  check(root.canWrite()){"target files directory not writable"}
+  val directory=File(root,"m06")
+  check(directory.mkdirs() || directory.isDirectory){"m06 evidence path is not a directory"}
+  check(directory.canWrite()){"m06 evidence directory not writable"}
+  return directory
+ }
  fun launch():V2VoiceActivity {
   i.runOnMainSync{i.targetContext.startActivity(Intent(i.targetContext,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))}
   var last:V2VoiceActivity?=null
@@ -43,7 +53,7 @@ internal object V2HostFixture {
   return "bytes=$total eof=$eof capped=${total==limit} timeout=${!eof && SystemClock.elapsedRealtime()>=end}"
  }
  fun snapshot(a:V2VoiceActivity?,name:String){
-  val dir=File(i.targetContext.filesDir,"m06").apply{mkdirs()}
+  val dir=evidenceDirectory()
   val status=dir.resolve("$name-evidence-status.txt")
   status.writeText("host=${a?.let{System.identityHashCode(it)}} startedMs=${SystemClock.elapsedRealtime()}\n")
   // Each independent query preserves progress/errors even if another observation fails.

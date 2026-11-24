@@ -1,0 +1,11 @@
+CI22冷目录首错与CI23最小回修
+
+CI22 run45501354875/job138825198913的artifact14969464787 SHA256 34fe35817a3dd8d2161e5696421507489edf40cbfc0f2866d67f1ecfac8c6fd3已核。首错为V2MicrophoneCommandTest.kt:124写old-read-negative快照时m06父目录不存在；source7还未播放fixture，gates/transport均false，source6正确NOT_RUN。这不是本轮输入低信号、RPC或识别缺陷；CI21旧低信号/管理FAIL与未到的确认项独立保留。
+
+仅修改AndroidTest证据目录准备。统一V2HostFixture.evidenceDirectory创建并校验files根与m06的isDirectory/canWrite，错误明确传播；测试入口和设置owner暂停之前先调用，且任何M06首次写入都通过该helper。覆盖microphone负控/时序/握手/配置/管理/清理、Host快照、Eyes截图与诊断、KWS结果、handoff和local prompt证据；synthetic子目录另检查创建与可写。不依赖较晚play、旧文件或另一个用例先建目录。
+
+旧READ负控、新nonce/source/session READ与Wire/原生输出前置、gatesAccepted赋值时机、精确RPC终态、原生stop/release/worker/lease、安全/时序/新鲜度及退出码均不改；首异常和suppressed清理继续保留。不新增镜像mkdir单测，干净CI的不存在m06初始条件才是动态修复证据。
+
+本机只构建匹配冻结头的测试APK，不重新构建主APK；app源码/资源/构建配置未变，主包SHA256 a2be08177fccd14731860895c24dcabfefb615768ad3df399306cd4b976862fa核字节复用。原122项JVM=120过2跳过、24宿主测试是既有范围，本轮不冒称重跑。CI保完整JVM/assemble/device门，未引跨run制品复用优化。
+
+仅发布一次必要新头，按原已审7→6校准与资源门继续；前置失败6不跑。global85的Maven429是历史依赖设施失败，不重跑旧run、不改镜像或依赖。新CI真实结果/分臂与冷目录成功证据尚待原件，不能凭编译通过称设备通过。PR36 HOLD，未证项OPEN，无云/手机操作。

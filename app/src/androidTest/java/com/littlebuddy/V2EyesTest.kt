@@ -40,7 +40,7 @@ class V2EyesTest {
     private fun shot(name: String) {
         inst.waitForIdleSync()
         val bitmap = checkNotNull(inst.uiAutomation.takeScreenshot())
-        val out = File(inst.targetContext.filesDir, "m06").apply { mkdirs() }
+        val out = V2HostFixture.evidenceDirectory()
         File(out,"$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
         assertTrue("actual screenshot must be landscape: ${bitmap.width}x${bitmap.height}",bitmap.width > bitmap.height)
     }
@@ -61,8 +61,7 @@ class V2EyesTest {
         throw AssertionError("default EyesView stable rendered frames missing: "+diagnostics(activity))
     }
     private fun saveTimeline(activity: V2VoiceActivity,name: String) {
-        File(inst.targetContext.filesDir,"m06").mkdirs()
-        File(inst.targetContext.filesDir,"m06/$name.json").writeText(activity.timelineJson())
+        V2HostFixture.evidenceDirectory().resolve("$name.json").writeText(activity.timelineJson())
     }
     private fun proof(activity: V2VoiceActivity): NativeEvidence {
         val latch = CountDownLatch(1); val result = AtomicReference<NativeEvidence>()
@@ -107,7 +106,7 @@ class V2EyesTest {
             val deadline = SystemClock.elapsedRealtime()+15000
             while (proof(activity).recorder.frames == 0L && SystemClock.elapsedRealtime() < deadline) Thread.sleep(50)
             val diagnosis = diagnostics(activity)
-            File(context.filesDir,"m06/diagnostics.txt").writeText(diagnosis)
+            V2HostFixture.evidenceDirectory().resolve("diagnostics.txt").writeText(diagnosis)
             println("M06_DIAGNOSTICS $diagnosis")
             val recorder = proof(activity).recorder
             assertTrue("local command recorder must really run: $diagnosis", recorder.started && recorder.recording && recorder.frames > 0)
@@ -188,12 +187,12 @@ class V2EyesTest {
                 java.io.FileInputStream(it.fileDescriptor).bufferedReader().readLines()
                     .filter { it.contains("topResumedActivity") || it.contains("mResumedActivity") }.joinToString("\n")
             }
-            File(context.filesDir,"m06/home-top.txt").writeText(top)
+            V2HostFixture.evidenceDirectory().resolve("home-top.txt").writeText(top)
             activity.mark("HOME_STATE_OBSERVED")
             saveTimeline(activity,"home-before-stop-check")
             val homePackage=context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
             val resolved=inst.uiAutomation.executeShellCommand("cmd package resolve-activity --brief --user 0 -a android.intent.action.MAIN -c android.intent.category.HOME").use {java.io.FileInputStream(it.fileDescriptor).bufferedReader().readText().trim()}
-            File(context.filesDir,"m06/home-resolution.txt").writeText("appVisible=$homePackage shell=$resolved")
+            V2HostFixture.evidenceDirectory().resolve("home-resolution.txt").writeText("appVisible=$homePackage shell=$resolved")
             val component=resolved.lineSequence().lastOrNull{it.contains('/')}
             assertTrue("HOME must show resolved desktop: $resolved got $top",component!=null && top.contains(component))
             assertFalse("HOME must actually pause old Host: $top",activity.resumed)
@@ -205,15 +204,15 @@ class V2EyesTest {
             }
             activity.mark("HOME_STOP_BUDGET_END")
             saveTimeline(activity,"home-stop-result")
-            File(context.filesDir,"m06/home-worker-stack.txt").writeText(activity.captureWorkerEvidence())
-            File(context.filesDir,"m06/home-proof.txt").writeText("before=$before after=$stopped "+activity.captureWorkerEvidence()+" "+diagnostics(activity))
+            V2HostFixture.evidenceDirectory().resolve("home-worker-stack.txt").writeText(activity.captureWorkerEvidence())
+            V2HostFixture.evidenceDirectory().resolve("home-proof.txt").writeText("before=$before after=$stopped "+activity.captureWorkerEvidence()+" "+diagnostics(activity))
             assertEquals(before.session,stopped.session)
             assertTrue("old native stop/release budget failed: $stopped",stopped.stopped && stopped.released && !stopped.recording)
             Thread.sleep(100); assertEquals(stopped.frames,activity.immediateRecorder().frames)
             context.startActivity(Intent(context,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
             val returned=readyLocalHost()
             val returnedDiagnostics=diagnostics(returned ?: resumedHost() ?: activity)
-            File(context.filesDir,"m06/home-return-diagnostics.txt").writeText(returnedDiagnostics)
+            V2HostFixture.evidenceDirectory().resolve("home-return-diagnostics.txt").writeText(returnedDiagnostics)
             shot("15-home-return-wake")
             assertNotNull("resumed/focused new recorder READ required: $returnedDiagnostics",returned)
             val host=checkNotNull(returned)

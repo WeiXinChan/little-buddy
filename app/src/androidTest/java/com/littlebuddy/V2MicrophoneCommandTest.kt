@@ -51,7 +51,7 @@ class V2MicrophoneCommandTest {
   if(name=="authorized enter fixture playback completed" || name=="AudioRecord/KWS entered management")timing("AWAIT_DEADLINE_$name","enter",end)
   while(!condition() && SystemClock.elapsedRealtime()<end)Thread.sleep(20)
   if(!condition()) {
-   val dir=File(inst.targetContext.filesDir,"m06").apply{mkdirs()}
+   val dir=V2HostFixture.evidenceDirectory()
    val host=diagnosticHost
    if(host!=null){dir.resolve("microphone-timeline.json").writeText(host.timelineJson());val latch=java.util.concurrent.CountDownLatch(1);host.observeDiagnostics{dir.resolve("microphone-diagnostics.txt").writeText(it);latch.countDown()};latch.await(2,java.util.concurrent.TimeUnit.SECONDS)}
   }
@@ -64,7 +64,7 @@ class V2MicrophoneCommandTest {
   val q=requests[name] ?: return
   val p=diagnosticHost?.immediateRecorder()
   playTiming.put(JSONObject().put("phase",phase).put("name",name).put("nonce",q.getString("nonce")).put("elapsed_ms",SystemClock.elapsedRealtime()).put("monotonic_ns",System.nanoTime()).put("native_session",p?.session).put("native_read_end_frame",p?.frames).put("deadline_elapsed_ms",deadline))
-  File(inst.targetContext.filesDir,"m06/microphone-play-timing.json").writeText(playTiming.toString(2))
+  V2HostFixture.evidenceDirectory().resolve("microphone-play-timing.json").writeText(playTiming.toString(2))
  }
  private fun completed(name:String):Boolean {
   val q=requests[name] ?: return false
@@ -83,15 +83,14 @@ class V2MicrophoneCommandTest {
   val proof=diagnosticHost?.immediateRecorder()
   q.put("request_guest_elapsed_ms",SystemClock.elapsedRealtime()).put("request_guest_monotonic_ns",System.nanoTime()).put("request_native_session",proof?.session).put("request_native_read_end_frame",proof?.frames).put("source_configuration",diagnosticHost?.captureSourceEvidence())
   requests[name]=q
-  File(root,"m06").mkdirs()
+  val evidence=V2HostFixture.evidenceDirectory()
   timing("BEFORE_SEND_STATUS",name)
-  File(root,"m06/handshake-root.json").writeText(q.toString())
+  evidence.resolve("handshake-root.json").writeText(q.toString())
   inst.sendStatus(30,Bundle().apply{putString("m06_request",q.toString())})
  }
  @Test fun actualMicrophoneManagementAndNegativeCommands() {
   val ctx=inst.targetContext
-  check(ctx.filesDir.mkdirs() || ctx.filesDir.isDirectory)
-  check(ctx.filesDir.canWrite())
+  V2HostFixture.evidenceDirectory()
   val activity=V2HostFixture.launch()
   activity.syntheticCaptureDiagnostics=true
   diagnosticHost=activity
@@ -103,6 +102,7 @@ class V2MicrophoneCommandTest {
    await("focused host"){activity.hasWindowFocus() && activity.resumed}
    if(calibrationSource!=null)await("pre-calibration local native READ"){activity.immediateRecorder().frames>0 && activity.immediateRecorder().recording}
    val previousSession=activity.captureReadSnapshot()?.session
+   V2HostFixture.evidenceDirectory() // Must succeed before pausing the owner.
    if(calibrationSource!=null)activity.afterEligible={ownerPaused.countDown();check(ownerResume.await(3,java.util.concurrent.TimeUnit.SECONDS))}
    inst.runOnMainSync {
     if(calibrationSource!=null){
@@ -121,7 +121,7 @@ class V2MicrophoneCommandTest {
      val old=checkNotNull(activity.captureReadSnapshot());assertTrue("old local really remains READ",old.reading)
      val expected=if(calibrationSource=="6")CaptureInput.RECOGNITION else CaptureInput.COMMUNICATION
      assertFalse("old READ cannot satisfy new nonce/source",old.readyFor(checkNotNull(calibrationNonce),expected))
-     File(ctx.filesDir,"m06/old-read-negative-${calibrationNonce}.json").writeText(activity.captureSourceEvidence().put("expected_nonce",calibrationNonce).put("ready",false).toString(2))
+     V2HostFixture.evidenceDirectory().resolve("old-read-negative-${calibrationNonce}.json").writeText(activity.captureSourceEvidence().put("expected_nonce",calibrationNonce).put("ready",false).toString(2))
     }finally{activity.afterEligible={};ownerResume.countDown()}
    }
    await("production Capture real READ"){
@@ -142,7 +142,7 @@ class V2MicrophoneCommandTest {
    await("native output really progressed"){var head=false;val l=java.util.concurrent.CountDownLatch(1);activity.observeNative{head=it.player.observedHead>0;l.countDown()};l.await(1,java.util.concurrent.TimeUnit.SECONDS);head}
    val audio=ctx.getSystemService(android.media.AudioManager::class.java)
    val config=JSONObject().put("microphone_mute",audio.isMicrophoneMute).put("configs",org.json.JSONArray(audio.activeRecordingConfigurations.map{r->JSONObject().put("session",r.clientAudioSessionId).put("source",r.clientAudioSource).put("client_rate",r.clientFormat.sampleRate).put("client_channels",r.clientFormat.channelCount).put("device_rate",r.format.sampleRate).put("device_channels",r.format.channelCount).put("device",r.audioDevice?.type).put("silenced",if(android.os.Build.VERSION.SDK_INT>=29)r.isClientSilenced else "UNAVAILABLE")}))
-   File(ctx.filesDir,"m06/microphone-system-config.json").apply{parentFile?.mkdirs();writeText(config.toString(2))}
+   V2HostFixture.evidenceDirectory().resolve("microphone-system-config.json").writeText(config.toString(2))
    gatesAccepted=true
    play("enter")
    timing("COMPLETION_AWAIT_STARTED","enter")
@@ -183,7 +183,7 @@ class V2MicrophoneCommandTest {
    assertSame(activity,V2HostFixture.launch())
    await("explicit session returns new local KWS READ"){val p=activity.immediateRecorder();activity.resumed && activity.hasWindowFocus() && p.session!=old.session && p.recording && p.frames>0}
    assertEquals("return must not resume old cloud upload",uploads,wire.inputs.get())
-   File(ctx.filesDir,"m06").mkdirs();File(ctx.filesDir,"m06/microphone-management.json").writeText(JSONObject().put("real_AudioRecord",true).put("KWS",true).put("network_adapter","synthetic WebSocket; cloud ASR/LLM not tested").put("managed_input_delta",wire.inputs.get()-before).put("timeline",org.json.JSONArray(activity.timelineJson())).toString(2))
+   V2HostFixture.evidenceDirectory().resolve("microphone-management.json").writeText(JSONObject().put("real_AudioRecord",true).put("KWS",true).put("network_adapter","synthetic WebSocket; cloud ASR/LLM not tested").put("managed_input_delta",wire.inputs.get()-before).put("timeline",org.json.JSONArray(activity.timelineJson())).toString(2))
   } catch(t:Throwable){primary=t;
    if(requests.containsKey("enter"))try{timing("FIRST_FAILURE","enter")}catch(e:Throwable){t.addSuppressed(e)};try{V2HostFixture.snapshot(activity,"microphone-first")}catch(e:Throwable){t.addSuppressed(e)};throw t
   } finally {
@@ -194,7 +194,7 @@ class V2MicrophoneCommandTest {
    try{V2HostFixture.finish(activity);finished=true}catch(e:Throwable){if(cleanup!=null)cleanup.addSuppressed(e) else cleanup=e}
    if(calibrationSource!=null)try{
     val proof=activity.immediateRecorder()
-    File(ctx.filesDir,"m06/arm-${calibrationSource}-${calibrationNonce}-cleanup.json").writeText(JSONObject().put("source",calibrationSource!!.toInt()).put("nonce",calibrationNonce).put("initial_source_configuration",initialSourceEvidence).put("initial_session",initialSession).put("gates_accepted",gatesAccepted && activity.syntheticProbeAllowed() && ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED).put("live_enter",liveEnter).put("finished",finished).put("session",proof.session).put("released",proof.released).put("stopped",proof.stopped).put("recording",proof.recording).put("worker_done",activity.captureWorkerDone).put("lease_available",Capture.leaseAvailable).put("first_failure",primary?.javaClass?.simpleName).toString(2))
+    V2HostFixture.evidenceDirectory().resolve("arm-${calibrationSource}-${calibrationNonce}-cleanup.json").writeText(JSONObject().put("source",calibrationSource!!.toInt()).put("nonce",calibrationNonce).put("initial_source_configuration",initialSourceEvidence).put("initial_session",initialSession).put("gates_accepted",gatesAccepted && activity.syntheticProbeAllowed() && ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED).put("live_enter",liveEnter).put("finished",finished).put("session",proof.session).put("released",proof.released).put("stopped",proof.stopped).put("recording",proof.recording).put("worker_done",activity.captureWorkerDone).put("lease_available",Capture.leaseAvailable).put("first_failure",primary?.javaClass?.simpleName).toString(2))
    }catch(e:Throwable){if(cleanup!=null)cleanup.addSuppressed(e)else cleanup=e}
    if(cleanup!=null){if(primary!=null)primary.addSuppressed(cleanup)else throw cleanup}
   }
