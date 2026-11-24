@@ -28,6 +28,7 @@ class Segment:
     answer: str | None
     end: int
     effect: str | None
+    effective: bool
 
 
 class Session:
@@ -36,12 +37,16 @@ class Session:
     ACK coordinates are engineering playback evidence, never acoustic evidence.
     Settings/pairing belong outside this object and survive clear().
     """
-    def __init__(self, clock, *, ttl=600, lease=15, budget=15, capacity=2):
-        if any(not math.isfinite(x) or x <= 0 for x in (ttl, lease, budget)):
+    def __init__(self, clock, *, ttl=600, lease=15, budget=15, capacity=2, progress_timeout=60):
+        if any(not math.isfinite(x) or x <= 0 for x in (ttl, lease, budget, progress_timeout)):
             raise ValueError('invalid duration')
         if type(capacity) is not int or capacity < 1:
             raise ValueError('invalid capacity')
         self.clock, self.ttl, self.lease, self.budget = clock, ttl, lease, budget
+        self.progress_timeout = progress_timeout
+        self.response_confirmed = False
+        self.response_expired = False
+        self.progress_deadline = 0
         self.capacity = capacity
         self.connection = self.turn = self.output = self.stream = self.topic = 0
         self.session = uuid.uuid4().hex
@@ -132,15 +137,27 @@ class Session:
         self.turn += 1
         self.deadline = self.clock() + self.budget
         self.retry_used = False
+        self.response_confirmed = self.response_expired = False
+        self.progress_deadline = 0
 
     def interrupt(self):
         if self._live():
             self._revoke()
 
+    def _output_live(self):
+        if not self._live() or self.response_expired:
+            return False
+        limit = self.progress_deadline if self.response_confirmed else self.deadline
+        if not limit or self.clock() >= limit:
+            self._revoke()
+            self.response_expired = True
+            return False
+        return True
+
     def task(self, name):
         if not isinstance(name, str) or not name or len(name) > 128:
             raise ValueError('invalid task ID')
-        if not self._live() or self.clock() >= self.deadline or name in self.tasks:
+        if not self._output_live() or name in self.tasks:
             raise RuntimeError('task unavailable')
         if len(self.tasks) >= self.capacity:
             raise BufferError('task capacity')
@@ -148,10 +165,7 @@ class Session:
         return Identity(self.connection, self.session, self.turn, self.output, name, 0)
 
     def accept(self, event):
-        if not isinstance(event, Identity) or not self._live():
-            return False
-        if self.clock() >= self.deadline:
-            self._revoke()
+        if not isinstance(event, Identity) or not self._output_live():
             return False
         if (event.connection, event.session, event.turn, event.output) != (
                 self.connection, self.session, self.turn, self.output):
@@ -165,7 +179,7 @@ class Session:
         return True
 
     def retry(self, *, safe, idempotent):
-        if (not self._live() or self.clock() >= self.deadline or self.retry_used
+        if (not self._output_live() or self.response_confirmed or self.retry_used
                 or safe is not True or idempotent is not True):
             return False
         self._revoke()
@@ -184,25 +198,29 @@ class Session:
             raise ValueError('unknown reset')
         self._revoke()
 
-    def send(self, event, *, name, public, end, approved, answer=None, effect=None):
+    def send(self, event, *, name, public, end, approved, answer=None, effect=None,
+             effective=True):
         if (not self._live() or approved is not True or self.player is None or type(end) is not int
                 or end <= self.sent_end or len(self.pending) >= self.capacity
                 or not all(isinstance(v, str) for v in (name, public))
                 or (answer is not None and not isinstance(answer, str))
                 or sum(len(v) for v in self.public) + sum(len(s.public) + len(s.answer or '') for s in self.pending)
                    + len(public) + len(answer or '') > self.content_limit
-                or len(name) > 128 or len(self.revealed) >= 128
+                or type(effective) is not bool
+                or len(name) > 128 or len(self.revealed) + len(self.pending) >= 128
                 or (effect is not None and (not isinstance(effect, str) or len(effect) > 128))
                 or not name or name in self.revealed
                 or any(s.name == name for s in self.pending)):
             return False
-        candidate = Segment(name, public, answer, end, effect)
+        candidate = Segment(name, public, answer, end, effect, effective)
         if not self._fits(pending=[s.__dict__ for s in self.pending] + [candidate.__dict__]):
             return False
         if not self.accept(event):
             return False
-        self.pending.append(Segment(name, public, answer, end, effect))
+        self.pending.append(Segment(name, public, answer, end, effect, effective))
         self.sent_end = end
+        if self.response_confirmed:
+            self.progress_deadline = self.clock() + self.progress_timeout
         return True
 
     def ack(self, event, *, player, stream, segment, head):
@@ -214,10 +232,15 @@ class Session:
         if not self.accept(event):
             return False
         self.head = head
+        if self.response_confirmed:
+            self.progress_deadline = self.clock() + self.progress_timeout
         if head < current.end:
             self.uncertain.add(segment)
             return False
         self.pending.popleft()
+        if current.effective:
+            self.response_confirmed = True
+            self.progress_deadline = self.clock() + self.progress_timeout
         self.uncertain.discard(segment)
         self.public.append(current.public)
         if current.answer is not None:
@@ -234,12 +257,20 @@ class Session:
     def change_game(self, *, rules, roles, secrets):
         if not self._live():
             return False
-        if not self._fits(game={'rules': rules, 'roles': roles}, secrets=secrets):
+        # Validate and detach every candidate before changing cancellation/topic state.
+        if (not isinstance(rules, str) or not isinstance(roles, (list, tuple))
+                or not all(isinstance(role, str) for role in roles)
+                or not isinstance(secrets, dict)
+                or not all(isinstance(k, str) and isinstance(v, str) for k, v in secrets.items())):
+            raise TypeError('rules/roles/secrets schema')
+        candidate_game = deepcopy({'rules': rules, 'roles': roles})
+        candidate_secrets = deepcopy(dict(secrets))
+        if not self._fits(game=candidate_game, secrets=candidate_secrets):
             raise BufferError('game context capacity or invalid data')
         self._revoke()
         self.topic += 1
-        self.game = deepcopy({'rules': rules, 'roles': roles})
-        self.secrets = deepcopy(dict(secrets))
+        self.game = candidate_game
+        self.secrets = candidate_secrets
         return True
 
     def remember_private(self, text):
@@ -264,7 +295,6 @@ class Session:
         # Caller allocates a new Session; closed IDs can never be resumed.
 
     def poll(self):
-        if self._live() and self.deadline and self.clock() >= self.deadline:
-            self._revoke()
-            self.deadline = 0
+        if self._live() and self.deadline:
+            self._output_live()
         return self.active
