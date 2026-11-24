@@ -6,6 +6,7 @@ TITA-80，范围为测试双件和证据约束。依赖 PR #31 的 M01 head `c92
 
 ```sh
 python3 -m tools.v2_harness.run --out docs/testing/v2/self-test.json
+python3 -m tools.v2_harness.r94_check --out docs/testing/v2/r94-controls.json
 python3 -m tools.v2_harness.inventory --help
 ```
 
@@ -15,13 +16,17 @@ python3 -m tools.v2_harness.inventory --help
 
 `dialogues.json` 有10条自造片段和预期意图，无真实完整会话。`write_signal(path)` 生成单声道16kHz一秒PCM工程信号：静音/音调/停顿/音调，各4000样本；返回来源与区间。它不是语音合成器，不支持据此测ASR、童声、多人或自然度。后续合法TTS语料必须保留供应商/版本/生成参数/许可/起止标注，D05未核实不连接真实服务。
 
-`evidence.execute(adapter, case, oracle)` 是未来适配器接入点：缺适配器、空观测、错误实现和适配器异常均抛错；oracle 必须明确返回 True。负向控制已注入“未静音”错误实现，证实被拒绝。此处没有真实产品适配器，不能据此认为取消已实现。
+`evidence.execute(adapter, case, oracle='fixture.stop.v1')` 仅执行已注册的合成停播场景（`case={'scenario':'fixture.stop.v1'}`）。观测必须恰含严格bool类型`muted`；空dict/list、额外字段、缺适配器、异常和错误未静音均失败。oracle采用工具内固定断言，拒绝调用方传入函数（包括无条件True）。返回观测不是产品执行凭证。
 
-`validate_product_result` 拒绝缺适配器/版本/证据/内容来源、仅夹具、零样本、有失败或缺必要声学观测的产品PASS。字段存在只能检查证据结构，真实性仍需独立审查；不能用任意字符串代替真实观测。后续发布门需结合本表、D03及P11–P13要求审查，不能由报告作者自行豁免声学要求。
+R94-01修正：`validate_report_schema`严格检查attempts/failures/errors/timeouts为显式非负int且拒bool；PASS要求attempts>0，失败/异常/超时均0。后三项为互斥结局，其和不超过attempts，重试单列不能重复扣分母。声学标记必须严格bool并与受控`SCENARIOS`逐项一致（当前A02/A06–A09/A13/A32/A35/A36需要），报告作者不能豁免。该表是证据门的最低范围，不能代替A场景的具体审查。NOT_RUN禁止非零样本。
+
+**当前`validate_product_result`拒绝全部产品PASS**，包括结构完整、版本和哈希字段齐全的伪造行。真实产品适配器、可信实际执行凭证与独立产品oracle绑定均未实现；字符串存在、hash存在或fixture返回正确值都不能替代。后续经独立审查接入之前没有解除选项。`validate_report_schema`仅校验结构，不得用它宣称产品通过。
 
 ## 盘点脚本审定边界
 
-本轮仅运行 `inventory --help`，不调用 adb，不占手机。脚本仅允许 `adb -s SERIAL get-state`、四个固定 `getprop` 及 Mac `system_profiler SPAudioDataType -json`，每次超时10秒；无安装/启动/录音/外放/解锁/设置写入。序列号由协调方执行时显式选择，不写入报告；失败输出unknown，不回显stderr以避免泄漏。主机音频列表可能含设备名称，上传前由执行代理脱敏。
+本轮仅执行帮助入口和模拟测试，不调用真实adb/system_profiler、不占手机。允许命令仍为`adb -s SERIAL get-state`、四个固定`getprop`、Mac `system_profiler SPAudioDataType -json`，没有新增权限或查询。每个子进程10秒、shell=False、stderr丢弃；stdout最多64KiB，超限/超时终止本次精确子进程并unknown，不输出原始异常。最多6次顺序调用。已有ADB连接/授权及可信PATH是前置，adb本身可能启动主机server，不承诺无任何主机副作用。
+
+R94-02修正：报告最大4KiB（另加换行），音频设备至多16个、枚举匿名编号和白名单输入/输出通道数、采样率；不保留名称、UID、序列号、地址、原始JSON或其哈希。ADB只输出已知状态、PKW110、有限格式Android版本和SDK；构建标识仍按原白名单查询但不保留值，unknown。空输出、未识别形状/值、失败均unknown。设备能力来自可解析系统声明，不证明可用声学路径；未知机型/格式保守unknown。所有原始采集内容仅限有界内存。
 
 由协调方审定后单独串行安排：确认目标设备、V1保护与签名策略、设备可操作性、可编程外放、独立手机输出观测、共同时间基准及误差。脚本刻意将这些能力标为NOT_VERIFIED；ADB连接和声卡枚举不证明声学闭环。没有程序化证据的字段保持未测，不安排用户点按或录音。
 
@@ -32,3 +37,5 @@ python3 -m tools.v2_harness.inventory --help
 当前未执行Android构建、设备/声学、真实供应商、真实存储删除或真实儿童测试。没有运行60分钟和实际等待7天。删除双件把全部副本放在内存集合中，不证明平台硬删除；管理双件将后台/锁屏/撤权限/识别失败抽象为同一释放操作，没有实现Android生命周期、持久限次或卸载归属恢复。后续必须接产品适配器和独立复核。
 
 D05账号条件、D04设备归属与恢复、D02/D06全副本删除及D03声学观测保持门槛。真实服务、保护管理写入、真实问题材料、声学达标和发布均未放行。未修改V1配置、不部署、不采购、不触发Backlog、不自动合并。
+
+R94原报告与复现附件原文归档于`docs/reviews/review-tita-94.md`和`docs/reviews/tita-94/`；归档probe.py依赖旧接口，不执行它以免旧mock失效触发设备命令。新复现由`r94_check.py`全量拦截设备查询；结果见`r94-controls.json`，修正请求待独立复核，不自行关闭。

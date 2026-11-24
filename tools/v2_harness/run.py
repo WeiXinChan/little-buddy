@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import platform
 import unittest
-from tools.v2_harness.evidence import provenance
+from tools.v2_harness.evidence import SCENARIOS, provenance
 
 
 def main():
@@ -22,7 +22,9 @@ def main():
         'attempts': result.testsRun, 'failures': len(result.failures),
         'errors': len(result.errors), 'skipped': len(result.skipped),
         'failure_cases': [t.id() for t, _ in result.failures + result.errors],
-        'product_results': [{'id': f'A{i:02}', 'status': 'NOT_RUN', 'attempts': 0}
+        'product_results': [{'id': f'A{i:02}', 'status': 'NOT_RUN', 'attempts': 0,
+                             'failures': 0, 'errors': 0, 'timeouts': 0,
+                             'requires_acoustic': SCENARIOS[f'A{i:02}']}
                             for i in range(1, 39)],
         'findings': {f'F{i:02}': 'OPEN_PENDING_IMPLEMENTATION_AND_INDEPENDENT_REVIEW'
                      for i in range(1, 6)},

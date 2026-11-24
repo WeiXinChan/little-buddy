@@ -2,6 +2,11 @@
 import hashlib
 from pathlib import Path
 import subprocess
+from types import MappingProxyType
+
+# Controlled policy, not a flag supplied by a report. Changes require review.
+SCENARIOS = MappingProxyType({f'A{i:02}': i in {2, 6, 7, 8, 9, 13, 32, 35, 36}
+                              for i in range(1, 39)})
 
 
 def provenance():
@@ -14,31 +19,57 @@ def provenance():
     }
 
 
+def validate_report_schema(row):
+    """Structural validation only; this is never evidence of product execution."""
+    if (type(row) is not dict or type(row.get('status')) is not str
+            or row['status'] not in {'PASS', 'FAIL', 'NOT_RUN', 'LIMITED'}):
+        raise ValueError('invalid result schema')
+    if type(row.get('id')) is not str or row['id'] not in SCENARIOS:
+        raise ValueError('unknown controlled scenario')
+    for key in ('attempts', 'failures', 'errors', 'timeouts'):
+        if type(row.get(key)) is not int or row[key] < 0:
+            raise ValueError('explicit nonnegative integer counts required')
+    if sum(row[k] for k in ('failures', 'errors', 'timeouts')) > row['attempts']:
+        raise ValueError('outcome counts exceed all attempts (disjoint outcomes)')
+    if type(row.get('requires_acoustic')) is not bool:
+        raise ValueError('acoustic classification must be strict bool')
+    if row['requires_acoustic'] is not SCENARIOS[row['id']]:
+        raise ValueError('report cannot override controlled acoustic policy')
+    if row['status'] == 'PASS':
+        if row['attempts'] == 0 or any(row[k] for k in ('failures', 'errors', 'timeouts')):
+            raise ValueError('PASS requires positive attempts and no bad outcomes')
+        if row.get('scope') != 'product':
+            raise ValueError('fixture results cannot be product PASS')
+        if row['requires_acoustic'] and not row.get('acoustic_observation'):
+            raise ValueError('missing independent acoustic observation')
+    elif row['status'] == 'NOT_RUN' and row['attempts'] != 0:
+        raise ValueError('NOT_RUN cannot claim attempts')
+
+
 def validate_product_result(row):
-    if row['status'] != 'PASS':
-        return
-    required = ['product_adapter', 'implementation_sha', 'evidence', 'provenance']
-    if any(not row.get(key) for key in required):
-        raise ValueError('product PASS lacks adapter/version/evidence/provenance')
-    if row.get('scope') != 'product' or row.get('attempts', 0) <= 0:
-        raise ValueError('fixture-only or zero-sample PASS')
-    if row.get('failures') != 0 or row.get('errors') != 0:
-        raise ValueError('failed/error attempts cannot produce PASS')
-    if row.get('requires_acoustic') not in (True, False) or row.get('requires_acoustic') is None:
-        raise ValueError('acoustic evidence requirement must be explicitly classified')
-    if row.get('timeouts', 0) != 0:
-        raise ValueError('timeouts cannot disappear from the denominator')
-    if row.get('requires_acoustic') and not row.get('acoustic_observation'):
-        raise ValueError('missing independent acoustic observation')
+    validate_report_schema(row)
+    if row['status'] == 'PASS':
+        # No real product adapter, trusted execution receipt or independent
+        # product oracle has been implemented/approved in M02. Fail closed.
+        # Strings, hashes and even structurally valid fabricated rows cannot
+        # substitute for that missing binding. Do not add a bypass argument.
+        raise ValueError('product PASS disabled: no approved product execution binding')
 
 
-def execute(adapter, case, oracle):
-    """No default/empty adapter. Oracle must raise on incorrect observations."""
+def execute(adapter, case, oracle='fixture.stop.v1'):
+    """Fixture-only executor with a fixed schema/oracle; no callable oracle bypass.
+
+    It returns an observation, never a product receipt or PASS report.
+    """
+    if type(case) is not dict or case != {'scenario': 'fixture.stop.v1'}:
+        raise ValueError('unregistered fixture case')
+    if type(oracle) is not str or oracle != 'fixture.stop.v1':
+        raise ValueError('unregistered oracle; callable oracles are not accepted')
     if adapter is None or not callable(adapter):
         raise ValueError('no product adapter')
     observed = adapter(case)  # exceptions deliberately propagate
-    if observed is None:
-        raise ValueError('adapter returned no observation')
-    if oracle(observed) is not True:
+    if type(observed) is not dict or set(observed) != {'muted'} or type(observed['muted']) is not bool:
+        raise ValueError('observation must match the nonempty stop schema')
+    if observed['muted'] is not True:
         raise AssertionError('product observation violates assertion')
     return observed

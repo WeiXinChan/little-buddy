@@ -2,26 +2,29 @@
   "scope": "fixture-self-test-only",
   "source": "synthetic",
   "provenance": {
-    "head": "c9270fb2fab75a1efd7809f9913dc51d9d02bdbb",
+    "head": "08dc8d3e098b2373c95f811c1f68653671285c83",
     "dirty": true,
     "content_sha256": {
       "tools/v2_harness/.gitignore": "32dae3052f331ee34d628ef535709b301259a45df7c7522c4d35dcf49873f00b",
       "tools/v2_harness/__init__.py": "7afc72ec97c78e30e4684f5b0a2f10873c4945c868d75b23a3ddc26b3976bda0",
       "tools/v2_harness/dialogues.json": "39f40f8fe20c7e505f6f5f6c8eaf7724077b041352c45091dd832034e1233408",
-      "tools/v2_harness/evidence.py": "1fdeff51e639a48304beea232ad5acbfbc633ae4747d599138cec3a55fc007c1",
-      "tools/v2_harness/inventory.py": "4212795f83c21b460ba4d7afb50ffc6dbc03948614cc9f5dc78fa3d100262747",
+      "tools/v2_harness/evidence.py": "c0eb392456038edb10fec52214a56d13cfd8fa909083ce4ab653a891c61621ca",
+      "tools/v2_harness/inventory-inputs.json": "91f02ccfb0367e74195735a93e29f3ea5eb1ea8d23572a242ee70316ecdb0601",
+      "tools/v2_harness/inventory.py": "ba1aff512fe2e002e7791bde9888320269286157817f74486ec9626cf7aeecc7",
       "tools/v2_harness/lab.py": "ee2fafed5434b3166b56f8fa3b0a4f4c6176913e59c7443e9a8f2dab5370485f",
-      "tools/v2_harness/run.py": "88faba1ac4ffd6d826abf184dff60e82d62feb7efcbcdd1e1f9fbbd3ecd0419b",
-      "tools/v2_harness/tests/test_lab.py": "282050f9b66c9b27c26db3d0be05e94a7ce52b38043d6c25734316ea14214e6b"
+      "tools/v2_harness/r94_check.py": "345ffc87689bce477725466e84e0403516bd75d602e8ec3bc6ba2b6d809e73bd",
+      "tools/v2_harness/run.py": "4fde40afc386af3bc17859df7fa80039dbcd6f97f7b72d3ebd1b386b2db5b09a",
+      "tools/v2_harness/tests/test_lab.py": "7c0965cf04f827628d60e0edceba50faa976c83167800a22e1b1b53e0addf551",
+      "tools/v2_harness/tests/test_r94.py": "4a5b5e4e6ac36b0241ce2c9c8cd4341ed74e400797e2c933689b30c8e425c27a"
     }
   },
-  "generated_at_utc": "2026-11-24T08:21:05.613755+00:00",
+  "generated_at_utc": "2026-11-24T08:38:47.231910+00:00",
   "python": "3.12.3",
   "host": "Linux",
   "device": "none",
   "network": "none",
   "seed": 80,
-  "attempts": 19,
+  "attempts": 28,
   "failures": 0,
   "errors": 0,
   "skipped": 0,
@@ -30,192 +33,344 @@
     {
       "id": "A01",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A02",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": true
     },
     {
       "id": "A03",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A04",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A05",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A06",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": true
     },
     {
       "id": "A07",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": true
     },
     {
       "id": "A08",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": true
     },
     {
       "id": "A09",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": true
     },
     {
       "id": "A10",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A11",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A12",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A13",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": true
     },
     {
       "id": "A14",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A15",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A16",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A17",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A18",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A19",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A20",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A21",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A22",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A23",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A24",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A25",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A26",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A27",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A28",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A29",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A30",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A31",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A32",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": true
     },
     {
       "id": "A33",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A34",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A35",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": true
     },
     {
       "id": "A36",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": true
     },
     {
       "id": "A37",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     },
     {
       "id": "A38",
       "status": "NOT_RUN",
-      "attempts": 0
+      "attempts": 0,
+      "failures": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "requires_acoustic": false
     }
   ],
   "findings": {

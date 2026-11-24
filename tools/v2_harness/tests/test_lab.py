@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 import unittest
 import wave
-from tools.v2_harness.evidence import execute, provenance, validate_product_result
+from tools.v2_harness.evidence import execute, provenance, validate_product_result, validate_report_schema
 
 from tools.v2_harness.lab import (
     Clock, DAY, Event, FaultBudget, Handle, Management, Material, Playback, Protocol,
@@ -28,11 +28,13 @@ class InfrastructureTests(unittest.TestCase):
         self.assertFalse(FaultBudget(c).fault('network', idempotent=False)['retry'])
 
     def test_evidence_rejects_unsupported_product_pass(self):
-        valid = dict(status='PASS', scope='product', product_adapter='synthetic-negative-control',
+        valid = dict(id='A08', status='PASS', scope='product', product_adapter='synthetic-negative-control',
                      implementation_sha='synthetic-version', evidence=['synthetic-observation'],
                      provenance={'content_sha256': 'synthetic'}, attempts=1, failures=0,
-                     errors=0, requires_acoustic=True, acoustic_observation='synthetic-control')
-        validate_product_result(valid)  # validator control, not a product report
+                     errors=0, timeouts=0, requires_acoustic=True, acoustic_observation='synthetic-control')
+        validate_report_schema(valid)  # structure control only
+        with self.assertRaises(ValueError):
+            validate_product_result(valid)  # all product PASS is disabled in M02
         for key, value in [('product_adapter', None), ('scope', 'fixture-self-test-only'),
                            ('attempts', 0), ('acoustic_observation', None), ('failures', 1),
                            ('errors', 1), ('evidence', []), ('provenance', {}),
@@ -46,8 +48,8 @@ class InfrastructureTests(unittest.TestCase):
         for adapter, exception in [(None, ValueError), (lambda c: None, ValueError),
                                    (broken, RuntimeError), (lambda c: {'muted': False}, AssertionError)]:
             with self.subTest(adapter=adapter), self.assertRaises(exception):
-                execute(adapter, {}, lambda o: o['muted'] is True)
-        self.assertEqual(execute(lambda c: {'muted': True}, {}, lambda o: o['muted'] is True),
+                execute(adapter, {'scenario': 'fixture.stop.v1'})
+        self.assertEqual(execute(lambda c: {'muted': True}, {'scenario': 'fixture.stop.v1'}),
                          {'muted': True})
 
     def test_wrong_adapter_causes_process_failure(self):
@@ -55,8 +57,7 @@ class InfrastructureTests(unittest.TestCase):
         import sys
         p = subprocess.run([sys.executable, '-c',
                             'from tools.v2_harness.evidence import execute; '
-                            'execute(lambda case: {"muted": False}, {}, '
-                            'lambda observed: observed["muted"] is True)'],
+                            'execute(lambda case: {"muted": False}, {"scenario": "fixture.stop.v1"})'],
                            capture_output=True, text=True, timeout=10)
         self.assertNotEqual(p.returncode, 0)
         self.assertIn('AssertionError', p.stderr)
