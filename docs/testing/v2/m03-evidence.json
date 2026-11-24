@@ -1,0 +1,20 @@
+{
+  "scope": "module-level-synthetic",
+  "implementation_sha": "971c25ad53b0069d8d17231b9d23b901be6480f4",
+  "attempts": 13,
+  "failures": 0,
+  "errors": 0,
+  "timeouts": 0,
+  "negative_controls": 4,
+  "m02_tests": 28,
+  "r94_controls": 21,
+  "product_pass_enabled": false,
+  "device": "none",
+  "files": {
+    "backend/v2/__init__.py": "451285c5de4a1b116e0665f02235dfb7a0cfc66d18dd70d4cb8ff487de3a9578",
+    "backend/v2/session.py": "e5bf7b49f1b7af5fc4bc72ca0142eb47120378dba8ca6cd75616e584eaf19f7b",
+    "tests/v2/test_session.py": "1e7f71c2a71229c01ad24a34c9847d88874a03a969ce04764aa3e93539417f0a",
+    "tools/v2_harness/session_adapter.py": "cad47182156ba62fb775a6cea54b31b21469fde47f77b48048d5c690fffd0ad6",
+    "docs/testing/v2/m03.md": "83743cba66cacd019ffb95822231609d4b11f6ce12963928d79cf0a941b7d410"
+  }
+}
