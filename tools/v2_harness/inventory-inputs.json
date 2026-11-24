@@ -1,0 +1,19 @@
+{
+  "source": "synthetic-inventory-negative-control",
+  "private_sentinels": ["SYNTHETIC_PRIVATE_DEVICE_NAME", "UID-SYNTHETIC", "SERIAL-SYNTHETIC", "192.0.2.1", "00:11:22:33:44:55"],
+  "audio": {
+    "SPAudioDataType": [{
+      "_name": "SYNTHETIC_PRIVATE_DEVICE_NAME",
+      "_items": [{
+        "_name": "SYNTHETIC_PRIVATE_DEVICE_NAME",
+        "coreaudio_device_uid": "UID-SYNTHETIC",
+        "serial": "SERIAL-SYNTHETIC",
+        "address": "192.0.2.1",
+        "mac": "00:11:22:33:44:55",
+        "coreaudio_device_input": "2",
+        "coreaudio_device_output": "2",
+        "coreaudio_device_srate": "48000"
+      }]
+    }]
+  }
+}

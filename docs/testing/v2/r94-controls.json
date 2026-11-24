@@ -1,0 +1,106 @@
+{
+  "scope": "synthetic-negative-controls-only",
+  "provenance": {
+    "head": "08dc8d3e098b2373c95f811c1f68653671285c83",
+    "dirty": true,
+    "content_sha256": {
+      "tools/v2_harness/.gitignore": "32dae3052f331ee34d628ef535709b301259a45df7c7522c4d35dcf49873f00b",
+      "tools/v2_harness/__init__.py": "7afc72ec97c78e30e4684f5b0a2f10873c4945c868d75b23a3ddc26b3976bda0",
+      "tools/v2_harness/dialogues.json": "39f40f8fe20c7e505f6f5f6c8eaf7724077b041352c45091dd832034e1233408",
+      "tools/v2_harness/evidence.py": "c0eb392456038edb10fec52214a56d13cfd8fa909083ce4ab653a891c61621ca",
+      "tools/v2_harness/inventory-inputs.json": "91f02ccfb0367e74195735a93e29f3ea5eb1ea8d23572a242ee70316ecdb0601",
+      "tools/v2_harness/inventory.py": "ba1aff512fe2e002e7791bde9888320269286157817f74486ec9626cf7aeecc7",
+      "tools/v2_harness/lab.py": "ee2fafed5434b3166b56f8fa3b0a4f4c6176913e59c7443e9a8f2dab5370485f",
+      "tools/v2_harness/r94_check.py": "345ffc87689bce477725466e84e0403516bd75d602e8ec3bc6ba2b6d809e73bd",
+      "tools/v2_harness/run.py": "4fde40afc386af3bc17859df7fa80039dbcd6f97f7b72d3ebd1b386b2db5b09a",
+      "tools/v2_harness/tests/test_lab.py": "7c0965cf04f827628d60e0edceba50faa976c83167800a22e1b1b53e0addf551",
+      "tools/v2_harness/tests/test_r94.py": "4a5b5e4e6ac36b0241ce2c9c8cd4341ed74e400797e2c933689b30c8e425c27a"
+    }
+  },
+  "controls": {
+    "missing_timeouts": true,
+    "nan_attempts": true,
+    "infinite_attempts": true,
+    "bool_attempts": true,
+    "string_attempts": true,
+    "zero_samples": true,
+    "numeric_acoustic_false": true,
+    "override_acoustic": true,
+    "missing_acoustic": true,
+    "fixture_scope": true,
+    "inconsistent_counts": true,
+    "fabricated_product_pass_disabled": true,
+    "adapter_wrong": true,
+    "adapter_unavailable": true,
+    "adapter_missing": true,
+    "adapter_empty_dict": true,
+    "adapter_empty_list": true,
+    "adapter_invalid_schema": true,
+    "six_allowlisted_commands_mocked": true,
+    "private_names_uids_serials_addresses_absent": true,
+    "bounded_summary": true
+  },
+  "control_count": 21,
+  "failed_controls": [],
+  "adapter_exit_codes": {
+    "wrong": 1,
+    "unavailable": 1,
+    "missing": 1,
+    "empty_dict": 1,
+    "empty_list": 1,
+    "invalid_schema": 1
+  },
+  "mock_inventory": {
+    "scope": "read-only-inventory-not-acoustic-test",
+    "device": "device-1",
+    "connection": {
+      "status": "unknown"
+    },
+    "model": {
+      "status": "unknown"
+    },
+    "android": {
+      "status": "unknown"
+    },
+    "sdk": {
+      "status": "unknown"
+    },
+    "build": {
+      "status": "unknown"
+    },
+    "host": "darwin",
+    "host_audio": {
+      "status": "observed",
+      "devices": [
+        {
+          "id": "audio-1",
+          "input_channels": 2,
+          "output_channels": 2,
+          "sample_rate_hz": 48000
+        }
+      ]
+    },
+    "unlocked": {
+      "status": "NOT_VERIFIED"
+    },
+    "aec": {
+      "status": "NOT_VERIFIED"
+    },
+    "external_playback_to_phone": {
+      "status": "NOT_VERIFIED"
+    },
+    "independent_speaker_observation": {
+      "status": "NOT_VERIFIED"
+    },
+    "common_clock_error": {
+      "status": "NOT_VERIFIED"
+    },
+    "v1_signature_and_install_strategy": {
+      "status": "NOT_VERIFIED"
+    }
+  },
+  "product_attempts": 0,
+  "limitations": [
+    "No device calls; no product execution; no acoustic observation"
+  ]
+}

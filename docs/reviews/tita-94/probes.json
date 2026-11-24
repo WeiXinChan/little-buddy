@@ -1,0 +1,125 @@
+{
+  "reject_product_adapter": true,
+  "reject_scope": true,
+  "reject_attempts": true,
+  "reject_acoustic_observation": true,
+  "adapter_wrong_exit": 1,
+  "adapter_unavailable_exit": 1,
+  "adapter_missing_exit": 1,
+  "adapter_empty_exit": 1,
+  "provenance": {
+    "clean_before": true,
+    "dirty_after": true,
+    "same_head": true,
+    "hash_changed": true,
+    "actual_hash_matches": true
+  },
+  "inventory_mock": {
+    "calls": [
+      {
+        "argv": [
+          "adb",
+          "-s",
+          "SYNTHETIC_SERIAL",
+          "get-state"
+        ],
+        "text": true,
+        "capture_output": true,
+        "timeout": 10
+      },
+      {
+        "argv": [
+          "adb",
+          "-s",
+          "SYNTHETIC_SERIAL",
+          "shell",
+          "getprop",
+          "ro.product.model"
+        ],
+        "text": true,
+        "capture_output": true,
+        "timeout": 10
+      },
+      {
+        "argv": [
+          "adb",
+          "-s",
+          "SYNTHETIC_SERIAL",
+          "shell",
+          "getprop",
+          "ro.build.version.release"
+        ],
+        "text": true,
+        "capture_output": true,
+        "timeout": 10
+      },
+      {
+        "argv": [
+          "adb",
+          "-s",
+          "SYNTHETIC_SERIAL",
+          "shell",
+          "getprop",
+          "ro.build.version.sdk"
+        ],
+        "text": true,
+        "capture_output": true,
+        "timeout": 10
+      },
+      {
+        "argv": [
+          "adb",
+          "-s",
+          "SYNTHETIC_SERIAL",
+          "shell",
+          "getprop",
+          "ro.build.id"
+        ],
+        "text": true,
+        "capture_output": true,
+        "timeout": 10
+      },
+      {
+        "argv": [
+          "system_profiler",
+          "SPAudioDataType",
+          "-json"
+        ],
+        "text": true,
+        "capture_output": true,
+        "timeout": 10
+      }
+    ],
+    "serial_not_in_report": true,
+    "stderr_not_in_report": true,
+    "private_audio_name_in_report": true
+  },
+  "inventory_timeout": {
+    "status": "unknown"
+  },
+  "inventory_missing_binary": {
+    "status": "unknown"
+  },
+  "inventory_nonzero": {
+    "status": "unknown"
+  },
+  "missing_timeouts": "ACCEPTED",
+  "nan_attempts": "ACCEPTED",
+  "bool_attempts": "ACCEPTED",
+  "numeric_acoustic_false": "ACCEPTED",
+  "original_hashes_match": true,
+  "current_provenance": {
+    "head": "0db95458ac6e0240c669207eb53a49b0ed11012e",
+    "dirty": false,
+    "content_sha256": {
+      "tools/v2_harness/.gitignore": "32dae3052f331ee34d628ef535709b301259a45df7c7522c4d35dcf49873f00b",
+      "tools/v2_harness/__init__.py": "7afc72ec97c78e30e4684f5b0a2f10873c4945c868d75b23a3ddc26b3976bda0",
+      "tools/v2_harness/dialogues.json": "39f40f8fe20c7e505f6f5f6c8eaf7724077b041352c45091dd832034e1233408",
+      "tools/v2_harness/evidence.py": "1fdeff51e639a48304beea232ad5acbfbc633ae4747d599138cec3a55fc007c1",
+      "tools/v2_harness/inventory.py": "4212795f83c21b460ba4d7afb50ffc6dbc03948614cc9f5dc78fa3d100262747",
+      "tools/v2_harness/lab.py": "ee2fafed5434b3166b56f8fa3b0a4f4c6176913e59c7443e9a8f2dab5370485f",
+      "tools/v2_harness/run.py": "88faba1ac4ffd6d826abf184dff60e82d62feb7efcbcdd1e1f9fbbd3ecd0419b",
+      "tools/v2_harness/tests/test_lab.py": "282050f9b66c9b27c26db3d0be05e94a7ce52b38043d6c25734316ea14214e6b"
+    }
+  }
+}
