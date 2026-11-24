@@ -15,4 +15,22 @@ class PacketTests(unittest.TestCase):
   g=m.packet_plan(bytes(1280),16000,lambda **kw:kw,'fixed',lambda:clock[0],lambda _:None)
   next(g);clock[0]=.3
   with self.assertRaisesRegex(RuntimeError,'pacing'):next(g)
+ def test_oversleep_500ms_never_yields_stale_second_packet(self):
+  clock=[0.0]
+  def oversleep(t):clock[0]+=t+.5
+  packets=m.packet_plan(bytes(1280),16000,lambda **kw:kw,'fixed',lambda:clock[0],oversleep)
+  next(packets)
+  with self.assertRaisesRegex(RuntimeError,'pacing'):next(packets)
+ def test_total_deadline_is_checked_after_sleep(self):
+  clock=[0.0]
+  def wait(t):clock[0]+=t
+  packets=m.packet_plan(bytes(1280),16000,lambda **kw:kw,'fixed',lambda:clock[0],wait,deadline=.01)
+  next(packets)
+  with self.assertRaises(m.InjectionTimingError) as failure:next(packets)
+  self.assertEqual('STREAM_DEADLINE',failure.exception.reason)
+ def test_serialization_delay_is_checked_before_yield(self):
+  clock=[0.0]
+  def slow_packet(**kw):clock[0]+=.5;return kw
+  packets=m.packet_plan(bytes(1280),16000,slow_packet,'fixed',lambda:clock[0],lambda _:None)
+  with self.assertRaises(m.InjectionTimingError):next(packets)
 if __name__=='__main__':unittest.main()

@@ -38,6 +38,7 @@ internal class CaptureUploads(
     try{lock.wait(left)}catch(e:InterruptedException){wipe(batch);throw e}
    }
    if(closed || !eligible(ticket)){wipe(batch);return false}
+   if(deadline!=null && now()>=deadline){wipe(batch);close();throw InputContinuityInterrupted()}
    held+=batch.samples;queue.addLast(batch)
    if(!scheduled){scheduled=true;start=true}
   }

@@ -1,0 +1,18 @@
+test_no_fast_catchup_when_beyond_buffer_safety_margin (test_grpc_packets.PacketTests.test_no_fast_catchup_when_beyond_buffer_safety_margin) ... ok
+test_oversleep_500ms_never_yields_stale_second_packet (test_grpc_packets.PacketTests.test_oversleep_500ms_never_yields_stale_second_packet) ... FAIL
+test_twenty_ms_pacing_and_exact_drain (test_grpc_packets.PacketTests.test_twenty_ms_pacing_and_exact_drain) ... ok
+test_reader_join_failure_still_terminates_owned_process (test_monitor_cleanup.MonitorCleanupTest.test_reader_join_failure_still_terminates_owned_process) ... ok
+test_all_stage_failures_retain_prior_evidence (test_route_evidence.RouteJournalTest.test_all_stage_failures_retain_prior_evidence) ... ok
+
+======================================================================
+FAIL: test_oversleep_500ms_never_yields_stale_second_packet (test_grpc_packets.PacketTests.test_oversleep_500ms_never_yields_stale_second_packet)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-84-70f7ce4d7235/workdir/little-buddy/scripts/m06/tests/test_grpc_packets.py", line 23, in test_oversleep_500ms_never_yields_stale_second_packet
+    with self.assertRaisesRegex(RuntimeError,'pacing'):next(packets)
+AssertionError: RuntimeError not raised
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.036s
+
+FAILED (failures=1)

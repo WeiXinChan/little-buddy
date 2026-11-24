@@ -70,5 +70,24 @@ class CaptureUploadsTest {
   q.submit(frames(16000),true,1,0)
   assertFalse(q.submit(frames(320),true,1,0){allowed.set(false);0L});q.close();assertEquals(0,q.heldSamples)
  }
+ @Test fun capacityReleasedAt101CannotBypassDeadline100(){
+  var clock=0L;val tasks=ArrayDeque<()->Unit>();var deliveries=0
+  val q=CaptureUploads({tasks.add(it);true},{true},{_,_,_->deliveries++},{throw it},{tasks.removeFirst()();clock=101},now={clock})
+  q.submit(frames(16000),true,1,0)
+  try{q.submit(frames(320),true,1,0);fail("expired wait accepted after capacity release")}catch(_:InputContinuityInterrupted){}
+  assertEquals(0,q.heldSamples);assertEquals(50,deliveries)
+ }
+ @Test fun nativeBudgetQueryTimeCountsEvenWhenItReleasesCapacity(){
+  var clock=0L;val tasks=ArrayDeque<()->Unit>()
+  val q=CaptureUploads({tasks.add(it);true},{true},{_,_,_->},{throw it},now={clock})
+  q.submit(frames(16000),true,1,0)
+  try{q.submit(frames(320),true,1,0){tasks.removeFirst()();clock=101;100};fail("native query extended cutoff")}catch(_:InputContinuityInterrupted){}
+  assertEquals(0,q.heldSamples)
+ }
+ @Test fun cancellationWinsWhenCapacityReturnsAfterDeadline(){
+  var clock=0L;val allowed=AtomicBoolean(true);val tasks=ArrayDeque<()->Unit>()
+  val q=CaptureUploads({tasks.add(it);true},{allowed.get()},{_,_,_->},{throw it},{tasks.removeFirst()();clock=101;allowed.set(false)},now={clock})
+  q.submit(frames(16000),true,1,0);assertFalse(q.submit(frames(320),true,1,0));q.close();assertEquals(0,q.heldSamples)
+ }
  @Test fun safeFailureNeverContainsMessageOrForeignFrame(){val e=IllegalStateException("PRIVATE_SENTINEL");e.stackTrace=arrayOf(StackTraceElement("foreign.Secret","PRIVATE_SENTINEL","Secret.kt",9),StackTraceElement("com.littlebuddy.v2.Capture","record","Capture.kt",11));val s=SafeFailure.describe(e);assertFalse(s.contains("PRIVATE_SENTINEL"));assertFalse(s.contains("foreign"));assertTrue(s.contains("Capture.kt:11"))}
 }

@@ -1,0 +1,12 @@
+JUnit version 4.13.2
+.E..............
+Time: 0.256
+There was 1 failure:
+1) capacityReleasedAt101CannotBypassDeadline100(com.littlebuddy.v2.CaptureUploadsTest)
+java.lang.AssertionError: expired wait accepted after capacity release
+	at org.junit.Assert.fail(Assert.java:89)
+	at com.littlebuddy.v2.CaptureUploadsTest.capacityReleasedAt101CannotBypassDeadline100(CaptureUploadsTest.kt:77)
+
+FAILURES!!!
+Tests run: 15,  Failures: 1
+
