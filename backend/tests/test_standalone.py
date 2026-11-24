@@ -121,7 +121,7 @@ class StandaloneTest(unittest.IsolatedAsyncioTestCase):
 
         token = secrets.token_hex(32)
         async with game_server(0, self.tls, token, HangingAudio(), report=report,
-                               trial_limits=True, expires_at=time.time() + 30) as server:
+                               expires_at=time.time() + 30) as server:
             async with self.open(server, token) as ws:
                 first = await session(ws)
                 await asyncio.wait_for(started.wait(), 2)

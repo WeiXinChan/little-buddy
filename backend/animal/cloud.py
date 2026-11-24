@@ -191,7 +191,8 @@ async def play_game(socket, providers, *, seed=None, report=print, trial_limits=
                 raise ProtocolError("unsupported catalog") from exc
         pending = await send_reply(session.reply)
         # The outer handler cancels and joins this session on disconnect.
-        async with asyncio.timeout(900):
+        # Only trials have a total deadline; every session retains per-operation limits.
+        async with asyncio.timeout(900 if trial_limits else None):
             while session.game:
                 async with asyncio.timeout(30):
                     message = pending if pending is not None else await receive()
@@ -359,7 +360,7 @@ async def main():
             providers = Demo()
         else:
             providers = DashScope.from_environment(http)
-        async with game_server(args.port, tls, token, providers, trial_limits=args.trial_limits or args.standalone,
+        async with game_server(args.port, tls, token, providers, trial_limits=args.trial_limits,
                                report=lambda line: print(line, flush=True), **options):
             print(f"animal_ready port={args.port}", flush=True)
             await stopped.wait()
