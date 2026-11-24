@@ -28,6 +28,10 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                        private val hooks: CaptureHooks = CaptureHooks(),
                        private val disposed: ()->Unit = {}) {
     companion object { private val lease=AtomicBoolean(false) }
+    @Volatile private var operation="NOT_STARTED"
+    @Volatile private var progressAt=0L
+    private fun progress(value:String){operation=value;progressAt=android.os.SystemClock.elapsedRealtime()}
+    fun workerEvidence()="operation=$operation lastProgressMs=$progressAt cancelled=${cancelled.get()} workerAlive=${thread?.isAlive} stack="+(thread?.stackTrace?.take(12)?.joinToString("|") ?: "none")
     private var ownsLease=false
     private val nativeLock=Any()
     @Volatile private var nativeRecorder: AudioRecord? = null
@@ -101,10 +105,10 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 aec?.enabled = true // Availability/enabled are diagnostics, not acoustic PASS.
             }
             phase = CapturePhase.WAKE_KWS
-            wake = SherpaWake(assets)
+            wake = SherpaWake(assets, allowed={ !cancelled.get() && allowed() }, progress={progress("WAKE_$it")})
             if(cancelled.get() || !allowed())return
             phase = CapturePhase.MANAGEMENT_KWS
-            commands = SherpaWake(assets, "*", "wake/manage.txt", 8)
+            commands = SherpaWake(assets, "*", "wake/manage.txt", 8, { !cancelled.get() && allowed() }, {progress("MANAGEMENT_$it")})
             synchronized(nativeLock) {
                 if (cancelled.get() || !allowed()) return
                 phase = CapturePhase.START
@@ -115,6 +119,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             }
             phase = CapturePhase.READ
             while (!cancelled.get()) {
+                progress("NATIVE_READ")
                 val count = native.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
                 if (cancelled.get() || !allowed()) break
                 check(count >= 0)
@@ -127,9 +132,13 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     }
                 }
                 if(!accept)break
+                progress("BEFORE_DECODE")
                 hooks.beforeDecode()
+                if(cancelled.get() || !allowed())break
                 val commandTail=commands?.accept(frame,count)
                 val hit=if(commandTail!=null) CommandBoundary.Hit(checkNotNull(commands?.detectedKeyword),checkNotNull(commands).matchedStart,commandTail) else null
+                if(cancelled.get() || !allowed())break
+                progress("COMMAND_BOUNDARY")
                 val command=commandBoundary.frame(frame,count,hit,management)
                 if (command!=null) {
                     val entering = !management && command == "进入管理"
@@ -139,7 +148,10 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                         commandGeneration.incrementAndGet()
                         management = entering
                         buffered.clear(); awake = false; voiced = false; uploadSamples = 0
-                        wake?.close(); wake = SherpaWake(assets); wakeBase = buffered.position
+                        if(cancelled.get() || !allowed())break
+                        progress("WAKE_CLOSE");wake?.close()
+                        if(cancelled.get() || !allowed())break
+                        progress("WAKE_CREATE");wake = SherpaWake(assets, allowed={ !cancelled.get() && allowed() }, progress={progress("WAKE_$it")}); wakeBase = buffered.position
                         owner.post { if (!cancelled.get() && allowed()) {
                             client.management(entering); managementChanged(entering)
                         } }
@@ -154,19 +166,26 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     buffered.clear()
                     awake = false; voiced = false; uploadSamples = 0
                     detector = SpeechDetector(320, initialFloor = 36.0); wakeBase = position
-                    wake?.close(); wake = SherpaWake(assets)
+                    if(cancelled.get() || !allowed())break
+                        progress("WAKE_CLOSE");wake?.close()
+                        if(cancelled.get() || !allowed())break
+                        progress("WAKE_CREATE");wake = SherpaWake(assets, allowed={ !cancelled.get() && allowed() }, progress={progress("WAKE_$it")})
                 }
                 if (!awake) {
                     val tail = wake?.accept(frame, count) ?: continue
                     if (!client.connectionActive) {
                         // Unconfigured local KWS never builds/uploads child expressions.
                         owner.post { if (!cancelled.get() && allowed()) client.wake() }
-                        wake?.close(); wake = SherpaWake(assets)
+                        if(cancelled.get() || !allowed())break
+                        progress("WAKE_CLOSE");wake?.close()
+                        if(cancelled.get() || !allowed())break
+                        progress("WAKE_CREATE");wake = SherpaWake(assets, allowed={ !cancelled.get() && allowed() }, progress={progress("WAKE_$it")})
                         wakeBase = position; buffered.clear()
                         continue
                     }
                     awake = true
-                    wake?.close(); wake = null
+                    if(cancelled.get() || !allowed())break
+                    progress("WAKE_CLOSE");wake?.close(); wake = null
                     detector = SpeechDetector(320, initialFloor = 36.0)
                     val wakeBoundary = (android.os.SystemClock.elapsedRealtime() -
                         ((position - (wakeBase + tail).coerceIn(0, position)) * 1000 / 16000)).coerceAtLeast(0)
@@ -218,6 +237,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             failedPhase = phase
             if (!cancelled.get()) owner.post { failed() }
         } finally {
+            progress("FINALLY_ENTER")
+            trace("FINALLY_ENTER",nativeProof,operation)
             phase = CapturePhase.RELEASE
             frame.fill(0); buffered.clear()
             // Stop/release native collection before potentially slow model destruction.
@@ -225,6 +246,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             synchronized(nativeLock) {
                 try {
                     trace("NATIVE_RELEASE_BEGIN",nativeProof,phase.name)
+                    progress("NATIVE_RELEASE")
                     recorder?.release()
                     check(recorder == null || recorder?.state == AudioRecord.STATE_UNINITIALIZED)
                     nativeRecorder=null
@@ -265,7 +287,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         requestStop()
         val old = thread ?: return
         old.join(500)
-        if (old.isAlive) { pendingDisposal = true; trace("DISPOSE_QUARANTINE",nativeProof,phase.name) }
+        if (old.isAlive) { pendingDisposal = true; trace("DISPOSE_QUARANTINE",nativeProof,operation) }
         // Never permit another recorder when the original has no release confirmation.
         if (!old.isAlive) thread = null
     }

@@ -39,6 +39,7 @@ class V2VoiceActivity : Activity() {
     internal var afterEligible: ()->Unit = {}
     private val life=LifecycleGate()
     private val timeline=StopTimeline(SystemClock::elapsedRealtime)
+    internal fun captureWorkerEvidence()=capture?.workerEvidence() ?: "no_capture"
     internal val captureWorkerDone get()=capture?.workerDone != false
     internal fun immediateRecorder()=capture?.nativeProof ?: releasedRecorder
     internal fun mark(name: String) { timeline.add(name,life.state.generation,immediateRecorder(),capture?.phase?.name ?: lastCapturePhase) }
@@ -66,7 +67,7 @@ class V2VoiceActivity : Activity() {
             "permission=${checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED} " +
             "capture_phase=${capture?.phase?.name ?: lastCapturePhase} failed_phase=$failure " +
             "started=${recorder.started} recording=${recorder.recording} frames=${recorder.frames} stopped=${recorder.stopped} released=${recorder.released} " +
-            "player_bound=${player.binding != null} head=${player.observedHead}")
+            "player_bound=${player.binding != null} head=${player.observedHead} ${captureWorkerEvidence()}")
     } }
     internal fun observeNative(result: (NativeEvidence) -> Unit) { owner.post {
         result(NativeEvidence(capture?.nativeProof ?: releasedRecorder, voice?.nativeProof() ?: releasedPlayer))

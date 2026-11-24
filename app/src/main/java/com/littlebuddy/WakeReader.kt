@@ -12,7 +12,11 @@ internal interface WakeKeyword : AutoCloseable {
 }
 
 internal class SherpaWake(assets: AssetManager, private val keyword: String = "瓦力瓦力",
-                          keywordFile: String = "wake/keywords.txt", maxPaths: Int = 4) : WakeKeyword {
+                          keywordFile: String = "wake/keywords.txt", maxPaths: Int = 4,
+                          allowed: ()->Boolean = {true},
+                          progress: (String)->Unit = {}) : WakeKeyword {
+    private val canDecode=allowed
+    private val reportProgress=progress
     private val spotter: KeywordSpotter
     private var deliveredTail=-1L
     var matchedStart=0L; private set
@@ -42,10 +46,19 @@ internal class SherpaWake(assets: AssetManager, private val keyword: String = "�
 
     var detectedKeyword: String? = null; private set
     override fun accept(samples: ShortArray, count: Int): Long? {
+        if(!canDecode())return null
+        reportProgress("ACCEPT_WAVEFORM")
         stream.acceptWaveform(FloatArray(count) { samples[it] / 32768f }, 16_000)
-        while (spotter.isReady(stream)) {
+        while (canDecode()) {
+            reportProgress("IS_READY")
+            if(!spotter.isReady(stream))break
+            if(!canDecode())return null
+            reportProgress("DECODE")
             spotter.decode(stream)
+            if(!canDecode())return null
+            reportProgress("GET_RESULT")
             val result = spotter.getResult(stream)
+            if(!canDecode())return null
             if (result.keyword.isNotEmpty() && (keyword == "*" || result.keyword == keyword)) {
                 detectedKeyword = result.keyword
                 val last = result.timestamps.lastOrNull() ?: error("Missing wake timestamp")

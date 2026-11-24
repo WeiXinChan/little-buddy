@@ -9,14 +9,27 @@ output=[]
 try:
  for line in p.stdout:
   print(line,end='',flush=True);output.append(line)
-  if line.startswith('INSTRUMENTATION_STATUS: m06_audio='):
-   name=line.strip().split('=',1)[1]
-   if name not in allowed or not re.fullmatch(r'[a-z0-9_.]+',name):raise ValueError('fixture allowlist')
+  if line.startswith('INSTRUMENTATION_STATUS: m06_request='):
+   q=json.loads(line.strip().split('=',1)[1]);name=q['name'];nonce=q['nonce'];private=q['root'];pkg=q['package']
+   if pkg!='com.littlebuddy.sim.v2' or q['user']!=0:raise ValueError('target user/package')
+   if name not in allowed or not re.fullmatch(r'[a-z0-9_.]+',name) or not re.fullmatch(r'[a-f0-9-]{36}',nonce):raise ValueError('fixture/nonce allowlist')
+   if not re.fullmatch(r'/[A-Za-z0-9_./]+',private) or not private.endswith('/'+pkg+'/files'):raise ValueError('private root')
+   pwd=subprocess.check_output(['adb','shell','run-as',pkg,'pwd'],text=True,timeout=5).strip()
+   canonical=subprocess.check_output(['adb','shell','run-as',pkg,'readlink','-f',private],text=True,timeout=5).strip()
+   subprocess.run(['adb','shell','run-as',pkg,'test','-d',private],check=True,timeout=5)
+   if canonical!=private:raise ValueError('private root mismatch')
+   print(json.dumps(dict(event='handshake_ready',nonce=nonce,root=private,run_as_pwd=pwd)),flush=True)
    path=root/(name+'.wav')
-   if hashlib.sha256(path.read_bytes()).hexdigest()!=allowed[name]:raise ValueError('fixture hash')
+   if hashlib.sha256(path.read_bytes()).hexdigest()!=allowed[name] or q['sha256']!=allowed[name]:raise ValueError('fixture hash')
    subprocess.run(['paplay','--device=m06_input',str(path)],check=True,timeout=20)
-   subprocess.run(['adb','shell','run-as','com.littlebuddy.sim.v2','touch','files/m06-audio-'+name+'.done'],check=True,timeout=5)
+   reply=json.dumps(dict(nonce=nonce,name=name,sha256=allowed[name],state='completed',playback_exit=0))
+   subprocess.run(['adb','shell','run-as',pkg,'tee',private+'/m06-'+nonce+'.json'],input=reply,text=True,stdout=subprocess.PIPE,check=True,timeout=5)
  result=p.wait(timeout=30)
  if result or not any('OK (1 test)' in x for x in output):sys.exit(1)
+except Exception:
+ # Let the bounded instrumentation await write real timeline/proof before cleanup.
+ try:p.wait(timeout=40)
+ except subprocess.TimeoutExpired:pass
+ raise
 finally:
  if p.poll() is None:p.terminate();p.wait(timeout=10)

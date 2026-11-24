@@ -50,9 +50,29 @@ class V2MicrophoneCommandTest {
   }
   assertTrue(name,condition())
  }
- private fun play(name:String) {inst.uiAutomation.executeShellCommand("run-as com.littlebuddy.sim.v2 rm -f files/m06-audio-$name.done").use {java.io.FileInputStream(it.fileDescriptor).readBytes()};inst.sendStatus(30,Bundle().apply{putString("m06_audio",name)})}
+ private val requests=mutableMapOf<String,JSONObject>()
+ private fun completed(name:String):Boolean {
+  val q=requests[name] ?: return false
+  val f=File(inst.targetContext.filesDir,"m06-${q.getString("nonce")}.json")
+  if(!f.isFile)return false
+  return try{val r=JSONObject(f.readText());r.getString("nonce")==q.getString("nonce") && r.getString("sha256")==q.getString("sha256") && r.getString("state")=="completed" && r.getInt("playback_exit")==0}catch(_:Exception){false}
+ }
+ private fun play(name:String) {
+  val root=inst.targetContext.filesDir
+  check(root.mkdirs() || root.isDirectory)
+  check(root.canWrite())
+  val bytes=inst.context.assets.open("m06-commands/$name.wav").use{it.readBytes()}
+  val hash=java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
+  val q=JSONObject().put("name",name).put("sha256",hash).put("nonce",java.util.UUID.randomUUID().toString()).put("root",root.canonicalPath).put("package",inst.targetContext.packageName).put("user",android.os.Process.myUid()/100000)
+  requests[name]=q
+  File(root,"m06").mkdirs()
+  File(root,"m06/handshake-root.json").writeText(q.toString())
+  inst.sendStatus(30,Bundle().apply{putString("m06_request",q.toString())})
+ }
  @Test fun actualMicrophoneManagementAndNegativeCommands() {
   val ctx=inst.targetContext
+  check(ctx.filesDir.mkdirs() || ctx.filesDir.isDirectory)
+  check(ctx.filesDir.canWrite())
   val activity=inst.startActivitySync(Intent(ctx,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as V2VoiceActivity
   diagnosticHost=activity
   lateinit var wire:Wire
@@ -78,11 +98,11 @@ class V2MicrophoneCommandTest {
    activity.observeNative{released=it.player.binding==null && it.player.stop==StopResult(true,true);release.countDown()};assertTrue(release.await(2,java.util.concurrent.TimeUnit.SECONDS));assertTrue(released)
    val before=wire.inputs.get();wire.emit("reveal","effect" to "synthetic","topic" to 5);wire.emit("audio","player" to wire.player,"stream" to 1,"segment" to "late","start" to 2400,"end" to 2640,"pcm" to android.util.Base64.encodeToString(ByteArray(480),2))
    for(name in listOf("cancel_negative","cancel_discussion","negative_pause_cancel_1.6","cancel_continued_discussion")) {
-    play(name);await("audio playback completed: $name"){File(ctx.filesDir,"m06-audio-$name.done").exists()};Thread.sleep(1200)
+    play(name);await("audio playback completed: $name"){completed(name)};Thread.sleep(1200)
     assertTrue("negative command must stay managed: $name",activity.isManaging);assertEquals(before,wire.inputs.get());assertFalse(activity.showingImage)
    }
    play("cancel");await("real cancel returns WAKE"){!activity.isManaging && activity.currentMood==EyeMood.WAKE};assertEquals(before,wire.inputs.get())
-   play("exit");await("outside exit fixture done"){File(ctx.filesDir,"m06-audio-exit.done").exists()};assertFalse(activity.isManaging)
+   play("exit");await("outside exit fixture done"){completed("exit")};assertFalse(activity.isManaging)
    play("enter_polite");await("fresh enter through real mic"){activity.isManaging}
    play("exit");await("real exit returns WAKE"){!activity.isManaging && activity.currentMood==EyeMood.WAKE};assertEquals(before,wire.inputs.get())
    val wakes=wire.wakes.get();play("wake");await("next actual wake only"){wire.wakes.get()>wakes}

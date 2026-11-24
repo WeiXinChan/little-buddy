@@ -101,7 +101,13 @@ jobs:
           adb shell wm user-rotation >render/display-rotation.txt
           adb emu avd hostmicon >render/hostmic.txt
           device_result=0
-          python3 scripts/m06/mic_controller.py | tee render/microphone.txt || device_result=1
+          set +e
+          python3 scripts/m06/mic_controller.py >render/microphone.txt 2>render/microphone-stderr.txt
+          microphone_result=$?
+          set -e
+          printf '%s\n' "$microphone_result" >render/microphone-exit.txt
+          cat render/microphone.txt
+          if ((microphone_result != 0)); then device_result=1; fi
           adb shell am instrument -w -r -e class com.littlebuddy.V2StopRaceTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/stop-race.txt || device_result=1
           grep -q 'OK (2 tests)' render/stop-race.txt || device_result=1
           adb shell am instrument -w -r -e class com.littlebuddy.V2EyesTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/instrumentation.txt || device_result=1
