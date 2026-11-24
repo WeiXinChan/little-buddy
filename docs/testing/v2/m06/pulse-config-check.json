@@ -1,0 +1,8 @@
+{
+  "test": "actual workflow heredoc rendered by bash",
+  "socket_matches_pulse_server": true,
+  "unexpanded_shell_variables": false,
+  "directory_mode": "0700",
+  "pulse_daemon_started": false,
+  "scope": "configuration path consistency only; CI checks real daemon readiness"
+}

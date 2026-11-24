@@ -32,7 +32,7 @@ jobs:
           export ANDROID_AVD_HOME="$RUNNER_TEMP/v2-avd"
           mkdir -m 700 -p "$ANDROID_AVD_HOME"
           export PULSE_SERVER="unix:$ANDROID_AVD_HOME/pulse.sock"
-          cat > "$ANDROID_AVD_HOME/pulse.pa" <<'PULSE'
+          cat > "$ANDROID_AVD_HOME/pulse.pa" <<PULSE
           load-module module-native-protocol-unix socket=$ANDROID_AVD_HOME/pulse.sock auth-anonymous=1
           load-module module-null-sink sink_name=v2_playback
           set-default-sink v2_playback

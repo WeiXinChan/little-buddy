@@ -1,0 +1,8 @@
+Source: 4e77a2eca72fb115ddab3537864f9143b7ba3983
+Run: https://github.com/WeiXinChan/little-buddy/actions/runs/45394677586
+Job: 138447164511
+Observed: build succeeded, emulator never connected; UI instrumentation NOT_RUN.
+2026-11-24T12:37:06.3826956Z BUILD SUCCESSFUL in 2m 31s
+2026-11-24T12:40:07.7228597Z error: no emulator detected
+2026-11-24T12:40:07.7245800Z ##[error]Process completed with exit code 124.
+
