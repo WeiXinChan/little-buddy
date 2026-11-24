@@ -5,9 +5,11 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 class CommandBoundaryReplayTest {
- @Test fun sameModelNativeHitsAndRealSyntheticPcmUseProductionBoundary() {
+ @Test fun sameModelNativeHitsAndRealSyntheticPcmUseProductionBoundary() = replay("native-replay.tsv",40)
+ @Test fun denyContextExpiresForIndependentCommands() = replay("deny-pair.tsv",4)
+ private fun replay(file: String,minimum: Int) {
   val root=listOf(File("src/androidTest/assets/m06-commands"),File("app/src/androidTest/assets/m06-commands")).first{it.isDirectory}
-  val lines=File(root,"native-replay.tsv").readLines();var i=0;val failures=mutableListOf<String>();var cases=0
+  val lines=File(root,file).readLines();var i=0;val failures=mutableListOf<String>();var cases=0
   while(i<lines.size) {
    val c=lines[i++].split('\t');check(c[0]=="case")
    val name=c[1];val managed=c[2]=="true";val expected=if(c[3]=="NONE")emptyList() else listOf(c[3])
@@ -20,7 +22,7 @@ class CommandBoundaryReplayTest {
    if(results!=expected)failures+="$name expected=$expected actual=$results"
    cases++
   }
-  assertTrue("actual native replay corpus required",cases>=40)
+  assertTrue("actual native replay corpus required",cases>=minimum)
   assertEquals(failures.joinToString("; "),emptyList<String>(),failures)
  }
 }

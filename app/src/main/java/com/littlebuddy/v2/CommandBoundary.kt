@@ -37,5 +37,5 @@ internal class CommandBoundary {
         if(first!=null && position-lastSpeech>=56000)clear() // 3.5s context horizon
         return null
     }
-    private fun clear() { first=null;candidate=null;vad=SpeechDetector(320,36.0) }
+    private fun clear() { first=null;candidate=null;denyNext=false;vad=SpeechDetector(320,36.0) }
 }

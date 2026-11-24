@@ -1,0 +1,74 @@
+[
+  {
+    "name": "deny_pair_cancel_1.6",
+    "expected": "NONE",
+    "hits": [
+      {
+        "frame": 87,
+        "name": "否定",
+        "start": 15359,
+        "end": 21119
+      },
+      {
+        "frame": 215,
+        "name": "取消",
+        "start": 58879,
+        "end": 64639
+      }
+    ]
+  },
+  {
+    "name": "deny_pair_cancel_4.0",
+    "expected": "取消",
+    "hits": [
+      {
+        "frame": 87,
+        "name": "否定",
+        "start": 15359,
+        "end": 21119
+      },
+      {
+        "frame": 343,
+        "name": "取消",
+        "start": 97279,
+        "end": 103039
+      }
+    ]
+  },
+  {
+    "name": "deny_pair_exit_1.6",
+    "expected": "NONE",
+    "hits": [
+      {
+        "frame": 87,
+        "name": "否定",
+        "start": 15359,
+        "end": 21119
+      },
+      {
+        "frame": 263,
+        "name": "退出管理",
+        "start": 57599,
+        "end": 77439
+      }
+    ]
+  },
+  {
+    "name": "deny_pair_exit_4.0",
+    "expected": "退出管理",
+    "hits": [
+      {
+        "frame": 87,
+        "name": "否定",
+        "start": 15359,
+        "end": 21119
+      },
+      {
+        "frame": 375,
+        "name": "退出管理",
+        "start": 92159,
+        "end": 115839
+      }
+    ]
+  }
+]

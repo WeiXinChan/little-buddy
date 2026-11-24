@@ -1,0 +1,12 @@
+case	deny_pair_cancel_1.6	true	NONE
+hit	87	否定	15359	21119
+hit	215	取消	58879	64639
+case	deny_pair_cancel_4.0	true	取消
+hit	87	否定	15359	21119
+hit	343	取消	97279	103039
+case	deny_pair_exit_1.6	true	NONE
+hit	87	否定	15359	21119
+hit	263	退出管理	57599	77439
+case	deny_pair_exit_4.0	true	退出管理
+hit	87	否定	15359	21119
+hit	375	退出管理	92159	115839
