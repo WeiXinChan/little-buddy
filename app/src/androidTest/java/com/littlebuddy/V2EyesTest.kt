@@ -46,6 +46,11 @@ class V2EyesTest {
         activity.observeNative { result.set(it); latch.countDown() }
         check(latch.await(3,TimeUnit.SECONDS)); return result.get()
     }
+    private fun diagnostics(activity: V2VoiceActivity): String {
+        val latch=CountDownLatch(1); val result=AtomicReference<String>()
+        activity.observeDiagnostics { result.set(it); latch.countDown() }
+        return if (latch.await(3,TimeUnit.SECONDS)) result.get() else "OWNER_UNRESPONSIVE"
+    }
     @Test fun realWindowAndProductionWireStates() {
         val context = inst.targetContext
         val activity = inst.startActivitySync(Intent(context,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as V2VoiceActivity
@@ -58,10 +63,15 @@ class V2EyesTest {
             receive.invoke(client,event.toString())
         } }
         try {
+            shot("01-default-landscape")
             val deadline = SystemClock.elapsedRealtime()+15000
             while (proof(activity).recorder.frames == 0L && SystemClock.elapsedRealtime() < deadline) Thread.sleep(50)
-            assertTrue("local command recorder must really run", proof(activity).recorder.recording)
-            assertEquals(EyeMood.WAKE, activity.currentMood); shot("01-default-landscape")
+            val diagnosis = diagnostics(activity)
+            File(context.filesDir,"m06/diagnostics.txt").writeText(diagnosis)
+            println("M06_DIAGNOSTICS $diagnosis")
+            val recorder = proof(activity).recorder
+            assertTrue("local command recorder must really run: $diagnosis", recorder.started && recorder.recording && recorder.frames > 0)
+            assertEquals(EyeMood.WAKE, activity.currentMood)
             main { client.wake() } // Disconnected wake reports failure, never comprehension.
             shot("02-failure")
             val wireSocket = WireSocket()
@@ -102,6 +112,10 @@ class V2EyesTest {
                 assertTrue(pcm.all { it == 0.toShort() })
             }
             assertEquals(uploadsBeforeManagement,wireSocket.inputs())
+            assertNull(client.nativeProof().binding)
+            assertEquals(StopResult(true,true),client.nativeProof().stop)
+            wire("audio","player" to playerName,"stream" to 1,"segment" to "late", "start" to 2400,"end" to 2640,"pcm" to android.util.Base64.encodeToString(ByteArray(480),android.util.Base64.NO_WRAP))
+            assertNull(client.nativeProof().binding)
             wire("reply_end","head" to 2400,"public_facts" to 1)
             wire("reveal","effect" to "synthetic-patch","topic" to 2)
             assertTrue(activity.isManaging); assertFalse(activity.showingImage); shot("11-locked-management-late-output")

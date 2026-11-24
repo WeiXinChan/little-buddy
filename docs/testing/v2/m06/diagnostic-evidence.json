@@ -1,0 +1,22 @@
+{
+  "jvm": {
+    "tests": 70,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2
+  },
+  "artifacts": [
+    {
+      "name": "app-v2Debug.apk",
+      "bytes": 27237622,
+      "sha256": "fd255a7d75c4f4337acee5012f30173f04c781a28d66f97fe2a015a908700d91"
+    },
+    {
+      "name": "app-v2Debug-androidTest.apk",
+      "bytes": 667376,
+      "sha256": "59f309e8bafc398f0a54b0b96bfed1a54f15042e9fe42dce6486696aa36b57e5"
+    }
+  ],
+  "diagnostics": "fixed CapturePhase and booleans/counters only, no exception message/body/token",
+  "CI": "pending actual new source"
+}

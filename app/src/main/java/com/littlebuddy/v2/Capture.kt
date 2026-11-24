@@ -13,6 +13,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
+internal enum class CapturePhase { NOT_STARTED, THREAD_START, AUDIO_RECORD, WAKE_KWS, MANAGEMENT_KWS, START, READ, RELEASE, RELEASED, QUARANTINED }
+
 /** One recorder throughout wake/continuation and full-duplex interaction.
  * No idle upload. Finite pre-roll preserves the KWS tail and short input onset.
  */
@@ -23,6 +25,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     @Volatile private var management = false
     fun enterManagement() { commandGeneration.incrementAndGet(); management = true }
     fun exitManagement() { commandGeneration.incrementAndGet(); management = false }
+    @Volatile var phase = CapturePhase.NOT_STARTED; private set
+    @Volatile var failedPhase: CapturePhase? = null; private set
     private val cancelled = AtomicBoolean(false)
     private val pending = AtomicInteger(0)
     private var thread: Thread? = null
@@ -31,6 +35,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     fun start() {
         check(thread == null && !quarantined)
         cancelled.set(false)
+        phase = CapturePhase.THREAD_START
         thread = Thread({ record() }, "v2-capture").apply { start() }
     }
     @SuppressLint("MissingPermission")
@@ -63,6 +68,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             }
         }
         try {
+            phase = CapturePhase.AUDIO_RECORD
             val minimum = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO,
                                                        AudioFormat.ENCODING_PCM_16BIT)
             check(minimum in 1..32000)
@@ -74,12 +80,16 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 aec = AcousticEchoCanceler.create(native.audioSessionId)
                 aec?.enabled = true // Availability/enabled are diagnostics, not acoustic PASS.
             }
+            phase = CapturePhase.WAKE_KWS
             wake = SherpaWake(assets)
+            phase = CapturePhase.MANAGEMENT_KWS
             commands = SherpaWake(assets, "*", "wake/manage.txt")
             if (cancelled.get()) return
+            phase = CapturePhase.START
             native.startRecording()
             check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
             nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
+            phase = CapturePhase.READ
             while (!cancelled.get()) {
                 val count = native.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
                 check(count >= 0)
@@ -171,8 +181,10 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if (uploadSamples >= 300000) error("input capacity")
             }
         } catch (_: Exception) {
+            failedPhase = phase
             if (!cancelled.get()) owner.post { failed() }
         } finally {
+            phase = CapturePhase.RELEASE
             frame.fill(0); buffered.clear()
             try { commands?.close(); wake?.close() } catch (_: Exception) { quarantined = true }
             try { aec?.release() } catch (_: Exception) { quarantined = true }
@@ -186,6 +198,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 check(recorder?.state == AudioRecord.STATE_UNINITIALIZED)
                 nativeProof = nativeProof.copy(recording=false, released=true)
             } catch (_: Exception) { quarantined = true }
+            phase = if (quarantined) CapturePhase.QUARANTINED else CapturePhase.RELEASED
             if (!cancelled.get()) owner.post { failed() }
         }
     }

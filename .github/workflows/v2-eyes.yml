@@ -55,6 +55,8 @@ jobs:
           echo 'no' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n v2eyes -k 'system-images;android-36;google_apis;x86_64' --force
           QEMU_AUDIO_DRV=pa "$ANDROID_HOME/emulator/emulator" -avd v2eyes -port 5554 -accel on -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
           emulator_pid=$!
+          test -f "$ANDROID_AVD_HOME/v2eyes.ini"
+          printf '%s\n' 'avdmanager/emulator use the same explicit ANDROID_AVD_HOME; v2eyes.ini exists' >render/avd-path-check.txt
           timeout 180s adb wait-for-device
           timeout 180s bash -c 'until [[ $(adb shell getprop sys.boot_completed | tr -d "\r") == 1 ]]; do sleep 2; done'
           adb shell wm size 1080x1920
@@ -62,6 +64,7 @@ jobs:
           adb shell settings put system user_rotation 1
           adb install -g app/build/outputs/apk/v2Debug/app-v2Debug.apk
           adb install app/build/outputs/apk/androidTest/v2Debug/app-v2Debug-androidTest.apk
+          adb shell pm path --user 0 com.littlebuddy.sim.v2 >render/package-before-reboot.txt
           # Existing regression setup requires a fresh AudioFlinger UID map.
           previous_boot=$(adb shell cat /proc/sys/kernel/random/boot_id | tr -d '\r')
           export previous_boot
@@ -69,21 +72,30 @@ jobs:
           timeout 180s bash -c 'until [[ $(adb shell cat /proc/sys/kernel/random/boot_id 2>/dev/null | tr -d "\r") != "$previous_boot" && $(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r") == 1 ]]; do sleep 2; done'
           adb shell getprop ro.build.version.sdk > render/api.txt
           adb shell getprop ro.product.cpu.abi > render/abi.txt
-          adb shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER com.littlebuddy.sim.v2 | tee render/launcher.txt
+          adb shell pm path --user 0 com.littlebuddy.sim.v2 >render/package-after-reboot.txt
+          adb shell am get-started-user-state 0 >render/user-before-unlock.txt
+          adb shell dumpsys window policy | grep -E 'keyguard|Keyguard|mCurrentFocus' >render/window-before-unlock.txt || true
+          adb shell cmd package resolve-activity --brief --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.littlebuddy.sim.v2 >render/launcher-before-unlock.txt
+          # Fresh test AVD has no secure credential; do not change lock settings.
+          adb shell input keyevent KEYCODE_WAKEUP
+          adb shell wm dismiss-keyguard
+          timeout 30s bash -c 'until adb shell am get-started-user-state 0 | grep -q RUNNING_UNLOCKED; do sleep 1; done'
+          adb shell am get-started-user-state 0 | tee render/user-after-unlock.txt
+          adb shell dumpsys window policy | grep -E 'keyguard|Keyguard|mCurrentFocus' >render/window-after-unlock.txt || true
+          adb shell cmd package resolve-activity --brief --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.littlebuddy.sim.v2 | tee render/launcher.txt
           grep -q V2VoiceActivity render/launcher.txt
           adb shell am instrument -w -r -e class com.littlebuddy.V2EyesTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/instrumentation.txt
           adb exec-out run-as com.littlebuddy.sim.v2 tar -C files -cf - m06 > render/screens.tar
           tar -xf render/screens.tar -C render
           test "$(find render/m06 -name '*.png' | wc -l)" -eq 16
           python3 - <<'PYCODE'
-          import pathlib, struct, base64, hashlib, json
+          import pathlib, struct
           for path in pathlib.Path('render/m06').glob('*.png'):
               width, height = struct.unpack('>II', path.read_bytes()[16:24])
               assert width > height, (path.name, width, height)
               print(path.name, width, height)
-              # Exact original synthetic UI PNG bytes, also recoverable through job logs.
-              print('M06_SCREENSHOT_JSON ' + json.dumps({'name':path.name,'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'base64':base64.b64encode(path.read_bytes()).decode()}))
           PYCODE
+          sha256sum render/m06/*.png >render/screenshot-sha256.txt
           grep -q 'OK (1 test)' render/instrumentation.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

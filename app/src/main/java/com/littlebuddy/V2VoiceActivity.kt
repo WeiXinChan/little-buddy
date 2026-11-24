@@ -33,6 +33,18 @@ class V2VoiceActivity : Activity() {
     private var explicitConnectionStarted = false
     private var releasedRecorder = RecorderProof()
     private var releasedPlayer = PlayerProof()
+    private var lastCapturePhase = "NOT_STARTED"
+    private var lastCaptureFailure = "NONE"
+    internal fun observeDiagnostics(result: (String) -> Unit) { owner.post {
+        val recorder = capture?.nativeProof ?: releasedRecorder
+        val player = voice?.nativeProof() ?: releasedPlayer
+        val failure = if (capture != null) capture?.failedPhase?.name ?: "NONE" else lastCaptureFailure
+        result("mode=$releaseState focus=${hasWindowFocus()} keyguard=${getSystemService(KeyguardManager::class.java).isKeyguardLocked} " +
+            "permission=${checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED} " +
+            "capture_phase=${capture?.phase?.name ?: lastCapturePhase} failed_phase=$failure " +
+            "started=${recorder.started} recording=${recorder.recording} frames=${recorder.frames} stopped=${recorder.stopped} released=${recorder.released} " +
+            "player_bound=${player.binding != null} head=${player.observedHead}")
+    } }
     internal fun observeNative(result: (NativeEvidence) -> Unit) { owner.post {
         result(NativeEvidence(capture?.nativeProof ?: releasedRecorder, voice?.nativeProof() ?: releasedPlayer))
     } }
@@ -135,7 +147,7 @@ class V2VoiceActivity : Activity() {
         scene.invalidate()
         voice?.close(); voice?.let { releasedPlayer = it.nativeProof() }
         if (voice?.quarantined != true) voice = null
-        capture?.close(); capture?.let { releasedRecorder = it.nativeProof }
+        capture?.close(); capture?.let { releasedRecorder = it.nativeProof; lastCapturePhase = it.phase.name; lastCaptureFailure = it.failedPhase?.name ?: "NONE" }
         // Failed capture release keeps the object, preventing new ownership.
         if (capture?.quarantined != true) capture = null
         releaseState = if (voice == null && capture == null) "released" else "quarantined"

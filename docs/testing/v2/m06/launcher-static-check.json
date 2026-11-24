@@ -1,0 +1,8 @@
+{
+  "bash_syntax": "PASS",
+  "merged_manifest_launchers": 1,
+  "launcher": "com.littlebuddy.V2VoiceActivity",
+  "resolve_has_MAIN_LAUNCHER_package_and_user0": true,
+  "dynamic_user_unlock_and_resolution": "pending CI; no assertion of success from static checks",
+  "user_state_condition_reference": "https://android.googlesource.com/platform/cts/+/0225177adffa9399e732157de73fcb851b665b33/hostsidetests/retaildemo/src/android/host/retaildemo/BaseTestCase.java"
+}
