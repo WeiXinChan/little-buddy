@@ -153,6 +153,7 @@ android {
         create("v2Debug") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".v2"
+            ndk.abiFilters += "arm64-v8a"
             versionNameSuffix = "-v2-m04"
             matchingFallbacks += "debug"
         }
