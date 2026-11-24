@@ -20,10 +20,9 @@ def run(path, stall):
     spec.loader.exec_module(m)
     now = [0.0]
     def sleep(seconds): now[0] += seconds
-    defaults = (lambda: now[0], sleep, None)
-    if 'before_yield' in m.packet_plan.__code__.co_varnames:
-        defaults += (None,)
-    m.packet_plan.__defaults__ = defaults
+    defaults=list(m.packet_plan.__defaults__)
+    defaults[0]=lambda:now[0];defaults[1]=sleep
+    m.packet_plan.__defaults__=tuple(defaults)
     delivered = []
     class Format:
         Mono = 0

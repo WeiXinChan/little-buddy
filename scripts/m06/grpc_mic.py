@@ -1,7 +1,7 @@
 """SDK37310 authenticated LOOPBACK virtual mic. Only hash-allowlisted fixtures reach here.
 RPC success is transport evidence, never a live AudioRecord/KWS assertion.
 """
-import hashlib,json,os,re,subprocess,time,wave,traceback,ipaddress
+import hashlib,json,os,re,subprocess,time,wave,traceback,ipaddress,sys
 from pathlib import Path
 PROTO_SHA='9a4b0f704b0d4cdda652f89fbd50bb3d54da3d46ec8efe6e8b2a2a135ef10e69'
 
@@ -70,9 +70,10 @@ def target_listeners(text,descriptor_pid,root_pid,target=8554):
         results.append(endpoint)
     return results
 
-def packet_plan(raw,rate,packet,fmt,clock=time.monotonic,sleep=time.sleep,deadline=None,before_yield=None):
+def packet_plan(raw,rate,packet,fmt,clock=time.monotonic,sleep=time.sleep,deadline=None,before_yield=None,prefix_ms=0):
     """Recheck after sleep and immediately before yield; never renew total deadline."""
-    size=rate//50*2;data=raw+bytes(rate*2*300//1000);start=clock()
+    if prefix_ms not in (0,600):raise ValueError("fixed prefix only")
+    size=rate//50*2;data=bytes(rate*2*prefix_ms//1000)+raw+bytes(rate*2*300//1000);start=clock()
     cutoff=deadline if deadline is not None else start+len(data)/(rate*2)+.15
     for index,pos in enumerate(range(0,len(data),size)):
         target=start+pos/(rate*2)
@@ -164,7 +165,9 @@ class GrpcMic:
             row.update(fields);row['stage']=stage;row['stages'].append(dict(stage=stage,unix_ns=time.time_ns(),monotonic_ns=time.monotonic_ns()))
             target.write_text(json.dumps(row,indent=2))
         save('before_fixture')
-        count=0;generator_failure=None
+        count=0;generator_failure=None;observer=None
+        gate_mode=os.environ.get("M06_SDK_INPUT_GATE")=="1"
+        prefix_ms=600 if gate_mode else 0
         try:
             assert hashlib.sha256(path.read_bytes()).hexdigest()==metadata['sha256']
             with wave.open(str(path)) as wav:
@@ -173,16 +176,25 @@ class GrpcMic:
             assert len(raw)<=rate*2*16,'bounded allowlisted fixture'
             self.stub.setMicrophoneState(self.pb.MicrophoneState(realAudioEnabled=False),metadata=self.auth,timeout=3)
             assert not self.stub.getMicrophoneState(self.Empty(),metadata=self.auth,timeout=3).realAudioEnabled
+            if gate_mode:
+                from sdk_input_gate import PrivatePulse,InputGateObserver
+                proof=PrivatePulse()
+                observer=InputGateObserver(
+                    read=lambda:self.stub.getMicrophoneState(self.Empty(),metadata=self.auth,timeout=.4).realAudioEnabled,
+                    write=lambda enabled:self.stub.setMicrophoneState(self.pb.MicrophoneState(realAudioEnabled=enabled),metadata=self.auth,timeout=.4),
+                    prove=proof.verify,path=Path('render')/('sdk-gate-'+metadata['nonce']+'.json'),context=dict(nonce=metadata['nonce'],fixture_sha256=metadata['sha256']))
+                observer.begin()
             fmt=self.pb.AudioFormat(samplingRate=rate,channels=self.pb.AudioFormat.Mono,format=self.pb.AudioFormat.AUD_FMT_S16,mode=self.pb.AudioFormat.MODE_UNSPECIFIED)
             if timing:timing.bridge('PRE_INJECT_GUEST_CLOCK')
-            save('inject_started',rate=rate,channels=1,sample_format='s16le',source_samples=len(raw)//2,drain_ms=300,packet_ms=20,mode='MODE_UNSPECIFIED',host_mic=False)
+            save('inject_started',rate=rate,channels=1,sample_format='s16le',source_samples=len(raw)//2,drain_ms=300,packet_ms=20,mode='MODE_UNSPECIFIED',initial_sdk_real_audio_enabled=False,private_null_only=bool(gate_mode),prefix_ms=prefix_ms,prefix_samples=rate*prefix_ms//1000,transport_payload_sha256=hashlib.sha256(bytes(rate*2*prefix_ms//1000)+raw+bytes(rate*2*300//1000)).hexdigest())
             seconds=len(raw)/(rate*2)+3;deadline=time.monotonic()+seconds
             def packets():
                 nonlocal count,generator_failure
                 try:
                     def journal_first(p,index):
                         if timing and index==0:timing.step('FIRST_PACKET_YIELDED',audio_bytes=len(p.audio),rate=p.format.samplingRate,channels_enum=p.format.channels,format_enum=p.format.format,mode_enum=p.format.mode)
-                    for p in packet_plan(raw,rate,self.pb.AudioPacket,fmt,deadline=deadline,before_yield=journal_first):
+                        if observer and index==0:observer.first_packet()
+                    for p in packet_plan(raw,rate,self.pb.AudioPacket,fmt,deadline=deadline,before_yield=journal_first,prefix_ms=prefix_ms):
                         count+=1
                         yield p
                 except InjectionTimingError as error:
@@ -197,4 +209,16 @@ class GrpcMic:
             raise RuntimeError('virtual mic RPC '+e.code().name) from None
         except Exception as e:
             save('failed',error=type(e).__name__);raise
+        finally:
+            if observer:
+                primary=sys.exception()
+                try:
+                    observer.finish()
+                    row['gate_journal']='sdk-gate-'+metadata['nonce']+'.json'
+                    row['gate_restored_false']=observer.row['restored_false']
+                    target.write_text(json.dumps(row,indent=2))
+                except Exception as error:
+                    save('gate_restore_or_observer_failed',error_class=type(error).__name__,packets=count)
+                    if primary:primary.add_note('SDK gate observer/restore failed')
+                    else:raise
     def close(self):self.channel.close()

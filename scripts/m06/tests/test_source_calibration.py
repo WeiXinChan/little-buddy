@@ -28,7 +28,7 @@ class PairTest(unittest.TestCase):
    calls.append(s);r=self.ready(s);r['transport_complete']=False;return r
   self.assertEqual(pair(arm)['unexecuted'],[6]);self.assertEqual(calls,[7])
  def test_transport_receipt_binds_exact_fixture_nonce_format_and_count(self):
-  r=dict(nonce='owned',name='enter',sha256=ENTER_SHA,backend='EmulatorController.injectAudio',proto_sha256=PROTO_SHA,stage='inject_completed',rpc_code='OK',packets=218,playback_exit=0,source_samples=64960,rate=16000,channels=1,sample_format='s16le',mode='MODE_UNSPECIFIED',drain_ms=300,packet_ms=20,host_mic=False)
+  r=dict(nonce='owned',name='enter',sha256=ENTER_SHA,backend='EmulatorController.injectAudio',proto_sha256=PROTO_SHA,stage='inject_completed',rpc_code='OK',packets=218,playback_exit=0,source_samples=64960,rate=16000,channels=1,sample_format='s16le',mode='MODE_UNSPECIFIED',drain_ms=300,packet_ms=20,initial_sdk_real_audio_enabled=False,private_null_only=False)
   self.assertTrue(transport_complete(r,'owned'))
-  for k,v in dict(nonce='other',sha256='other',stage='rpc_failed',rpc_code='CANCELLED',packets=217,rate=48000,channels=2,host_mic=True).items():
+  for k,v in dict(nonce='other',sha256='other',stage='rpc_failed',rpc_code='CANCELLED',packets=217,rate=48000,channels=2,initial_sdk_real_audio_enabled=True).items():
    self.assertFalse(transport_complete(dict(r,**{k:v}),'owned'))

@@ -33,4 +33,19 @@ class PacketTests(unittest.TestCase):
   def slow_packet(**kw):clock[0]+=.5;return kw
   packets=m.packet_plan(bytes(1280),16000,slow_packet,'fixed',lambda:clock[0],lambda _:None)
   with self.assertRaises(m.InjectionTimingError):next(packets)
+ def test_fixed_600ms_prefix_is_only_zeros_and_preserves_entire_source(self):
+  clock=[0.0]
+  def wait(t):clock[0]+=t
+  source=bytes(range(256))*int(129920/256)+bytes(129920%256)
+  packets=list(m.packet_plan(source,16000,lambda **kw:kw,'fixed',lambda:clock[0],wait,deadline=7.06,prefix_ms=600))
+  data=b''.join(p['audio'] for p in packets)
+  self.assertEqual(len(packets),248)
+  self.assertEqual(data[:19200],bytes(19200));self.assertEqual(data[19200:19200+len(source)],source);self.assertEqual(data[-9600:],bytes(9600))
+ def test_prefix_does_not_renew_original_deadline(self):
+  clock=[0.0]
+  def wait(t):clock[0]+=t
+  g=m.packet_plan(bytes(1280),16000,lambda **kw:kw,'fixed',lambda:clock[0],wait,deadline=.01,prefix_ms=600)
+  next(g)
+  with self.assertRaises(m.InjectionTimingError) as e:next(g)
+  self.assertEqual(e.exception.reason,'STREAM_DEADLINE')
 if __name__=='__main__':unittest.main()

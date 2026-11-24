@@ -27,10 +27,10 @@ def transport_complete(row,nonce):
     expected=dict(nonce=nonce,name='enter',sha256=ENTER_SHA,backend='EmulatorController.injectAudio',
                   proto_sha256=PROTO_SHA,stage='inject_completed',rpc_code='OK',packets=218,
                   playback_exit=0,source_samples=64960,rate=16000,channels=1,sample_format='s16le',
-                  mode='MODE_UNSPECIFIED',drain_ms=300,packet_ms=20,host_mic=False)
+                  mode='MODE_UNSPECIFIED',drain_ms=300,packet_ms=20,initial_sdk_real_audio_enabled=False,private_null_only=False)
     return all(k in row and type(row[k]) is type(v) and row[k]==v for k,v in expected.items()) and not row.get('generator_failure')
 
-def run_arm(source):
+def run_arm(source,transport_validator=transport_complete):
     nonce=str(uuid.uuid4()); directory=Path('render')/('source'+str(source)); directory.mkdir(parents=True,exist_ok=True)
     env=dict(os.environ, M06_CALIBRATION_SOURCE=str(source), M06_CALIBRATION_NONCE=nonce,
              M06_AUDIO_INPUT='grpc', BUDDY_SYNTHETIC_AVD_PROBE='1', ANDROID_SERIAL='emulator-5554')
@@ -39,7 +39,7 @@ def run_arm(source):
     row=dict(source=source,nonce=nonce,test_exit=code,gates_accepted=False,transport_complete=False)
     transport_file=Path('render')/('mic-grpc-'+nonce+'.json')
     if transport_file.is_file():
-        receipt=json.loads(transport_file.read_text());row['transport_complete']=transport_complete(receipt,nonce)
+        receipt=json.loads(transport_file.read_text());row['transport_complete']=transport_validator(receipt,nonce)
         row['transport_stage']=receipt.get('stage');row['transport_rpc_code']=receipt.get('rpc_code')
     (directory/'result.json').write_text(json.dumps(row,indent=2))
     # The completed test's native/worker/lease proof is required, not a sleep or cleared lease.

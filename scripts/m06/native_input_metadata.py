@@ -52,7 +52,7 @@ def query(command, kind=None, seconds=3):
         text = data.decode('utf-8', 'replace')
         # Never retain arbitrary error bodies or credentials/headers.
         wanted = ('audio', 'input', 'record', 'effect', 'format', 'sample', 'channel', 'source',
-                  'device', 'session', 'thread', 'handle', 'alsa', 'pcm', '<name>', '<version>',
+                  'device', 'session', 'thread', 'handle', 'gain', 'mute', 'silenc', 'alsa', 'pcm', '<name>', '<version>',
                   '<interface>', '<instance>', '<transport>', '<hal', '<profile', '<route')
         result['fields'] = [line[:600] for line in text.splitlines()
                             if any(w in line.lower() for w in wanted)
