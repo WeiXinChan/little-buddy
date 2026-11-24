@@ -70,7 +70,7 @@ def target_listeners(text,descriptor_pid,root_pid,target=8554):
         results.append(endpoint)
     return results
 
-def packet_plan(raw,rate,packet,fmt,clock=time.monotonic,sleep=time.sleep,deadline=None):
+def packet_plan(raw,rate,packet,fmt,clock=time.monotonic,sleep=time.sleep,deadline=None,before_yield=None):
     """Recheck after sleep and immediately before yield; never renew total deadline."""
     size=rate//50*2;data=raw+bytes(rate*2*300//1000);start=clock()
     cutoff=deadline if deadline is not None else start+len(data)/(rate*2)+.15
@@ -85,6 +85,7 @@ def packet_plan(raw,rate,packet,fmt,clock=time.monotonic,sleep=time.sleep,deadli
         if current<target:sleep(min(target-current,cutoff-current))
         check()
         result=packet(format=fmt,timestamp=time.time_ns()//1000,audio=data[pos:pos+size])
+        if before_yield:before_yield(result,index)
         check()
         yield result
 
@@ -179,9 +180,10 @@ class GrpcMic:
             def packets():
                 nonlocal count,generator_failure
                 try:
-                    for p in packet_plan(raw,rate,self.pb.AudioPacket,fmt,deadline=deadline):
+                    def journal_first(p,index):
+                        if timing and index==0:timing.step('FIRST_PACKET_YIELDED',audio_bytes=len(p.audio),rate=p.format.samplingRate,channels_enum=p.format.channels,format_enum=p.format.format,mode_enum=p.format.mode)
+                    for p in packet_plan(raw,rate,self.pb.AudioPacket,fmt,deadline=deadline,before_yield=journal_first):
                         count+=1
-                        if timing and count==1:timing.step('FIRST_PACKET_YIELDED',audio_bytes=len(p.audio),rate=p.format.samplingRate,channels_enum=p.format.channels,format_enum=p.format.format,mode_enum=p.format.mode)
                         yield p
                 except InjectionTimingError as error:
                     generator_failure=dict(reason=error.reason,index=error.index,late_ms=error.late_ms)

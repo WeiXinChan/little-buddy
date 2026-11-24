@@ -47,6 +47,8 @@ class V2VoiceActivity : Activity() {
     @Volatile internal var syntheticCaptureDiagnostics=false
     @Volatile internal var syntheticPcmObserver:((ShortArray,Int,RecorderProof)->Unit)?=null
     internal fun syntheticProbeAllowed()=BuildConfig.DEBUG && BuildConfig.SYNTHETIC_PCM_PROBE && packageName=="com.littlebuddy.sim.v2" && android.os.Build.HARDWARE in listOf("ranchu","goldfish")
+    internal fun captureReadSnapshot():com.littlebuddy.v2.CaptureReadSnapshot? {val held=capture;return held?.readSnapshot()}
+    internal fun captureSourceEvidence():JSONObject {val p=captureReadSnapshot();return JSONObject().put("requested",p?.requested).put("actual",p?.actual).put("nonce",p?.nonce).put("session",p?.session).put("native_session",p?.nativeSession).put("frames",p?.frames).put("recording",p?.recording)}
     internal val captureWorkerDone get()=capture?.let{it.workerDone && it.leaseReturned} ?: true
     internal fun immediateRecorder()=capture?.nativeProof ?: releasedRecorder
     internal fun mark(name: String) { timeline.add(name,life.state.generation,immediateRecorder(),capture?.phase?.name ?: lastCapturePhase) }
@@ -61,7 +63,14 @@ class V2VoiceActivity : Activity() {
     private fun eligible(ticket: Long)=life.allows(ticket) &&
         checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED &&
         !getSystemService(KeyguardManager::class.java).isKeyguardLocked
-    private class ConnectionIntent(val id:Long,val generation:Long,val address:String,val credential:String)
+    private class ConnectionIntent(val id:Long,val generation:Long,val address:String,val credential:String,val sourceProbe:com.littlebuddy.v2.SyntheticSourcePermit?)
+    private var pendingSyntheticSource:com.littlebuddy.v2.SyntheticSourcePermit?=null
+    private fun sourceEnvironment()=com.littlebuddy.v2.SyntheticSourceEnvironment(syntheticProbeAllowed() && syntheticCaptureDiagnostics,android.os.Build.HARDWARE,android.os.Build.VERSION.SDK_INT,android.os.Build.PRODUCT,android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "UNKNOWN")
+    internal fun selectSyntheticSource(source:com.littlebuddy.v2.CaptureInput,nonce:String,sha:String){
+        val permit=com.littlebuddy.v2.SyntheticSourcePermit(source,nonce,sha,life.state.generation,SystemClock.elapsedRealtime())
+        check(permit.valid(sourceEnvironment(),SystemClock.elapsedRealtime(),life.state.generation))
+        pendingSyntheticSource=permit
+    }
     private val connectionSequence=java.util.concurrent.atomic.AtomicLong()
     private val leaseWait=com.littlebuddy.v2.OwnerLeaseWait()
     private fun awaitGlobalLease(){
@@ -214,12 +223,13 @@ class V2VoiceActivity : Activity() {
         check(hasWindowFocus() && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
         check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked)
         val ticket=life.state.generation;val id=connectionSequence.incrementAndGet()
+        val sourceProbe=pendingSyntheticSource;pendingSyntheticSource=null
         owner.post {
             if(id!=connectionSequence.get() || !eligible(ticket)){mark("STALE_CONNECT_REJECTED");return@post}
             afterEligible()
             if(id!=connectionSequence.get() || !eligible(ticket)){mark("STALE_CONNECT_REJECTED");return@post}
             leaseWait.cancelAll()
-            pendingConnection.offer(id,ticket,ConnectionIntent(id,ticket,address,credential))
+            pendingConnection.offer(id,ticket,ConnectionIntent(id,ticket,address,credential,sourceProbe))
             voice?.close();voice?.let{releasedPlayer=it.nativeProof()}
             if(voice?.quarantined!=true)voice=null
             capture?.requestStop();capture?.close()
@@ -235,16 +245,17 @@ class V2VoiceActivity : Activity() {
         if(intent==null){if(pendingConnection.present){releaseState="waiting_disposal";mark("CONNECTION_PENDING_DISPOSAL");if(!Capture.leaseAvailable)awaitGlobalLease()};return}
         held?.let{releasedRecorder=it.nativeProof};capture=null
         val client=newClient();voice=client;releaseState="active"
-        if(!installCapture(client,intent.generation)){if(intent.id==connectionSequence.get() && eligible(intent.generation) && !Capture.leaseAvailable){pendingConnection.offer(intent.id,intent.generation,intent);awaitGlobalLease()};return}
+        if(!installCapture(client,intent.generation,intent.sourceProbe)){if(intent.id==connectionSequence.get() && eligible(intent.generation) && !Capture.leaseAvailable){pendingConnection.offer(intent.id,intent.generation,intent);awaitGlobalLease()};return}
         if(intent.id==connectionSequence.get() && eligible(intent.generation))client.connect(intent.address,intent.credential) else stopVoice()
     }
-    private fun makeCapture(client: VoiceClient,ticket: Long): Capture {
+    private fun makeCapture(client: VoiceClient,ticket: Long,sourceProbe:com.littlebuddy.v2.SyntheticSourcePermit?=null): Capture {
         lateinit var created: Capture
         created=Capture(assets,owner,client,
             { if(capture===created) { displayEvent("failure"); stopVoice() } },
             { entering -> if(capture===created && life.allows(ticket))manage(entering) },
             { life.allows(ticket) },
             { event,proof,phase -> timeline.add(event,ticket,proof,phase) },
+            sourceProbe=sourceProbe, sourceProbeAllowed={sourceProbe?.valid(sourceEnvironment(),SystemClock.elapsedRealtime(),ticket)==true && eligible(ticket)},
             hooks=com.littlebuddy.v2.CaptureHooks(afterUploadDelivery={afterUploadDelivery()},afterFirstRead={send->afterCaptureFirstRead(send)},syntheticPcm={data,count,proof->if(syntheticCaptureDiagnostics && syntheticProbeAllowed())syntheticPcmObserver?.invoke(data,count,proof)},syntheticEnabled={syntheticCaptureDiagnostics},syntheticTrace={detail->if(syntheticCaptureDiagnostics)timeline.add("SYNTHETIC_CAPTURE",ticket,immediateRecorder(),detail)},beforeDispose={beforeCaptureDispose()},beforeLeaseReturn={beforeCaptureLeaseReturn()},beforeCommandDecision={beforeManagementCommand(it)}),
             disposed = { owner.post {
                 mark("DISPOSE_CONSUME")
@@ -256,8 +267,8 @@ class V2VoiceActivity : Activity() {
             } }, managementPrompt=::showManagementPrompt)
         return created
     }
-    private fun installCapture(client: VoiceClient,ticket: Long): Boolean {
-        val created=makeCapture(client,ticket); capture=created
+    private fun installCapture(client: VoiceClient,ticket: Long,sourceProbe:com.littlebuddy.v2.SyntheticSourcePermit?=null): Boolean {
+        val created=makeCapture(client,ticket,sourceProbe); capture=created
         if(!created.start()) {
             created.requestStop(); client.close()
             if(capture===created)capture=null

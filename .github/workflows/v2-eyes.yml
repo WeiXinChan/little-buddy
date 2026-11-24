@@ -145,7 +145,7 @@ jobs:
           pactl -f json list source-outputs >render/pulse-source-outputs-before-mic.json
           device_result=0
           set +e
-          BUDDY_SYNTHETIC_AVD_PROBE=1 M06_AUDIO_INPUT=grpc python3 scripts/m06/mic_controller.py >render/microphone.txt 2>render/microphone-stderr.txt
+          BUDDY_SYNTHETIC_AVD_PROBE=1 M06_AUDIO_INPUT=grpc python3 scripts/m06/source_calibration.py >render/microphone.txt 2>render/microphone-stderr.txt
           microphone_result=$?
           set -e
           printf '%s\n' "$microphone_result" >render/microphone-exit.txt
@@ -172,7 +172,8 @@ jobs:
           tar -xf render/screens.tar -C render
           # Only authorized synthetic capture files; export once, then purge AVD PCM.
           adb shell run-as com.littlebuddy.sim.v2 find files/m06 -type f -name capture.s16le -delete
-          python3 scripts/m06/analyze_capture.py render/m06 >render/captured-alignment.txt 2>&1 || device_result=1
+          # Each arm was analyzed/exported before purging its guest PCM.
+          test -f render/source-calibration.json || device_result=1
           test "$(find render/m06 -name '[0-9][0-9]-*.png' | wc -l)" -eq 16
           python3 - <<'PYCODE'
           import pathlib, struct

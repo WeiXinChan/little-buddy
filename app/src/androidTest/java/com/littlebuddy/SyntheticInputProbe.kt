@@ -9,6 +9,7 @@ import java.io.File
 internal class SyntheticInputProbe(private val a:V2VoiceActivity,private val nonce:String,private val source:ByteArray,private val expectedSha:String) {
  companion object {const val ENTER_SHA="c53eb146203afc87fd8092f60721e49a20d30baaa0811da715788a40fe582e34"}
  private val i=InstrumentationRegistry.getInstrumentation()
+ private val sourceConfiguration=a.captureSourceEvidence()
  private val startedMs=SystemClock.elapsedRealtime()
  private val startedNs=System.nanoTime()
  private val storage=ByteArray(128000*2)
@@ -53,7 +54,7 @@ internal class SyntheticInputProbe(private val a:V2VoiceActivity,private val non
    File(dir,"capture.s16le").writeBytes(raw)
    val report=JSONObject().put("scope","authorized synthetic enter fixture only; not environmental/child audio")
     .put("nonce",nonce).put("source_sha256",expectedSha).put("source_samples",64960).put("capture_sha256",sha(raw))
-    .put("sample_rate",16000).put("channels",1).put("encoding","signed PCM16 little endian")
+    .put("source_configuration",sourceConfiguration).put("sample_rate",16000).put("channels",1).put("encoding","signed PCM16 little endian")
     .put("session",session).put("first_frame",firstFrame).put("last_frame",lastFrame).put("samples",used/2)
     .put("armed_elapsed_ms",startedMs).put("armed_monotonic_ns",startedNs).put("last_read_monotonic_ns",endedNs)
     .put("read_watermarks",watermarks).put("first_rejected_elapsed_ms",firstRejectedMs).put("first_rejected_native_frame",firstRejectedFrame).put("frozen_elapsed_ms",frozenMs)
@@ -61,9 +62,10 @@ internal class SyntheticInputProbe(private val a:V2VoiceActivity,private val non
     .put("window_limit_ms",8000).put("sample_limit",128000)
     .put("native_format_evidence","SYNTHETIC_CAPTURE NATIVE_FORMAT in activity timeline; requested format recorded here")
    File(dir,"capture.json").writeText(report.toString(2))
-   val timeline=JSONArray(a.timelineJson());val formats=JSONArray()
+   val timeline=JSONArray(a.timelineJson());val formats=JSONArray();val stamps=JSONArray()
    for(n in 0 until timeline.length()){val e=timeline.getJSONObject(n);if(e.getString("event")=="SYNTHETIC_CAPTURE" && e.getString("phase").startsWith("NATIVE_FORMAT"))formats.put(e)}
-   report.put("actual_native_format_events",formats)
+   for(n in 0 until timeline.length()){val e=timeline.getJSONObject(n);if(e.getString("event")=="SYNTHETIC_CAPTURE" && e.optInt("session",-1)==session && e.getString("phase").startsWith("NATIVE_TIMESTAMP"))stamps.put(e)}
+   report.put("actual_native_format_events",formats).put("native_timestamp_events",stamps)
    report.put("source_replay",replay(source.copyOfRange(44,source.size)))
    report.put("capture_replay",replay(raw))
    File(dir,"capture.json").writeText(report.toString(2))

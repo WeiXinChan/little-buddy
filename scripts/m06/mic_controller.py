@@ -1,5 +1,6 @@
 """Synthetic Pulse source -> AVD microphone. No replacement of Android AudioRecord."""
-import subprocess,json,hashlib,re,sys,os
+import subprocess,json,hashlib,re,sys,os,threading
+from native_input_metadata import active
 from route_evidence import play_fixture
 from fixture_timing import FixtureTiming
 from pathlib import Path
@@ -21,7 +22,14 @@ if os.environ.get('M06_AUDIO_INPUT')=='grpc':
  except Exception as e:
   Path('render/grpc-mic-init-failure.json').write_text(json.dumps(dict(stage='authenticated_loopback_setup',error=type(e).__name__)))
   raise RuntimeError('virtual mic setup '+type(e).__name__) from None
-p=subprocess.Popen(['adb','shell','am','instrument','-w','-r','-e','class','com.littlebuddy.V2MicrophoneCommandTest','com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
+calibration=os.environ.get('M06_CALIBRATION_SOURCE');calibration_nonce=os.environ.get('M06_CALIBRATION_NONCE')
+extra=[]
+if calibration is not None:
+ assert os.environ.get('BUDDY_SYNTHETIC_AVD_PROBE')=='1' and calibration in ('7','6') and re.fullmatch(r'[a-f0-9-]{36}',calibration_nonce or '')
+ extra=['-e','m06_source',calibration,'-e','m06_nonce',calibration_nonce]
+metadata_worker=None
+rpc_done=threading.Event()
+p=subprocess.Popen(['adb','shell','am','instrument','-w','-r','-e','class','com.littlebuddy.V2MicrophoneCommandTest']+extra+['com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
 output=[]
 timing=None
 try:
@@ -32,6 +40,9 @@ try:
    if pkg!='com.littlebuddy.sim.v2' or q['user']!=0:raise ValueError('target user/package')
    if name not in allowed or not re.fullmatch(r'[a-z0-9_.]+',name) or not re.fullmatch(r'[a-f0-9-]{36}',nonce):raise ValueError('fixture/nonce allowlist')
    if not re.fullmatch(r'/[A-Za-z0-9_./]+',private) or not private.endswith('/'+pkg+'/files'):raise ValueError('private root')
+   if name=='enter' and calibration is not None:
+    assert nonce==calibration_nonce and q['source_configuration']['nonce']==nonce and q['source_configuration']['requested']==int(calibration) and q['source_configuration']['actual']==int(calibration) and q['source_configuration']['session']==q['source_configuration']['native_session'] and q['source_configuration']['recording'] and q['source_configuration']['frames']>0
+    metadata_worker=threading.Thread(target=active,args=(Path('render/native-input'),nonce,rpc_done),name='owned-native-metadata');metadata_worker.start()
    timing=FixtureTiming(q) if name=='enter' and virtual_mic and os.environ.get('BUDDY_SYNTHETIC_AVD_PROBE')=='1' else None
    if timing:timing.step('PWD_START')
    pwd=subprocess.check_output(['adb','shell','run-as',pkg,'pwd'],text=True,timeout=5).strip()
@@ -47,6 +58,7 @@ try:
    if timing:timing.step('FIXTURE_HASH_VERIFIED')
    fixture_metadata=dict(nonce=nonce,name=name,sha256=allowed[name])
    diagnostic=virtual_mic.play(path,fixture_metadata,timing=timing) if virtual_mic else play_fixture(path,fixture_metadata,monitor=(name=="enter" and os.environ.get("BUDDY_SYNTHETIC_AVD_PROBE")=="1"))
+   if metadata_worker:rpc_done.set()
    print(json.dumps(diagnostic),flush=True)
    if timing:timing.step('PLAY_RETURNED')
    reply=json.dumps(dict(nonce=nonce,name=name,sha256=allowed[name],state='completed',playback_exit=0))
@@ -61,5 +73,16 @@ except Exception as error:
  except subprocess.TimeoutExpired:pass
  raise
 finally:
- if virtual_mic:virtual_mic.close()
- if p.poll() is None:p.terminate();p.wait(timeout=10)
+ cleanup_failed=False
+ rpc_done.set()
+ if metadata_worker:
+  metadata_worker.join(18)
+  cleanup_failed=metadata_worker.is_alive()
+ try:
+  if virtual_mic:virtual_mic.close()
+ finally:
+  if p.poll() is None:p.terminate();p.wait(timeout=10)
+ if cleanup_failed:
+  active_error=sys.exception()
+  if active_error:active_error.add_note('owned metadata worker failed to retire')
+  else:raise RuntimeError('owned metadata worker failed to retire')

@@ -1,0 +1,21 @@
+CI22：经审定的一次 source7→6 校准
+
+以05f284a为父，仅原PR36实施。生产默认7、V1源码不变，无Intent/任意整数开关，校准仍走原Capture、Sherpa、Boundary、VoiceClient及owner。没有新增probe APK或AVD。现有sim.v2诊断变体所含AAR ABI沿用，运行身份仅API36/sdk_gphone64_x86_64/x86_64/ranchu或goldfish。
+
+source选择为类型受限enum。测试选择绑定显式ConnectionIntent，每代Capture冻结；本地自动监听不消费或继承选择。Activity和Capture双层检查DEBUG/SYNTHETIC_PCM_PROBE/专用包/硬件/镜像、nonce、固定enter SHA、代际以及8秒/128000样本授权参数。创建和startRecording前分别检查新鲜性。8秒许可用于本次native启动授权；已成功启动的同一Capture保持冻结source继续原生命周期/管理协议，不续发授权给新Capture。原始PCM持久化另受既有探针自arm开始8秒/128000样本硬上限，后续管理音频不新增持久化。此区分保证完整提示协议可执行，同时不扩录音导出授权。
+
+每臂先等旧local native READ，再以可控屏障暂停owner于startVoice afterEligible，实证旧7仍READ但不能满足本次nonce；解除后必须等新Wire、本次nonce/requested+actual source、proof/native同session及真实READ。快照全部来自一个held Capture、同nativeLock，不把旧Recorder的帧数当新连接已就绪。普通非校准也等待新Wire与新session。gatesAccepted仅在这些条件及原生输出head/配置前置通过、即将play(enter)时置真；初始化/等待/权限前置异常不置真。
+
+同AVD固定源4.06秒/64960帧/16k mono PCM16，MODE_UNSPECIFIED、20ms包、300ms排空和原鉴权。每臂独立nonce/session，raw采集上限/12秒await和KWS配置不变。source7 live失败仍保FAIL；只要前置门通过、传输完整、原生released+stopped+workerDone+lease自然返还，才执行source6一次。无需source7先有完整同源capture，但RPC/packet deadline、初始化门或资源返还失败都停止剩余臂，不用sleep或清lease代替所有权。
+
+host校验同nonce/固定SHA的mic-grpc终态为inject_completed、OK、218包/64960源样本及全部格式/节流/模式/host mic字段，缺失或失败不当未知放行。两臂分别导出有界tar并校验成员无绝对路径/父目录/链接，每臂只保留自身synthetic目录；哈希分析后按精确nonce清guest raw。root最终artifact保留分臂原件和原测试exit，不用任一臂通过抹另一臂失败。
+
+只读元数据：先核AVD身份、simulate_input实际值/不存在，再收服务/module/VINTF、policy与hash、固定proc/asound路径。已证simulate_input=true或身份失败则停止；其他不可读字段明确UNAVAILABLE，不阻止一次校准。无公开SDK consumed counter仍标UNAVAILABLE，不把RPC当消费。活动session采AudioFlinger/Policy，RPC终态后采同组ALSA状态；所有查询限时间/字节， owned adb子进程终止并回收。ALSA采用独立类型化过滤，保路径、card/PCM索引、format/rate/channels/period/buffer、state及hw_ptr/appl_ptr/owner_pid，不把它们误滤掉；没有读取PCM音频节点。字段/前后计数无法对应时不推断消费。
+
+生产read中仅专用诊断开启时每秒记录实际AudioRecord MONOTONIC timestamp状态、native frame/time与read水位；失败记固定不可用状态，不冒充硬件时戳。原样PCM observer仍在KWS前。真实进入管理后才继续原有负例、提示真实播放完成+200ms/watermark、旧声音/自提示拒绝、新确认及管理零上传和HOME新local KWS等门；未到NOT_RUN。
+
+首包修复：journal callback位于packet_plan最终yield前deadline/150ms迟到检查之前。控制实验500ms阻塞0包yield，正常218包；旧反例1包后才失败历史保留。journal名FIRST_PACKET_YIELDED仅沿用准备事件名，不是SDK消费回执。没有放宽预算/音量/阈值。
+
+判读严格分层：6同源完整且live命中、7异常，仅支持source相关路径差异；两臂低信号仅设施/路径未证，不判SDK单因或source无关；两臂正常为本次未复现。真实提示配对与真机声学不得由离线、RPC或source对照代替。CI21原件/旧失败和九设备通过保留；global84双API通过按既有证据保留。Mac runner缺失与AVD校准分开，本轮不占手机/云调用。
+
+本地先有一次中间完整构建成功，未发布；收齐后按接管审查修了前置/transport/ALSA门再冻结最终树。中间XML/哈希保留但不作最终包。最终验证数量、SHA和包hash以本轮manifest为准；动态尚需单次CI原件核验，PR36 HOLD。

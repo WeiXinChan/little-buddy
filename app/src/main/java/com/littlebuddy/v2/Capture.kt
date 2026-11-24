@@ -25,6 +25,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                        private val allowed: ()->Boolean = { true },
                        private val trace: (String,RecorderProof,String)->Unit = { _,_,_-> },
                        private val hooks: CaptureHooks = CaptureHooks(),
+                       private val sourceProbe:SyntheticSourcePermit?=null,
+                       private val sourceProbeAllowed:()->Boolean={false},
                        private val disposed: ()->Unit = {},
                        private val managementPrompt: (String,()->Boolean,(Boolean)->Unit)->Unit = {_,_,_->}) {
     companion object {
@@ -38,6 +40,16 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             return {synchronized(leaseLock){leaseWaiters.remove(callback)};Unit}
         }
         private fun signalLeaseAvailable(){val ready=synchronized(leaseLock){if(leaseAvailable)leaseWaiters.toList().also{leaseWaiters.clear()}else emptyList()};ready.forEach{it()}}
+    }
+    private fun probePermitted():Boolean {
+        val p=sourceProbe ?: return false
+        val e=SyntheticSourceEnvironment(com.littlebuddy.BuildConfig.DEBUG && com.littlebuddy.BuildConfig.SYNTHETIC_PCM_PROBE && com.littlebuddy.BuildConfig.APPLICATION_ID=="com.littlebuddy.sim.v2",android.os.Build.HARDWARE,android.os.Build.VERSION.SDK_INT,android.os.Build.PRODUCT,android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "UNKNOWN")
+        return p.valid(e,android.os.SystemClock.elapsedRealtime(),p.generation) && sourceProbeAllowed()
+    }
+    val requestedInput=sourceProbe?.source ?: CaptureInput.COMMUNICATION
+    fun readSnapshot()=synchronized(nativeLock){
+        val n=nativeRecorder;val p=nativeProof
+        CaptureReadSnapshot(requestedInput.value,n?.audioSource,sourceProbe?.nonce,p.session,n?.audioSessionId,p.frames,p.recording && n?.recordingState==AudioRecord.RECORDSTATE_RECORDING)
     }
     private val captureId=java.util.UUID.randomUUID().toString()
     val leaseReturned get()=!ownsLease && lease.get()!=captureId
@@ -97,6 +109,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var suppressStartedAt=0L
         var awaitingPrompt:PromptAck?=null
         val captureTimestamp=android.media.AudioTimestamp()
+        var nextSyntheticTimestamp=0L
         var position = 0L
         var firstAfterWake = false
         var awake = false
@@ -133,11 +146,15 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             val minimum = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO,
                                                        AudioFormat.ENCODING_PCM_16BIT)
             check(minimum in 1..32000)
-            val native = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, 16000,
+            val input=requestedInput
+            if(sourceProbe!=null)check(probePermitted()) { "synthetic source authorization expired" }
+            trace("CAPTURE_SOURCE_SELECTED",nativeProof,"requested=${input.value} nonce=${sourceProbe?.nonce ?: "NONE"}")
+            val native = AudioRecord(input.value, 16000,
                 AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minimum, 6400))
             recorder = native
             synchronized(nativeLock) { nativeRecorder=native }
             check(native.state == AudioRecord.STATE_INITIALIZED)
+            check(native.audioSource==input.value)
             if (AcousticEchoCanceler.isAvailable()) {
                 aec = AcousticEchoCanceler.create(native.audioSessionId)
                 aec?.enabled = true // Availability/enabled are diagnostics, not acoustic PASS.
@@ -149,6 +166,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             commands = SherpaWake(assets, "*", "wake/manage.txt", 8, { !cancelled.get() && allowed() }, {progress("MANAGEMENT_$it")})
             synchronized(nativeLock) {
                 if (cancelled.get() || !allowed()) return
+                if(sourceProbe!=null && !probePermitted()){trace("SOURCE_START_REVOKED",nativeProof,"requested=${input.value}");return}
                 phase = CapturePhase.START
                 native.startRecording()
                 check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
@@ -176,7 +194,12 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 progress("BEFORE_DECODE")
                 capturedSamples+=count
                 if(hooks.syntheticEnabled())hooks.syntheticPcm?.invoke(frame,count,nativeProof)
-                if(hooks.syntheticEnabled())meter.accept(frame,count)?.let{hooks.syntheticTrace?.invoke("$it source=VOICE_COMMUNICATION route=${native.routedDevice?.type} aec=${aec?.enabled}")}
+                if(hooks.syntheticEnabled() && android.os.SystemClock.elapsedRealtime()>=nextSyntheticTimestamp){
+                    val stamp=android.media.AudioTimestamp();val result=try{synchronized(nativeLock){if(nativeRecorder===native)native.getTimestamp(stamp,android.media.AudioTimestamp.TIMEBASE_MONOTONIC) else AudioRecord.ERROR_INVALID_OPERATION}}catch(_:Exception){AudioRecord.ERROR_INVALID_OPERATION}
+                    hooks.syntheticTrace?.invoke("NATIVE_TIMESTAMP status=$result nativeFrame=${if(result==AudioRecord.SUCCESS)stamp.framePosition else -1} nativeMonoNs=${if(result==AudioRecord.SUCCESS)stamp.nanoTime else -1} readFrame=${nativeProof.frames} observedMonoNs=${System.nanoTime()}")
+                    nextSyntheticTimestamp=android.os.SystemClock.elapsedRealtime()+1000
+                }
+                if(hooks.syntheticEnabled())meter.accept(frame,count)?.let{hooks.syntheticTrace?.invoke("$it source=${native.audioSource} route=${native.routedDevice?.type} aec=${aec?.enabled}")}
                 val completedPrompt=promptAck.getAndSet(null)?.takeIf{it.nonce==activePromptNonce && it.generation==commandGeneration.get()}
                 if(completedPrompt!=null)promptPermit.revoke(completedPrompt.nonce,completedPrompt.generation)
                 if(completedPrompt?.success==false){
