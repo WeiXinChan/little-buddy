@@ -12,7 +12,7 @@
 4. 把单元安装到 `/etc/systemd/system/`。运行 `systemd-analyze verify`、`systemctl daemon-reload` 和 `systemctl start little-buddy-v1.service`。从回环以严格 TLS 验证服务进程、`/healthz` 和鉴权 WSS，确认真实 UID 非 0。使用合成夹具时通过临时回环实例加 `--provider fake`，运行 `PYTHONPATH=.:backend python3 -m unittest discover -s backend/tests -q`。默认回环端口 19443，启用前核对未占用。
 5. 由运维应用已独立复核且备好回退的 SSH 专用设备身份。启用前保留当前管理会话，记录管理登录与监听基线。服务端仅接受设备公钥和 RSA-SHA2-256，只允许客户端转发到 `127.0.0.1:19443`，禁用 shell、exec、子系统和其他转发。验证随后仍可新建管理连接，并从 Wi-Fi 和移动网用正式包验证业务 WSS。 [SSH 设备身份运维](device-ssh-operations.md)
 
-单实例最多一个已升级会话。有效设备启动尝试每分钟最多 6 次，错误令牌不占设备配额。应用会话限制 ASR、LLM 和 TTS 次数，另有帧长、队列、心跳和时限。公网代理还应限制未鉴权连接速率和并发。日志仅含计数、分类和时延。看护时用 `journalctl -u little-buddy-v1.service` 对照供应商计量，不记录原始音频、转写和完整聊天。合成测试核对计数与释放行为，供应商真实用量、外网时延与童声体验留最终窗口。
+单实例最多一个已升级会话。有效设备启动尝试每分钟最多 6 次，错误令牌不占设备配额。仅显式传入 `--trial-limits` 时启用每会话 ASR、LLM 和 TTS 次数配额。正式服务仍限制帧长、队列、心跳和时限。公网代理还应限制未鉴权连接速率和并发。日志仅含计数、分类和时延。看护时用 `journalctl -u little-buddy-v1.service` 对照供应商计量，不记录原始音频、转写和完整聊天。合成测试核对计数与释放行为，供应商真实用量、外网时延与童声体验留最终窗口。
 
 正式单元启用前校验 cgroup v2 的 `memory.swap.max=0`、core 软硬限制均为 0，并以合成进程确认 standalone 入口的不可转储设置。发布与回退均应配套选择含进程保护的后端和单元。若上一版本缺少所需保护，停止专用服务直至可恢复到满足条件的版本。 [隔离复验记录](bailian-data-evidence.md#专用服务隔离复验)
 

@@ -359,7 +359,7 @@ async def main():
             providers = Demo()
         else:
             providers = DashScope.from_environment(http)
-        async with game_server(args.port, tls, token, providers, trial_limits=args.trial_limits or args.standalone,
+        async with game_server(args.port, tls, token, providers, trial_limits=args.trial_limits,
                                report=lambda line: print(line, flush=True), **options):
             print(f"animal_ready port={args.port}", flush=True)
             await stopped.wait()

@@ -1,16 +1,21 @@
 import asyncio
 from contextlib import asynccontextmanager
 import json
+import os
 import ssl
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 import httpx
 
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
+from backend.animal import cloud
 from backend.animal.cloud import game_server
 from backend.animal.private_fixture import fixture_server
 from backend.animal.rules import CARDS, CATALOG_VERSION
@@ -51,15 +56,19 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
             "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost",
             "-days", "1", "-keyout", key, "-out", cert,
         ], check=True, capture_output=True)
+        cls.cert, cls.key = cert, key
         cls.tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         cls.tls.load_cert_chain(cert, key)
         cls.trust = ssl.create_default_context(cafile=str(cert))
         cls.token = "test" * 8
 
-    def open(self, server, token=None):
+    def open(self, server, token=None, *, standalone=False):
         port = server.sockets[0].getsockname()[1]
-        return connect(f"wss://localhost:{port}/v1/animal", ssl=self.trust,
+        options = {"host": "127.0.0.1", "port": port} if standalone else {}
+        authority = "localhost:19443" if standalone else f"localhost:{port}"
+        return connect(f"wss://{authority}/v1/animal", ssl=self.trust,
                        additional_headers={"Authorization": f"Bearer {token or self.token}"},
+                       **options,
                        ping_interval=2, ping_timeout=2, close_timeout=0.5)
 
     async def receive(self, ws, event):
@@ -415,7 +424,50 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(demo.spoken[spoken_before:], [spoken])
                 self.assertEqual(model_calls, [text] if model_text else [])
 
-    async def test_default_crosses_old_usage_thresholds_and_trial_is_explicit(self):
+    @asynccontextmanager
+    async def standalone(self, demo, logs, *, trial):
+        # Exercise the CLI and standalone credential validation. Only the
+        # cloud adapter and the listener's dynamic test port are substituted.
+        ready = asyncio.get_running_loop().create_future()
+        token = "a" * 64
+
+        @asynccontextmanager
+        async def listener(port, tls, device_token, providers, **options):
+            self.assertEqual(port, 19443)
+            self.assertEqual(device_token, token)
+            async with game_server(0, tls, device_token, providers, seed=0, **options) as server:
+                ready.set_result(server)
+                yield server
+
+        with tempfile.TemporaryDirectory() as credentials:
+            directory = Path(credentials)
+            (directory / "animal-device-token").write_text(token)
+            (directory / "animal-device-expiry").write_text(str(int(time.time()) + 60))
+            argv = ["cloud", "--standalone", "--port", "19443", "--cert", str(self.cert),
+                    "--key", str(self.key)]
+            if trial:
+                argv.append("--trial-limits")
+            with patch.object(sys, "argv", argv), patch.dict(os.environ, {
+                "CREDENTIALS_DIRECTORY": credentials,
+                "LITTLE_BUDDY_AUTHORITY": "localhost:19443",
+                "LITTLE_BUDDY_BIND": "127.0.0.1",
+            }), patch.object(DashScope, "from_environment", return_value=demo), patch.object(
+                cloud, "game_server", listener
+            ), patch.object(cloud, "disable_core_dumps"), patch.object(cloud, "print", lambda line, **_: logs.append(line), create=True):
+                task = asyncio.create_task(cloud.main())
+                try:
+                    done, _ = await asyncio.wait({ready, task}, timeout=3,
+                                                 return_when=asyncio.FIRST_COMPLETED)
+                    if task in done:
+                        await task
+                    self.assertIn(ready, done, "standalone listener did not start")
+                    yield ready.result(), token
+                finally:
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+                    asyncio.get_running_loop().remove_signal_handler(cloud.signal.SIGTERM)
+
+    async def test_standalone_crosses_old_usage_thresholds_unless_trial_is_explicit(self):
         for trial in (False, True):
             with self.subTest(trial=trial):
                 contexts = []
@@ -433,10 +485,8 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
 
                 demo = ChatFixture(["我想聊天"] + [f"聊第{number}只小猫" for number in range(25)])
                 logs = []
-                options = {"trial_limits": True} if trial else {}
-                async with game_server(0, self.tls, self.token, demo, seed=0, report=logs.append,
-                                       **options) as server:
-                    async with self.open(server) as ws:
+                async with self.standalone(demo, logs, trial=trial) as (server, token):
+                    async with self.open(server, token, standalone=True) as ws:
                         await self.start(ws, conversation=True)
                         await self.speech(ws, await self.reply(ws))
                         receipt = await self.reply(ws)
@@ -449,8 +499,16 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
                             else:
                                 self.assertEqual((receipt["next_action"], receipt["count"]), ("listen", 3))
                                 self.assertEqual(demo.spoken[-1], "我们一起数数吧。")
+                        if not trial:
+                            self.assertEqual(len(demo.spoken), 77)
+                            for action in ("listen", "end"):
+                                await self.send(ws, "listen.silence", receipt["key"],
+                                                listen_id=receipt["listen_id"])
+                                receipt = await self.reply(ws)
+                                self.assertEqual(receipt["next_action"], action)
                 self.assertEqual(demo.requests, 13 if trial else 26)
-                self.assertEqual(len(demo.spoken), 36 if trial else 77)
+                if trial:
+                    self.assertEqual(len(demo.spoken), 36)
                 self.assertEqual(len(contexts[-1]), 3)
                 self.assertEqual([turn[0] for turn in contexts[-1]],
                                  [f"聊第{number}只小猫" for number in (range(8, 11) if trial else range(21, 24))])
