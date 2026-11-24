@@ -114,6 +114,13 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 }
                 if (!awake) {
                     val tail = wake?.accept(frame, count) ?: continue
+                    if (!client.connectionActive) {
+                        // Unconfigured local KWS never builds/uploads child expressions.
+                        owner.post { if (!cancelled.get()) client.wake() }
+                        wake?.close(); wake = SherpaWake(assets)
+                        wakeBase = position; buffered.clear()
+                        continue
+                    }
                     awake = true
                     wake?.close(); wake = null
                     detector = SpeechDetector(320, initialFloor = 36.0)

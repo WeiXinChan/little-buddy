@@ -11,6 +11,9 @@ import android.widget.Button
 import androidx.test.platform.app.InstrumentationRegistry
 import com.littlebuddy.v2.*
 import org.json.JSONObject
+import okhttp3.Request
+import okhttp3.WebSocket
+import okio.ByteString
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
@@ -20,6 +23,16 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** Real emulator windows; synthetic wire events traverse production receive/playback. */
 class V2EyesTest {
+    private class WireSocket : WebSocket {
+        val messages = mutableListOf<String>()
+        override fun request() = Request.Builder().url("wss://synthetic.invalid/v2/voice").build()
+        override fun queueSize() = 0L
+        override fun send(text: String): Boolean { messages += text; return true }
+        override fun send(bytes: ByteString) = false
+        override fun close(code: Int, reason: String?) = true
+        override fun cancel() {}
+        fun inputs() = messages.count { JSONObject(it).getString("type") == "input" }
+    }
     private val inst get() = InstrumentationRegistry.getInstrumentation()
     private fun main(action: () -> Unit) = inst.runOnMainSync(action)
     private fun shot(name: String) {
@@ -51,10 +64,16 @@ class V2EyesTest {
             assertEquals(EyeMood.WAKE, activity.currentMood); shot("01-default-landscape")
             main { client.wake() } // Disconnected wake reports failure, never comprehension.
             shot("02-failure")
-            wire("reply_end","head" to 0,"public_facts" to 0); shot("03-listening")
+            val wireSocket = WireSocket()
+            main {
+                client.javaClass.getDeclaredField("socket").apply { isAccessible = true }.set(client,wireSocket)
+                client.javaClass.getDeclaredField("active").apply { isAccessible = true }.setBoolean(client,true)
+                client.wake(); client.frame(ShortArray(320){42},true)
+            }
+            assertEquals(1,wireSocket.inputs()); shot("03-listening")
             wire("thinking_wait"); shot("04-thinking")
-            main { client.quiet(); activity.displayEvent("waiting") }; shot("05-waiting")
-            wire("open","revision" to 0)
+            main { client.quiet() }; shot("05-waiting")
+            wire("open","revision" to 1)
             val field = client.javaClass.getDeclaredField("playerName").apply { isAccessible = true }
             val playerName = field.get(client) as String
             wire("bound","player" to playerName,"identity" to JSONObject(),"stream" to 1)
@@ -77,10 +96,21 @@ class V2EyesTest {
             wire("reveal","effect" to "synthetic-patch","topic" to 2)
             assertTrue(activity.showingImage)
             main { client.management(true); activity.manage(true) }
+            val uploadsBeforeManagement = wireSocket.inputs()
+            main {
+                val pcm = ShortArray(320){42}; client.frame(pcm,true)
+                assertTrue(pcm.all { it == 0.toShort() })
+            }
+            assertEquals(uploadsBeforeManagement,wireSocket.inputs())
             wire("reply_end","head" to 2400,"public_facts" to 1)
             wire("reveal","effect" to "synthetic-patch","topic" to 2)
             assertTrue(activity.isManaging); assertFalse(activity.showingImage); shot("11-locked-management-late-output")
-            main { client.management(false); activity.manage(false) }; assertEquals(EyeMood.WAKE, activity.currentMood); shot("12-exit-wake")
+            main {
+                client.management(false); activity.manage(false)
+                client.frame(ShortArray(320){42},true)
+                receive.invoke(client,JSONObject().put("v",2).put("epoch",0).put("type","reply_end").put("head",2400).put("public_facts",1).toString())
+            }
+            assertFalse(client.isAwake); assertEquals(uploadsBeforeManagement,wireSocket.inputs()); assertEquals(EyeMood.WAKE, activity.currentMood); shot("12-exit-wake")
             // Production management wire routing with no provisioned credentials.
             wire("management")
             inst.waitForIdleSync(); Thread.sleep(300)

@@ -26,7 +26,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var socket: WebSocket? = null
     private var epoch = 0L
     private var sequence = 0L
-    private var active = false
+    @Volatile private var active = false
     internal val connectionActive get() = active
     internal var sentPackets = 0L; private set
     @Volatile var isAwake = false; private set
@@ -43,8 +43,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private val gate: InputGate = InputGate(waits, SystemClock::elapsedRealtime,
         { version -> send("advance", "revision" to version); candidate() },
         { version -> send("probe", "revision" to version) },
-        { version -> send("seal", "revision" to version); inputSerial++ ; outputBusy = true },
-        { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true },
+        { version -> send("seal", "revision" to version); inputSerial++ ; outputBusy = true; status("thinking") },
+        { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true; status("thinking") },
         { send("thinking_prompt", "revision" to gateVersion()); status("thinking") },
         { isAwake = false; idleSerial++; interrupt(); status("wake") })
     private fun gateDeadline(): Long = gate.responseDeadline

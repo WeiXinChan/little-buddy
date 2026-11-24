@@ -1,0 +1,41 @@
+{
+  "source_sha": "recorded in delivery report after connected publication",
+  "environment": "Linux x86_64; JDK17; SDK36/build-tools35; no local emulator; arm64 APK",
+  "jvm": {
+    "tests": 70,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2
+  },
+  "python": {
+    "tests": 77,
+    "failures": 0,
+    "skipped": 0
+  },
+  "artifacts": [
+    {
+      "name": "app-v2Debug.apk",
+      "bytes": 27236914,
+      "sha256": "d78bc4cf5f4ac7819c3a23b74a9e06243e832d1da6344caceee567e00d15e9d7"
+    },
+    {
+      "name": "app-v2Debug-androidTest.apk",
+      "bytes": 666598,
+      "sha256": "c849a071812d3e1f83d3bc8d1566a932c499c472d5d169e0ea5a3b4f276f3ebf"
+    }
+  ],
+  "device": "OPPO NOT_RUN",
+  "acoustic": "NOT_RUN",
+  "ci_rendering": "pending",
+  "open": "R14/F01; M07 catalog; M08 PIN",
+  "supersedes": "Initial local artifacts in evidence.json; remote rendering 4e77a2e is an earlier source snapshot.",
+  "source_files_sha256": {
+    "app/src/main/java/com/littlebuddy/WakeReader.kt": "8f7079daa3fa31b7fbe2c185ad8c68cc60b4062142de95f4369afbf89829b8b8",
+    "app/src/main/java/com/littlebuddy/V2VoiceActivity.kt": "daea5b48c20cd56dafaef5d0ab9b1c8943efb1d06afe2514148024cb23e85cce",
+    "app/src/main/java/com/littlebuddy/v2/VoiceClient.kt": "d15e7ccb319d78c75888baa725fa538fa5ee8b6a65272e2905e62e87aefde9ea",
+    "app/src/main/java/com/littlebuddy/v2/EyeScene.kt": "3d75e96d352cca57b5bc4a1932e3788e825f3fc2ab436f366d1f50df1f4bbf90",
+    "app/src/main/java/com/littlebuddy/v2/Capture.kt": "b3f46f1f73352001a6e2629f9873086d107bff35d79e8f30f49748eebb022550",
+    "app/src/main/java/com/littlebuddy/v2/EyesView.kt": "5b7e85edc0de4a7aa663ad905b3db4a670d9d97ac030546660bdb4ec909c965b",
+    "app/src/main/java/com/littlebuddy/v2/InputGate.kt": "b1131dd9721d93d7a930b5dc104d64e1460c9acb96523a4a899b1ee2b4463146"
+  }
+}

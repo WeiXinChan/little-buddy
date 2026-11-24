@@ -42,7 +42,7 @@ internal class EyesView(context: Context) : View(context) {
         val pulse = sin(now/260.0).toFloat()
         val eyeWidth = horizontal*.91f
         val eyeHeight = vertical * when(mood) {
-            EyeMood.WAKE -> .25f
+            EyeMood.WAKE -> .78f
             EyeMood.LISTENING -> .95f
             EyeMood.THINKING -> .64f
             EyeMood.SPEAKING -> .77f + .055f*pulse
@@ -60,7 +60,7 @@ internal class EyesView(context: Context) : View(context) {
             val y = height/2f + if (mood == EyeMood.THINKING) -unit*.09f else 0f
             paint.color = color
             canvas.drawRoundRect(RectF(x-eyeWidth/2, y-eyeHeight/2, x+eyeWidth/2, y+eyeHeight/2), eyeWidth*.48f, eyeHeight*.48f, paint)
-            if (mood != EyeMood.WAKE && mood != EyeMood.FAILURE) {
+            if (mood != EyeMood.FAILURE) {
                 paint.color = Color.rgb(9, 29, 46)
                 val dx = if (mood == EyeMood.THINKING) unit*.1f else 0f
                 canvas.drawOval(RectF(x-unit*.13f+dx, y-unit*.17f, x+unit*.13f+dx, y+unit*.17f), paint)

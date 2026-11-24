@@ -13,6 +13,9 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
       - name: Build and render on API 36 x86_64
         shell: bash
         run: |
@@ -25,10 +28,33 @@ jobs:
           mkdir -p render
           git rev-parse HEAD > render/source.txt
           sha256sum app/build/outputs/apk/v2Debug/*.apk app/build/outputs/apk/androidTest/v2Debug/*.apk > render/apk-sha256.txt
+          sudo -n apt-get -o Acquire::http::Timeout=15 -o Acquire::Retries=0 install -y --no-install-recommends libpulse0 pulseaudio pulseaudio-utils
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/v2-avd"
+          mkdir -m 700 -p "$ANDROID_AVD_HOME"
+          export PULSE_SERVER="unix:$ANDROID_AVD_HOME/pulse.sock"
+          cat > "$ANDROID_AVD_HOME/pulse.pa" <<'PULSE'
+          load-module module-native-protocol-unix socket=$ANDROID_AVD_HOME/pulse.sock auth-anonymous=1
+          load-module module-null-sink sink_name=v2_playback
+          set-default-sink v2_playback
+          set-default-source v2_playback.monitor
+          PULSE
+          pulseaudio -n -F "$ANDROID_AVD_HOME/pulse.pa" --daemonize=no --exit-idle-time=-1 --use-pid-file=no >render/pulse.log 2>&1 &
+          pulse_pid=$!
+          emulator_pid=
+          cleanup() {
+            result=$?
+            if ((result != 0)); then cat render/emulator.log render/pulse.log 2>/dev/null || true; fi
+            adb emu kill || true
+            if [[ -n "$emulator_pid" ]]; then wait "$emulator_pid" || true; fi
+            kill "$pulse_pid" 2>/dev/null || true
+            wait "$pulse_pid" || true
+            exit "$result"
+          }
+          trap cleanup EXIT
+          timeout 15s bash -c 'until pactl get-default-sink 2>/dev/null | grep -Fx v2_playback; do sleep 1; done'
           echo 'no' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n v2eyes -k 'system-images;android-36;google_apis;x86_64' --force
-          "$ANDROID_HOME/emulator/emulator" -avd v2eyes -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect > render/emulator.log 2>&1 &
+          QEMU_AUDIO_DRV=pa "$ANDROID_HOME/emulator/emulator" -avd v2eyes -port 5554 -accel on -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
           emulator_pid=$!
-          trap 'adb emu kill || true; wait "$emulator_pid" || true' EXIT
           timeout 180s adb wait-for-device
           timeout 180s bash -c 'until [[ $(adb shell getprop sys.boot_completed | tr -d "\r") == 1 ]]; do sleep 2; done'
           adb shell wm size 1080x1920
@@ -54,6 +80,11 @@ jobs:
           name: v2-eyes-api36
           path: |
             render/
+            app/build/test-results/testV2DebugUnitTest/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: v2-eyes-emulator-apks
+          path: |
             app/build/outputs/apk/v2Debug/*.apk
             app/build/outputs/apk/androidTest/v2Debug/*.apk
-            app/build/test-results/testV2DebugUnitTest/
