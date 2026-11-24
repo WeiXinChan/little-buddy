@@ -1,0 +1,23 @@
+{
+  "scope": "original-head-negative-control",
+  "tested_head": "e44433665a9f547df5e7872ad8aa1d1a29199a74",
+  "dirty": true,
+  "attempts": 3,
+  "failures": 3,
+  "errors": 0,
+  "timeout_measurement": "not instrumented; synchronous local suite",
+  "failing_tests": [
+    "r96_tests.Review96Tests.test_r96_01_story_after_effective_audio_ack",
+    "r96_tests.Review96Tests.test_r96_02_reserve_pending_and_atomic_rejection",
+    "r96_tests.Review96Tests.test_r96_03_invalid_schema_preserves_entire_state"
+  ],
+  "product_pass_enabled": false,
+  "sha256": {
+    "backend/v2/session.py": "0ebea0e93f407da7b3494721cdd6bf76d3b33783a58bbd05394eb4c90e8b3028",
+    "tests/v2/test_r96.py": "75b909047c01213484b0e00e0a89b87455ed733ca706293c794f066b7ef4e76c",
+    "tests/v2/test_session.py": "1e7f71c2a71229c01ad24a34c9847d88874a03a969ce04764aa3e93539417f0a",
+    "tools/v2_harness/session_adapter.py": "cad47182156ba62fb775a6cea54b31b21469fde47f77b48048d5c690fffd0ad6",
+    "tools/v2_harness/r96_regression.py": "42438e36e2a82f38fe5a12e6f7f205e7762846983b4ad6de2b5a53b38f862ae2"
+  },
+  "expected_outcome_observed": true
+}

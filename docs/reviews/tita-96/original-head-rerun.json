@@ -1,0 +1,199 @@
+[
+  {
+    "case": "flush",
+    "expected": [
+      false,
+      [],
+      false,
+      false
+    ],
+    "actual": [
+      false,
+      [],
+      false,
+      false
+    ],
+    "passed": true
+  },
+  {
+    "case": "stop",
+    "expected": [
+      false,
+      [],
+      false,
+      false
+    ],
+    "actual": [
+      false,
+      [],
+      false,
+      false
+    ],
+    "passed": true
+  },
+  {
+    "case": "rebuild",
+    "expected": [
+      false,
+      [],
+      false,
+      false
+    ],
+    "actual": [
+      false,
+      [],
+      false,
+      false
+    ],
+    "passed": true
+  },
+  {
+    "case": "wrap",
+    "expected": [
+      false,
+      [],
+      false,
+      false
+    ],
+    "actual": [
+      false,
+      [],
+      false,
+      false
+    ],
+    "passed": true
+  },
+  {
+    "case": "route-loss",
+    "expected": [
+      false,
+      [],
+      false,
+      false
+    ],
+    "actual": [
+      false,
+      [],
+      false,
+      false
+    ],
+    "passed": true
+  },
+  {
+    "case": "response_received_before_budget_later_story_chunk",
+    "expected": true,
+    "actual": false,
+    "passed": false
+  },
+  {
+    "case": "revealed_capacity_reserves_pending",
+    "expected": 128,
+    "actual": 129,
+    "passed": false
+  },
+  {
+    "case": "invalid_game_atomic",
+    "expected": [
+      2,
+      0,
+      {}
+    ],
+    "actual": [
+      3,
+      1,
+      {
+        "rules": "new",
+        "roles": []
+      }
+    ],
+    "passed": false
+  },
+  {
+    "case": "shared_privacy",
+    "expected": [
+      [],
+      {}
+    ],
+    "actual": [
+      [],
+      {}
+    ],
+    "passed": true
+  },
+  {
+    "case": "handoff_cleanup",
+    "expected": [
+      {},
+      0,
+      0
+    ],
+    "actual": [
+      {},
+      0,
+      0
+    ],
+    "passed": true
+  },
+  {
+    "case": "retry_budget_unchanged",
+    "expected": [
+      true,
+      15,
+      false
+    ],
+    "actual": [
+      true,
+      15,
+      false
+    ],
+    "passed": true
+  },
+  {
+    "case": "long_active_conversation",
+    "expected": [
+      true,
+      1800
+    ],
+    "actual": [
+      true,
+      1800
+    ],
+    "passed": true
+  },
+  {
+    "case": "idle_ttl_cleanup",
+    "expected": false,
+    "actual": false,
+    "passed": true
+  },
+  {
+    "case": "combined_capacity_reject",
+    "expected": false,
+    "actual": false,
+    "passed": true
+  },
+  {
+    "case": "empty_or_wrong_adapter",
+    "expected": true,
+    "actual": true,
+    "passed": true
+  },
+  {
+    "case": "empty_or_wrong_adapter",
+    "expected": true,
+    "actual": true,
+    "passed": true
+  },
+  {
+    "case": "empty_or_wrong_adapter",
+    "expected": true,
+    "actual": true,
+    "passed": true
+  },
+  {
+    "case": "broken_implementation",
+    "expected": true,
+    "actual": true,
+    "passed": true
+  }
+]
