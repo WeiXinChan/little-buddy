@@ -1,0 +1,14 @@
+{
+  "case": "R97-01",
+  "input_at": 0,
+  "analysis_done_at": 14,
+  "deadline": 15.0,
+  "at": 16,
+  "response_confirmed": false,
+  "response_expired": true,
+  "output_still_live": false,
+  "expected_deadline_upper_bound": 15,
+  "defect_reproduced": false
+}
+
+original_probe_assertion=known-bad negative control no longer reproduces; review result needs update

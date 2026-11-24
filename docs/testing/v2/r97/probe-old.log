@@ -1,0 +1,14 @@
+{
+  "case": "R97-01",
+  "input_at": 0,
+  "analysis_done_at": 14,
+  "deadline": 29.0,
+  "at": 16,
+  "response_confirmed": false,
+  "response_expired": false,
+  "output_still_live": true,
+  "expected_deadline_upper_bound": 15,
+  "defect_reproduced": true
+}
+
+original_probe_exit=0 (defect detected)

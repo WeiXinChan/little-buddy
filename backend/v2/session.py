@@ -47,6 +47,7 @@ class Session:
         self.response_confirmed = False
         self.response_expired = False
         self.progress_deadline = 0
+        self.last_head_progress = clock()
         self.capacity = capacity
         self.connection = self.turn = self.output = self.stream = self.topic = 0
         self.session = uuid.uuid4().hex
@@ -219,8 +220,6 @@ class Session:
             return False
         self.pending.append(Segment(name, public, answer, end, effect, effective))
         self.sent_end = end
-        if self.response_confirmed:
-            self.progress_deadline = self.clock() + self.progress_timeout
         return True
 
     def ack(self, event, *, player, stream, segment, head):
@@ -231,21 +230,26 @@ class Session:
         current = self.pending[0]
         if not self.accept(event):
             return False
+        advanced = head > self.head
         self.head = head
-        if self.response_confirmed:
+        if advanced:
+            self.last_head_progress = self.clock()
+        if self.response_confirmed and advanced:
             self.progress_deadline = self.clock() + self.progress_timeout
         if head < current.end:
             self.uncertain.add(segment)
             return False
         self.pending.popleft()
-        if current.effective:
+        if current.effective and not self.response_confirmed:
             self.response_confirmed = True
-            self.progress_deadline = self.clock() + self.progress_timeout
+            self.progress_deadline = self.last_head_progress + self.progress_timeout
         self.uncertain.discard(segment)
-        self.public.append(current.public)
+        if current.public:
+            self.public.append(current.public)
         if current.answer is not None:
             self.public.append(current.answer)
-        self.revealed.add(segment)
+        if current.public or current.answer is not None or current.effect:
+            self.revealed.add(segment)
         if current.effect:
             self.commands.append(('reveal', current.effect, self.topic))
         return True

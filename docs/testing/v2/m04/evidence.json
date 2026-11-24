@@ -1,0 +1,84 @@
+{
+  "dependency_head": "c54ff0a6369a46c1ac7a87233702976376ae2f7b",
+  "scope": "local software only; no phone or acoustic results",
+  "python": {
+    "tests": 33,
+    "failures": 0,
+    "errors": 0
+  },
+  "jvm": {
+    "tests": 56,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2,
+    "passed": 54,
+    "skipped_cases": [
+      "com.littlebuddy.GameReleaseIntegrationTest.ackCanTraverseTheSocketWhileTheNextSegmentHasNoConsumer",
+      "com.littlebuddy.WakeReaderTest.modelTimestampsDriveContinuousAndSoloReplay"
+    ]
+  },
+  "tool_tests": 28,
+  "negative_controls": {
+    "attempts": 3,
+    "detected": 3
+  },
+  "original_review_script": {
+    "checks": 19,
+    "failed": 0,
+    "non_author_this_run": false
+  },
+  "device": "NOT_TESTED",
+  "acoustic": "NOT_TESTED",
+  "F03": "OPEN",
+  "A12": "OPEN",
+  "build": {
+    "result": "PASS",
+    "tasks": [
+      "testV2DebugUnitTest",
+      "assembleV2Debug",
+      "assembleV2DebugAndroidTest"
+    ],
+    "max_workers": 1,
+    "global_lock": true
+  },
+  "source_sha256": {
+    "app/src/main/java/com/littlebuddy/v2/VoiceClient.kt": "7cb3b67fa61cfa530895cf6fe1e69927186b85480ef7cae374ef68fa863038c6",
+    "app/src/main/java/com/littlebuddy/v2/Playback.kt": "79edf2327daa3f5e86710923ab8d2dffe523d424630c262dfab291cdd36da13f",
+    "app/src/main/java/com/littlebuddy/v2/AndroidTrack.kt": "e88bfa69f13ce2d77806535f983fc33da9e206958f9a0c5fb7fc83b06e47e437",
+    "app/src/main/java/com/littlebuddy/v2/Turns.kt": "da60d28552bf6a92a287ad037da3cb0b630d3ec67d9f6893f5b1d7d430158669",
+    "app/src/main/java/com/littlebuddy/v2/Capture.kt": "5fd1672f3b07a6a0f6f6f7e2a6694c7dd7543f8402111bb8fadd13fd88f2b5cb",
+    "app/src/main/java/com/littlebuddy/v2/WakeSamples.kt": "3939e50d5ad46b3530530f1a6785a9c8e72613aa72c6aa74af9f8e93318a254f",
+    "app/src/main/java/com/littlebuddy/v2/InputGate.kt": "b1e6a24796be555450497687820acbfd80fe07007dd1b8b74039aa4b7d1aeb15",
+    "app/src/main/java/com/littlebuddy/V2VoiceActivity.kt": "d521c110447cfebaa2360edad7a940e335acc4c39e1294b44836f4a2c5c5a19f",
+    "backend/v2/session.py": "8eca96e56fe2e6680ff3f7a95c400698e1e259821d09fe3ea883163160be6ec9",
+    "backend/v2/voice.py": "00abea4b629c7f5740747c16b9a43fbe2a8819889fd8c6ef5c16139201c2361d",
+    "backend/v2/fixture.py": "ba8d9da7fe8b5d70ef06f7ed0a2d37e31dd2e469b2b22f9118dd51157010e6ff",
+    "backend/v2/server.py": "71c85e0741d8b3bdc24ef08ff3ffe32892552f60d6a1549b3b57116257bc5962",
+    "backend/v2/__init__.py": "451285c5de4a1b116e0665f02235dfb7a0cfc66d18dd70d4cb8ff487de3a9578",
+    "tests/v2/test_m04_transport.py": "690857c78897251fa634a5674781ffada0256ed21ac35d59ba620ea3458b99b0",
+    "tests/v2/test_m04.py": "985590f05af0b401600a7790bda00d26eb3349e5701c1d01e2a03697828b448d",
+    "app/src/test/java/com/littlebuddy/v2/InputGateTest.kt": "b51f921d2a4c31fe51eda267b5825a22c023b05f418b66cc1fe87c6072c2e012",
+    "app/src/test/java/com/littlebuddy/v2/PlaybackTest.kt": "a70c8db4f51dfbb4d4e1d2874a6873f1eb4a64d04d38e97d3cf533c85586e97c",
+    "app/src/androidTest/java/com/littlebuddy/V2AudioTest.kt": "39abbf052546e68be936f528e7e0d083d6f4bea64722aa8aa76f03b2135a27a5",
+    "app/build.gradle.kts": "fc5a3ddd36625342dbe620246edcb00bcb623d03c0dd8037e5165153cf90cea3"
+  },
+  "artifacts": {
+    "app/build/outputs/apk/v2Debug/app-v2Debug.apk": {
+      "bytes": 89450689,
+      "sha256": "8e0c6bba0bc4803f1a74fd9c6a4e92c479adb0f78de48f4b564e8402f12f4741"
+    },
+    "app/build/outputs/apk/androidTest/v2Debug/app-v2Debug-androidTest.apk": {
+      "bytes": 641180,
+      "sha256": "c20cfddf196777234271ed69e3f09b57bb687fa9166ddaa868d05fafcf5d25c1"
+    }
+  },
+  "instrumentation": {
+    "built": true,
+    "executed": false,
+    "cases": [
+      "nativeTrackAckAndStopReleaseUseProductionPump",
+      "realTlsWebsocketFeedsRealTrackAndAckReturnsToBackend",
+      "backgroundReleasesRecorderAndPlayerWithoutAutomaticResume"
+    ]
+  }
+}

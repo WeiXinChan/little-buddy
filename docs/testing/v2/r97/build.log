@@ -1,0 +1,104 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.13/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+[=========                              ] 25%
+WARNING: platform-tools package is not installed.
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preV2DebugBuild UP-TO-DATE
+> Task :app:generateV2DebugBuildConfig UP-TO-DATE
+> Task :app:checkV2DebugAarMetadata UP-TO-DATE
+> Task :app:processV2DebugNavigationResources UP-TO-DATE
+> Task :app:compileV2DebugNavigationResources UP-TO-DATE
+> Task :app:generateV2DebugResValues UP-TO-DATE
+> Task :app:mapV2DebugSourceSetPaths UP-TO-DATE
+> Task :app:generateV2DebugResources UP-TO-DATE
+> Task :app:mergeV2DebugResources UP-TO-DATE
+> Task :app:packageV2DebugResources UP-TO-DATE
+> Task :app:parseV2DebugLocalResources UP-TO-DATE
+> Task :app:createV2DebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksV2Debug UP-TO-DATE
+> Task :app:processV2DebugMainManifest UP-TO-DATE
+> Task :app:processV2DebugManifest UP-TO-DATE
+> Task :app:processV2DebugManifestForPackage UP-TO-DATE
+> Task :app:processV2DebugResources UP-TO-DATE
+> Task :app:compileV2DebugKotlin
+> Task :app:javaPreCompileV2Debug UP-TO-DATE
+> Task :app:compileV2DebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleV2DebugClassesToRuntimeJar
+> Task :app:bundleV2DebugClassesToCompileJar
+
+> Task :app:compileV2DebugUnitTestKotlin
+w: file://<checkout>/app/src/test/java/com/littlebuddy/GameReleaseIntegrationTest.kt:98:33 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file://<checkout>/app/src/test/java/com/littlebuddy/GameReleaseIntegrationTest.kt:102:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file://<checkout>/app/src/test/java/com/littlebuddy/GameReleaseIntegrationTest.kt:102:51 The corresponding parameter in the supertype 'WebSocketListener' is named 'text'. This may cause problems when calling this function with named arguments.
+w: file://<checkout>/app/src/test/java/com/littlebuddy/GameReleaseIntegrationTest.kt:138:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+w: file://<checkout>/app/src/test/java/com/littlebuddy/GameReleaseIntegrationTest.kt:153:36 The corresponding parameter in the supertype 'WebSocketListener' is named 'webSocket'. This may cause problems when calling this function with named arguments.
+
+> Task :app:preV2DebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileV2DebugUnitTest UP-TO-DATE
+> Task :app:compileV2DebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processV2DebugJavaRes UP-TO-DATE
+> Task :app:processV2DebugUnitTestJavaRes UP-TO-DATE
+> Task :app:testV2DebugUnitTest
+> Task :app:mergeV2DebugNativeDebugMetadata NO-SOURCE
+> Task :app:mergeV2DebugShaders UP-TO-DATE
+> Task :app:compileV2DebugShaders NO-SOURCE
+> Task :app:generateV2DebugAssets UP-TO-DATE
+> Task :app:mergeV2DebugAssets UP-TO-DATE
+> Task :app:compressV2DebugAssets UP-TO-DATE
+> Task :app:checkV2DebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarV2DebugFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexV2Debug UP-TO-DATE
+> Task :app:mergeLibDexV2Debug UP-TO-DATE
+> Task :app:dexBuilderV2Debug
+> Task :app:mergeProjectDexV2Debug
+> Task :app:mergeV2DebugGlobalSynthetics UP-TO-DATE
+> Task :app:mergeV2DebugJavaResource UP-TO-DATE
+> Task :app:mergeV2DebugJniLibFolders UP-TO-DATE
+> Task :app:mergeV2DebugNativeLibs UP-TO-DATE
+> Task :app:stripV2DebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningV2Debug UP-TO-DATE
+> Task :app:writeV2DebugAppMetadata UP-TO-DATE
+> Task :app:writeV2DebugSigningConfigVersions UP-TO-DATE
+> Task :app:packageV2Debug
+> Task :app:createV2DebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleV2Debug
+> Task :app:preV2DebugAndroidTestBuild SKIPPED
+> Task :app:processV2DebugAndroidTestManifest UP-TO-DATE
+> Task :app:generateV2DebugAndroidTestBuildConfig UP-TO-DATE
+> Task :app:checkV2DebugAndroidTestAarMetadata UP-TO-DATE
+> Task :app:processV2DebugAndroidTestNavigationResources UP-TO-DATE
+> Task :app:compileV2DebugAndroidTestNavigationResources UP-TO-DATE
+> Task :app:generateV2DebugAndroidTestResValues UP-TO-DATE
+> Task :app:mapV2DebugAndroidTestSourceSetPaths UP-TO-DATE
+> Task :app:generateV2DebugAndroidTestResources UP-TO-DATE
+> Task :app:mergeV2DebugAndroidTestResources UP-TO-DATE
+> Task :app:processV2DebugAndroidTestResources UP-TO-DATE
+> Task :app:compileV2DebugAndroidTestKotlin
+> Task :app:javaPreCompileV2DebugAndroidTest UP-TO-DATE
+> Task :app:compileV2DebugAndroidTestJavaWithJavac UP-TO-DATE
+> Task :app:mergeV2DebugAndroidTestShaders UP-TO-DATE
+> Task :app:compileV2DebugAndroidTestShaders NO-SOURCE
+> Task :app:generateV2DebugAndroidTestAssets UP-TO-DATE
+> Task :app:mergeV2DebugAndroidTestAssets UP-TO-DATE
+> Task :app:compressV2DebugAndroidTestAssets UP-TO-DATE
+> Task :app:checkV2DebugAndroidTestDuplicateClasses UP-TO-DATE
+> Task :app:desugarV2DebugAndroidTestFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexV2DebugAndroidTest UP-TO-DATE
+> Task :app:mergeLibDexV2DebugAndroidTest UP-TO-DATE
+> Task :app:dexBuilderV2DebugAndroidTest
+> Task :app:mergeProjectDexV2DebugAndroidTest
+> Task :app:mergeV2DebugAndroidTestGlobalSynthetics UP-TO-DATE
+> Task :app:processV2DebugAndroidTestJavaRes UP-TO-DATE
+> Task :app:mergeV2DebugAndroidTestJavaResource UP-TO-DATE
+> Task :app:mergeV2DebugAndroidTestJniLibFolders UP-TO-DATE
+> Task :app:mergeV2DebugAndroidTestNativeLibs NO-SOURCE
+> Task :app:stripV2DebugAndroidTestDebugSymbols NO-SOURCE
+> Task :app:validateSigningV2DebugAndroidTest UP-TO-DATE
+> Task :app:writeV2DebugAndroidTestSigningConfigVersions UP-TO-DATE
+> Task :app:packageV2DebugAndroidTest
+> Task :app:createV2DebugAndroidTestApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleV2DebugAndroidTest
+
+BUILD SUCCESSFUL in 1m 16s
+75 actionable tasks: 12 executed, 63 up-to-date
