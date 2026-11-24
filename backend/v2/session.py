@@ -29,6 +29,9 @@ class Segment:
     end: int
     effect: str | None
     effective: bool
+    state: dict | None = None
+    private: bool = False
+    anchors: tuple = ()
 
 
 class Session:
@@ -56,6 +59,10 @@ class Session:
         self.deadline = 0
         self.active = True
         self.public, self.private, self.secrets, self.game = [], [], {}, {}
+        self.private_mode = False
+        self.memory_revision = 0
+        self.recent = []
+        self.facts = {}
         self.pending = deque()
         self.tasks, self.commands = {}, deque()
         self.player = None
@@ -83,6 +90,7 @@ class Session:
 
     def _fits(self, **changes):
         state = dict(public=self.public, private=self.private, game=self.game, secrets=self.secrets,
+                     recent=self.recent, facts=self.facts,
                      pending=[s.__dict__ for s in self.pending])
         state.update(changes)
         try:
@@ -110,7 +118,10 @@ class Session:
         if self.active:
             self._revoke()
         self.active = False
+        self.memory_revision += 1
         self.public.clear()
+        self.recent.clear(); self.facts.clear()
+        self.private_mode = False
         self.private.clear()
         self.secrets.clear()
         self.game.clear()
@@ -200,7 +211,7 @@ class Session:
         self._revoke()
 
     def send(self, event, *, name, public, end, approved, answer=None, effect=None,
-             effective=True):
+             effective=True, state=None, anchors=()):
         if (not self._live() or approved is not True or self.player is None or type(end) is not int
                 or end <= self.sent_end or len(self.pending) >= self.capacity
                 or not all(isinstance(v, str) for v in (name, public))
@@ -213,12 +224,24 @@ class Session:
                 or not name or name in self.revealed
                 or any(s.name == name for s in self.pending)):
             return False
-        candidate = Segment(name, public, answer, end, effect, effective)
+        if state is not None:
+            if (not isinstance(state, dict) or set(state) != {'mode', 'rules', 'roles', 'secrets'} or
+                    not isinstance(state['rules'], str) or not isinstance(state['roles'], list) or
+                    not all(isinstance(x, str) for x in state['roles']) or
+                    not isinstance(state['secrets'], dict) or
+                    not all(isinstance(k, str) and isinstance(v, str) for k, v in state['secrets'].items()) or
+                    state['mode'] not in {'chat', 'guess', 'story', 'adventure', 'association'}):
+                return False
+            state = deepcopy(state)
+        if (not isinstance(anchors, tuple) or len(anchors) > 16 or
+                any(not isinstance(k, str) or not 1 <= len(k) <= 40 for k in anchors)):
+            return False
+        candidate = Segment(name, public, answer, end, effect, effective, state, self.private_mode, anchors)
         if not self._fits(pending=[s.__dict__ for s in self.pending] + [candidate.__dict__]):
             return False
         if not self.accept(event):
             return False
-        self.pending.append(Segment(name, public, answer, end, effect, effective))
+        self.pending.append(candidate)
         self.sent_end = end
         return True
 
@@ -228,6 +251,23 @@ class Session:
                 or not self.pending or segment != self.pending[0].name):
             return False
         current = self.pending[0]
+        if head >= current.end:
+            public, private = list(self.public), list(self.private)
+            target = private if current.private else public
+            if current.public: target.append(current.public)
+            if current.answer is not None: target.append(current.answer)
+            recent = list(self.recent)
+            if current.public:
+                recent = (recent + [dict(text=current.public, role='played',
+                                        turn=self.turn, private=current.private)])[-8:]
+            facts = self._played_facts(current)
+            game, secrets = self.game, self.secrets
+            if current.state is not None and not current.private:
+                game = deepcopy(current.state); secrets = game.pop('secrets')
+            if not self._fits(public=public, private=private, recent=recent, facts=facts,
+                              game=game, secrets=secrets,
+                              pending=[s.__dict__ for s in list(self.pending)[1:]]):
+                return False
         if not self.accept(event):
             return False
         advanced = head > self.head
@@ -244,14 +284,117 @@ class Session:
             self.response_confirmed = True
             self.progress_deadline = self.last_head_progress + self.progress_timeout
         self.uncertain.discard(segment)
+        target = self.private if current.private else self.public
         if current.public:
-            self.public.append(current.public)
+            target.append(current.public)
+            self.recent = (self.recent + [dict(text=current.public, role='played',
+                                             turn=self.turn, private=current.private)])[-8:]
+            self.memory_revision += 1
+        if current.public:
+            self.facts = self._played_facts(current)
         if current.answer is not None:
-            self.public.append(current.answer)
+            target.append(current.answer)
+            self.memory_revision += 1
+        if current.state is not None and not current.private:
+            proposed = deepcopy(current.state)
+            self.secrets = proposed.pop('secrets')
+            self.game = proposed
+            self.topic += 1
         if current.public or current.answer is not None or current.effect:
             self.revealed.add(segment)
         if current.effect:
             self.commands.append(('reveal', current.effect, self.topic))
+        return True
+
+    def _played_facts(self, current):
+        facts = deepcopy(self.facts)
+        prefix = 'private:played:' if current.private else 'public:played:'
+        for key in current.anchors:
+            name = prefix + key
+            facts.pop(name, None)
+            facts[name] = dict(value=current.public, source='played',
+                               segment=current.name, turn=self.turn, private=current.private)
+        # Current facts by semantic key supersede old values. Old output anchors
+        # are bounded per visibility; recent utterances and current game remain.
+        owned = [k for k in facts if k.startswith(prefix)]
+        protected = {'plot.main', 'plot.goal', 'plot.location', 'plot.inventory',
+                     'clue.current', 'answer.current', 'rule.current', 'role.current', 'promise.current'}
+        removable = [k for k in owned if k[len(prefix):] not in protected]
+        for key in removable[:max(0, len(owned)-16)]:
+            del facts[key]
+        return facts
+
+    def record_input(self, text, facts):
+        if text is None:
+            return
+        if not self._live() or not isinstance(text, str) or len(text) > 2048:
+            raise ValueError('input')
+        if not isinstance(facts, list) or len(facts) > 8:
+            raise ValueError('facts')
+        candidate = deepcopy(self.facts)
+        for fact in facts:
+            if (not isinstance(fact, dict) or set(fact) != {'key', 'start', 'end', 'value'} or
+                    fact['key'] not in {'nickname', 'preference', 'role', 'rule', 'clue', 'plot', 'promise'} or
+                    type(fact['start']) is not int or type(fact['end']) is not int or
+                    not 0 <= fact['start'] < fact['end'] <= len(text) or
+                    fact['value'] != text[fact['start']:fact['end']] or len(fact['value']) > 256):
+                raise ValueError('fact provenance')
+            # Public and private versions cannot overwrite each other.
+            key = ('private:' if self.private_mode else 'public:') + fact['key']
+            previous = candidate.get(key)
+            if previous is not None and previous.get('source_text') != text:
+                candidate[key + ':history:' + str(previous['turn'])] = previous
+            candidate[key] = dict(value=fact['value'], source='child', turn=self.turn,
+                                  source_text=text, span=[fact['start'], fact['end']],
+                                  evidence_only=True, private=self.private_mode)
+            history = sorted((k for k in candidate if k.startswith(key + ':history:')),
+                             key=lambda k: candidate[k]['turn'])
+            for obsolete in history[:-3]:
+                del candidate[obsolete]
+        # Keep bounded source propositions, not bare entities masquerading as
+        # affirmative preferences. Old source history is the first to be evicted.
+        def child_bytes():
+            return len(json.dumps({k:v for k,v in candidate.items() if v['source']=='child'},
+                                  ensure_ascii=False).encode())
+        history = sorted((k for k in candidate if ':history:' in k),
+                         key=lambda k: candidate[k]['turn'])
+        while child_bytes() > 16000 and history:
+            del candidate[history.pop(0)]
+        if child_bytes() > 16000:
+            raise BufferError('protected source context capacity')
+        recent = (self.recent + [dict(text=text, role='child', turn=self.turn, private=self.private_mode)])[-8:]
+        if not self._fits(facts=candidate, recent=recent):
+            raise BufferError('input context capacity')
+        self.facts = candidate
+        self.recent = recent
+        self.memory_revision += 1
+
+    def memory_snapshot(self, *, private=False):
+        return (self.connection, self.session, self.turn, self.output, self.memory_revision,
+                private, tuple(self.private if private else self.public))
+
+    def compact(self, snapshot, keep):
+        # Extractive writeback only: no prose and no proposed/unplayed facts.
+        if not self._live() or snapshot != self.memory_snapshot(private=snapshot[-2]):
+            return False
+        facts = snapshot[-1]
+        if (not isinstance(keep, list) or any(type(i) is not int or not 0 <= i < len(facts) for i in keep)
+                or len(set(keep)) != len(keep)):
+            return False
+        selected = [facts[i] for i in sorted(keep)]
+        # Always keep the recent conversational tail, independent of model advice.
+        selected = list(dict.fromkeys(selected + list(facts[-8:])))
+        if facts and not selected:
+            return False
+        if len(selected) >= len(facts):
+            return False
+        if snapshot[-2]:
+            self.private = selected
+        else:
+            self.public = selected
+        self.memory_revision += 1
+        # Old IDs cannot be ACKed: pending first-segment + sequence + stream gate.
+        self.revealed.intersection_update(s.name for s in self.pending)
         return True
 
     def image_ready(self, event, *, topic):
@@ -290,8 +433,10 @@ class Session:
             return {}
         # No arbitrary model-authored summary can promote proposed facts.
         return {'heard': tuple(self.public), 'game': deepcopy(self.game),
+                'recent': deepcopy([r for r in self.recent if (not shared and self.private_mode) or not r['private']]),
+                'facts': deepcopy({k: v for k, v in self.facts.items() if (not shared and self.private_mode) or not v['private']}),
                 'unrevealed': {} if shared else deepcopy(self.secrets),
-                'private': () if shared else tuple(self.private),
+                'private': tuple(self.private) if self.private_mode and not shared else (),
                 'partial_unknown': tuple(sorted(self.uncertain))}
 
     def handoff(self):

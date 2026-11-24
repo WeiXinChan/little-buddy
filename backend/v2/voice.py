@@ -46,7 +46,7 @@ def decode(raw):
                'ack': {'identity', 'player', 'stream', 'segment', 'head'}, 'end': set()}
     if (not isinstance(event, dict) or event.get('v') != 2 or type(event.get('v')) is not int
             or event.get('type') not in schemas
-            or (set(event) - ({'speech', 'age_ms'} if event['type'] == 'input' else set())) != schemas[event['type']] | {'v', 'type', 'epoch', 'seq'}
+            or (set(event) - ({'speech', 'age_ms'} if event['type'] == 'input' else {'age_ms'} if event['type'] == 'wake_solo' else set())) != schemas[event['type']] | {'v', 'type', 'epoch', 'seq'}
             or any(type(event[k]) is not int or event[k] < 0 for k in ('epoch', 'seq'))):
         raise WireError('schema')
     return event
@@ -184,9 +184,11 @@ class VoicePeer:
         elif kind == 'wake':
             self.session.valid_interaction()
         elif kind == 'wake_solo':
-            if not self.capture and (self.generation is None or self.generation.done()):
+            if (not self.awaiting_input and self.prepared is None and not self.capture
+                    and (self.generation is None or self.generation.done())):
                 self.input_budget = ResponseBudget(self.session.clock)
-                self.input_budget.speech()
+                self.input_budget.speech(event.get('age_ms', 0))
+                self.input_budget.remaining()
                 self.awaiting_input = True
                 await self.decision(None, 'new_turn', self.revision, self.input_budget.deadline)
         elif kind == 'advance':
@@ -252,6 +254,7 @@ class VoicePeer:
             await self.commands()
 
     async def analyze(self, pcm, epoch, revision):
+        session_id = self.session.session
         try:
             async with asyncio.timeout(self.input_budget.remaining()):
                 async with self.resource(self.providers.recognize(16000)) as recognizer:
@@ -266,7 +269,7 @@ class VoicePeer:
                         or result['completion'] not in {'complete', 'incomplete', 'thinking'}
                         or result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown'}):
                     raise WireError('endpoint schema')
-                if epoch != self.epoch or revision != self.revision or not self.session.active:
+                if epoch != self.epoch or revision != self.revision or session_id != self.session.session or not self.session.active:
                     return
                 self.input_budget.remaining()
                 if result['completion'] == 'thinking':
@@ -276,7 +279,7 @@ class VoicePeer:
         except asyncio.CancelledError:
             raise
         except Exception:
-            if epoch == self.epoch and revision == self.revision:
+            if epoch == self.epoch and revision == self.revision and session_id == self.session.session:
                 await self.send('decision', meaning='unknown', intent='', revision=revision)
             if self.quarantined:
                 await self.socket.close(1011, 'resource unavailable')
@@ -295,7 +298,23 @@ class VoicePeer:
             self.awaiting_input = False
         await self.send('decision', meaning=meaning, intent=intent, revision=revision)
 
+    async def compact_memory(self, epoch):
+        if not hasattr(self.providers, 'compact'):
+            return
+        if max(len(self.session.public), len(self.session.private)) < 40 and len(self.session.revealed) < 80 and len(json.dumps(self.session.context(), ensure_ascii=False).encode()) < 24000:
+            return
+        snapshot = self.session.memory_snapshot(private=self.session.private_mode)
+        keep = await self.providers.compact(snapshot[-1])
+        if epoch != self.epoch:
+            raise WireError('stale summary')
+        self.session.compact(snapshot, keep)
+        if len(self.session.revealed) >= 80:
+            # Replays remain rejected by exact pending-front ID and task sequence.
+            self.session.revealed.intersection_update(s.name for s in self.session.pending)
+
     async def respond(self, text, epoch):
+        session_id = self.session.session
+        stage = 'bind'
         try:
             while self.session.player is None:
                 self.changed.clear()
@@ -304,13 +323,73 @@ class VoicePeer:
                 await self.changed.wait()
             # Unified model receives the authoritative played-only context. Supplier
             # adaptation belongs to M05; no unrestricted model-proposed facts enter it.
-            async with self.resource(self.providers.answer(text, self.session.context())) as sentences:
+            await self.compact_memory(epoch)
+            state = None
+            if hasattr(self.providers, 'plan'):
+                context = self.session.context()
+                stage = 'plan'
+                plan = await self.providers.plan(text, context)
+                if epoch != self.epoch or not self.session._output_live():
+                    return
+                action = plan['action']
+                if action == 'handoff' and any((self.session.recent, self.session.facts,
+                                                         self.session.public, self.session.private,
+                                                         self.session.game, self.session.secrets)):
+                    old = self.session
+                    deadline = old.deadline
+                    old.handoff()
+                    await self.commands()
+                    if self.recognition is not None and not self.recognition.done():
+                        self.recognition.cancel()
+                    self.capture.clear()
+                    self.analysis = self.next_probe = self.prepared = None
+                    self.ack_identity = None
+                    self.session = Session(old.clock, ttl=old.ttl, lease=old.lease, budget=old.budget,
+                                           capacity=old.capacity, progress_timeout=old.progress_timeout)
+                    # A normal client stop/epoch transition then binds a fresh track.
+                    # The existing request keeps its original first-response deadline.
+                    await self.decision(text, 'new_turn', self.revision, deadline)
+                    return
+                elif action == 'private':
+                    self.session.private_mode = True
+                elif action in {'change', 'leave'} and self.session.private_mode:
+                    self.session.private_mode = False
+                    plan = await self.providers.plan(text, self.session.context(shared=True))
+                if action == 'leave':
+                    plan.update(mode='chat', rules='', roles=[], secrets={})
+                if epoch != self.epoch or not self.session._output_live():
+                    return
+                stage = 'facts'
+                facts = await self.providers.facts(text)
+                if epoch != self.epoch or not self.session._output_live():
+                    return
+                stage = 'fact_commit'
+                self.session.record_input(text, facts)
+                stage = 'safety'
+                if not await self.providers.safe(''.join(plan['sentences']), self.session.context()):
+                    raise WireError('safety')
+                state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
+                @asynccontextmanager
+                async def planned():
+                    async def items():
+                        for sentence in plan['sentences']:
+                            if len(plan['sentences']) > 1 and not await self.providers.safe(sentence, self.session.context()):
+                                raise WireError('safety')
+                            yield sentence
+                    yield items()
+                manager = planned()
+            else:
+                manager = self.providers.answer(text, self.session.context())
+            async with self.resource(manager) as sentences:
+                sentence_number = 0
                 async for proposed in sentences:
+                    sentence_number += 1
                     if not isinstance(proposed, str) or len(proposed) > 2048:
                         raise WireError('text capacity')
                     approved = self.policy.segment(proposed)
                     if not approved:
                         raise WireError('policy')
+                    stage = 'synthesis'
                     async with self.resource(self.providers.synthesize(approved, 24000)) as chunks:
                         # One-chunk lookahead marks the final chunk's public fact.
                         previous = None
@@ -322,7 +401,9 @@ class VoicePeer:
                             previous = chunk
                         if previous is None:
                             raise WireError('empty synthesis')
-                        await self.audio(previous, approved, epoch)
+                        await self.audio(previous, approved, epoch,
+                                         state=state if state is not None and sentence_number == len(plan['sentences']) else None,
+                                         anchors=tuple(k for k, i in plan['anchors'].items() if i == sentence_number-1) if state is not None else ())
             while self.session.pending:
                 self.changed.clear()
                 if epoch != self.epoch or not self.session._output_live():
@@ -333,16 +414,19 @@ class VoicePeer:
         except asyncio.CancelledError:
             raise
         except Exception as failure:
+            if epoch != self.epoch or session_id != self.session.session:
+                return
+            self.last_failure = dict(stage=stage, kind=type(failure).__name__)
             # Exception messages may contain provider content/credentials: never emit.
             self.session.interrupt()
             await self.commands()
-            await self.send('failure', code=failure.code if isinstance(failure, VoiceFault) else 'voice')
+            await self.send('failure', code=failure.code if isinstance(failure, VoiceFault) else 'timeout' if isinstance(failure, TimeoutError) else 'voice')
             if self.quarantined:
                 await self.socket.close(1011, 'resource unavailable')
         finally:
             text = ''
 
-    async def audio(self, pcm, public, epoch):
+    async def audio(self, pcm, public, epoch, state=None, anchors=()):
         while len(self.session.pending) >= 2 or self.suspended:
             self.changed.clear()
             if epoch != self.epoch or not self.session._output_live():
@@ -350,10 +434,13 @@ class VoicePeer:
             await self.changed.wait()
         if epoch != self.epoch:
             raise WireError('revoked')
+        await self.compact_memory(epoch)
+        if epoch != self.epoch or not self.session._output_live():
+            raise WireError('revoked')
         name, start = uuid4().hex, self.session.sent_end
         end = start + len(pcm)//2
         if not self.session.send(replace(self.tts_identity, sequence=self.send_sequence),
-                                 name=name, public=public, end=end, approved=True, effective=True):
+                                 name=name, public=public, end=end, approved=True, effective=True, state=state, anchors=anchors):
             raise WireError('send rejected')
         self.send_sequence += 1
         await self.send('audio', player=self.session.player, stream=self.session.stream,

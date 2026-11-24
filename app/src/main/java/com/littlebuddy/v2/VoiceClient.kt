@@ -36,9 +36,10 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         { version -> send("advance", "revision" to version); candidate() },
         { version -> send("probe", "revision" to version) },
         { version -> send("seal", "revision" to version); inputSerial++ ; outputBusy = true },
-        { send("wake_solo"); outputBusy = true },
+        { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true },
         { send("thinking_prompt", "revision" to gateVersion()); status("thinking") },
         { isAwake = false; idleSerial++; interrupt(); status("wake") })
+    private fun gateDeadline(): Long = gate.responseDeadline
     private fun gateVersion(): Long = gate.revision
     private var ackIdentity: JSONObject? = null
     private var ackSequence = 0L
@@ -166,7 +167,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         send("input", "pcm" to Base64.encodeToString(bytes.array(), Base64.NO_WRAP), "speech" to speech, "age_ms" to age)
         bytes.array().fill(0)
     }
-    fun wake() { isAwake = true; gate.wake(); send("wake"); status("listening") }
+    fun wake(observedAt: Long = SystemClock.elapsedRealtime()) { if (isAwake) return; isAwake = true; gate.wake(observedAt); send("wake"); status("listening") }
     fun frame(samples: ShortArray, speech: Boolean, capturedAt: Long = SystemClock.elapsedRealtime()) {
         if (speech) gate.speech(capturedAt) else gate.quiet()
         input(samples, samples.size, speech, capturedAt)

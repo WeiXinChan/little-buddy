@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.littlebuddy.v2.Recheck97EdgesTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:07:52.428Z" hostname="VM-0-12-ubuntu" time="0.002">
+  <properties/>
+  <testcase name="soloProposalMustAlsoExpireWhenNetworkIsSilent" classname="com.littlebuddy.v2.Recheck97EdgesTest" time="0.002"/>
+  <testcase name="futureCaptureBoundaryIsRejected" classname="com.littlebuddy.v2.Recheck97EdgesTest" time="0.0"/>
+  <testcase name="ordinarySpeechExpiresWithoutAnyServerReply" classname="com.littlebuddy.v2.Recheck97EdgesTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

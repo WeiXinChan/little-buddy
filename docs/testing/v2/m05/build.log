@@ -1,0 +1,100 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.13/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+[=========                              ] 25%
+WARNING: platform-tools package is not installed.
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preV2DebugBuild UP-TO-DATE
+> Task :app:generateV2DebugBuildConfig UP-TO-DATE
+> Task :app:checkV2DebugAarMetadata UP-TO-DATE
+> Task :app:processV2DebugNavigationResources UP-TO-DATE
+> Task :app:compileV2DebugNavigationResources UP-TO-DATE
+> Task :app:generateV2DebugResValues UP-TO-DATE
+> Task :app:mapV2DebugSourceSetPaths UP-TO-DATE
+> Task :app:generateV2DebugResources UP-TO-DATE
+> Task :app:mergeV2DebugResources UP-TO-DATE
+> Task :app:packageV2DebugResources UP-TO-DATE
+> Task :app:parseV2DebugLocalResources UP-TO-DATE
+> Task :app:createV2DebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksV2Debug UP-TO-DATE
+> Task :app:processV2DebugMainManifest UP-TO-DATE
+> Task :app:processV2DebugManifest UP-TO-DATE
+> Task :app:processV2DebugManifestForPackage UP-TO-DATE
+> Task :app:processV2DebugResources UP-TO-DATE
+> Task :app:compileV2DebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileV2Debug UP-TO-DATE
+> Task :app:compileV2DebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleV2DebugClassesToRuntimeJar UP-TO-DATE
+> Task :app:bundleV2DebugClassesToCompileJar UP-TO-DATE
+> Task :app:compileV2DebugUnitTestKotlin UP-TO-DATE
+> Task :app:preV2DebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileV2DebugUnitTest UP-TO-DATE
+> Task :app:compileV2DebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processV2DebugJavaRes UP-TO-DATE
+> Task :app:processV2DebugUnitTestJavaRes UP-TO-DATE
+> Task :app:testV2DebugUnitTest UP-TO-DATE
+> Task :app:mergeV2DebugNativeDebugMetadata NO-SOURCE
+> Task :app:mergeV2DebugShaders
+> Task :app:compileV2DebugShaders NO-SOURCE
+> Task :app:generateV2DebugAssets UP-TO-DATE
+> Task :app:mergeV2DebugAssets
+> Task :app:compressV2DebugAssets
+> Task :app:checkV2DebugDuplicateClasses
+> Task :app:desugarV2DebugFileDependencies
+> Task :app:mergeExtDexV2Debug
+> Task :app:mergeLibDexV2Debug
+> Task :app:dexBuilderV2Debug
+> Task :app:mergeProjectDexV2Debug
+> Task :app:mergeV2DebugGlobalSynthetics
+> Task :app:mergeV2DebugJavaResource
+> Task :app:mergeV2DebugJniLibFolders
+> Task :app:mergeV2DebugNativeLibs
+
+> Task :app:stripV2DebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libonnxruntime.so, libsherpa-onnx-jni.so. Run with --info option to learn more.
+
+> Task :app:validateSigningV2Debug
+> Task :app:writeV2DebugAppMetadata
+> Task :app:writeV2DebugSigningConfigVersions
+> Task :app:packageV2Debug
+> Task :app:createV2DebugApkListingFileRedirect
+> Task :app:assembleV2Debug
+> Task :app:preV2DebugAndroidTestBuild SKIPPED
+> Task :app:processV2DebugAndroidTestManifest
+> Task :app:generateV2DebugAndroidTestBuildConfig
+> Task :app:checkV2DebugAndroidTestAarMetadata
+> Task :app:processV2DebugAndroidTestNavigationResources
+> Task :app:compileV2DebugAndroidTestNavigationResources
+> Task :app:generateV2DebugAndroidTestResValues
+> Task :app:mapV2DebugAndroidTestSourceSetPaths
+> Task :app:generateV2DebugAndroidTestResources
+> Task :app:mergeV2DebugAndroidTestResources
+> Task :app:processV2DebugAndroidTestResources
+> Task :app:compileV2DebugAndroidTestKotlin
+> Task :app:javaPreCompileV2DebugAndroidTest
+> Task :app:compileV2DebugAndroidTestJavaWithJavac
+> Task :app:mergeV2DebugAndroidTestShaders
+> Task :app:compileV2DebugAndroidTestShaders NO-SOURCE
+> Task :app:generateV2DebugAndroidTestAssets UP-TO-DATE
+> Task :app:mergeV2DebugAndroidTestAssets
+> Task :app:compressV2DebugAndroidTestAssets
+> Task :app:checkV2DebugAndroidTestDuplicateClasses
+> Task :app:desugarV2DebugAndroidTestFileDependencies
+> Task :app:mergeExtDexV2DebugAndroidTest
+> Task :app:mergeLibDexV2DebugAndroidTest
+> Task :app:dexBuilderV2DebugAndroidTest
+> Task :app:mergeProjectDexV2DebugAndroidTest
+> Task :app:mergeV2DebugAndroidTestGlobalSynthetics
+> Task :app:processV2DebugAndroidTestJavaRes
+> Task :app:mergeV2DebugAndroidTestJavaResource
+> Task :app:mergeV2DebugAndroidTestJniLibFolders
+> Task :app:mergeV2DebugAndroidTestNativeLibs NO-SOURCE
+> Task :app:stripV2DebugAndroidTestDebugSymbols NO-SOURCE
+> Task :app:validateSigningV2DebugAndroidTest
+> Task :app:writeV2DebugAndroidTestSigningConfigVersions
+> Task :app:packageV2DebugAndroidTest
+> Task :app:createV2DebugAndroidTestApkListingFileRedirect
+> Task :app:assembleV2DebugAndroidTest
+
+BUILD SUCCESSFUL in 51s
+75 actionable tasks: 49 executed, 26 up-to-date

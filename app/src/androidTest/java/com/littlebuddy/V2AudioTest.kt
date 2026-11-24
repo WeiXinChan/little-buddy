@@ -192,6 +192,34 @@ class V2AudioTest {
     @Test fun realTlsWebsocketFeedsRealTrackAndAckReturnsToBackend()=roundTrip(false)
     @Test fun suppressedFinalAckCannotPassRoundTripOracle()=roundTrip(true)
 
+    @Test fun soloNoServerFramesLocallyCancelsRealVoiceClient() {
+        val address=args.getString("v2SilentAddress")
+        val token=args.getString("v2FixtureToken")
+        assumeNotNull(address,token) // Requires the authenticated blackhole fixture.
+        val thread=HandlerThread("v2-solo-blackhole").apply{start()}
+        val owner=Handler(thread.looper)
+        val opened=CountDownLatch(1); val expired=CountDownLatch(1)
+        var client:VoiceClient?=null; var began=0L; var ended=0L
+        owner.post {
+            client=VoiceClient(owner,{ if(it=="wake")opened.countDown() },{}, {_,_->},
+                { ended=SystemClock.elapsedRealtime();expired.countDown() })
+            client!!.connect(checkNotNull(address),checkNotNull(token))
+        }
+        try {
+            assertTrue("actual TLS websocket open",opened.await(5,TimeUnit.SECONDS))
+            owner.post { began=SystemClock.elapsedRealtime();client!!.wake(began) }
+            assertTrue("without any server application frames local timeout must close",expired.await(17,TimeUnit.SECONDS))
+            assertTrue("15s wake boundary includes solo wait",ended-began in 15000..16000)
+            val checked=CountDownLatch(1)
+            owner.post { assertFalse(client!!.isAwake);assertNull(client!!.nativeProof().binding);checked.countDown() }
+            assertTrue(checked.await(1,TimeUnit.SECONDS))
+        } finally {
+            val done=CountDownLatch(1)
+            owner.post {client?.close();done.countDown();thread.quitSafely()}
+            assertTrue(done.await(1,TimeUnit.SECONDS));thread.join(1000)
+        }
+    }
+
     @Test fun permissionRevocationPreparation() {
         assumeTrue(args.getString("v2PermissionPhase")=="prepare")
         val(address,token)=fixture(); val activity=launch()
