@@ -1,0 +1,69 @@
+{
+  "tool": "eSpeak NG text-to-speech: 1.51  Data at: /usr/lib/x86_64-linux-gnu/espeak-ng-data",
+  "tool_license": "GPL-3.0-or-later; no human audio input; generated synthetic speech test fixtures",
+  "rows": [
+    {
+      "name": "enter",
+      "text": "瓦力瓦力进入管理页面",
+      "source": "espeak-ng cmn -s150; locally generated synthetic Mandarin",
+      "sha256": "1aae9a1bb2b548d67aa6d9695330f6dfef048d9f3481afebb4d249fc16469806",
+      "frames": 87836
+    },
+    {
+      "name": "cancel",
+      "text": "取消",
+      "source": "espeak-ng cmn -s150; locally generated synthetic Mandarin",
+      "sha256": "1a5dc3c9f8854a0f07264e94a8c658e3e5e26f31c5918830bf8a347050c6106a",
+      "frames": 48237
+    },
+    {
+      "name": "exit",
+      "text": "退出管理页面",
+      "source": "espeak-ng cmn -s150; locally generated synthetic Mandarin",
+      "sha256": "6a375ee96f71612bf1c0595bdde9d618a2e7dcdb66ec694184764dc507e535d1",
+      "frames": 78322
+    },
+    {
+      "name": "near",
+      "text": "哪里哪里进入公园里面",
+      "source": "espeak-ng cmn -s150; locally generated synthetic Mandarin",
+      "sha256": "48155d93889574dafec7d67d9e62d1af1b8e0319e662372e08871ed89846a577",
+      "frames": 101760
+    },
+    {
+      "name": "negative",
+      "text": "瓦力瓦力不要进入管理页面",
+      "source": "espeak-ng cmn -s150; locally generated synthetic Mandarin",
+      "sha256": "a06aa440a0cf7c1a78860b390d7da351ca83263c5d1024c34b0b822412a6353d",
+      "frames": 100663
+    },
+    {
+      "name": "discussion",
+      "text": "我在讲瓦力瓦力进入管理页面这个句子",
+      "source": "espeak-ng cmn -s150; locally generated synthetic Mandarin",
+      "sha256": "221b0e613545db349b717ae2e53a5728639c115ad79fe5c8f1857f698ebf00bd",
+      "frames": 130959
+    },
+    {
+      "name": "cancel_negative",
+      "text": "不要取消",
+      "source": "espeak-ng cmn -s150; locally generated synthetic Mandarin",
+      "sha256": "b5b57db3b4cf6ebb4784991c92ef8574eb926099fb791694e8e60eb6e6e34faf",
+      "frames": 63684
+    },
+    {
+      "name": "cancel_discussion",
+      "text": "故事里面提到了取消这个词",
+      "source": "espeak-ng cmn -s150; locally generated synthetic Mandarin",
+      "sha256": "176a29d6823e98866332da19ccd9b0db4d64f48be119e1e82f49435bced09e8b",
+      "frames": 107288
+    },
+    {
+      "name": "wake",
+      "text": "瓦力瓦力",
+      "source": "espeak-ng cmn -s150; locally generated synthetic Mandarin",
+      "sha256": "5f986179a7af11533f2defeaa83687b3d1331b5954a097b513b498f7418313fc",
+      "frames": 50081
+    }
+  ]
+}

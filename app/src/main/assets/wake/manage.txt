@@ -1,3 +1,7 @@
-w ǎ l ì w ǎ l ì j ìn r ù g u ǎn l ǐ y è m iàn @进入管理
-q ǔ x i āo @取消
-t u ì ch ū g u ǎn l ǐ y è m iàn @退出管理
+w ǎ l ì w ǎ l ì j ìn r ù g uǎn l ǐ y è m iàn @进入管理
+q ǔ x iāo @取消
+t uì ch ū g uǎn l ǐ y è m iàn @退出管理
+w ǎ l ì w ǎ l ì q ǐng j ìn r ù g uǎn l ǐ y è m iàn @进入管理
+w ǎ l ì w ǎ l ì d ǎ k āi g uǎn l ǐ y è m iàn @进入管理
+b ú y ào @否定
+b ù y ào @否定

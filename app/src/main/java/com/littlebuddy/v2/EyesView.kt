@@ -12,6 +12,7 @@ import kotlin.math.sin
 
 /** Actual default V2 surface; no text, controls or debug affordances. */
 internal class EyesView(context: Context) : View(context) {
+    @Volatile var drawSerial=0L; private set
     var mood = EyeMood.WAKE
         set(value) { field = value; invalidate() }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -25,6 +26,7 @@ internal class EyesView(context: Context) : View(context) {
     }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        drawSerial++
         canvas.drawColor(Color.rgb(7, 14, 29))
         val now = SystemClock.uptimeMillis()
         image?.let {

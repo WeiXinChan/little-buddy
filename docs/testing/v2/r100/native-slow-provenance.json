@@ -1,0 +1,14 @@
+[
+  {
+    "name": "native_slow_polite",
+    "text": "瓦力瓦力请进入管理页面",
+    "source": "espeak-ng cmn native synthesis -s100; no time stretch; robotic Mandarin quality limitation",
+    "sha256": "507f3b0958915daa017ff0f2f8ca160473abab5bcb2b8ffca76c048f7082a156"
+  },
+  {
+    "name": "native_slow_open",
+    "text": "瓦力瓦力打开管理页面",
+    "source": "espeak-ng cmn native synthesis -s100; no time stretch; robotic Mandarin quality limitation",
+    "sha256": "038cea8a22db56b2c02642180a4694a7899f42c4e8b964c625f2f30dff1516bb"
+  }
+]

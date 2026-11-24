@@ -1,0 +1,677 @@
+{
+  "python_library": "1.12.27",
+  "config": {
+    "score": 1.5,
+    "threshold": 0.25,
+    "trailing_blanks": 2,
+    "active_paths": 4,
+    "threads": 1,
+    "frame": 320,
+    "sample_rate": 16000,
+    "tail_zero_samples": 32000
+  },
+  "model_sha256": {
+    "decoder-epoch-13-avg-2-chunk-16-left-64.onnx": "63a22dd60f40fff082ac3e09afa507f6787da36df76ded2fbe145fa233e22c21",
+    "encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx": "408bbd740838c42d5bf6d1c5b80b3c88b616c7860b92d980328b5b068c76ae48",
+    "joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx": "190d4067b4cc20b72a42a1916e69d92052000fb7051a427ebb1bc72a69207dc1"
+  },
+  "cases": [
+    {
+      "name": "enter_polite",
+      "variant": "original",
+      "input_finished": false,
+      "decodes": 18,
+      "pcm_sha256": "341373a5f7f613871b95d02384c40acc3821a7d3bf21aa8b3acca60420f4fe8c",
+      "hits": [
+        {
+          "name": "进入管理",
+          "at_sample": 53760,
+          "timestamps": [
+            0.9599999785423279,
+            1.0,
+            1.0799999237060547,
+            1.159999966621399,
+            1.2799999713897705,
+            1.3199999332427979,
+            1.4399999380111694,
+            1.5199999809265137,
+            1.71999990940094,
+            1.8399999141693115,
+            1.9199999570846558,
+            2.0,
+            2.0799999237060547,
+            2.1599998474121094,
+            2.2799999713897705,
+            2.359999895095825,
+            2.440000057220459,
+            2.4800000190734863,
+            2.559999942779541,
+            2.6399998664855957,
+            2.7200000286102295,
+            2.799999952316284
+          ]
+        }
+      ]
+    },
+    {
+      "name": "enter_polite",
+      "variant": "original",
+      "input_finished": true,
+      "decodes": 19,
+      "pcm_sha256": "341373a5f7f613871b95d02384c40acc3821a7d3bf21aa8b3acca60420f4fe8c",
+      "hits": [
+        {
+          "name": "进入管理",
+          "at_sample": 53760,
+          "timestamps": [
+            0.9599999785423279,
+            1.0,
+            1.0799999237060547,
+            1.159999966621399,
+            1.2799999713897705,
+            1.3199999332427979,
+            1.4399999380111694,
+            1.5199999809265137,
+            1.71999990940094,
+            1.8399999141693115,
+            1.9199999570846558,
+            2.0,
+            2.0799999237060547,
+            2.1599998474121094,
+            2.2799999713897705,
+            2.359999895095825,
+            2.440000057220459,
+            2.4800000190734863,
+            2.559999942779541,
+            2.6399998664855957,
+            2.7200000286102295,
+            2.799999952316284
+          ]
+        }
+      ]
+    },
+    {
+      "name": "enter_polite",
+      "variant": "volume",
+      "input_finished": false,
+      "decodes": 18,
+      "pcm_sha256": "798a14aa6727ad02f5497f868661e72a3cef24c8041a386981a5741afe1b54fb",
+      "hits": [
+        {
+          "name": "进入管理",
+          "at_sample": 53760,
+          "timestamps": [
+            0.9599999785423279,
+            1.0,
+            1.0799999237060547,
+            1.159999966621399,
+            1.2799999713897705,
+            1.3199999332427979,
+            1.4399999380111694,
+            1.5199999809265137,
+            1.71999990940094,
+            1.8399999141693115,
+            1.9199999570846558,
+            2.0,
+            2.0799999237060547,
+            2.1599998474121094,
+            2.2799999713897705,
+            2.359999895095825,
+            2.440000057220459,
+            2.4800000190734863,
+            2.559999942779541,
+            2.6399998664855957,
+            2.7200000286102295,
+            2.799999952316284
+          ]
+        }
+      ]
+    },
+    {
+      "name": "enter_polite",
+      "variant": "volume",
+      "input_finished": true,
+      "decodes": 19,
+      "pcm_sha256": "798a14aa6727ad02f5497f868661e72a3cef24c8041a386981a5741afe1b54fb",
+      "hits": [
+        {
+          "name": "进入管理",
+          "at_sample": 53760,
+          "timestamps": [
+            0.9599999785423279,
+            1.0,
+            1.0799999237060547,
+            1.159999966621399,
+            1.2799999713897705,
+            1.3199999332427979,
+            1.4399999380111694,
+            1.5199999809265137,
+            1.71999990940094,
+            1.8399999141693115,
+            1.9199999570846558,
+            2.0,
+            2.0799999237060547,
+            2.1599998474121094,
+            2.2799999713897705,
+            2.359999895095825,
+            2.440000057220459,
+            2.4800000190734863,
+            2.559999942779541,
+            2.6399998664855957,
+            2.7200000286102295,
+            2.799999952316284
+          ]
+        }
+      ]
+    },
+    {
+      "name": "enter_polite",
+      "variant": "atempo",
+      "input_finished": false,
+      "decodes": 21,
+      "pcm_sha256": "5e511a71f69ebe917de8d7ca166d311a4f7781c014985b93b9d494ff48c6c7df",
+      "hits": []
+    },
+    {
+      "name": "enter_polite",
+      "variant": "atempo",
+      "input_finished": true,
+      "decodes": 21,
+      "pcm_sha256": "5e511a71f69ebe917de8d7ca166d311a4f7781c014985b93b9d494ff48c6c7df",
+      "hits": []
+    },
+    {
+      "name": "enter_polite",
+      "variant": "combined",
+      "input_finished": false,
+      "decodes": 21,
+      "pcm_sha256": "d4d5de99591352ce57a553b36003dec0d4f7f99d4332d1eba19eb20e69c1fe6e",
+      "hits": []
+    },
+    {
+      "name": "enter_polite",
+      "variant": "combined",
+      "input_finished": true,
+      "decodes": 21,
+      "pcm_sha256": "d4d5de99591352ce57a553b36003dec0d4f7f99d4332d1eba19eb20e69c1fe6e",
+      "hits": []
+    },
+    {
+      "name": "enter_open",
+      "variant": "original",
+      "input_finished": false,
+      "decodes": 18,
+      "pcm_sha256": "6e264dd72391f5542d6ee81943807946b3d5b7ccf996cf2bf939b8ff0f0c0500",
+      "hits": [
+        {
+          "name": "进入管理",
+          "at_sample": 48640,
+          "timestamps": [
+            0.9599999785423279,
+            1.0,
+            1.0799999237060547,
+            1.159999966621399,
+            1.2400000095367432,
+            1.3199999332427979,
+            1.4399999380111694,
+            1.4800000190734863,
+            1.71999990940094,
+            1.7999999523162842,
+            1.9199999570846558,
+            1.959999918937683,
+            2.0799999237060547,
+            2.1599998474121094,
+            2.240000009536743,
+            2.2799999713897705,
+            2.3999998569488525,
+            2.440000057220459,
+            2.5199999809265137,
+            2.5999999046325684
+          ]
+        }
+      ]
+    },
+    {
+      "name": "enter_open",
+      "variant": "original",
+      "input_finished": true,
+      "decodes": 18,
+      "pcm_sha256": "6e264dd72391f5542d6ee81943807946b3d5b7ccf996cf2bf939b8ff0f0c0500",
+      "hits": [
+        {
+          "name": "进入管理",
+          "at_sample": 48640,
+          "timestamps": [
+            0.9599999785423279,
+            1.0,
+            1.0799999237060547,
+            1.159999966621399,
+            1.2400000095367432,
+            1.3199999332427979,
+            1.4399999380111694,
+            1.4800000190734863,
+            1.71999990940094,
+            1.7999999523162842,
+            1.9199999570846558,
+            1.959999918937683,
+            2.0799999237060547,
+            2.1599998474121094,
+            2.240000009536743,
+            2.2799999713897705,
+            2.3999998569488525,
+            2.440000057220459,
+            2.5199999809265137,
+            2.5999999046325684
+          ]
+        }
+      ]
+    },
+    {
+      "name": "enter_open",
+      "variant": "volume",
+      "input_finished": false,
+      "decodes": 18,
+      "pcm_sha256": "e808e5c703cb464f6e586a2fc81571a767540325d11ab835e2f7f802e6e57152",
+      "hits": [
+        {
+          "name": "进入管理",
+          "at_sample": 48640,
+          "timestamps": [
+            0.9599999785423279,
+            1.0,
+            1.0799999237060547,
+            1.159999966621399,
+            1.2799999713897705,
+            1.3199999332427979,
+            1.4399999380111694,
+            1.4800000190734863,
+            1.71999990940094,
+            1.7999999523162842,
+            1.9199999570846558,
+            1.959999918937683,
+            2.0799999237060547,
+            2.1599998474121094,
+            2.240000009536743,
+            2.319999933242798,
+            2.3999998569488525,
+            2.440000057220459,
+            2.5199999809265137,
+            2.5999999046325684
+          ]
+        }
+      ]
+    },
+    {
+      "name": "enter_open",
+      "variant": "volume",
+      "input_finished": true,
+      "decodes": 18,
+      "pcm_sha256": "e808e5c703cb464f6e586a2fc81571a767540325d11ab835e2f7f802e6e57152",
+      "hits": [
+        {
+          "name": "进入管理",
+          "at_sample": 48640,
+          "timestamps": [
+            0.9599999785423279,
+            1.0,
+            1.0799999237060547,
+            1.159999966621399,
+            1.2799999713897705,
+            1.3199999332427979,
+            1.4399999380111694,
+            1.4800000190734863,
+            1.71999990940094,
+            1.7999999523162842,
+            1.9199999570846558,
+            1.959999918937683,
+            2.0799999237060547,
+            2.1599998474121094,
+            2.240000009536743,
+            2.319999933242798,
+            2.3999998569488525,
+            2.440000057220459,
+            2.5199999809265137,
+            2.5999999046325684
+          ]
+        }
+      ]
+    },
+    {
+      "name": "enter_open",
+      "variant": "atempo",
+      "input_finished": false,
+      "decodes": 20,
+      "pcm_sha256": "c8e4bcc7c06f9fad4de35ebb804ddfbd21682d3831bd35b1fc09453028c7a5e9",
+      "hits": []
+    },
+    {
+      "name": "enter_open",
+      "variant": "atempo",
+      "input_finished": true,
+      "decodes": 20,
+      "pcm_sha256": "c8e4bcc7c06f9fad4de35ebb804ddfbd21682d3831bd35b1fc09453028c7a5e9",
+      "hits": []
+    },
+    {
+      "name": "enter_open",
+      "variant": "combined",
+      "input_finished": false,
+      "decodes": 20,
+      "pcm_sha256": "9d08f4a9b790b06fa0208af8b998c44a448a292bd03031ccae0875c392d53a83",
+      "hits": []
+    },
+    {
+      "name": "enter_open",
+      "variant": "combined",
+      "input_finished": true,
+      "decodes": 20,
+      "pcm_sha256": "9d08f4a9b790b06fa0208af8b998c44a448a292bd03031ccae0875c392d53a83",
+      "hits": []
+    },
+    {
+      "name": "negative",
+      "variant": "original",
+      "input_finished": false,
+      "decodes": 19,
+      "pcm_sha256": "8a864e806ba3683fd678a1c3eb4fc0815d04645514aa5a6dc2994538365e9fed",
+      "hits": [
+        {
+          "name": "否定",
+          "at_sample": 38400,
+          "timestamps": [
+            1.7599999904632568,
+            1.8399999141693115,
+            1.8799999952316284,
+            1.9199999570846558
+          ]
+        }
+      ]
+    },
+    {
+      "name": "negative",
+      "variant": "original",
+      "input_finished": true,
+      "decodes": 19,
+      "pcm_sha256": "8a864e806ba3683fd678a1c3eb4fc0815d04645514aa5a6dc2994538365e9fed",
+      "hits": [
+        {
+          "name": "否定",
+          "at_sample": 38400,
+          "timestamps": [
+            1.7599999904632568,
+            1.8399999141693115,
+            1.8799999952316284,
+            1.9199999570846558
+          ]
+        }
+      ]
+    },
+    {
+      "name": "negative",
+      "variant": "volume",
+      "input_finished": false,
+      "decodes": 19,
+      "pcm_sha256": "4d4710ee26802c4e33b2ea00e75f82026e82ad7dfbcc0c2e6c06986daa117de4",
+      "hits": [
+        {
+          "name": "否定",
+          "at_sample": 38400,
+          "timestamps": [
+            1.7599999904632568,
+            1.8399999141693115,
+            1.8799999952316284,
+            1.9199999570846558
+          ]
+        }
+      ]
+    },
+    {
+      "name": "negative",
+      "variant": "volume",
+      "input_finished": true,
+      "decodes": 19,
+      "pcm_sha256": "4d4710ee26802c4e33b2ea00e75f82026e82ad7dfbcc0c2e6c06986daa117de4",
+      "hits": [
+        {
+          "name": "否定",
+          "at_sample": 38400,
+          "timestamps": [
+            1.7599999904632568,
+            1.8399999141693115,
+            1.8799999952316284,
+            1.9199999570846558
+          ]
+        }
+      ]
+    },
+    {
+      "name": "negative",
+      "variant": "atempo",
+      "input_finished": false,
+      "decodes": 21,
+      "pcm_sha256": "9aa6a2b6acff8042e110026029831e87eaafc8359eb3ff6e90671a3f1f7e49de",
+      "hits": [
+        {
+          "name": "否定",
+          "at_sample": 43520,
+          "timestamps": [
+            2.0399999618530273,
+            2.119999885559082,
+            2.200000047683716,
+            2.240000009536743
+          ]
+        }
+      ]
+    },
+    {
+      "name": "negative",
+      "variant": "atempo",
+      "input_finished": true,
+      "decodes": 21,
+      "pcm_sha256": "9aa6a2b6acff8042e110026029831e87eaafc8359eb3ff6e90671a3f1f7e49de",
+      "hits": [
+        {
+          "name": "否定",
+          "at_sample": 43520,
+          "timestamps": [
+            2.0399999618530273,
+            2.119999885559082,
+            2.200000047683716,
+            2.240000009536743
+          ]
+        }
+      ]
+    },
+    {
+      "name": "negative",
+      "variant": "combined",
+      "input_finished": false,
+      "decodes": 21,
+      "pcm_sha256": "d232f6c851d0cbf5b7cd7623638c9ee90bcff52444273c92c373814e292224d1",
+      "hits": [
+        {
+          "name": "否定",
+          "at_sample": 43520,
+          "timestamps": [
+            2.0399999618530273,
+            2.1599998474121094,
+            2.200000047683716,
+            2.240000009536743
+          ]
+        }
+      ]
+    },
+    {
+      "name": "negative",
+      "variant": "combined",
+      "input_finished": true,
+      "decodes": 21,
+      "pcm_sha256": "d232f6c851d0cbf5b7cd7623638c9ee90bcff52444273c92c373814e292224d1",
+      "hits": [
+        {
+          "name": "否定",
+          "at_sample": 43520,
+          "timestamps": [
+            2.0399999618530273,
+            2.1599998474121094,
+            2.200000047683716,
+            2.240000009536743
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cancel_discussion",
+      "variant": "original",
+      "input_finished": false,
+      "decodes": 20,
+      "pcm_sha256": "acf5e9cd7d799f98323dc06239a2903cc84a761d2a63b34004208b64a447a7bd",
+      "hits": [
+        {
+          "name": "取消",
+          "at_sample": 48640,
+          "timestamps": [
+            2.319999933242798,
+            2.440000057220459,
+            2.559999942779541,
+            2.6399998664855957
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cancel_discussion",
+      "variant": "original",
+      "input_finished": true,
+      "decodes": 20,
+      "pcm_sha256": "acf5e9cd7d799f98323dc06239a2903cc84a761d2a63b34004208b64a447a7bd",
+      "hits": [
+        {
+          "name": "取消",
+          "at_sample": 48640,
+          "timestamps": [
+            2.319999933242798,
+            2.440000057220459,
+            2.559999942779541,
+            2.6399998664855957
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cancel_discussion",
+      "variant": "volume",
+      "input_finished": false,
+      "decodes": 20,
+      "pcm_sha256": "21c56f09aeb0a22bace1bb86cc54005b7bc315dc1f05a9f4acc8b7b97925a825",
+      "hits": [
+        {
+          "name": "取消",
+          "at_sample": 48640,
+          "timestamps": [
+            2.319999933242798,
+            2.440000057220459,
+            2.559999942779541,
+            2.6399998664855957
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cancel_discussion",
+      "variant": "volume",
+      "input_finished": true,
+      "decodes": 20,
+      "pcm_sha256": "21c56f09aeb0a22bace1bb86cc54005b7bc315dc1f05a9f4acc8b7b97925a825",
+      "hits": [
+        {
+          "name": "取消",
+          "at_sample": 48640,
+          "timestamps": [
+            2.319999933242798,
+            2.440000057220459,
+            2.559999942779541,
+            2.6399998664855957
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cancel_discussion",
+      "variant": "atempo",
+      "input_finished": false,
+      "decodes": 22,
+      "pcm_sha256": "21ccc348c68b6ccba3b7e2a0775e67e20d22cbe1b145537ae050824987ef9e61",
+      "hits": [
+        {
+          "name": "取消",
+          "at_sample": 58880,
+          "timestamps": [
+            2.7200000286102295,
+            2.879999876022339,
+            3.0,
+            3.0799999237060547
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cancel_discussion",
+      "variant": "atempo",
+      "input_finished": true,
+      "decodes": 22,
+      "pcm_sha256": "21ccc348c68b6ccba3b7e2a0775e67e20d22cbe1b145537ae050824987ef9e61",
+      "hits": [
+        {
+          "name": "取消",
+          "at_sample": 58880,
+          "timestamps": [
+            2.7200000286102295,
+            2.879999876022339,
+            3.0,
+            3.0799999237060547
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cancel_discussion",
+      "variant": "combined",
+      "input_finished": false,
+      "decodes": 22,
+      "pcm_sha256": "25bdd5e783c8e51944f5c9fd575f0df1a7bab1a72291be292033e73ff82bc72e",
+      "hits": [
+        {
+          "name": "取消",
+          "at_sample": 58880,
+          "timestamps": [
+            2.7200000286102295,
+            2.879999876022339,
+            3.0,
+            3.0799999237060547
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cancel_discussion",
+      "variant": "combined",
+      "input_finished": true,
+      "decodes": 22,
+      "pcm_sha256": "25bdd5e783c8e51944f5c9fd575f0df1a7bab1a72291be292033e73ff82bc72e",
+      "hits": [
+        {
+          "name": "取消",
+          "at_sample": 58880,
+          "timestamps": [
+            2.7200000286102295,
+            2.879999876022339,
+            3.0,
+            3.0799999237060547
+          ]
+        }
+      ]
+    }
+  ],
+  "native_slow_TTS": "NOT_RUN; atempo is DSP, not natural slow pronunciation"
+}

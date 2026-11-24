@@ -38,11 +38,31 @@ class V2EyesTest {
     private val inst get() = InstrumentationRegistry.getInstrumentation()
     private fun main(action: () -> Unit) = inst.runOnMainSync(action)
     private fun shot(name: String) {
-        inst.waitForIdleSync(); Thread.sleep(100)
+        inst.waitForIdleSync()
         val bitmap = checkNotNull(inst.uiAutomation.takeScreenshot())
         val out = File(inst.targetContext.filesDir, "m06").apply { mkdirs() }
         File(out,"$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
         assertTrue("actual screenshot must be landscape: ${bitmap.width}x${bitmap.height}",bitmap.width > bitmap.height)
+    }
+    private fun stableDefault(activity: V2VoiceActivity) {
+        val first=activity.eyesFrame; val deadline=SystemClock.elapsedRealtime()+5000
+        while(SystemClock.elapsedRealtime()<deadline) {
+            main { activity.requestEyesFrame() }
+            inst.waitForIdleSync()
+            if(activity.resumed && activity.hasWindowFocus() && activity.eyesFrame>=first+2) {
+                val bitmap=checkNotNull(inst.uiAutomation.takeScreenshot())
+                val dark=Color.rgb(7,14,29)
+                val stable=bitmap.getPixel(bitmap.width/2,bitmap.height/2)==dark && bitmap.getPixel(bitmap.width/2,32)==dark
+                bitmap.recycle()
+                if(stable)return
+            }
+            Thread.sleep(16)
+        }
+        throw AssertionError("default EyesView stable rendered frames missing: "+diagnostics(activity))
+    }
+    private fun saveTimeline(activity: V2VoiceActivity,name: String) {
+        File(inst.targetContext.filesDir,"m06").mkdirs()
+        File(inst.targetContext.filesDir,"m06/$name.json").writeText(activity.timelineJson())
     }
     private fun proof(activity: V2VoiceActivity): NativeEvidence {
         val latch = CountDownLatch(1); val result = AtomicReference<NativeEvidence>()
@@ -83,7 +103,7 @@ class V2EyesTest {
             receive.invoke(client,event.toString())
         } }
         try {
-            shot("01-default-landscape")
+            stableDefault(activity); shot("01-default-landscape")
             val deadline = SystemClock.elapsedRealtime()+15000
             while (proof(activity).recorder.frames == 0L && SystemClock.elapsedRealtime() < deadline) Thread.sleep(50)
             val diagnosis = diagnostics(activity)
@@ -157,14 +177,35 @@ class V2EyesTest {
             Thread.sleep(300); shot("14-button-cancel-wake")
             val before = proof(activity).recorder
             assertTrue("HOME precondition real recorder READ",before.started && before.recording && before.frames>0)
+            activity.mark("HOME_COMMAND_BEGIN")
             inst.uiAutomation.executeShellCommand("input keyevent KEYCODE_HOME").use {
                 java.io.FileInputStream(it.fileDescriptor).readBytes()
             }
-            Thread.sleep(600)
-            val stopped = proof(activity).recorder
-            assertEquals(before.session, stopped.session)
-            assertTrue(stopped.stopped && stopped.released && !stopped.recording)
-            Thread.sleep(100); assertEquals(stopped.frames,proof(activity).recorder.frames)
+            activity.mark("HOME_COMMAND_COMPLETE")
+            val homeDeadline=SystemClock.elapsedRealtime()+2000
+            while((activity.resumed || activity.hasWindowFocus()) && SystemClock.elapsedRealtime()<homeDeadline)Thread.sleep(20)
+            val top=inst.uiAutomation.executeShellCommand("dumpsys activity activities").use {
+                java.io.FileInputStream(it.fileDescriptor).bufferedReader().readLines()
+                    .filter { it.contains("topResumedActivity") || it.contains("mResumedActivity") }.joinToString("\n")
+            }
+            File(context.filesDir,"m06/home-top.txt").writeText(top)
+            activity.mark("HOME_STATE_OBSERVED")
+            saveTimeline(activity,"home-before-stop-check")
+            val homePackage=context.packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+            assertTrue("HOME must show resolved desktop, got $top",homePackage!=null && top.contains(homePackage))
+            assertFalse("HOME must actually pause old Host: $top",activity.resumed)
+            assertFalse("HOME must remove old Host focus: $top",activity.hasWindowFocus())
+            val stopDeadline=SystemClock.elapsedRealtime()+1000
+            var stopped=activity.immediateRecorder()
+            while(!(stopped.stopped && stopped.released && !stopped.recording) && SystemClock.elapsedRealtime()<stopDeadline) {
+                Thread.sleep(10); stopped=activity.immediateRecorder()
+            }
+            activity.mark("HOME_STOP_BUDGET_END")
+            saveTimeline(activity,"home-stop-result")
+            File(context.filesDir,"m06/home-proof.txt").writeText("before=$before after=$stopped "+diagnostics(activity))
+            assertEquals(before.session,stopped.session)
+            assertTrue("old native stop/release budget failed: $stopped",stopped.stopped && stopped.released && !stopped.recording)
+            Thread.sleep(100); assertEquals(stopped.frames,activity.immediateRecorder().frames)
             context.startActivity(Intent(context,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
             val returned=readyLocalHost()
             val returnedDiagnostics=diagnostics(returned ?: resumedHost() ?: activity)
@@ -184,7 +225,7 @@ class V2EyesTest {
             val restarted=readyLocalHost(host)
             assertNotNull("recreate must return to focused local KWS READ",restarted)
             assertEquals(EyeMood.WAKE,checkNotNull(restarted).currentMood)
-            shot("16-restart-default")
+            stableDefault(checkNotNull(restarted)); shot("16-restart-default")
         } finally { val current=resumedHost(); main { client.close(); current?.finish(); if(!activity.isFinishing) activity.finish() } }
     }
 }

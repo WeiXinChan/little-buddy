@@ -1,0 +1,86 @@
+case	enter	false	进入管理
+hit	151	进入管理	15359	44159
+case	enter_slow	false	进入管理
+hit	183	进入管理	15359	51199
+case	enter_fast	false	进入管理
+hit	135	进入管理	12799	38399
+case	enter_noise	false	进入管理
+hit	183	进入管理	23039	51839
+case	enter_polite	false	进入管理
+hit	167	进入管理	15359	46719
+case	enter_polite_slow	false	进入管理
+case	enter_polite_fast	false	进入管理
+hit	151	进入管理	12159	40960
+case	enter_polite_noise	false	进入管理
+hit	183	进入管理	20479	54399
+case	enter_open	false	进入管理
+hit	151	进入管理	15359	43519
+case	enter_open_slow	false	进入管理
+case	enter_open_fast	false	进入管理
+hit	135	进入管理	12159	38399
+case	enter_open_noise	false	进入管理
+hit	183	进入管理	22399	51199
+case	cancel	true	取消
+hit	87	取消	15359	21760
+case	cancel_slow	true	取消
+hit	87	取消	17920	24319
+case	cancel_fast	true	取消
+hit	71	取消	12799	19199
+case	cancel_noise	true	取消
+hit	103	取消	23039	29439
+case	exit	true	退出管理
+hit	119	退出管理	10239	33920
+case	exit_slow	true	退出管理
+hit	135	退出管理	15359	39039
+case	exit_fast	true	退出管理
+hit	103	退出管理	10239	30079
+case	exit_noise	true	退出管理
+hit	151	退出管理	22399	41600
+case	near	false	NONE
+case	near_slow	false	NONE
+case	near_fast	false	NONE
+case	negative	false	NONE
+hit	119	否定	28159	32639
+case	negative_slow	false	NONE
+hit	135	否定	32639	37760
+case	negative_fast	false	NONE
+case	discussion	false	NONE
+case	discussion_slow	false	NONE
+case	discussion_fast	false	NONE
+case	cancel_negative	true	NONE
+hit	87	否定	15359	20479
+hit	103	取消	21760	28159
+case	cancel_negative_slow	true	NONE
+hit	87	否定	16639	23039
+hit	119	取消	25599	31999
+case	cancel_negative_fast	true	NONE
+hit	71	否定	12159	18559
+hit	87	取消	19199	24959
+case	cancel_discussion	true	NONE
+hit	151	取消	37119	44159
+case	cancel_discussion_slow	true	NONE
+hit	183	取消	43520	51199
+case	cancel_discussion_fast	true	NONE
+hit	135	取消	32639	38399
+case	negative_pause_cancel_0.6	true	NONE
+hit	87	否定	15359	21119
+hit	247	取消	67199	72960
+case	negative_pause_exit_0.6	true	NONE
+hit	87	否定	15359	21119
+hit	279	退出管理	66559	85759
+case	negative_pause_cancel_1.6	true	NONE
+hit	87	否定	15359	21119
+hit	295	取消	83199	88960
+case	negative_pause_exit_1.6	true	NONE
+hit	87	否定	15359	21119
+hit	327	退出管理	81919	101759
+case	negative_pause_cancel_4.0	true	NONE
+hit	87	否定	15359	21119
+hit	407	取消	121599	127359
+case	negative_pause_exit_4.0	true	NONE
+hit	87	否定	15359	21119
+hit	455	退出管理	120319	139519
+case	cancel_continued_discussion	true	NONE
+hit	87	取消	15359	21760
+case	exit_continued_discussion	true	NONE
+hit	119	退出管理	10239	33920

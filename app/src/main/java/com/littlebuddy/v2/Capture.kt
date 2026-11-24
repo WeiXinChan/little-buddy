@@ -13,6 +13,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
+internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {})
+
 internal enum class CapturePhase { NOT_STARTED, THREAD_START, AUDIO_RECORD, WAKE_KWS, MANAGEMENT_KWS, START, READ, RELEASE, RELEASED, QUARANTINED }
 
 /** One recorder throughout wake/continuation and full-duplex interaction.
@@ -20,7 +22,15 @@ internal enum class CapturePhase { NOT_STARTED, THREAD_START, AUDIO_RECORD, WAKE
  */
 internal class Capture(private val assets: AssetManager, private val owner: Handler,
                        private val client: VoiceClient, private val failed: () -> Unit,
-                       private val managementChanged: (Boolean) -> Unit = {}) {
+                       private val managementChanged: (Boolean) -> Unit = {},
+                       private val allowed: ()->Boolean = { true },
+                       private val trace: (String,RecorderProof,String)->Unit = { _,_,_-> },
+                       private val hooks: CaptureHooks = CaptureHooks(),
+                       private val disposed: ()->Unit = {}) {
+    companion object { private val lease=AtomicBoolean(false) }
+    private var ownsLease=false
+    private val nativeLock=Any()
+    @Volatile private var nativeRecorder: AudioRecord? = null
     private val commandGeneration = AtomicLong(0)
     @Volatile private var management = false
     fun enterManagement() { commandGeneration.incrementAndGet(); management = true }
@@ -31,12 +41,18 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     private val pending = AtomicInteger(0)
     private var thread: Thread? = null
     @Volatile var nativeProof = RecorderProof(); private set
-    var quarantined = false; private set
-    fun start() {
-        check(thread == null && !quarantined)
-        cancelled.set(false)
+    @Volatile private var resourceFault = false
+    @Volatile private var pendingDisposal = false
+    val quarantined get() = resourceFault || (pendingDisposal && thread?.isAlive == true)
+    val closing get() = cancelled.get()
+    val workerDone get() = thread?.isAlive != true
+    fun start(): Boolean {
+        if(thread != null || quarantined || cancelled.get() || !allowed()) { trace("START_REJECTED",nativeProof,phase.name); return false }
+        if(!lease.compareAndSet(false,true)) { trace("START_LEASE_BUSY",nativeProof,phase.name); return false }
+        ownsLease=true
         phase = CapturePhase.THREAD_START
         thread = Thread({ record() }, "v2-capture").apply { start() }
+        return true
     }
     @SuppressLint("MissingPermission")
     private fun record() {
@@ -44,6 +60,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var aec: AcousticEchoCanceler? = null
         var wake: SherpaWake? = null
         var commands: SherpaWake? = null
+        val commandBoundary=CommandBoundary()
         val buffered = WakeSamples()
         val frame = ShortArray(320)
         var position = 0L
@@ -63,11 +80,12 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             uploadSamples += data.size
             check(pending.incrementAndGet() <= 20)
             owner.post {
-                try { if (!cancelled.get() && !management && ticket == commandGeneration.get()) client.frame(data, speech, capturedAt) }
+                try { if (!cancelled.get() && allowed() && !management && ticket == commandGeneration.get()) client.frame(data, speech, capturedAt) }
                 finally { data.fill(0); pending.decrementAndGet() }
             }
         }
         try {
+            if(cancelled.get() || !allowed())return
             phase = CapturePhase.AUDIO_RECORD
             val minimum = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO,
                                                        AudioFormat.ENCODING_PCM_16BIT)
@@ -75,6 +93,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             val native = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, 16000,
                 AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minimum, 6400))
             recorder = native
+            synchronized(nativeLock) { nativeRecorder=native }
             check(native.state == AudioRecord.STATE_INITIALIZED)
             if (AcousticEchoCanceler.isAvailable()) {
                 aec = AcousticEchoCanceler.create(native.audioSessionId)
@@ -84,29 +103,42 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             wake = SherpaWake(assets)
             phase = CapturePhase.MANAGEMENT_KWS
             commands = SherpaWake(assets, "*", "wake/manage.txt")
-            if (cancelled.get()) return
-            phase = CapturePhase.START
-            native.startRecording()
-            check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
-            nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
+            synchronized(nativeLock) {
+                if (cancelled.get() || !allowed()) return
+                phase = CapturePhase.START
+                native.startRecording()
+                check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+                nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
+                trace("NATIVE_START",nativeProof,phase.name)
+            }
             phase = CapturePhase.READ
             while (!cancelled.get()) {
                 val count = native.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
+                if (cancelled.get() || !allowed()) break
                 check(count >= 0)
                 if (count == 0) { Thread.sleep(5); continue }
-                check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
-                nativeProof = nativeProof.copy(recording=true, frames=nativeProof.frames+count)
-                if (commands?.accept(frame, count) != null) {
-                    val command = commands?.detectedKeyword
-                    commands?.close(); commands = SherpaWake(assets, "*", "wake/manage.txt")
+                val accept=synchronized(nativeLock) {
+                    if(cancelled.get() || !allowed()) false else {
+                        check(native.recordingState==AudioRecord.RECORDSTATE_RECORDING)
+                        nativeProof=nativeProof.copy(recording=true,frames=nativeProof.frames+count)
+                        true
+                    }
+                }
+                if(!accept)break
+                hooks.beforeDecode()
+                val commandTail=commands?.accept(frame,count)
+                val hit=if(commandTail!=null) CommandBoundary.Hit(checkNotNull(commands?.detectedKeyword),checkNotNull(commands).matchedStart,commandTail) else null
+                val command=commandBoundary.frame(frame,count,hit,management)
+                if (command!=null) {
                     val entering = !management && command == "进入管理"
                     val exiting = management && command in listOf("取消", "退出管理")
                     if (entering || exiting) {
+                        trace(if(entering)"MANAGEMENT_ENTER" else "MANAGEMENT_EXIT",nativeProof,phase.name)
                         commandGeneration.incrementAndGet()
                         management = entering
                         buffered.clear(); awake = false; voiced = false; uploadSamples = 0
                         wake?.close(); wake = SherpaWake(assets); wakeBase = buffered.position
-                        owner.post { if (!cancelled.get()) {
+                        owner.post { if (!cancelled.get() && allowed()) {
                             client.management(entering); managementChanged(entering)
                         } }
                         continue
@@ -126,7 +158,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     val tail = wake?.accept(frame, count) ?: continue
                     if (!client.connectionActive) {
                         // Unconfigured local KWS never builds/uploads child expressions.
-                        owner.post { if (!cancelled.get()) client.wake() }
+                        owner.post { if (!cancelled.get() && allowed()) client.wake() }
                         wake?.close(); wake = SherpaWake(assets)
                         wakeBase = position; buffered.clear()
                         continue
@@ -136,7 +168,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     detector = SpeechDetector(320, initialFloor = 36.0)
                     val wakeBoundary = (android.os.SystemClock.elapsedRealtime() -
                         ((position - (wakeBase + tail).coerceIn(0, position)) * 1000 / 16000)).coerceAtLeast(0)
-                    owner.post { if (!cancelled.get()) client.wake(wakeBoundary) }
+                    owner.post { if (!cancelled.get() && allowed()) client.wake(wakeBoundary) }
                     // Absolute ring and KWS-local coordinates share a recorded origin.
                     lastSpeech = android.os.SystemClock.elapsedRealtime()
                     val absoluteTail = (wakeBase + tail).coerceIn(0, position)
@@ -172,7 +204,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 } else if (voiced && now - lastSpeech <= 300) {
                     buffered.read().forEach { upload(it, false) }
                 } else {
-                    owner.post { if (!cancelled.get()) client.quiet() }
+                    owner.post { if (!cancelled.get() && allowed()) client.quiet() }
                     if (voiced) { voiced = false; detector = SpeechDetector(320, initialFloor = 36.0) }
                     if (!firstAfterWake) buffered.follow()
                 }
@@ -186,27 +218,52 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         } finally {
             phase = CapturePhase.RELEASE
             frame.fill(0); buffered.clear()
-            try { commands?.close(); wake?.close() } catch (_: Exception) { quarantined = true }
-            try { aec?.release() } catch (_: Exception) { quarantined = true }
-            try {
-                if (recorder?.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder?.stop()
-                check(recorder?.recordingState == AudioRecord.RECORDSTATE_STOPPED)
-                nativeProof = nativeProof.copy(recording=false, stopped=true)
-            } catch (_: Exception) { quarantined = true }
-            try {
-                recorder?.release()
-                check(recorder?.state == AudioRecord.STATE_UNINITIALIZED)
-                nativeProof = nativeProof.copy(recording=false, released=true)
-            } catch (_: Exception) { quarantined = true }
+            // Stop/release native collection before potentially slow model destruction.
+            stopNative()
+            synchronized(nativeLock) {
+                try {
+                    trace("NATIVE_RELEASE_BEGIN",nativeProof,phase.name)
+                    recorder?.release()
+                    check(recorder == null || recorder?.state == AudioRecord.STATE_UNINITIALIZED)
+                    nativeRecorder=null
+                    nativeProof=nativeProof.copy(recording=false,released=true)
+                    trace("NATIVE_RELEASE_END",nativeProof,phase.name)
+                } catch (_: Exception) { resourceFault=true }
+            }
+            try { aec?.release() } catch (_: Exception) { resourceFault=true }
+            trace("MODELS_DISPOSE_BEGIN",nativeProof,phase.name)
+            hooks.beforeDispose()
+            try { commands?.close() } catch (_: Exception) { resourceFault=true }
+            try { wake?.close() } catch (_: Exception) { resourceFault=true }
+            trace("MODELS_DISPOSE_END",nativeProof,phase.name)
+            pendingDisposal=false
             phase = if (quarantined) CapturePhase.QUARANTINED else CapturePhase.RELEASED
+            if(ownsLease && !resourceFault) { ownsLease=false; lease.set(false) }
+            disposed()
             if (!cancelled.get()) owner.post { failed() }
         }
     }
+    private fun stopNative() { synchronized(nativeLock) {
+        val native=nativeRecorder ?: return
+        try {
+            trace("NATIVE_STOP_BEGIN",nativeProof,phase.name)
+            if(native.recordingState==AudioRecord.RECORDSTATE_RECORDING)native.stop()
+            check(native.recordingState==AudioRecord.RECORDSTATE_STOPPED)
+            nativeProof=nativeProof.copy(recording=false,stopped=true)
+            trace("NATIVE_STOP_END",nativeProof,phase.name)
+        } catch (_: Exception) { resourceFault=true }
+    } }
+    /** Immediate caller-thread cancellation, independent of owner/decode/destructors. */
+    fun requestStop() {
+        cancelled.set(true); commandGeneration.incrementAndGet()
+        trace("CANCEL_REQUEST",nativeProof,phase.name)
+        stopNative()
+    }
     fun close() {
-        cancelled.set(true)
+        requestStop()
         val old = thread ?: return
         old.join(500)
-        if (old.isAlive) quarantined = true
+        if (old.isAlive) { pendingDisposal = true; trace("DISPOSE_QUARANTINE",nativeProof,phase.name) }
         // Never permit another recorder when the original has no release confirmation.
         if (!old.isAlive) thread = null
     }

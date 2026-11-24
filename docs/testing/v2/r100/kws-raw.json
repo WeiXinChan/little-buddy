@@ -1,0 +1,67 @@
+{
+  "sherpa_version": "1.12.27",
+  "mode": "real model 320 sample frames CPU1; raw KWS hits, not production command decisions",
+  "rows": [
+    {
+      "name": "enter",
+      "hits": [
+        {
+          "keyword": "进入管理",
+          "at_ms": 3020
+        }
+      ]
+    },
+    {
+      "name": "cancel",
+      "hits": [
+        {
+          "keyword": "取消",
+          "at_ms": 1740
+        }
+      ]
+    },
+    {
+      "name": "exit",
+      "hits": [
+        {
+          "keyword": "退出管理",
+          "at_ms": 2380
+        }
+      ]
+    },
+    {
+      "name": "near",
+      "hits": []
+    },
+    {
+      "name": "negative",
+      "hits": []
+    },
+    {
+      "name": "discussion",
+      "hits": []
+    },
+    {
+      "name": "cancel_negative",
+      "hits": [
+        {
+          "keyword": "取消",
+          "at_ms": 2060
+        }
+      ]
+    },
+    {
+      "name": "cancel_discussion",
+      "hits": [
+        {
+          "keyword": "取消",
+          "at_ms": 3020
+        }
+      ]
+    },
+    {
+      "name": "wake",
+      "hits": []
+    }
+  ]
+}

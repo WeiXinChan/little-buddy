@@ -14,7 +14,9 @@ internal interface WakeKeyword : AutoCloseable {
 internal class SherpaWake(assets: AssetManager, private val keyword: String = "瓦力瓦力",
                           keywordFile: String = "wake/keywords.txt") : WakeKeyword {
     private val spotter: KeywordSpotter
-    private val stream: com.k2fsa.sherpa.onnx.OnlineStream
+    private var deliveredTail=-1L
+    var matchedStart=0L; private set
+    private var stream: com.k2fsa.sherpa.onnx.OnlineStream
 
     init {
         val suffix = "epoch-13-avg-2-chunk-16-left-64"
@@ -30,6 +32,10 @@ internal class SherpaWake(assets: AssetManager, private val keyword: String = "�
                 numThreads = 1,
             ),
             keywordsFile = keywordFile,
+            keywordsScore = 1.5f,
+            keywordsThreshold = 0.25f,
+            numTrailingBlanks = 2,
+            maxActivePaths = 4,
         ))
         stream = spotter.createStream()
     }
@@ -43,7 +49,13 @@ internal class SherpaWake(assets: AssetManager, private val keyword: String = "�
             if (result.keyword.isNotEmpty() && (keyword == "*" || result.keyword == keyword)) {
                 detectedKeyword = result.keyword
                 val last = result.timestamps.lastOrNull() ?: error("Missing wake timestamp")
-                return ((last + 0.12f) * 16_000).toLong()
+                matchedStart=((result.timestamps.firstOrNull() ?: 0f)*16000).toLong()
+                val tail=((last+0.12f)*16000).toLong()
+                // Native no-reset replay did not reproduce duplicate hits. Keep its
+                // absolute clock and defensively consume each timestamp once.
+                if(tail<=deliveredTail)continue
+                deliveredTail=tail
+                return tail
             }
         }
         return null

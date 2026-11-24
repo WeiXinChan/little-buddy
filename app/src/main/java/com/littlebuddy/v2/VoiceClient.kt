@@ -20,7 +20,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val failed: () -> Unit = {}, waits: Waits = Waits(),
                            private val observed: (PlaybackAck) -> Unit = {},
                            private val completed: (Long, Int) -> Unit = { _, _ -> },
-                           private val allowAck: (PlaybackAck) -> Boolean = { true }) {
+                           private val allowAck: (PlaybackAck) -> Boolean = { true },
+                           private val socketFactory: ((Request,WebSocketListener)->WebSocket)? = null) {
     fun nativeProof() = player.nativeProof()
     val quarantined get() = player.quarantined
     private var socket: WebSocket? = null
@@ -91,7 +92,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         active = true
         epoch = 0; sequence = 0
         val request = Request.Builder().url(address).header("Authorization", "Bearer $token").build()
-        socket = http.newWebSocket(request, object : WebSocketListener() {
+        val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) { handler.post {
                 if (socket !== webSocket || !active) return@post
                 status("wake"); pump.run(); heartbeat.run()
@@ -106,7 +107,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 handler.post { if (socket === webSocket) fail("closed") }
             }
-        })
+        }
+        socket = socketFactory?.invoke(request,listener) ?: http.newWebSocket(request,listener)
     }
     private fun send(kind: String, vararg values: Pair<String, Any>) {
         if (!active) return

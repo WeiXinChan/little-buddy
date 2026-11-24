@@ -18,6 +18,11 @@ import com.littlebuddy.v2.EyeScene
 import com.littlebuddy.v2.NativeEvidence
 import com.littlebuddy.v2.RecorderProof
 import com.littlebuddy.v2.PlayerProof
+import com.littlebuddy.v2.LifecycleGate
+import com.littlebuddy.v2.StopTimeline
+import android.os.SystemClock
+import org.json.JSONArray
+import org.json.JSONObject
 import com.littlebuddy.v2.Capture
 import com.littlebuddy.v2.VoiceClient
 
@@ -28,10 +33,27 @@ class V2VoiceActivity : Activity() {
     private val audioThread = HandlerThread("v2-audio").apply { start() }
     private val owner = Handler(audioThread.looper)
     @Volatile internal var releaseState: String = "idle"; private set
-    private var voice: VoiceClient? = null
-    private var capture: Capture? = null
+    @Volatile private var voice: VoiceClient? = null
+    @Volatile private var capture: Capture? = null
+    internal var transportOverride: ((okhttp3.Request,okhttp3.WebSocketListener)->okhttp3.WebSocket)? = null
+    internal var afterEligible: ()->Unit = {}
+    private val life=LifecycleGate()
+    private val timeline=StopTimeline(SystemClock::elapsedRealtime)
+    internal fun immediateRecorder()=capture?.nativeProof ?: releasedRecorder
+    internal fun mark(name: String) { timeline.add(name,life.state.generation,immediateRecorder(),capture?.phase?.name ?: lastCapturePhase) }
+    internal fun timelineJson(): String = JSONArray(timeline.snapshot().map {
+        JSONObject().put("ms",it.ms).put("event",it.event).put("generation",it.generation)
+            .put("session",it.session).put("frames",it.frames).put("recording",it.recording)
+            .put("stopped",it.stopped).put("released",it.released).put("phase",it.phase)
+    }).toString()
+    internal val resumed get()=life.state.resumed
+    internal val eyesFrame get()=eyes.drawSerial
+    internal fun requestEyesFrame() { eyes.postInvalidateOnAnimation() }
+    private fun eligible(ticket: Long)=life.allows(ticket) &&
+        checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED &&
+        !getSystemService(KeyguardManager::class.java).isKeyguardLocked
     private var explicitConnectionStarted = false
-    private var releasedRecorder = RecorderProof()
+    @Volatile private var releasedRecorder = RecorderProof()
     private var releasedPlayer = PlayerProof()
     private var lastCapturePhase = "NOT_STARTED"
     private var lastCaptureFailure = "NONE"
@@ -39,7 +61,7 @@ class V2VoiceActivity : Activity() {
         val recorder = capture?.nativeProof ?: releasedRecorder
         val player = voice?.nativeProof() ?: releasedPlayer
         val failure = if (capture != null) capture?.failedPhase?.name ?: "NONE" else lastCaptureFailure
-        result("mode=$releaseState focus=${hasWindowFocus()} keyguard=${getSystemService(KeyguardManager::class.java).isKeyguardLocked} " +
+        result("resumed=${life.state.resumed} generation=${life.state.generation} mode=$releaseState focus=${hasWindowFocus()} keyguard=${getSystemService(KeyguardManager::class.java).isKeyguardLocked} " +
             "permission=${checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED} " +
             "capture_phase=${capture?.phase?.name ?: lastCapturePhase} failed_phase=$failure " +
             "started=${recorder.started} recording=${recorder.recording} frames=${recorder.frames} stopped=${recorder.stopped} released=${recorder.released} " +
@@ -115,35 +137,81 @@ class V2VoiceActivity : Activity() {
     internal fun startVoice(address: String, credential: String) {
         check(hasWindowFocus() && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
         check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked)
+        val ticket=life.state.generation
         owner.post {
+            if(!eligible(ticket)) { mark("STALE_CONNECT_REJECTED"); return@post }
+            afterEligible()
+            if(!eligible(ticket)) { mark("STALE_CONNECT_REJECTED"); return@post }
             voice?.close(); capture?.close()
-            check(voice?.quarantined != true && capture?.quarantined != true)
+            if(voice?.quarantined==true || capture?.quarantined==true) { mark("RECONNECT_QUARANTINED"); return@post }
             voice = null; capture = null
             explicitConnectionStarted = true
             releaseState = "active"
             val client = newClient()
             voice = client
-            client.connect(address, credential)
-            capture = Capture(assets, owner, client, { displayEvent("failure"); stopVoice() }, ::manage).also { it.start() }
+            if(!installCapture(client,ticket))return@post
+            if(eligible(ticket))client.connect(address,credential) else { capture?.requestStop(); stopVoice() }
         }
+    }
+    private fun makeCapture(client: VoiceClient,ticket: Long): Capture {
+        lateinit var created: Capture
+        created=Capture(assets,owner,client,
+            { if(capture===created) { displayEvent("failure"); stopVoice() } },
+            { entering -> if(capture===created && life.allows(ticket))manage(entering) },
+            { life.allows(ticket) },
+            { event,proof,phase -> timeline.add(event,ticket,proof,phase) },
+            disposed = { owner.post {
+                mark("DISPOSE_CONSUME")
+                if(capture===created && !created.quarantined && eligible(life.state.generation))localCommands()
+            } })
+        return created
+    }
+    private fun installCapture(client: VoiceClient,ticket: Long): Boolean {
+        val created=makeCapture(client,ticket); capture=created
+        if(!created.start()) {
+            created.requestStop(); client.close()
+            if(capture===created)capture=null
+            if(voice===client)voice=null
+            releaseState="released"; mark("STALE_CAPTURE_START_REJECTED")
+            return false
+        }
+        return true
     }
     internal fun handleStatus(value: String) {
         if (value == "management") { capture?.enterManagement(); manage(true) } else displayEvent(value)
     }
-    private fun newClient() = VoiceClient(owner, ::handleStatus,
+    private fun newClient(): VoiceClient { val ticket=life.state.generation; return VoiceClient(owner, { if(life.allows(ticket))handleStatus(it) },
         ::hideImage, ::revealImage,
-        { displayEvent("failure"); stopVoice() })
-    private fun localCommands() {
+        { displayEvent("failure"); stopVoice() }, socketFactory=transportOverride) }
+    private fun localCommands(retryUntil: Long=SystemClock.elapsedRealtime()+1500) {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
             getSystemService(KeyguardManager::class.java).isKeyguardLocked) return
+        val ticket=life.state.generation
         owner.post {
+            if(!eligible(ticket)) { mark("STALE_LOCAL_START_REJECTED"); return@post }
+            afterEligible()
+            if(!eligible(ticket)) { mark("STALE_LOCAL_START_REJECTED"); return@post }
+            val held=capture
+            if(held?.closing==true) {
+                if(held.workerDone && !held.quarantined && held.nativeProof.released) { releasedRecorder=held.nativeProof; capture=null }
+                else { if(SystemClock.elapsedRealtime()<retryUntil) owner.postDelayed({if(eligible(ticket))localCommands(retryUntil)},50)
+                    else mark("DISPOSAL_WAIT_EXPIRED")
+                    return@post
+                }
+            }
             if (explicitConnectionStarted || voice != null || capture != null || scene.management) return@post
             val client = newClient(); voice = client
             releaseState = "local_kws"
-            capture = Capture(assets, owner, client, { displayEvent("failure"); stopVoice() }, ::manage).also { it.start() }
+            if(!installCapture(client,ticket) && eligible(ticket) && SystemClock.elapsedRealtime()<retryUntil)owner.postDelayed({if(eligible(ticket))localCommands(retryUntil)},50)
         }
     }
-    private fun stopVoice() { owner.post {
+    private fun stopVoice() {
+        val stopping=capture; val stoppingVoice=voice
+        mark("STOP_ENQUEUE")
+        stopping?.requestStop() // before owner queue or model destruction
+        owner.post {
+        mark("STOP_CONSUME")
+        if(capture!==stopping || voice!==stoppingVoice) { mark("STALE_STOP_REJECTED"); return@post }
         scene.invalidate()
         voice?.close(); voice?.let { releasedPlayer = it.nativeProof() }
         if (voice?.quarantined != true) voice = null
@@ -154,10 +222,23 @@ class V2VoiceActivity : Activity() {
         val ticket = scene.generation
         val mood = scene.mood
         runOnUiThread { if (scene.accepts(ticket)) eyes.mood = mood }
+        mark("STOP_FINISH")
+        if(stopping!=null && stopping.quarantined && stopping.nativeProof.released) {
+            val generation=life.state.generation; val deadline=SystemClock.elapsedRealtime()+1500
+            fun reap() {
+                if(capture!==stopping || !eligible(generation))return
+                if(stopping.workerDone && !stopping.quarantined) { releasedRecorder=stopping.nativeProof; capture=null; localCommands() }
+                else if(SystemClock.elapsedRealtime()<deadline)owner.postDelayed({reap()},50)
+                else mark("DISPOSAL_WAIT_EXPIRED")
+            }
+            owner.postDelayed({reap()},50)
+        }
     } }
-    override fun onPause() { owner.post { scene.exit(); runOnUiThread { setContentView(eyes); eyes.mood = scene.mood } }; stopVoice(); super.onPause() }
+    override fun onResume() { super.onResume(); life.resume(); mark("LIFE_RESUME"); if(hasWindowFocus()) { life.focus(true); localCommands() } }
+    override fun onPause() { life.pause(); mark("LIFE_PAUSE"); owner.post { scene.exit(); runOnUiThread { setContentView(eyes); eyes.mood = scene.mood } }; stopVoice(); super.onPause() }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        life.focus(hasFocus); mark(if(hasFocus)"FOCUS_GAIN" else "FOCUS_LOSS")
         if (!hasFocus) stopVoice() else { immersive(); localCommands() }
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -165,6 +246,7 @@ class V2VoiceActivity : Activity() {
         if (grantResults.any { it != PackageManager.PERMISSION_GRANTED }) stopVoice() else if (hasWindowFocus()) localCommands()
     }
     override fun onDestroy() {
+        life.destroy(); mark("LIFE_DESTROY")
         stopVoice()
         owner.post { audioThread.quitSafely() }
         super.onDestroy()

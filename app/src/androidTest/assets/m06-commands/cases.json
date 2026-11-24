@@ -1,0 +1,305 @@
+{
+  "cases": [
+    {
+      "name": "enter",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "c53eb146203afc87fd8092f60721e49a20d30baaa0811da715788a40fe582e34",
+      "source": "authorized-tts provenance.json"
+    },
+    {
+      "name": "enter_slow",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "7a5566316300f1656f6e5c0a768df6f043e5f06186856f58d03d2900f97fe472",
+      "source": "enter: atempo=0.85 volume=0.5"
+    },
+    {
+      "name": "enter_fast",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "1f15a0737add1a0520fbca03f78d0ebace20a5228833e0f4441de84130c2efd2",
+      "source": "enter: atempo=1.15 volume=1.4"
+    },
+    {
+      "name": "enter_noise",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "9008dafc4c4cc9be19c676ca0f85317aa282147a288d6f4dfba6264283cb4bbf",
+      "source": "enter: 40ms transient then 200ms quiet"
+    },
+    {
+      "name": "enter_polite",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "613d9099d62d60d5c062f3a956f2576785322f8d70d502c70b4b7bb30725ad43",
+      "source": "authorized-tts provenance.json"
+    },
+    {
+      "name": "enter_polite_slow",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "85e7bf2ab1c7a40d5c31bd95a9ef29d81e28adeae9e3dbc87d50542bd326afa1",
+      "source": "enter_polite: atempo=0.85 volume=0.5"
+    },
+    {
+      "name": "enter_polite_fast",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "52a4fddd7d2b702fc20f99955f46890ddacac87552d2d6c65904c4b9b3d361dd",
+      "source": "enter_polite: atempo=1.15 volume=1.4"
+    },
+    {
+      "name": "enter_polite_noise",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "fe84859bb2ee998be0ec464b383f91700d30c8d2bc214b388b64b25afdd78b87",
+      "source": "enter_polite: 40ms transient then 200ms quiet"
+    },
+    {
+      "name": "enter_open",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "7b317c8a22cf42eaea0685145cfa34500f93e9a65398d5ac0a8967ad1d386d8d",
+      "source": "authorized-tts provenance.json"
+    },
+    {
+      "name": "enter_open_slow",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "1ffe1336b11db21f21392cc62cd27d5fcf978104e84d7d41ff1c2bfb975e0984",
+      "source": "enter_open: atempo=0.85 volume=0.5"
+    },
+    {
+      "name": "enter_open_fast",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "0a66122b7351ce7953ebe79e9d852645b84064d38bf8777ce10b643fbb5cc6fb",
+      "source": "enter_open: atempo=1.15 volume=1.4"
+    },
+    {
+      "name": "enter_open_noise",
+      "expected": "进入管理",
+      "managed": false,
+      "sha256": "3fff80cd760aa337df646195c6e19af6f4b9229dab304f801f5be2c21c98d4e7",
+      "source": "enter_open: 40ms transient then 200ms quiet"
+    },
+    {
+      "name": "cancel",
+      "expected": "取消",
+      "managed": true,
+      "sha256": "921c5c46e0ab685ea9fa3e003d6351b55b0cf2c65924a3afb1313a01b80d9199",
+      "source": "authorized-tts provenance.json"
+    },
+    {
+      "name": "cancel_slow",
+      "expected": "取消",
+      "managed": true,
+      "sha256": "3d1373f70aa8e794619157c6c1510a463798c87f744b6ee50d2f69f6f79142e1",
+      "source": "cancel: atempo=0.85 volume=0.5"
+    },
+    {
+      "name": "cancel_fast",
+      "expected": "取消",
+      "managed": true,
+      "sha256": "d049eac5310c695b8ff2a3083e864c86df6436159880b3b0f33f670a2d46843d",
+      "source": "cancel: atempo=1.15 volume=1.4"
+    },
+    {
+      "name": "cancel_noise",
+      "expected": "取消",
+      "managed": true,
+      "sha256": "fb2fefc515848cbff9df759d1d0d657bdb35ae9b0c46cfaae8bbfb3a1c5ee240",
+      "source": "cancel: 40ms transient then 200ms quiet"
+    },
+    {
+      "name": "exit",
+      "expected": "退出管理",
+      "managed": true,
+      "sha256": "1c5160f9128401c94392c35d29d8c15d7d226a6a6159a4a542c503d8ddec7629",
+      "source": "authorized-tts provenance.json"
+    },
+    {
+      "name": "exit_slow",
+      "expected": "退出管理",
+      "managed": true,
+      "sha256": "3c1944a9b5becd041d7ae82039b0b86e18ad51109eee923534bc93a00583da89",
+      "source": "exit: atempo=0.85 volume=0.5"
+    },
+    {
+      "name": "exit_fast",
+      "expected": "退出管理",
+      "managed": true,
+      "sha256": "b869f1c287096bdb4e2052d0f5394ddcff32c22cdd3cd184cc0de8feb2ed9cae",
+      "source": "exit: atempo=1.15 volume=1.4"
+    },
+    {
+      "name": "exit_noise",
+      "expected": "退出管理",
+      "managed": true,
+      "sha256": "82de86b7db319bcdd8506eaa9f9084b7cf3c41572426bde0dab29a8686a3d3fb",
+      "source": "exit: 40ms transient then 200ms quiet"
+    },
+    {
+      "name": "near",
+      "expected": null,
+      "managed": false,
+      "sha256": "8d8a89024b3e47bfb59d4dbac2e8802e4accb59032c374c9dd3ddaed9f0e676d",
+      "source": "authorized-tts provenance.json"
+    },
+    {
+      "name": "near_slow",
+      "expected": null,
+      "managed": false,
+      "sha256": "3439d14625a776931a4f2d08fa86b2682440a08d97b5e22d1692b977c5ce4f14",
+      "source": "near: atempo=0.85 volume=0.5"
+    },
+    {
+      "name": "near_fast",
+      "expected": null,
+      "managed": false,
+      "sha256": "d60086e4b43274bd9e4f2bca0533be291cb2edf34c81d3b01c82d49b44c4a27f",
+      "source": "near: atempo=1.15 volume=1.4"
+    },
+    {
+      "name": "negative",
+      "expected": null,
+      "managed": false,
+      "sha256": "4b0bf8d5fcecb5d02fe93b2870edf4897c5867dfea1f0eea056a704b0a017eaa",
+      "source": "authorized-tts provenance.json"
+    },
+    {
+      "name": "negative_slow",
+      "expected": null,
+      "managed": false,
+      "sha256": "e52398b72ee0074b0f86b4a96b4538a0f7447d1b0de7062aeb9117289e74b8c1",
+      "source": "negative: atempo=0.85 volume=0.5"
+    },
+    {
+      "name": "negative_fast",
+      "expected": null,
+      "managed": false,
+      "sha256": "26ba672c33eccbe61c44f7153b4186625602f1475eb85d53cb716bb4d6f5a3a0",
+      "source": "negative: atempo=1.15 volume=1.4"
+    },
+    {
+      "name": "discussion",
+      "expected": null,
+      "managed": false,
+      "sha256": "28ddcf7c128458075369c9ae506a0f4842e6e9e272d2087d05b1af9dd03f074d",
+      "source": "authorized-tts provenance.json"
+    },
+    {
+      "name": "discussion_slow",
+      "expected": null,
+      "managed": false,
+      "sha256": "e81bbe6964d1225f547ccd180222a1b640e45f6d3a90b5a025d956b87a554a1f",
+      "source": "discussion: atempo=0.85 volume=0.5"
+    },
+    {
+      "name": "discussion_fast",
+      "expected": null,
+      "managed": false,
+      "sha256": "351f24c5075cdc808bbe06f4eec30c3b2b97798228f6e20a266b2fc06204ff92",
+      "source": "discussion: atempo=1.15 volume=1.4"
+    },
+    {
+      "name": "cancel_negative",
+      "expected": null,
+      "managed": true,
+      "sha256": "184c4228e7c535fdaabb1a02d3e258af3a6b69beeb8cda4776bf8217f1722150",
+      "source": "authorized-tts provenance.json"
+    },
+    {
+      "name": "cancel_negative_slow",
+      "expected": null,
+      "managed": true,
+      "sha256": "8d073b41fd207aa6fb50c834a645d77218081fb17e99a4b57f831adcb40c19fe",
+      "source": "cancel_negative: atempo=0.85 volume=0.5"
+    },
+    {
+      "name": "cancel_negative_fast",
+      "expected": null,
+      "managed": true,
+      "sha256": "653b7306dbc0dc9b90fd2824111e0b8911f011332d4cabe72f6de0eec23dc5b9",
+      "source": "cancel_negative: atempo=1.15 volume=1.4"
+    },
+    {
+      "name": "cancel_discussion",
+      "expected": null,
+      "managed": true,
+      "sha256": "f906ce85dfd0ddb87f994a2c029d7a5c4b5d514254588a69bcde58ee349b0bd7",
+      "source": "authorized-tts provenance.json"
+    },
+    {
+      "name": "cancel_discussion_slow",
+      "expected": null,
+      "managed": true,
+      "sha256": "9cc377b177c1a5a293751c60d45e26588e6821dd44ba2e891517df89f6086a89",
+      "source": "cancel_discussion: atempo=0.85 volume=0.5"
+    },
+    {
+      "name": "cancel_discussion_fast",
+      "expected": null,
+      "managed": true,
+      "sha256": "254866d7b68b3454721722bd7ff87dba1bd0214dcf0919969af27ccb5752e8c4",
+      "source": "cancel_discussion: atempo=1.15 volume=1.4"
+    },
+    {
+      "name": "negative_pause_cancel_0.6",
+      "expected": null,
+      "managed": true,
+      "sha256": "06ef2de513666f0cc9cb265676a66c0debf29051ab756d91638c65d296be2483",
+      "source": "authorized deny_prefix + 0.6s pause + cancel; no expectation changed"
+    },
+    {
+      "name": "negative_pause_exit_0.6",
+      "expected": null,
+      "managed": true,
+      "sha256": "fe1d492af8980d2ab828c416587c1fdca96e879da1378b16d2121ec58bc9b7e0",
+      "source": "authorized deny_prefix + 0.6s pause + exit; no expectation changed"
+    },
+    {
+      "name": "negative_pause_cancel_1.6",
+      "expected": null,
+      "managed": true,
+      "sha256": "29820348a6da8ae9d10c3d6b79693066d5afe35b56a0bef7cf0c2862ed6906a1",
+      "source": "authorized deny_prefix + 1.6s pause + cancel; no expectation changed"
+    },
+    {
+      "name": "negative_pause_exit_1.6",
+      "expected": null,
+      "managed": true,
+      "sha256": "50839e4a060af4e72839627dd350b43ab64263f011b8f0fd260c09394d9208e0",
+      "source": "authorized deny_prefix + 1.6s pause + exit; no expectation changed"
+    },
+    {
+      "name": "negative_pause_cancel_4.0",
+      "expected": null,
+      "managed": true,
+      "sha256": "765158d301003aa20224e1e7e92a668f9a4e584f72903fb245bb9d7790819c0a",
+      "source": "authorized deny_prefix + 4.0s pause + cancel; no expectation changed"
+    },
+    {
+      "name": "negative_pause_exit_4.0",
+      "expected": null,
+      "managed": true,
+      "sha256": "b28bfac259821facd3dd2cbd46b200e6d3d34db7751716214a01267fa721df1a",
+      "source": "authorized deny_prefix + 4.0s pause + exit; no expectation changed"
+    },
+    {
+      "name": "cancel_continued_discussion",
+      "expected": null,
+      "managed": true,
+      "sha256": "a77567e740fb76e77888f6c4ddf963da000075644e5b5e06319014b33128f1b4",
+      "source": "cancel +200ms+ continued discussion, padding removed"
+    },
+    {
+      "name": "exit_continued_discussion",
+      "expected": null,
+      "managed": true,
+      "sha256": "bc2a8e1fde0f47756374e8fe9e75ddcecca7f570ae136f470d525d6eb6342dbb",
+      "source": "exit +200ms+ continued discussion, padding removed"
+    }
+  ]
+}

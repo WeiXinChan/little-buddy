@@ -1,0 +1,88 @@
+{
+  "source": "existing project authorized DashScope synthetic-only TTS",
+  "model": "cosyvoice-v3-flash",
+  "voice": "longanyang",
+  "region": "cn-beijing",
+  "sample_rate": 16000,
+  "license_scope": "existing authorized project API terms; agent-authored synthetic text; no human recording; no new paid service",
+  "rows": [
+    {
+      "name": "enter",
+      "text": "瓦力瓦力进入管理页面",
+      "frames": 64960,
+      "sha256": "c53eb146203afc87fd8092f60721e49a20d30baaa0811da715788a40fe582e34"
+    },
+    {
+      "name": "cancel",
+      "text": "取消",
+      "frames": 41920,
+      "sha256": "921c5c46e0ab685ea9fa3e003d6351b55b0cf2c65924a3afb1313a01b80d9199"
+    },
+    {
+      "name": "exit",
+      "text": "退出管理页面",
+      "frames": 54720,
+      "sha256": "1c5160f9128401c94392c35d29d8c15d7d226a6a6159a4a542c503d8ddec7629"
+    },
+    {
+      "name": "near",
+      "text": "哪里哪里进入公园里面",
+      "frames": 70080,
+      "sha256": "8d8a89024b3e47bfb59d4dbac2e8802e4accb59032c374c9dd3ddaed9f0e676d"
+    },
+    {
+      "name": "negative",
+      "text": "瓦力瓦力不要进入管理页面",
+      "frames": 68160,
+      "sha256": "4b0bf8d5fcecb5d02fe93b2870edf4897c5867dfea1f0eea056a704b0a017eaa"
+    },
+    {
+      "name": "discussion",
+      "text": "我在讲瓦力瓦力进入管理页面这个句子",
+      "frames": 84160,
+      "sha256": "28ddcf7c128458075369c9ae506a0f4842e6e9e272d2087d05b1af9dd03f074d"
+    },
+    {
+      "name": "cancel_negative",
+      "text": "不要取消",
+      "frames": 48960,
+      "sha256": "184c4228e7c535fdaabb1a02d3e258af3a6b69beeb8cda4776bf8217f1722150"
+    },
+    {
+      "name": "cancel_discussion",
+      "text": "故事里面提到了取消这个词",
+      "frames": 75200,
+      "sha256": "f906ce85dfd0ddb87f994a2c029d7a5c4b5d514254588a69bcde58ee349b0bd7"
+    },
+    {
+      "name": "wake",
+      "text": "瓦力瓦力",
+      "frames": 47040,
+      "sha256": "14a9855fbd417f6716b2b50da05cc1ae8226c4cff1102a377af8172902eac71e"
+    },
+    {
+      "name": "enter_polite",
+      "text": "瓦力瓦力请进入管理页面",
+      "frames": 67520,
+      "sha256": "613d9099d62d60d5c062f3a956f2576785322f8d70d502c70b4b7bb30725ad43"
+    },
+    {
+      "name": "enter_open",
+      "text": "瓦力瓦力打开管理页面",
+      "frames": 64320,
+      "sha256": "7b317c8a22cf42eaea0685145cfa34500f93e9a65398d5ac0a8967ad1d386d8d"
+    },
+    {
+      "name": "deny_prefix",
+      "text": "不要",
+      "frames": 41920,
+      "sha256": "2a4f4e3509608883f832e2aca0b5a6ec3ceb078dac916e0806816afbae7da080"
+    },
+    {
+      "name": "discussion_suffix",
+      "text": "这个词是故事里的台词",
+      "frames": 66240,
+      "sha256": "b8629d5b232e507ad1c0acf4efeb90fc95856edf209e3a2eb52b4d9319194c2d"
+    }
+  ]
+}

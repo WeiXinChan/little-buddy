@@ -36,7 +36,8 @@ jobs:
           load-module module-native-protocol-unix socket=$ANDROID_AVD_HOME/pulse.sock auth-anonymous=1
           load-module module-null-sink sink_name=v2_playback
           set-default-sink v2_playback
-          set-default-source v2_playback.monitor
+          load-module module-null-sink sink_name=m06_input
+          set-default-source m06_input.monitor
           PULSE
           pulseaudio -n -F "$ANDROID_AVD_HOME/pulse.pa" --daemonize=no --exit-idle-time=-1 --use-pid-file=no >render/pulse.log 2>&1 &
           pulse_pid=$!
@@ -53,7 +54,7 @@ jobs:
           trap cleanup EXIT
           timeout 15s bash -c 'until pactl get-default-sink 2>/dev/null | grep -Fx v2_playback; do sleep 1; done'
           echo 'no' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n v2eyes -k 'system-images;android-36;google_apis;x86_64' --force
-          QEMU_AUDIO_DRV=pa "$ANDROID_HOME/emulator/emulator" -avd v2eyes -port 5554 -accel on -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
+          PULSE_SOURCE=m06_input.monitor QEMU_AUDIO_DRV=pa "$ANDROID_HOME/emulator/emulator" -avd v2eyes -port 5554 -accel on -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
           emulator_pid=$!
           test -f "$ANDROID_AVD_HOME/v2eyes.ini"
           printf '%s\n' 'avdmanager/emulator use the same explicit ANDROID_AVD_HOME; v2eyes.ini exists' >render/avd-path-check.txt
@@ -95,6 +96,10 @@ jobs:
           adb shell wm size >render/display-size.txt
           adb shell wm density >render/display-density.txt
           adb shell wm user-rotation >render/display-rotation.txt
+          adb emu avd hostmicon >render/hostmic.txt
+          python3 scripts/m06/mic_controller.py | tee render/microphone.txt
+          adb shell am instrument -w -r -e class com.littlebuddy.V2StopRaceTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/stop-race.txt
+          grep -q 'OK (2 tests)' render/stop-race.txt
           adb shell am instrument -w -r -e class com.littlebuddy.V2EyesTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/instrumentation.txt
           adb exec-out run-as com.littlebuddy.sim.v2 tar -C files -cf - m06 > render/screens.tar
           tar -xf render/screens.tar -C render

@@ -1,0 +1,42 @@
+{
+  "sherpa_version": "1.12.27",
+  "mode": "real model 320 sample frames CPU1; raw KWS hits, not production command decisions",
+  "rows": [
+    {
+      "name": "enter",
+      "hits": []
+    },
+    {
+      "name": "cancel",
+      "hits": []
+    },
+    {
+      "name": "exit",
+      "hits": []
+    },
+    {
+      "name": "near",
+      "hits": []
+    },
+    {
+      "name": "negative",
+      "hits": []
+    },
+    {
+      "name": "discussion",
+      "hits": []
+    },
+    {
+      "name": "cancel_negative",
+      "hits": []
+    },
+    {
+      "name": "cancel_discussion",
+      "hits": []
+    },
+    {
+      "name": "wake",
+      "hits": []
+    }
+  ]
+}
