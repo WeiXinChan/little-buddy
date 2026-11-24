@@ -1,0 +1,125 @@
+{
+  "reviewed_parent": "36ceb656d70f13048802a26884db1ec64571c7b5",
+  "scope": "software regression and rebuilt artifacts; no phone/acoustic execution",
+  "python": {
+    "tests": 42,
+    "passed": 42,
+    "failed": 0
+  },
+  "tools": {
+    "tests": 28,
+    "passed": 28
+  },
+  "r97_01": {
+    "old_deadline": 29,
+    "new_deadline": 15,
+    "at_16_old_live": true,
+    "at_16_new_live": false,
+    "original_probe": "unchanged; its known-bad assertion intentionally no longer holds on new source"
+  },
+  "r97_02": {
+    "review_test_sha256": "3394272dbca99f1e17450156dd55f8eedcdca1c308e3a4e48d927280d62d9481",
+    "original_test_unchanged": true,
+    "old_result": "independent reviewer XML: 1 pass / 1 fail",
+    "new_result": "2 pass / 0 fail"
+  },
+  "r97_03": {
+    "instrumentation_built": true,
+    "executed": false,
+    "lock_secure_automation": "NOT_RUN until an existing authorized unlock adapter is available; never change credentials",
+    "permission_controller": "scripts/v2-device-regression.py"
+  },
+  "build": {
+    "result": "PASS",
+    "global_lock": true,
+    "max_workers": 1,
+    "seconds": 76
+  },
+  "artifacts": {
+    "app/build/outputs/apk/v2Debug/app-v2Debug.apk": {
+      "bytes": 27215456,
+      "sha256": "88940a952ebadd2dada28619fcfd67e8c339bfe1deeeb6a946a9f00555006386",
+      "certificate_sha256": "7705f543347ae9ec1de4ae4b0dc24f73b0a472fb32ecc06cca0d112a8fe75e10",
+      "signature_verified": true,
+      "abi": [
+        "arm64-v8a"
+      ],
+      "badging": "package: name='com.littlebuddy.sim.v2' versionCode='13' versionName='0.1.12-animal-private-v2-m04' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'"
+    },
+    "app/build/outputs/apk/androidTest/v2Debug/app-v2Debug-androidTest.apk": {
+      "bytes": 648361,
+      "sha256": "3ca2e24c2bc198a2452b703789f06f99f44faffce4d5042a44db46c7058fb232",
+      "certificate_sha256": "7705f543347ae9ec1de4ae4b0dc24f73b0a472fb32ecc06cca0d112a8fe75e10",
+      "signature_verified": true,
+      "abi": [],
+      "badging": "package: name='com.littlebuddy.sim.v2.test' versionCode='' versionName='' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'"
+    }
+  },
+  "supersedes": {
+    "app/build/outputs/apk/v2Debug/app-v2Debug.apk": {
+      "bytes": 27100089,
+      "sha256": "3c57ebf29eefc4a653824fa190dc17d3557ca964da5cacece7d0964b8ad9a24f",
+      "signature_verified": true,
+      "certificate_sha256": "7705f543347ae9ec1de4ae4b0dc24f73b0a472fb32ecc06cca0d112a8fe75e10",
+      "abi": [
+        "arm64-v8a"
+      ],
+      "badging": "package: name='com.littlebuddy.sim.v2' versionCode='13' versionName='0.1.12-animal-private-v2-m04' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'"
+    },
+    "app/build/outputs/apk/androidTest/v2Debug/app-v2Debug-androidTest.apk": {
+      "bytes": 552326,
+      "sha256": "144d88d482300112969f634bd9dd92b36b09a24920c85e43dd0fd2006e289d7e",
+      "signature_verified": true,
+      "certificate_sha256": "7705f543347ae9ec1de4ae4b0dc24f73b0a472fb32ecc06cca0d112a8fe75e10",
+      "abi": [],
+      "badging": "package: name='com.littlebuddy.sim.v2.test' versionCode='' versionName='' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'"
+    }
+  },
+  "device": "NOT_TESTED",
+  "acoustic": "NOT_TESTED",
+  "F03": "OPEN",
+  "A12": "OPEN",
+  "jvm": {
+    "tests": 63,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2,
+    "passed": 61
+  },
+  "gzip": {
+    "filename": "wali-v2-r97-arm64.apk.gz",
+    "bytes": 13786482,
+    "sha256": "6fe1353646a3cad8396fc98c1d6c3facf731b1214156bb2343a07ca0dee78709",
+    "decompressed_sha256": "88940a952ebadd2dada28619fcfd67e8c339bfe1deeeb6a946a9f00555006386",
+    "transport_only": true
+  },
+  "source_sha256": {
+    "app/build.gradle.kts": "960fef3162bb61ef3a31bcb4b6ecb7493526ba3dbda5e1f9b302a06c6c75c235",
+    "app/src/androidTest/java/com/littlebuddy/V2AudioTest.kt": "640364c44ce97a0df5e71ce230cc0f01ab25e9c89a806e65d9f1951b10768c5a",
+    "app/src/main/java/com/littlebuddy/V2VoiceActivity.kt": "db680bffec613855794246aa07652196d26484949382f8707150be4b68c91af9",
+    "app/src/main/java/com/littlebuddy/v2/AndroidTrack.kt": "e88bfa69f13ce2d77806535f983fc33da9e206958f9a0c5fb7fc83b06e47e437",
+    "app/src/main/java/com/littlebuddy/v2/Capture.kt": "bbb9f69a4e5ab51762e889540b8d545fdf1cef8b29e4b973283b4ee3255758b0",
+    "app/src/main/java/com/littlebuddy/v2/InputGate.kt": "0a500e7fd9d5ef7f229890b5dba4cfe27f019f0c63eb4c5f7ed67abe6289e7a9",
+    "app/src/main/java/com/littlebuddy/v2/NativeEvidence.kt": "b8851071c7b87c8a5f170633721becf9ddd58014cd649fc571f823335b2e7e5f",
+    "app/src/main/java/com/littlebuddy/v2/Playback.kt": "639ea944587a0476f227a4c412055de57daa1e6470618950d245a8bcd71cd2b8",
+    "app/src/main/java/com/littlebuddy/v2/Turns.kt": "da60d28552bf6a92a287ad037da3cb0b630d3ec67d9f6893f5b1d7d430158669",
+    "app/src/main/java/com/littlebuddy/v2/VoiceClient.kt": "6a2d3cd6ff5f6f9de3cbd8c97e08cd9adc26a2df7cfe5e1dc70a46f8f632419f",
+    "app/src/main/java/com/littlebuddy/v2/WakeSamples.kt": "3939e50d5ad46b3530530f1a6785a9c8e72613aa72c6aa74af9f8e93318a254f",
+    "app/src/test/java/com/littlebuddy/v2/InputGateTest.kt": "c39d3db261f4d405d54ae671ec79a5c1de07865f1cb2c1f6e6920d63fdcdc807",
+    "app/src/test/java/com/littlebuddy/v2/NativeEvidenceTest.kt": "d9422248989622e02b8b82bba934973a726083b25de8b25122a28d26f5fb6717",
+    "app/src/test/java/com/littlebuddy/v2/PlaybackTest.kt": "a70c8db4f51dfbb4d4e1d2874a6873f1eb4a64d04d38e97d3cf533c85586e97c",
+    "app/src/test/java/com/littlebuddy/v2/Review97Test.kt": "3394272dbca99f1e17450156dd55f8eedcdca1c308e3a4e48d927280d62d9481",
+    "backend/v2/__init__.py": "451285c5de4a1b116e0665f02235dfb7a0cfc66d18dd70d4cb8ff487de3a9578",
+    "backend/v2/budget.py": "c3f2e226ee876a4c48cc84be7d4d4243c705f9016909c3a11ba45c04c83f7989",
+    "backend/v2/fixture.py": "ba8d9da7fe8b5d70ef06f7ed0a2d37e31dd2e469b2b22f9118dd51157010e6ff",
+    "backend/v2/server.py": "71c85e0741d8b3bdc24ef08ff3ffe32892552f60d6a1549b3b57116257bc5962",
+    "backend/v2/session.py": "8eca96e56fe2e6680ff3f7a95c400698e1e259821d09fe3ea883163160be6ec9",
+    "backend/v2/voice.py": "2640566209a4c83344c77c82256c3042437d186de41e583095763b4aea884627",
+    "scripts/v2-device-regression.py": "12b3291e6af115191aac6181bcf87c444a4a8a3b7e0a6ed394d55bc24aa1f3e4",
+    "tests/v2/test_m04.py": "985590f05af0b401600a7790bda00d26eb3349e5701c1d01e2a03697828b448d",
+    "tests/v2/test_m04_transport.py": "690857c78897251fa634a5674781ffada0256ed21ac35d59ba620ea3458b99b0",
+    "tests/v2/test_r96.py": "75b909047c01213484b0e00e0a89b87455ed733ca706293c794f066b7ef4e76c",
+    "tests/v2/test_r97.py": "4515430dfd089cad2ad185f10ef9818780944348c50992af4673a9b0936b7dd9",
+    "tests/v2/test_session.py": "1e7f71c2a71229c01ad24a34c9847d88874a03a969ce04764aa3e93539417f0a"
+  }
+}

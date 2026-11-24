@@ -80,4 +80,20 @@ class InputGateTest {
         assertEquals(900L, Waits(complete=900,incomplete=2200,thinking=9000).complete)
         try { Waits(complete=1500); fail() } catch (_: IllegalArgumentException) {}
     }
+    @Test fun capturedTimeIncludesOwnerDelayAndCannotBeInTheFuture() {
+        val lab=Lab();lab.gate.wake();lab.time=6000
+        lab.gate.speech(0);lab.gate.quiet()
+        assertEquals(15000L,lab.gate.responseDeadline)
+        lab.time=14000;lab.gate.decision(1,Completion.COMPLETE);lab.gate.tick(true)
+        assertEquals(15000L,lab.gate.responseDeadline)
+        lab.time=15000
+        try{lab.gate.checkResponseDeadline();fail()}catch(_:IllegalStateException){}
+        try{lab.gate.speech(16000);fail()}catch(_:IllegalArgumentException){}
+    }
+    @Test fun partialAcknowledgementCannotReleaseBudgetButEffectivePlayedCan() {
+        val lab=Lab();lab.gate.wake();lab.gate.speech();lab.gate.quiet()
+        lab.time=14999;lab.gate.checkResponseDeadline()
+        lab.gate.effectivePlayed();lab.time=16000;lab.gate.checkResponseDeadline()
+    }
+
 }

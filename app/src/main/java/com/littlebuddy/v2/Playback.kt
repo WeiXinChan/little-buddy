@@ -15,7 +15,7 @@ internal interface TrackPort {
 internal data class Binding(val epoch: Long, val player: String, val stream: Int)
 internal data class AudioPacket(val binding: Binding, val segment: String, val start: Long,
                                val end: Long, val pcm: ShortArray)
-internal data class PlaybackAck(val binding: Binding, val segment: String, val head: Long)
+internal data class PlaybackAck(val binding: Binding, val segment: String, val head: Long, val completed: Boolean = false)
 internal data class StopResult(val stopped: Boolean, val released: Boolean)
 
 /** Production queue/pump; AndroidTrack supplies the actual playback head.
@@ -23,6 +23,9 @@ internal data class StopResult(val stopped: Boolean, val released: Boolean)
  */
 internal class Playback(private val factory: () -> TrackPort, private val now: () -> Long,
                         private val ack: (PlaybackAck) -> Unit) {
+    private var releasedBinding: Binding? = null
+    private var lastStop: StopResult? = null
+    fun nativeProof() = PlayerProof(binding, head, releasedBinding, lastStop)
     val hasPending get() = queue.isNotEmpty()
     var binding: Binding? = null; private set
     var quarantined = false; private set
@@ -57,13 +60,17 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
     fun tick() {
         val native = track ?: return
         try {
+            // Reject an expired owner tick before reading a late native head, writing
+            // samples or acknowledging anything. The old deadline is authoritative.
+            if (queue.isNotEmpty()) check(now() - progress < 60_000)
             val position = native.head
+            if (queue.isNotEmpty()) check(now() - progress < 60_000)
             // A native counter reset/wrap or impossible head invalidates the stream.
             check(position >= head && position <= written)
             if (position > head) { head = position; progress = now() }
             val packet = queue.firstOrNull()
             if (packet != null && position != reported) {
-                ack(PlaybackAck(packet.binding, packet.segment, position))
+                ack(PlaybackAck(packet.binding, packet.segment, position, position >= packet.end))
                 reported = position
             }
             if (packet != null && offset == packet.pcm.size && position >= packet.end) {
@@ -91,6 +98,7 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
 
     fun stop(): StopResult {
         // Revoke before any fallible native call. Late ACK/audio cannot bind again.
+        val previousBinding = binding
         binding = null
         val native = track
         track = null
@@ -105,6 +113,8 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
         }
         try { native.release() } catch (_: Exception) { released = false }
         quarantined = quarantined || !stopped || !released
-        return StopResult(stopped, released)
+        val result = StopResult(stopped, released)
+        releasedBinding = previousBinding; lastStop = result
+        return result
     }
 }

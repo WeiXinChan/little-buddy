@@ -13,6 +13,7 @@ from dataclasses import asdict, replace
 from uuid import uuid4
 
 from backend.v2.session import Identity, Session
+from backend.v2.budget import ResponseBudget
 
 
 class VoiceFault(Exception):
@@ -45,7 +46,7 @@ def decode(raw):
                'ack': {'identity', 'player', 'stream', 'segment', 'head'}, 'end': set()}
     if (not isinstance(event, dict) or event.get('v') != 2 or type(event.get('v')) is not int
             or event.get('type') not in schemas
-            or set(event) != schemas[event['type']] | {'v', 'type', 'epoch', 'seq'}
+            or (set(event) - ({'speech', 'age_ms'} if event['type'] == 'input' else set())) != schemas[event['type']] | {'v', 'type', 'epoch', 'seq'}
             or any(type(event[k]) is not int or event[k] < 0 for k in ('epoch', 'seq'))):
         raise WireError('schema')
     return event
@@ -57,6 +58,8 @@ class VoicePeer:
         self.session = Session(clock)
         self.epoch, self.sequence = 0, -1
         self.capture = bytearray()
+        self.input_budget = ResponseBudget(clock)
+        self.awaiting_input = False
         self.generation = None
         self.recognition = None
         self.next_probe = None
@@ -139,11 +142,14 @@ class VoicePeer:
             await self.cancel_generation()
             prepared, self.prepared = self.prepared, None
             if prepared is not None and event['intent'] == prepared[2]:
-                text, sealed_at, _, revision = prepared
+                text, deadline, _, revision = prepared
                 if revision != self.revision:
                     return
+                if self.session.clock() >= deadline:
+                    raise WireError("response budget exhausted")
                 self.session.begin_turn()
-                self.session.deadline = sealed_at + self.session.budget
+                self.session.deadline = deadline
+                self.awaiting_input = False
                 await self.commands()
                 await self.send('open', revision=self.revision)
                 self.generation = asyncio.create_task(self.respond(text, self.epoch))
@@ -168,12 +174,21 @@ class VoicePeer:
             data = base64.b64decode(event['pcm'], validate=True)
             if not data or len(data) % 2 or len(data) > 6400 or len(self.capture) + len(data) > 640000:
                 raise WireError('capture capacity')
+            speech, age = event.get('speech', True), event.get('age_ms', 0)
+            if type(speech) is not bool or type(age) is not int or not 0 <= age <= 20000:
+                raise WireError('capture boundary')
+            if speech:
+                self.input_budget.speech(age)
+                self.awaiting_input = True
             self.capture.extend(data)
         elif kind == 'wake':
             self.session.valid_interaction()
         elif kind == 'wake_solo':
             if not self.capture and (self.generation is None or self.generation.done()):
-                await self.decision(None, 'new_turn', self.revision, self.session.clock())
+                self.input_budget = ResponseBudget(self.session.clock)
+                self.input_budget.speech()
+                self.awaiting_input = True
+                await self.decision(None, 'new_turn', self.revision, self.input_budget.deadline)
         elif kind == 'advance':
             version = event['revision']
             if type(version) is not int or version != self.revision + 1:
@@ -186,6 +201,8 @@ class VoicePeer:
         elif kind == 'probe':
             if event['revision'] != self.revision or not self.capture:
                 return
+            self.input_budget.resume()
+            self.input_budget.remaining()
             if self.recognition is not None and not self.recognition.done():
                 self.next_probe = (bytes(self.capture), self.epoch, self.revision)
                 return
@@ -203,7 +220,9 @@ class VoicePeer:
             revision, text, _, meaning = self.analysis
             self.capture.clear()
             self.analysis = None
-            await self.decision(text, meaning, revision, self.session.clock())
+            self.input_budget.resume()
+            self.input_budget.remaining()
+            await self.decision(text, meaning, revision, self.input_budget.deadline)
         elif kind == 'bind':
             if (not isinstance(event['player'], str) or len(event['player']) > 128
                     or not event['player'] or self.session.player is not None or self.generation is None):
@@ -234,7 +253,7 @@ class VoicePeer:
 
     async def analyze(self, pcm, epoch, revision):
         try:
-            async with asyncio.timeout(15):
+            async with asyncio.timeout(self.input_budget.remaining()):
                 async with self.resource(self.providers.recognize(16000)) as recognizer:
                     for offset in range(0, len(pcm), 6400):
                         await recognizer.write(pcm[offset:offset+6400])
@@ -249,6 +268,9 @@ class VoicePeer:
                     raise WireError('endpoint schema')
                 if epoch != self.epoch or revision != self.revision or not self.session.active:
                     return
+                self.input_budget.remaining()
+                if result['completion'] == 'thinking':
+                    self.input_budget.pause_thinking()
                 self.analysis = (revision, text, result['completion'], result['meaning'])
                 await self.send('endpoint', revision=revision, completion=result['completion'])
         except asyncio.CancelledError:
@@ -264,12 +286,13 @@ class VoicePeer:
             if pending is not None and not self.closed and pending[1:] == (self.epoch, self.revision):
                 self.recognition = asyncio.create_task(self.analyze(*pending))
 
-    async def decision(self, text, meaning, revision, sealed_at):
+    async def decision(self, text, meaning, revision, deadline):
         if meaning == 'new_turn':
             intent = uuid4().hex
-            self.prepared = (text, sealed_at, intent, revision)
+            self.prepared = (text, deadline, intent, revision)
         else:
             intent = ''
+            self.awaiting_input = False
         await self.send('decision', meaning=meaning, intent=intent, revision=revision)
 
     async def respond(self, text, epoch):
@@ -306,7 +329,7 @@ class VoicePeer:
                     raise WireError('revoked')
                 await self.changed.wait()
             self.session.deadline = 0
-            await self.send('reply_end')
+            await self.send('reply_end', head=self.session.head, public_facts=len(self.session.public))
         except asyncio.CancelledError:
             raise
         except Exception as failure:
@@ -330,7 +353,7 @@ class VoicePeer:
         name, start = uuid4().hex, self.session.sent_end
         end = start + len(pcm)//2
         if not self.session.send(replace(self.tts_identity, sequence=self.send_sequence),
-                                 name=name, public=public, end=end, approved=True, effective=bool(public)):
+                                 name=name, public=public, end=end, approved=True, effective=True):
             raise WireError('send rejected')
         self.send_sequence += 1
         await self.send('audio', player=self.session.player, stream=self.session.stream,
@@ -339,6 +362,17 @@ class VoicePeer:
     async def monitor(self):
         while not self.closed:
             await asyncio.sleep(.1)
+            if self.awaiting_input and self.input_budget.thinking_at is None:
+                try:
+                    self.input_budget.remaining()
+                except (TimeoutError, ValueError):
+                    self.session.interrupt()
+                    await self.commands()
+                    await self.cancel_generation()
+                    if self.recognition is not None:
+                        self.recognition.cancel()
+                    await self.send('failure', code='timeout')
+                    return
             self.session.poll()
             await self.commands()
             if not self.session.active or self.session.response_expired:

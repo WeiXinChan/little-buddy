@@ -17,6 +17,15 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
                          private val advance: (Long) -> Unit, private val probe: (Long) -> Unit,
                          private val seal: (Long) -> Unit, private val solo: () -> Unit,
                          private val askOnce: () -> Unit, private val idle: () -> Unit) {
+    var responseDeadline = 0L; private set
+    var excludedThinkingMs = 0L; private set
+    private var thinkingAt: Long? = null
+    private var responsePending = false
+    fun checkResponseDeadline() {
+        if (responsePending && thinkingAt == null) check(now() < responseDeadline) { "first response expired" }
+    }
+    fun noResponseExpected() { responsePending = false }
+    fun effectivePlayed() { responsePending = false }
     var revision = 0L; private set
     var awake = false; private set
     private var lastSpeech = 0L
@@ -33,24 +42,36 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
         awake = true; wakeAt = now(); lastInteraction = now()
         hasInput = false; speaking = false; soloSent = false; prompted = false
         completion = null; probing = false
+        responsePending = false; thinkingAt = null; excludedThinkingMs = 0
     }
-    fun speech() {
+    fun speech(observedAt: Long = now()) {
         if (!awake) return
+        require(observedAt <= now() && observedAt >= 0) { "future capture boundary" }
         if (!speaking) {
             revision++; advance(revision)
             completion = null; probing = false; prompted = false
         }
         soloSent = true
-        hasInput = true; speaking = true; lastSpeech = now(); lastInteraction = now()
+        hasInput = true; speaking = true; lastSpeech = maxOf(lastSpeech, observedAt); lastInteraction = now()
+        responsePending = true; responseDeadline = lastSpeech + 15000
+        thinkingAt = null; excludedThinkingMs = 0
     }
     fun quiet() { speaking = false }
     fun decision(version: Long, value: Completion) {
         if (!awake || version != revision || !hasInput || speaking) return
+        checkResponseDeadline()
+        if (value == Completion.THINKING) {
+            if (thinkingAt == null) thinkingAt = now()
+        } else thinkingAt?.let { start ->
+            val excluded = now() - start
+            excludedThinkingMs += excluded; responseDeadline += excluded; thinkingAt = null
+        }
         probing = false; completion = value; decisionAt = now()
     }
     fun interaction() { lastInteraction = now() }
     fun tick(outputBusy: Boolean) {
         if (!awake) return
+        checkResponseDeadline()
         val time = now()
         if (!hasInput && !soloSent && time - wakeAt >= waits.solo) { soloSent = true; solo() }
         if (hasInput && !speaking) {

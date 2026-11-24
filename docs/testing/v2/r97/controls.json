@@ -1,0 +1,24 @@
+{
+  "scope": "synthetic module oracle; not non-author review",
+  "checks": [
+    {
+      "case": "production_stall_releases",
+      "passed": true
+    },
+    {
+      "case": "same_head_refreshes_deadline",
+      "negative_control_detected": true,
+      "passed": true
+    },
+    {
+      "case": "ignores_output_deadline",
+      "negative_control_detected": true,
+      "passed": true
+    },
+    {
+      "case": "fake_ack_confirms_full_segment",
+      "negative_control_detected": true,
+      "passed": true
+    }
+  ]
+}

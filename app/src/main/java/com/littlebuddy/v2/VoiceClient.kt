@@ -18,7 +18,10 @@ import java.util.concurrent.TimeUnit
 internal class VoiceClient(private val handler: Handler, private val status: (String) -> Unit,
                            private val hideImage: () -> Unit, private val reveal: (String, Int) -> Unit,
                            private val failed: () -> Unit = {}, waits: Waits = Waits(),
-                           private val observed: (PlaybackAck) -> Unit = {}) {
+                           private val observed: (PlaybackAck) -> Unit = {},
+                           private val completed: (Long, Int) -> Unit = { _, _ -> },
+                           private val allowAck: (PlaybackAck) -> Boolean = { true }) {
+    fun nativeProof() = player.nativeProof()
     val quarantined get() = player.quarantined
     private var socket: WebSocket? = null
     private var epoch = 0L
@@ -28,6 +31,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     @Volatile var idleSerial = 0L; private set
     @Volatile var inputSerial = 0L; private set
     private var outputBusy = false
+    private var responseRevision = -1L
     private val gate: InputGate = InputGate(waits, SystemClock::elapsedRealtime,
         { version -> send("advance", "revision" to version); candidate() },
         { version -> send("probe", "revision" to version) },
@@ -44,6 +48,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private val player = Playback({ AndroidTrack(handler) { fail("route") } },
         SystemClock::elapsedRealtime) { ack ->
         observed(ack)
+        if (ack.completed && responseRevision == gate.revision && ack.binding.epoch == epoch) gate.effectivePlayed()
+        if (!allowAck(ack)) return@Playback
         val identity = ackIdentity ?: return@Playback
         val copy = JSONObject(identity.toString()).put("sequence", ackSequence++)
         send("ack", "identity" to copy, "player" to ack.binding.player,
@@ -52,7 +58,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private val pump = object : Runnable {
         override fun run() {
             if (!active) return
-            try { player.tick(); gate.tick(outputBusy) } catch (_: Exception) { fail("playback"); return }
+            try { gate.checkResponseDeadline(); player.tick(); gate.tick(outputBusy) } catch (_: Exception) { fail("playback"); return }
             handler.postDelayed(this, 10)
         }
     }
@@ -108,6 +114,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             "open" -> {
                 if (event.getLong("revision") != gate.revision) return
                 outputBusy = true
+                responseRevision = gate.revision
                 check(player.binding == null)
                 playerName = UUID.randomUUID().toString()
                 send("bind", "player" to checkNotNull(playerName))
@@ -131,11 +138,13 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 if (event.getLong("revision") != gate.revision) return
                 when (event.getString("meaning")) {
                 "noise", "backchannel" -> {
+                    gate.noResponseExpected()
                     if (player.suspended) player.resumeConfirmedNoise()
                     send("resume_noise"); outputBusy = player.hasPending
                 }
                 "thinking" -> status("listening")
-                "new_turn", "stop" -> interrupt(event.optString("intent", ""))
+                "new_turn" -> interrupt(event.optString("intent", ""))
+                "stop" -> { gate.noResponseExpected(); interrupt() }
                 else -> status("clarify") // Unknown recognition never resumes audio.
             }
             }
@@ -143,22 +152,24 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             "reveal" -> if (player.binding != null && !player.suspended)
                 reveal(event.getString("effect"), event.getInt("topic"))
             "thinking_wait" -> status("thinking")
-            "reply_end" -> { outputBusy = false; gate.interaction(); status("listening") }
+            "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status("listening") }
             "failure" -> { interrupt(); status("failure") }
             else -> error("unknown event")
         }
     }
-    fun input(samples: ShortArray, count: Int) {
+    fun input(samples: ShortArray, count: Int, speech: Boolean = true, capturedAt: Long = SystemClock.elapsedRealtime()) {
+        val age = SystemClock.elapsedRealtime() - capturedAt
+        require(age in 0..20000) { "capture age" }
         require(count in 1..3200)
         val bytes = ByteBuffer.allocate(count * 2).order(ByteOrder.LITTLE_ENDIAN)
         repeat(count) { bytes.putShort(samples[it]) }
-        send("input", "pcm" to Base64.encodeToString(bytes.array(), Base64.NO_WRAP))
+        send("input", "pcm" to Base64.encodeToString(bytes.array(), Base64.NO_WRAP), "speech" to speech, "age_ms" to age)
         bytes.array().fill(0)
     }
     fun wake() { isAwake = true; gate.wake(); send("wake"); status("listening") }
-    fun frame(samples: ShortArray, speech: Boolean) {
-        if (speech) gate.speech() else gate.quiet()
-        input(samples, samples.size)
+    fun frame(samples: ShortArray, speech: Boolean, capturedAt: Long = SystemClock.elapsedRealtime()) {
+        if (speech) gate.speech(capturedAt) else gate.quiet()
+        input(samples, samples.size, speech, capturedAt)
         samples.fill(0)
     }
     fun quiet() { gate.quiet() }

@@ -8,6 +8,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.widget.TextView
+import com.littlebuddy.v2.NativeEvidence
+import com.littlebuddy.v2.RecorderProof
+import com.littlebuddy.v2.PlayerProof
 import com.littlebuddy.v2.Capture
 import com.littlebuddy.v2.VoiceClient
 
@@ -20,6 +23,12 @@ class V2VoiceActivity : Activity() {
     @Volatile internal var releaseState: String = "idle"; private set
     private var voice: VoiceClient? = null
     private var capture: Capture? = null
+    private var releasedRecorder = RecorderProof()
+    private var releasedPlayer = PlayerProof()
+    internal fun observeNative(result: (NativeEvidence) -> Unit) { owner.post {
+        result(NativeEvidence(capture?.nativeProof ?: releasedRecorder, voice?.nativeProof() ?: releasedPlayer))
+    } }
+    internal fun withVoice(action: (VoiceClient) -> Unit) { owner.post { voice?.let(action) } }
     private lateinit var label: TextView
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,8 +49,9 @@ class V2VoiceActivity : Activity() {
         }
     }
     private fun stopVoice() { owner.post {
-        voice?.close(); if (voice?.quarantined != true) voice = null
-        capture?.close()
+        voice?.close(); voice?.let { releasedPlayer = it.nativeProof() }
+        if (voice?.quarantined != true) voice = null
+        capture?.close(); capture?.let { releasedRecorder = it.nativeProof }
         // Failed capture release keeps the object, preventing new ownership.
         if (capture?.quarantined != true) capture = null
         releaseState = if (voice == null && capture == null) "released" else "quarantined"

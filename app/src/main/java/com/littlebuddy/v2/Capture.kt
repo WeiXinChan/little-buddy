@@ -20,6 +20,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     private val cancelled = AtomicBoolean(false)
     private val pending = AtomicInteger(0)
     private var thread: Thread? = null
+    @Volatile var nativeProof = RecorderProof(); private set
     var quarantined = false; private set
     fun start() {
         check(thread == null && !quarantined)
@@ -44,11 +45,12 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var detector = SpeechDetector(320, initialFloor = 36.0)
         var uploadSamples = 0
         fun upload(data: ShortArray, speech: Boolean) {
+            val capturedAt = android.os.SystemClock.elapsedRealtime()
             if (uploadSamples + data.size > 320000) error("input bound")
             uploadSamples += data.size
             check(pending.incrementAndGet() <= 20)
             owner.post {
-                try { if (!cancelled.get()) client.frame(data, speech) }
+                try { if (!cancelled.get()) client.frame(data, speech, capturedAt) }
                 finally { data.fill(0); pending.decrementAndGet() }
             }
         }
@@ -65,12 +67,16 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 aec?.enabled = true // Availability/enabled are diagnostics, not acoustic PASS.
             }
             wake = SherpaWake(assets)
+            if (cancelled.get()) return
             native.startRecording()
             check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+            nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
             while (!cancelled.get()) {
                 val count = native.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
                 check(count >= 0)
                 if (count == 0) { Thread.sleep(5); continue }
+                check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+                nativeProof = nativeProof.copy(recording=true, frames=nativeProof.frames+count)
                 buffered.push(frame, count)
                 position = buffered.position
                 if (awake && idle != client.idleSerial) {
@@ -134,8 +140,16 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             frame.fill(0); buffered.clear()
             try { wake?.close() } catch (_: Exception) { quarantined = true }
             try { aec?.release() } catch (_: Exception) { quarantined = true }
-            try { recorder?.stop() } catch (_: Exception) { quarantined = true }
-            try { recorder?.release() } catch (_: Exception) { quarantined = true }
+            try {
+                if (recorder?.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder?.stop()
+                check(recorder?.recordingState == AudioRecord.RECORDSTATE_STOPPED)
+                nativeProof = nativeProof.copy(recording=false, stopped=true)
+            } catch (_: Exception) { quarantined = true }
+            try {
+                recorder?.release()
+                check(recorder?.state == AudioRecord.STATE_UNINITIALIZED)
+                nativeProof = nativeProof.copy(recording=false, released=true)
+            } catch (_: Exception) { quarantined = true }
             if (!cancelled.get()) owner.post { failed() }
         }
     }
