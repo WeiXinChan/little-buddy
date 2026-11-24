@@ -4,6 +4,10 @@ from pathlib import Path
 root=Path('app/src/androidTest/assets/m06-commands')
 allowed={r['name']:r['sha256'] for r in json.loads((root/'cases.json').read_text())['cases']}
 allowed.update({r['name']:r['sha256'] for r in json.loads((root/'provenance.json').read_text())['rows']})
+paths={name:root/(name+'.wav') for name in allowed}
+protocol=Path('app/src/androidTest/assets/m06-protocol-v2')
+for row in json.loads((protocol/'provenance.json').read_text()):
+ name='v2_'+row['name'];allowed[name]=row['sha256'];paths[name]=protocol/(row['name']+'.wav')
 p=subprocess.Popen(['adb','shell','am','instrument','-w','-r','-e','class','com.littlebuddy.V2MicrophoneCommandTest','com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
 output=[]
 try:
@@ -19,7 +23,7 @@ try:
    subprocess.run(['adb','shell','run-as',pkg,'test','-d',private],check=True,timeout=5)
    if canonical!=private:raise ValueError('private root mismatch')
    print(json.dumps(dict(event='handshake_ready',nonce=nonce,root=private,run_as_pwd=pwd)),flush=True)
-   path=root/(name+'.wav')
+   path=paths[name]
    if hashlib.sha256(path.read_bytes()).hexdigest()!=allowed[name] or q['sha256']!=allowed[name]:raise ValueError('fixture hash')
    subprocess.run(['paplay','--device=m06_input',str(path)],check=True,timeout=20)
    reply=json.dumps(dict(nonce=nonce,name=name,sha256=allowed[name],state='completed',playback_exit=0))

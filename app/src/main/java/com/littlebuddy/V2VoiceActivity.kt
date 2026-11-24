@@ -73,6 +73,21 @@ class V2VoiceActivity : Activity() {
         result(NativeEvidence(capture?.nativeProof ?: releasedRecorder, voice?.nativeProof() ?: releasedPlayer))
     } }
     internal fun withVoice(action: (VoiceClient) -> Unit) { owner.post { voice?.let(action) } }
+    @Volatile internal var beforeManagementPrompt: (((()->Unit))->Unit)?=null
+    @Volatile internal var beforeManagementCommand: (String?)->Unit={}
+    @Volatile internal var managementPromptSerial=0L;private set
+    private fun showManagementPrompt(text:String,ack:()->Unit){val hook=beforeManagementPrompt;if(hook!=null)hook{drawManagementPrompt(text,ack)} else drawManagementPrompt(text,ack)}
+    private fun drawManagementPrompt(text:String,ack:()->Unit){runOnUiThread{
+        val view=managementPromptView ?: return@runOnUiThread
+        val generation=scene.generation
+        if(!scene.management)return@runOnUiThread
+        view.text=text
+        val listener=object:android.view.ViewTreeObserver.OnDrawListener {var sent=false
+            override fun onDraw(){if(sent)return;sent=true;view.post{if(view.viewTreeObserver.isAlive)view.viewTreeObserver.removeOnDrawListener(this);if(scene.management && scene.generation==generation && managementPromptView===view){managementPromptSerial++;ack()}}}
+        }
+        view.viewTreeObserver.addOnDrawListener(listener);view.invalidate()
+    }}
+    private var managementPromptView: TextView?=null
     private lateinit var eyes: EyesView
     private val scene = EyeScene()
     // M07 installs only safety-reviewed local catalog entries, never remote URLs.
@@ -116,6 +131,7 @@ class V2VoiceActivity : Activity() {
                     isEnabled = false // M08 supplies verification, rate limiting and recovery.
                 })
                 addView(TextView(this@V2VoiceActivity).apply { text = "家长验证尚未启用，暂不能修改设置。" })
+                addView(TextView(this@V2VoiceActivity).apply { managementPromptView=this; text="" })
                 addView(Button(this@V2VoiceActivity).apply { text = "取消"; setOnClickListener { exitManagement() } })
             })
         }
@@ -171,10 +187,11 @@ class V2VoiceActivity : Activity() {
             { entering -> if(capture===created && life.allows(ticket))manage(entering) },
             { life.allows(ticket) },
             { event,proof,phase -> timeline.add(event,ticket,proof,phase) },
+            hooks=com.littlebuddy.v2.CaptureHooks(beforeCommandDecision={beforeManagementCommand(it)}),
             disposed = { owner.post {
                 mark("DISPOSE_CONSUME")
                 if(capture===created && !created.quarantined && eligible(life.state.generation))localCommands()
-            } })
+            } }, managementPrompt=::showManagementPrompt)
         return created
     }
     private fun installCapture(client: VoiceClient,ticket: Long): Boolean {

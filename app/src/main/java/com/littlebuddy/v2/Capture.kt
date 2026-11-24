@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
-internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {})
+internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {},val beforeCommandDecision: (String?)->Unit = {})
 
 internal enum class CapturePhase { NOT_STARTED, THREAD_START, AUDIO_RECORD, WAKE_KWS, MANAGEMENT_KWS, START, READ, RELEASE, RELEASED, QUARANTINED }
 
@@ -26,7 +26,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                        private val allowed: ()->Boolean = { true },
                        private val trace: (String,RecorderProof,String)->Unit = { _,_,_-> },
                        private val hooks: CaptureHooks = CaptureHooks(),
-                       private val disposed: ()->Unit = {}) {
+                       private val disposed: ()->Unit = {},
+                       private val managementPrompt: (String,()->Unit)->Unit = {_,_->}) {
     companion object { private val lease=AtomicBoolean(false) }
     @Volatile private var operation="NOT_STARTED"
     @Volatile private var progressAt=0L
@@ -35,6 +36,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     private var ownsLease=false
     private val nativeLock=Any()
     @Volatile private var nativeRecorder: AudioRecord? = null
+    @Volatile private var capturedSamples=0L
+    private data class PromptAck(val nonce:Long,val nano:Long,val generation:Long)
+    private val promptAck=java.util.concurrent.atomic.AtomicReference<PromptAck?>(null)
     private val commandGeneration = AtomicLong(0)
     @Volatile private var management = false
     fun enterManagement() { commandGeneration.incrementAndGet(); management = true }
@@ -68,6 +72,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         val commandBoundary=CommandBoundary()
         val buffered = WakeSamples()
         val frame = ShortArray(320)
+        var awaitingPrompt:PromptAck?=null
+        val captureTimestamp=android.media.AudioTimestamp()
         var position = 0L
         var firstAfterWake = false
         var awake = false
@@ -137,9 +143,27 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if(cancelled.get() || !allowed())break
                 val commandTail=commands?.accept(frame,count)
                 val hit=if(commandTail!=null) CommandBoundary.Hit(checkNotNull(commands?.detectedKeyword),checkNotNull(commands).matchedStart,commandTail) else null
+                hooks.beforeCommandDecision(hit?.name)
                 if(cancelled.get() || !allowed())break
                 progress("COMMAND_BOUNDARY")
-                val command=commandBoundary.frame(frame,count,hit,management)
+                capturedSamples+=count
+                promptAck.getAndSet(null)?.let{awaitingPrompt=it}
+                awaitingPrompt?.let{ack ->
+                    progress("CONFIRM_NATIVE_TIMESTAMP")
+                    val result=native.getTimestamp(captureTimestamp,android.media.AudioTimestamp.TIMEBASE_MONOTONIC)
+                    val marker=if(result==AudioRecord.SUCCESS)CaptureFreshness.marker(ack.nano,captureTimestamp.framePosition,captureTimestamp.nanoTime,nativeProof.frames,System.nanoTime()) else null
+                    if(marker!=null && ack.generation==commandGeneration.get()) {
+                        val armed=commandBoundary.armConfirmation(ack.nonce,marker,ack.generation)
+                        trace(if(armed)"CONFIRM_NATIVE_BARRIER" else "CONFIRM_NATIVE_BARRIER_REJECTED",nativeProof,"nonce=${ack.nonce} nativeFrame=$marker nativeNano=${captureTimestamp.nanoTime} promptNano=${ack.nano}")
+                        awaitingPrompt=null
+                    }
+                }
+                val command=commandBoundary.frame(frame,count,hit,management,commandGeneration.get())
+                if(command in listOf("确认退出提示","继续管理")) {
+                    val ticket=commandGeneration.get();val nonce=commandBoundary.confirmationNonce
+                    owner.post {if(!cancelled.get() && allowed() && management && ticket==commandGeneration.get())managementPrompt(if(command=="确认退出提示")"要退出吗？请说确认退出，或点取消按钮。" else "继续管理") {if(!cancelled.get() && allowed() && ticket==commandGeneration.get())promptAck.set(PromptAck(nonce,System.nanoTime(),ticket))}}
+                    frame.fill(0);continue
+                }
                 if (command!=null) {
                     val entering = !management && command == "进入管理"
                     val exiting = management && command in listOf("取消", "退出管理")

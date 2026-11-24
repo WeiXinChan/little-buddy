@@ -5,3 +5,11 @@ w ǎ l ì w ǎ l ì q ǐng j ìn r ù g uǎn l ǐ y è m iàn @进入管理
 w ǎ l ì w ǎ l ì d ǎ k āi g uǎn l ǐ y è m iàn @进入管理
 b ú y ào @否定
 b ù y ào @否定
+q uè r èn t uì ch ū @确认退出
+j ì x ù g uǎn l ǐ @继续管理
+b ù @否定
+b ié @否定
+b ù q uè r èn t uì ch ū @否定
+b ié q uè r èn t uì ch ū @否定
+b ù j ì x ù g uǎn l ǐ @否定
+b ié j ì x ù g uǎn l ǐ @否定

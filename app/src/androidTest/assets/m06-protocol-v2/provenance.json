@@ -1,0 +1,74 @@
+[
+  {
+    "name": "confirm_exit",
+    "text": "确认退出",
+    "source": "existing authorized CosyVoice WebSocket direct rate; no DSP time stretch",
+    "model": "cosyvoice-v3-flash",
+    "voice": "longanyang",
+    "rate": 1.0,
+    "requested_sample_rate": 24000,
+    "duration_s": 4.02,
+    "sha256": "9df61ed155b7dc3d2aadeb3032c1202e00e0bd0a28a75709a6dde55c81639b58",
+    "status": "generated"
+  },
+  {
+    "name": "continue_management",
+    "text": "继续管理",
+    "source": "existing authorized CosyVoice WebSocket direct rate; no DSP time stretch",
+    "model": "cosyvoice-v3-flash",
+    "voice": "longanyang",
+    "rate": 1.0,
+    "requested_sample_rate": 24000,
+    "duration_s": 4.06,
+    "sha256": "af3783aef8e1c3e2dcfe15c07ea85ad6f9c246f6fde8535146a24b01d78a5db2",
+    "status": "generated"
+  },
+  {
+    "name": "deny_confirm",
+    "text": "不要确认退出",
+    "source": "existing authorized CosyVoice WebSocket direct rate; no DSP time stretch",
+    "model": "cosyvoice-v3-flash",
+    "voice": "longanyang",
+    "rate": 1.0,
+    "requested_sample_rate": 24000,
+    "duration_s": 4.38,
+    "sha256": "732d306813dfb5df08e2c9f11d5a7aa26351576d62272ccb452ebff5e9aaf763",
+    "status": "generated"
+  },
+  {
+    "name": "quote_confirm",
+    "text": "故事里面提到了确认退出这个词",
+    "source": "existing authorized CosyVoice WebSocket direct rate; no DSP time stretch",
+    "model": "cosyvoice-v3-flash",
+    "voice": "longanyang",
+    "rate": 1.0,
+    "requested_sample_rate": 24000,
+    "duration_s": 6.18,
+    "sha256": "e9dda733dc41c0e2f4c74dacf16a7d0e02ae713f73a03d97356adb57871e383e",
+    "status": "generated"
+  },
+  {
+    "name": "short_bie_confirm",
+    "text": "别确认退出",
+    "source": "existing authorized CosyVoice WebSocket direct rate; no DSP time stretch",
+    "model": "cosyvoice-v3-flash",
+    "voice": "longanyang",
+    "rate": 1.0,
+    "requested_sample_rate": 24000,
+    "duration_s": 4.3,
+    "sha256": "753382c3ce6d09af09657089aad07c3a8095fdaef10c6a23355355158f0e47bb",
+    "status": "generated"
+  },
+  {
+    "name": "short_bu_confirm",
+    "text": "不确认退出",
+    "source": "existing authorized CosyVoice WebSocket direct rate; no DSP time stretch",
+    "model": "cosyvoice-v3-flash",
+    "voice": "longanyang",
+    "rate": 1.0,
+    "requested_sample_rate": 24000,
+    "duration_s": 4.1,
+    "sha256": "da100f49556b585f091227b3060a188d7710d4587bd7f9257a0c46f08cc13789",
+    "status": "generated"
+  }
+]

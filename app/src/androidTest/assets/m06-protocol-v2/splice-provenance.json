@@ -1,0 +1,22 @@
+[
+  {
+    "name": "splice_bu_continue",
+    "prefix_source": "short_bu_confirm",
+    "prefix_end_sample": 17279,
+    "continuation_source": "continue_management",
+    "continuation_start_sample": 8000,
+    "continuation_trim_tail": 32000,
+    "sha256": "e2a25907626f8813aa6ee8b7e8c645ac8ed75f23a4fb75b787b59c0626df9510",
+    "scope": "DSP-only synthetic negative; no claim natural pronunciation"
+  },
+  {
+    "name": "splice_quote_continue",
+    "prefix_source": "quote_confirm",
+    "prefix_end_sample": 37759,
+    "continuation_source": "continue_management",
+    "continuation_start_sample": 8000,
+    "continuation_trim_tail": 32000,
+    "sha256": "b0c568a9477a65a54d11f0a69cd3b44a466d3a4b3f8f7940fc19c3562a51a12a",
+    "scope": "DSP-only synthetic negative; no claim natural pronunciation"
+  }
+]

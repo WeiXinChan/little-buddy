@@ -17,7 +17,7 @@ class CommandBoundaryReplayTest {
    while(i<lines.size && lines[i].startsWith("hit\t")) {val h=lines[i++].split('\t');hits[h[1].toInt()]=CommandBoundary.Hit(h[2],h[3].toLong(),h[4].toLong())}
    val bytes=File(root,"$name.wav").readBytes();val pcm=ShortArray((bytes.size-44)/2)
    ByteBuffer.wrap(bytes,44,bytes.size-44).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(pcm)
-   val boundary=CommandBoundary();val results=mutableListOf<String>();val all=pcm+ShortArray(19200)
+   val boundary=CommandBoundary{0L};val results=mutableListOf<String>();val all=pcm+ShortArray(19200)
    for(pos in all.indices step 320) {val f=all.copyOfRange(pos,minOf(pos+320,all.size));boundary.frame(f,f.size,hits[pos/320],managed)?.let{results+=it}}
    if(results!=expected)failures+="$name expected=$expected actual=$results"
    cases++

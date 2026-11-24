@@ -1,0 +1,493 @@
+{
+  "protocol": 2,
+  "paths": 8,
+  "score": 1.5,
+  "threshold": 0.25,
+  "trailing": 2,
+  "prompt_ack": "Kotlin replay acknowledges at prompt event; device uses actual UI acknowledgment and current captured sample",
+  "cases": [
+    {
+      "name": "clear_cancel",
+      "expected": [
+        "取消"
+      ],
+      "segments": [
+        {
+          "source": "cancel",
+          "start_sample": 0,
+          "samples": 41920
+        }
+      ],
+      "sha256": "5f5cc423ec7c5c9db2e9f3bdab6a03476a11709279a645e3696a2f0bc1857ef7",
+      "hits": [
+        {
+          "frame": 87,
+          "name": "取消",
+          "start": 15359,
+          "end": 21760
+        }
+      ]
+    },
+    {
+      "name": "clear_exit",
+      "expected": [
+        "退出管理"
+      ],
+      "segments": [
+        {
+          "source": "exit",
+          "start_sample": 0,
+          "samples": 54720
+        }
+      ],
+      "sha256": "f248e968c579c459f8775cb41e97a71d14730269c85063d9984435ad2db321ee",
+      "hits": [
+        {
+          "frame": 119,
+          "name": "退出管理",
+          "start": 10239,
+          "end": 33920
+        }
+      ]
+    },
+    {
+      "name": "uncertain_prompt_confirm",
+      "expected": [
+        "确认退出提示",
+        "取消"
+      ],
+      "segments": [
+        {
+          "source": "negative_pause_cancel_1.6",
+          "start_sample": 0,
+          "samples": 109440
+        },
+        {
+          "source": "confirm_exit",
+          "start_sample": 141440,
+          "samples": 64320
+        }
+      ],
+      "sha256": "676e47c63fa1030fe4da7f51d72369cb8ee34806761d2ac6ef3a794463c0da30",
+      "hits": [
+        {
+          "frame": 87,
+          "name": "否定",
+          "start": 15359,
+          "end": 21119
+        },
+        {
+          "frame": 295,
+          "name": "取消",
+          "start": 83199,
+          "end": 88960
+        },
+        {
+          "frame": 535,
+          "name": "确认退出",
+          "start": 156160,
+          "end": 168319
+        }
+      ]
+    },
+    {
+      "name": "deny_confirm_stays",
+      "expected": [
+        "确认退出提示"
+      ],
+      "segments": [
+        {
+          "source": "negative_pause_cancel_1.6",
+          "start_sample": 0,
+          "samples": 109440
+        },
+        {
+          "source": "deny_confirm",
+          "start_sample": 141440,
+          "samples": 70080
+        }
+      ],
+      "sha256": "b742f021fd5482a132f0b4915f94ea384218f7fc465d1cfd81fc458837c0e980",
+      "hits": [
+        {
+          "frame": 87,
+          "name": "否定",
+          "start": 15359,
+          "end": 21119
+        },
+        {
+          "frame": 295,
+          "name": "取消",
+          "start": 83199,
+          "end": 88960
+        },
+        {
+          "frame": 519,
+          "name": "否定",
+          "start": 155519,
+          "end": 161280
+        },
+        {
+          "frame": 567,
+          "name": "确认退出",
+          "start": 162559,
+          "end": 174080
+        }
+      ]
+    },
+    {
+      "name": "quote_confirm_stays",
+      "expected": [
+        "确认退出提示"
+      ],
+      "segments": [
+        {
+          "source": "negative_pause_cancel_1.6",
+          "start_sample": 0,
+          "samples": 109440
+        },
+        {
+          "source": "quote_confirm",
+          "start_sample": 141440,
+          "samples": 98880
+        }
+      ],
+      "sha256": "d0ec6f67082652b8506ce65d8ee290c81af8ec2003b02679da76f3ef140775bd",
+      "hits": [
+        {
+          "frame": 87,
+          "name": "否定",
+          "start": 15359,
+          "end": 21119
+        },
+        {
+          "frame": 295,
+          "name": "取消",
+          "start": 83199,
+          "end": 88960
+        },
+        {
+          "frame": 615,
+          "name": "确认退出",
+          "start": 179199,
+          "end": 193920
+        }
+      ]
+    },
+    {
+      "name": "continue_then_cancel",
+      "expected": [
+        "确认退出提示",
+        "继续管理",
+        "取消"
+      ],
+      "segments": [
+        {
+          "source": "negative_pause_cancel_1.6",
+          "start_sample": 0,
+          "samples": 109440
+        },
+        {
+          "source": "continue_management",
+          "start_sample": 141440,
+          "samples": 64960
+        },
+        {
+          "source": "cancel",
+          "start_sample": 238400,
+          "samples": 41920
+        }
+      ],
+      "sha256": "fea9b5da64b929e9e9084013b592549412f84a4d8b84b6450ed8daf1157401de",
+      "hits": [
+        {
+          "frame": 87,
+          "name": "否定",
+          "start": 15359,
+          "end": 21119
+        },
+        {
+          "frame": 295,
+          "name": "取消",
+          "start": 83199,
+          "end": 88960
+        },
+        {
+          "frame": 551,
+          "name": "继续管理",
+          "start": 156160,
+          "end": 169599
+        },
+        {
+          "frame": 823,
+          "name": "取消",
+          "start": 253439,
+          "end": 259839
+        }
+      ]
+    },
+    {
+      "name": "old_confirm_rejected",
+      "expected": [],
+      "segments": [
+        {
+          "source": "confirm_exit",
+          "start_sample": 0,
+          "samples": 64320
+        }
+      ],
+      "sha256": "1fdb07d02b15edf84dbce0f3e86deda5f283246612f3c710a29e49e083619966",
+      "hits": [
+        {
+          "frame": 103,
+          "name": "确认退出",
+          "start": 15359,
+          "end": 26879
+        }
+      ]
+    },
+    {
+      "name": "bie_confirm_stays",
+      "expected": [
+        "确认退出提示"
+      ],
+      "segments": [
+        {
+          "source": "negative_pause_cancel_1.6",
+          "start_sample": 0,
+          "samples": 109440
+        },
+        {
+          "source": "short_bie_confirm",
+          "start_sample": 141440,
+          "samples": 68800
+        }
+      ],
+      "sha256": "9d8ddea20062e7bd3a4f625f88a3b13a764e0fe297afa840006b9391d4e4a2fa",
+      "hits": [
+        {
+          "frame": 87,
+          "name": "否定",
+          "start": 15359,
+          "end": 21119
+        },
+        {
+          "frame": 295,
+          "name": "取消",
+          "start": 83199,
+          "end": 88960
+        },
+        {
+          "frame": 551,
+          "name": "否定",
+          "start": 153599,
+          "end": 172159
+        }
+      ]
+    },
+    {
+      "name": "bu_confirm_stays",
+      "expected": [
+        "确认退出提示"
+      ],
+      "segments": [
+        {
+          "source": "negative_pause_cancel_1.6",
+          "start_sample": 0,
+          "samples": 109440
+        },
+        {
+          "source": "short_bu_confirm",
+          "start_sample": 141440,
+          "samples": 65600
+        }
+      ],
+      "sha256": "2886e1dc01fe8a02a1ff4de2eba29f992dc0129486c0e4894226ea42357a97ac",
+      "hits": [
+        {
+          "frame": 87,
+          "name": "否定",
+          "start": 15359,
+          "end": 21119
+        },
+        {
+          "frame": 295,
+          "name": "取消",
+          "start": 83199,
+          "end": 88960
+        },
+        {
+          "frame": 551,
+          "name": "否定",
+          "start": 155519,
+          "end": 169599
+        }
+      ]
+    },
+    {
+      "name": "buffered_old_confirm_rejected",
+      "expected": [
+        "确认退出提示"
+      ],
+      "segments": [
+        {
+          "source": "negative_pause_cancel_1.6",
+          "start_sample": 0,
+          "samples": 109440
+        },
+        {
+          "source": "confirm_exit",
+          "start_sample": 141440,
+          "samples": 64320
+        }
+      ],
+      "sha256": "676e47c63fa1030fe4da7f51d72369cb8ee34806761d2ac6ef3a794463c0da30",
+      "hits": [
+        {
+          "frame": 87,
+          "name": "否定",
+          "start": 15359,
+          "end": 21119
+        },
+        {
+          "frame": 295,
+          "name": "取消",
+          "start": 83199,
+          "end": 88960
+        },
+        {
+          "frame": 535,
+          "name": "确认退出",
+          "start": 156160,
+          "end": 168319
+        }
+      ]
+    },
+    {
+      "name": "negative_continue_does_not_clear",
+      "expected": [
+        "确认退出提示",
+        "确认退出提示",
+        "取消"
+      ],
+      "segments": [
+        {
+          "source": "negative_pause_cancel_1.6",
+          "start_sample": 0,
+          "samples": 109440
+        },
+        {
+          "source": "splice_bu_continue",
+          "start_sample": 141440,
+          "samples": 42239
+        },
+        {
+          "source": "cancel",
+          "start_sample": 215679,
+          "samples": 41920
+        },
+        {
+          "source": "confirm_exit",
+          "start_sample": 289599,
+          "samples": 64320
+        }
+      ],
+      "sha256": "d60c50bbca95083cb1825f0de10bd9e0807dd8f74ab5a18cb4c806df4e22c45e",
+      "hits": [
+        {
+          "frame": 87,
+          "name": "否定",
+          "start": 15359,
+          "end": 21119
+        },
+        {
+          "frame": 295,
+          "name": "取消",
+          "start": 83199,
+          "end": 88960
+        },
+        {
+          "frame": 567,
+          "name": "继续管理",
+          "start": 165759,
+          "end": 178559
+        },
+        {
+          "frame": 759,
+          "name": "取消",
+          "start": 231039,
+          "end": 236799
+        },
+        {
+          "frame": 999,
+          "name": "确认退出",
+          "start": 304639,
+          "end": 316800
+        }
+      ]
+    },
+    {
+      "name": "quoted_continue_does_not_clear",
+      "expected": [
+        "确认退出提示",
+        "确认退出提示",
+        "取消"
+      ],
+      "segments": [
+        {
+          "source": "negative_pause_cancel_1.6",
+          "start_sample": 0,
+          "samples": 109440
+        },
+        {
+          "source": "splice_quote_continue",
+          "start_sample": 141440,
+          "samples": 62719
+        },
+        {
+          "source": "cancel",
+          "start_sample": 236159,
+          "samples": 41920
+        },
+        {
+          "source": "confirm_exit",
+          "start_sample": 310079,
+          "samples": 64320
+        }
+      ],
+      "sha256": "61c3cc67bbcdf77806ba66a56dc001708d43c0abf6f6da7902d7abf3ce0e64db",
+      "hits": [
+        {
+          "frame": 87,
+          "name": "否定",
+          "start": 15359,
+          "end": 21119
+        },
+        {
+          "frame": 295,
+          "name": "取消",
+          "start": 83199,
+          "end": 88960
+        },
+        {
+          "frame": 631,
+          "name": "继续管理",
+          "start": 186239,
+          "end": 199039
+        },
+        {
+          "frame": 823,
+          "name": "取消",
+          "start": 251519,
+          "end": 257280
+        },
+        {
+          "frame": 1063,
+          "name": "确认退出",
+          "start": 325119,
+          "end": 337279
+        }
+      ]
+    }
+  ]
+}

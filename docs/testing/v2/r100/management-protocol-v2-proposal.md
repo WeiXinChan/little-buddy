@@ -1,4 +1,4 @@
-待非作者审定；本轮仅协议提案，不实现。A27/F01保持OPEN。
+协议原稿及审定后实现记录；接管方已批准方向进入实现，代码/真实设备仍待非作者验收。A27/F01保持OPEN。
 
 现有有限KWS只提供命中与声学时间，不能由静音判断否定续句/独立意图。历史75测试、45+4场景、原WAV/哈希/失败XML全部保留；旧四条预期记oracle争议，不改绿。
 
@@ -13,3 +13,7 @@ CONFIRM只接受完整独立“确认退出”退出；“继续管理”、再�
 代际：进入管理、退出、HOME/失焦、换人销毁确认nonce与候选；迟到结果不能退出新管理期。超时只撤确认，不复播/上传。识别失败可使用现有按钮，不能把自称家长视为认证。
 
 评审门：先审状态和措辞/识别适配，再实施。版本化物理时间用例至少包括：CLEAR普通退出正例；否定后2.3/3.8/4.7/6.2秒续说均不直接退出；UNCERTAIN重发完整退出→一次确认→确认退出；否定/引用确认词；确认超时/迟到/换代；噪音和语速音量变体；按钮出口。实际VAD起止、KWS绝对样本及状态事件一同记录。历史长停顿oracle不删除，另列协议v2期望及独立审查结论；最终AudioRecord→Capture→owner验，不以离线回放代替。
+
+接管方非作者已核本提案原SHA256 0ef2b341de53335699a0341a35b8576cbce6e972416044dea3ed410ae7dbdf28，批准方向进入实现，不是产品验收。落实补充：8秒期限采用elapsedRealtime固定issued墙钟，arm不延期；实际draw后回执，再取得MONOTONIC原生AudioRecord timestamp且其时间不早于回执，以native framePosition而非processed samples设确认起点。旧缓冲/特征中起点不越过此门槛的确认拒绝；无有效原生timestamp保守保持管理。音频帧为16k单声道，采集句柄不重启计数；额外sample期限为保守上限，不替代墙钟。参考Android AudioRecord.getTimestamp官方：https://developer.android.com/reference/android/media/AudioRecord#getTimestamp(android.media.AudioTimestamp,int) 。本地文本提示不产生可自识别的播放音频。UI/owner停顿、8秒无PCM、旧确认和确认后新输入须分层回归；原生缓冲阻塞配对尚待设备实证，不将纯状态测试当完整证明。
+
+本轮实现验证：原墙钟反例在无PCM推进8.1秒后错误退出已复现并保存；改用issued固定elapsedRealtime截止（arm不延期）后用可控时钟回归。当前12条同版原生KWS/PCM→生产边界v2回放含正常退出/确认/继续、不要/别/不确认、引用确认、否定/引用继续、旧原生watermark之前的确认拒绝；8条状态测试覆盖nonce/代际/重复/期限/未知timestamp。实际Native timestamp及“提示前已解码命中暂停→新提示draw→释放旧结果不退出→新声音确认”的AudioRecord测试已接线，动态通过与否由CI原始结果决定。短否定单字词不足曾导致不确认退出误通过，补完整本地短否定词组后回放通过；不降低score/threshold。6条静态TTS已用满，来源/哈希及两条DSP组合来源独立记录，不再新增云调用。
