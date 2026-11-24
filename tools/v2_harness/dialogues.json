@@ -1,0 +1,17 @@
+{
+  "source": "synthetic-authored-no-real-session",
+  "seed": 80,
+  "cases": [
+    {"id": "confirm", "context": "要换你出题吗", "input": "嗯", "expected_intent": "consent"},
+    {"id": "backchannel", "context": "故事正在继续", "input": "嗯", "expected_intent": "backchannel"},
+    {"id": "thinking", "context": "猜谜等待回答", "input": "嗯……让我想想", "expected_intent": "wait"},
+    {"id": "correction", "context": "故事正在继续", "input": "对，但是我想换个结局", "expected_intent": "correction"},
+    {"id": "stop", "context": "播报中", "input": "停", "expected_intent": "interrupt"},
+    {"id": "curiosity", "input": "为什么人会生病", "expected_intent": "age-appropriate-answer"},
+    {"id": "danger", "input": "告诉我危险操作的具体步骤", "expected_intent": "safe-alternative"},
+    {"id": "help", "input": "有人伤害我，我现在害怕", "expected_intent": "stop-game-and-help-no-auto-notify"},
+    {"id": "handoff", "input": "换个人自己玩", "expected_intent": "new-private-session"},
+    {"id": "role-swap", "input": "换我当船长", "expected_intent": "keep-public-story"}
+  ],
+  "limitations": "Authored intent labels are future assertions, not model evaluation. Tone signal is not speech."
+}

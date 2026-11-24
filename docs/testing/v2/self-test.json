@@ -1,0 +1,232 @@
+{
+  "scope": "fixture-self-test-only",
+  "source": "synthetic",
+  "provenance": {
+    "head": "c9270fb2fab75a1efd7809f9913dc51d9d02bdbb",
+    "dirty": true,
+    "content_sha256": {
+      "tools/v2_harness/.gitignore": "32dae3052f331ee34d628ef535709b301259a45df7c7522c4d35dcf49873f00b",
+      "tools/v2_harness/__init__.py": "7afc72ec97c78e30e4684f5b0a2f10873c4945c868d75b23a3ddc26b3976bda0",
+      "tools/v2_harness/dialogues.json": "39f40f8fe20c7e505f6f5f6c8eaf7724077b041352c45091dd832034e1233408",
+      "tools/v2_harness/evidence.py": "1fdeff51e639a48304beea232ad5acbfbc633ae4747d599138cec3a55fc007c1",
+      "tools/v2_harness/inventory.py": "4212795f83c21b460ba4d7afb50ffc6dbc03948614cc9f5dc78fa3d100262747",
+      "tools/v2_harness/lab.py": "ee2fafed5434b3166b56f8fa3b0a4f4c6176913e59c7443e9a8f2dab5370485f",
+      "tools/v2_harness/run.py": "88faba1ac4ffd6d826abf184dff60e82d62feb7efcbcdd1e1f9fbbd3ecd0419b",
+      "tools/v2_harness/tests/test_lab.py": "282050f9b66c9b27c26db3d0be05e94a7ce52b38043d6c25734316ea14214e6b"
+    }
+  },
+  "generated_at_utc": "2026-11-24T08:21:05.613755+00:00",
+  "python": "3.12.3",
+  "host": "Linux",
+  "device": "none",
+  "network": "none",
+  "seed": 80,
+  "attempts": 19,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "failure_cases": [],
+  "product_results": [
+    {
+      "id": "A01",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A02",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A03",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A04",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A05",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A06",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A07",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A08",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A09",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A10",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A11",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A12",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A13",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A14",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A15",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A16",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A17",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A18",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A19",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A20",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A21",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A22",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A23",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A24",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A25",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A26",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A27",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A28",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A29",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A30",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A31",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A32",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A33",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A34",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A35",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A36",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A37",
+      "status": "NOT_RUN",
+      "attempts": 0
+    },
+    {
+      "id": "A38",
+      "status": "NOT_RUN",
+      "attempts": 0
+    }
+  ],
+  "findings": {
+    "F01": "OPEN_PENDING_IMPLEMENTATION_AND_INDEPENDENT_REVIEW",
+    "F02": "OPEN_PENDING_IMPLEMENTATION_AND_INDEPENDENT_REVIEW",
+    "F03": "OPEN_PENDING_IMPLEMENTATION_AND_INDEPENDENT_REVIEW",
+    "F04": "OPEN_PENDING_IMPLEMENTATION_AND_INDEPENDENT_REVIEW",
+    "F05": "OPEN_PENDING_IMPLEMENTATION_AND_INDEPENDENT_REVIEW"
+  },
+  "limitations": [
+    "No product adapter, device, speech recognizer, cloud or acoustic execution",
+    "No child voice evidence; no elapsed 7-day test"
+  ]
+}
