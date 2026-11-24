@@ -1,0 +1,113 @@
+{
+  "reviewed_head": "059ef654ea50c3a0cef928150016db348a628e6c",
+  "python": {
+    "total": 75,
+    "passed": 75
+  },
+  "r99_test_methods": 16,
+  "matrices": {
+    "asr_await_stages": 4,
+    "asr_cancel_modes": 3,
+    "endpoint_cancel_modes": 3,
+    "generation_await_stages": 5,
+    "generation_cancel_modes": 3
+  },
+  "legacy_probe_unchanged": true,
+  "legacy_original_sha256": {
+    "probe99.py": "8b337f327a7dd1926ac30e2dcb2496c958003974f2e85c714b73997424584104",
+    "checks99.py": "767163f96315e5350cb7cb464aea848d4363512227341e046d2c144374bc2993",
+    "report99.md": "658d967f291e54b21713224e096233a07400e708f88f3560a3c160de13785c6c",
+    "evidence/probe99.json": "8af97a7a1b554b56287596804182cf5273f64e6e3849208eacd2816e93a1c8f2",
+    "evidence/probe99-negative.json": "3bf94b6ba1bd299b35813434e79512df764e674f9c7565e149f131e0a4f7b9e2",
+    "evidence/live-independent.json": "ba93a46d48713eb1ebbaf65d835c54448def0ce55758e85eb3cd55746e6cb8b8",
+    "evidence/live-independent-2.json": "bdfc3a8d31f5fdf5d9ad391a8549bb00155db3df7f3ec9c6d40aaf4b2f592c57",
+    "evidence/live-independent-3.json": "81cec3ecb752e6a24ae80acb6194638e195879e2683af6cfa2a4699c176d8b18",
+    "evidence/oracle-audit.json": "7f1335c711b5cbd88205bb702825d17c589bc61e502d4f08c1497e465cecc321",
+    "evidence/review99-sha256.json": "288603b690c1782cd7d48173d1ed3bdc9d4cec2ec1ed94acfb8058328c3eace8"
+  },
+  "apk_reuse": {
+    "native_sources_verified": 15,
+    "native_source_sha256": {
+      "app/src/test/java/com/littlebuddy/v2/Recheck97EdgesTest.kt": "28a2e8b8bf55bddd7a9e4bcf96c54fa327268a72f0607ea83804e4ffd5dd44c9",
+      "app/src/test/java/com/littlebuddy/v2/NativeEvidenceTest.kt": "d9422248989622e02b8b82bba934973a726083b25de8b25122a28d26f5fb6717",
+      "app/src/test/java/com/littlebuddy/v2/InputGateTest.kt": "d25fe7cc1b9ff94ffde619a8e691e90bc3860f53392f31653aa1037c69f424b2",
+      "app/src/test/java/com/littlebuddy/v2/PlaybackTest.kt": "a70c8db4f51dfbb4d4e1d2874a6873f1eb4a64d04d38e97d3cf533c85586e97c",
+      "app/src/test/java/com/littlebuddy/v2/Review97Test.kt": "3394272dbca99f1e17450156dd55f8eedcdca1c308e3a4e48d927280d62d9481",
+      "app/src/main/java/com/littlebuddy/v2/VoiceClient.kt": "c95aebbe5c9578eefb745b222c4f1e7882326cc1dfdb4f8c25df0be111e2cc9c",
+      "app/src/main/java/com/littlebuddy/v2/Playback.kt": "639ea944587a0476f227a4c412055de57daa1e6470618950d245a8bcd71cd2b8",
+      "app/src/main/java/com/littlebuddy/v2/AndroidTrack.kt": "e88bfa69f13ce2d77806535f983fc33da9e206958f9a0c5fb7fc83b06e47e437",
+      "app/src/main/java/com/littlebuddy/v2/Turns.kt": "da60d28552bf6a92a287ad037da3cb0b630d3ec67d9f6893f5b1d7d430158669",
+      "app/src/main/java/com/littlebuddy/v2/Capture.kt": "d826c536ae19c91f307a19b460b6b2067b75aa313e0760738b9e6ff60a818fc5",
+      "app/src/main/java/com/littlebuddy/v2/WakeSamples.kt": "3939e50d5ad46b3530530f1a6785a9c8e72613aa72c6aa74af9f8e93318a254f",
+      "app/src/main/java/com/littlebuddy/v2/NativeEvidence.kt": "b8851071c7b87c8a5f170633721becf9ddd58014cd649fc571f823335b2e7e5f",
+      "app/src/main/java/com/littlebuddy/v2/InputGate.kt": "a165ea1ef522c2a455108396c9d69a2eb39892de807ef39a7bcd365d0841ea65",
+      "app/src/androidTest/java/com/littlebuddy/V2AudioTest.kt": "e33380884a33c5de2a3b03332fd9074a0b4867a0dca6c7c03dcd11ffaafa7e16",
+      "app/build.gradle.kts": "960fef3162bb61ef3a31bcb4b6ecb7493526ba3dbda5e1f9b302a06c6c75c235"
+    },
+    "artifacts": {
+      "app-v2Debug.apk": {
+        "sha256": "866f3f3e534d2557f9ab7aacc0ce1d41368f76d751d997d01a7deb945ac39440",
+        "reused": true,
+        "rebuild": false
+      },
+      "app-v2Debug-androidTest.apk": {
+        "sha256": "e5f11334b9f1bb73159e869eca8565b702eff02f1e2418c6f989e98163f6ebd5",
+        "reused": true,
+        "rebuild": false
+      }
+    },
+    "android_changed": false,
+    "gradle_changed": false,
+    "jvm_rerun": false,
+    "android_rebuild": false,
+    "apk_upload": false,
+    "match_scope": "unchanged native sources/build config only; backend is updated and separately hashed"
+  },
+  "schema_contract": {
+    "sample": "R99-new-FACTS-synthetic-only",
+    "attempts": 1,
+    "real_child": false,
+    "schema_source_sha256": "3614a430bd03262139fc858bb148a0c9c4895ea339d3fa2aff965a83c6e7eb04",
+    "facts_schema_sha256": "e48634bedbc18f34dffaeee0c2dad155381717c673287bf70df6d4152f07ffe1",
+    "accepted": true,
+    "dimension_legal": true,
+    "provenance_valid": true,
+    "nonempty": true,
+    "facts_count": 2,
+    "status": 200,
+    "code": null,
+    "usage": {
+      "requests": 1,
+      "failures": 0,
+      "prompt_tokens": 564,
+      "completion_tokens": 32
+    },
+    "model": "qwen3.8-flash",
+    "fabrication_rejected": true,
+    "passed": true
+  },
+  "current_sources": {
+    "backend/v2/voice.py": "7b2ed1350c028798942752c21d1f3e001228b1ae1f125f59683793c5cc940135",
+    "backend/v2/session.py": "5b45d74e2ee3d6db9723b9c10e15973f266c52ca92f71e8a5f6444a4fe9f9b3e",
+    "backend/v2/companion.py": "a5f4c84c7b59d274a286d6a8becbe7df5457f762eee40c4ba59c10cac347d8c0",
+    "backend/v2/schemas.py": "3614a430bd03262139fc858bb148a0c9c4895ea339d3fa2aff965a83c6e7eb04",
+    "tests/v2/test_r99.py": "61356ff765e409c6183ddd075f8749854ec2db888050bf8cfba972f0501de83b",
+    "tests/v2/test_m05.py": "f46fb92fe92714653bb9b521e8894488cdbd170e1234cf5cf3c724a40b760037",
+    "scripts/v2-facts-contract-probe.py": "39f9354975ee737f5c73ee8910a4e65870752cd97ad6ec4e3adad2996fc802a0"
+  },
+  "device_runs": 0,
+  "acoustics": "NOT_RUN",
+  "real_child": "NOT_RUN",
+  "acceptance": "author targeted repair; non-author recheck pending; F03/A12/solo-A18 overall OPEN",
+  "local_tested_commit": "d36a11fa2cfcbf60553aa0d3845391b7263c66f6",
+  "historical_non_author_cloud": {
+    "rounds": [
+      "3/5",
+      "4/5",
+      "5/5"
+    ],
+    "http_attempts": 51,
+    "negation_oracle": "first two rounds too narrow, no proven product misanswer",
+    "privacy_first_round": "insufficient flags, cannot prove leak"
+  }
+}

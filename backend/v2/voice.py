@@ -29,6 +29,37 @@ class WireError(ValueError):
     pass
 
 
+class StaleOperation(asyncio.CancelledError):
+    """Revoked work cannot dispatch, publish, or borrow another session."""
+
+
+class Operation:
+    def __init__(self, peer, epoch, revision=None):
+        self.peer, self.session = peer, peer.session
+        self.session_id = self.session.session
+        self.connection, self.turn = self.session.connection, self.session.turn
+        self.epoch, self.revision = epoch, revision
+        self.budget = peer.input_budget
+        self.output = None
+        self.cancelled = False
+
+    def valid(self):
+        p, s = self.peer, self.session
+        return (not self.cancelled and not p.closed and not p.quarantined
+                and p.session is s and s.session == self.session_id
+                and p.epoch == self.epoch and s.connection == self.connection
+                and s.turn == self.turn
+                and (self.revision is None or p.revision == self.revision)
+                and (self.output is None or s.output == self.output)
+                and s._live())
+
+    def ensure(self):
+        task = asyncio.current_task()
+        if not self.valid() or (task is not None and task.cancelling()):
+            raise StaleOperation()
+
+
+
 def decode(raw):
     if not isinstance(raw, str) or len(raw.encode()) > 16000:
         raise WireError('frame')
@@ -74,6 +105,9 @@ class VoicePeer:
         self.ack_sequence = 0
         self.send_sequence = 0
         self.closed = False
+        self.recognition_scopes = {}
+        self.generation_scopes = {}
+        self.retired_tasks = set()
 
     @asynccontextmanager
     async def resource(self, manager):
@@ -85,7 +119,14 @@ class VoicePeer:
             yield value
         finally:
             exit_task = asyncio.create_task(manager.__aexit__(*sys.exc_info()))
-            done, _ = await asyncio.wait({exit_task}, timeout=.5)
+            self.track_retired(exit_task)
+            try:
+                done, _ = await asyncio.wait({exit_task}, timeout=.5)
+            except asyncio.CancelledError:
+                # The caller stopping must not orphan an unconfirmed close.
+                self.quarantined = True
+                exit_task.cancel()
+                raise
             if not done:
                 self.quarantined = True
                 exit_task.cancel()
@@ -94,12 +135,73 @@ class VoicePeer:
                 self.quarantined = True
                 raise WireError('resource close failure')
 
+    async def owned(self, operation, function, *args, **kwargs):
+        operation.ensure()
+        result = await function(*args, **kwargs)
+        operation.ensure()
+        return result
+
+    @asynccontextmanager
+    async def owned_resource(self, operation, factory, *args):
+        operation.ensure()
+        async with self.resource(factory(*args)) as value:
+            operation.ensure()
+            yield value
+        operation.ensure()
+
+    async def owned_items(self, operation, source):
+        operation.ensure()
+        iterator = source.__aiter__()
+        while True:
+            try:
+                yield await self.owned(operation, iterator.__anext__)
+            except StopAsyncIteration:
+                return
+
+    def track_retired(self, task):
+        self.retired_tasks.add(task)
+        def finished(done):
+            self.retired_tasks.discard(done)
+            if not done.cancelled():
+                done.exception()
+        task.add_done_callback(finished)
+
+    async def cancel_recognition(self):
+        task = self.recognition
+        self.next_probe = None
+        if task is None or task.done():
+            return
+        scope = self.recognition_scopes.get(task)
+        if scope is not None:
+            scope.cancelled = True
+        task.cancel()
+        done, _ = await asyncio.wait({task}, timeout=.5)
+        if not done:
+            # No replacement supplier is allowed on this connection after an
+            # unconfirmed release. Late work still retains its revoked scope.
+            self.quarantined = True
+            self.track_retired(task)
+        elif not task.cancelled():
+            task.exception()
+
+    async def close_quarantined(self):
+        task = asyncio.create_task(self.socket.close(1011, 'resource unavailable'))
+        done, _ = await asyncio.wait({task}, timeout=.5)
+        if not done:
+            task.cancel()
+            self.track_retired(task)
+        elif not task.cancelled():
+            task.exception()
+
     async def send(self, kind, **fields):
         async with asyncio.timeout(2):
             await self.socket.send(json.dumps(dict(v=2, type=kind, epoch=self.epoch, **fields)))
 
     async def commands(self):
-        for command in self.session.drain_commands():
+        session, epoch, turn = self.session, self.epoch, self.session.turn
+        for command in session.drain_commands():
+            if self.session is not session or self.epoch != epoch or session.turn != turn:
+                break
             if command[0] == 'mute_flush':
                 await self.send('revoke')
             elif command[0] == 'reveal':
@@ -109,12 +211,16 @@ class VoicePeer:
     async def cancel_generation(self):
         task, self.generation = self.generation, None
         if task is not None:
+            scope = self.generation_scopes.get(task)
+            if scope is not None:
+                scope.cancelled = True
             task.cancel()
             done, _ = await asyncio.wait({task}, timeout=.5)
             if not done:
                 # Never reuse an unconfirmed provider resource. Connection closes;
                 # caller/service owns eventual shutdown, no unbounded new attempts.
                 self.quarantined = True
+                self.track_retired(task)
                 raise WireError('provider close timeout')
             if not task.cancelled() and task.exception() is not None:
                 self.quarantined = True
@@ -122,6 +228,8 @@ class VoicePeer:
 
     async def handle(self, raw):
         event = decode(raw)
+        if self.quarantined and event['type'] != 'end':
+            raise WireError('quarantined')
         kind, epoch, seq = event['type'], event['epoch'], event['seq']
         if epoch < self.epoch:
             return  # Revoked audio, ASR and playback callbacks have no effects.
@@ -155,10 +263,9 @@ class VoicePeer:
                 self.generation = asyncio.create_task(self.respond(text, self.epoch))
         elif kind == 'end':
             self.prepared = None
-            if self.recognition is not None:
-                self.recognition.cancel()
             self.session.clear()
             self.capture.clear()
+            await self.cancel_recognition()
             await self.commands()
             await self.cancel_generation()
         elif kind == 'suspend':
@@ -206,7 +313,7 @@ class VoicePeer:
             self.input_budget.resume()
             self.input_budget.remaining()
             if self.recognition is not None and not self.recognition.done():
-                self.next_probe = (bytes(self.capture), self.epoch, self.revision)
+                self.next_probe = (bytes(self.capture), Operation(self, self.epoch, self.revision), self.recognition)
                 return
             self.recognition = asyncio.create_task(self.analyze(bytes(self.capture), self.epoch, self.revision))
         elif kind == 'thinking_prompt':
@@ -253,41 +360,55 @@ class VoicePeer:
                              segment=event['segment'], head=event['head'])
             await self.commands()
 
-    async def analyze(self, pcm, epoch, revision):
-        session_id = self.session.session
+    def analyze(self, pcm, epoch, revision):
+        # Bind on invocation, before create_task can be delayed until a handoff.
+        return self._analyze(pcm, Operation(self, epoch, revision))
+
+    async def _analyze(self, pcm, operation):
+        owner = asyncio.current_task()
+        self.recognition_scopes[owner] = operation
         try:
-            async with asyncio.timeout(self.input_budget.remaining()):
-                async with self.resource(self.providers.recognize(16000)) as recognizer:
+            operation.ensure()
+            async with asyncio.timeout(operation.budget.remaining()):
+                async with self.owned_resource(operation, self.providers.recognize, 16000) as recognizer:
                     for offset in range(0, len(pcm), 6400):
-                        await recognizer.write(pcm[offset:offset+6400])
-                    text = await recognizer.finish()
+                        await self.owned(operation, recognizer.write, pcm[offset:offset+6400])
+                    text = await self.owned(operation, recognizer.finish)
+                operation.ensure()
                 text = self.policy.input(text)
-                # Async M05 unified-LLM contract. No fixed punctuation/word-count
-                # shortcut treats a short word, recognition failure or echo as noise.
-                result = await self.providers.endpoint(text, self.session.context())
+                operation.ensure()
+                # Only this operation's authorised session may supply context.
+                context = operation.session.context()
+                result = await self.owned(operation, self.providers.endpoint, text, context)
                 if (not isinstance(result, dict) or set(result) != {'completion', 'meaning'}
                         or result['completion'] not in {'complete', 'incomplete', 'thinking'}
                         or result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown'}):
                     raise WireError('endpoint schema')
-                if epoch != self.epoch or revision != self.revision or session_id != self.session.session or not self.session.active:
-                    return
-                self.input_budget.remaining()
+                operation.ensure()
+                operation.budget.remaining()
                 if result['completion'] == 'thinking':
-                    self.input_budget.pause_thinking()
-                self.analysis = (revision, text, result['completion'], result['meaning'])
-                await self.send('endpoint', revision=revision, completion=result['completion'])
+                    operation.budget.pause_thinking()
+                self.analysis = (operation.revision, text, result['completion'], result['meaning'])
+                await self.owned(operation, self.send, 'endpoint',
+                                 revision=operation.revision, completion=result['completion'])
+        except StaleOperation:
+            return
         except asyncio.CancelledError:
             raise
         except Exception:
-            if epoch == self.epoch and revision == self.revision and session_id == self.session.session:
-                await self.send('decision', meaning='unknown', intent='', revision=revision)
-            if self.quarantined:
-                await self.socket.close(1011, 'resource unavailable')
+            if operation.valid():
+                await self.owned(operation, self.send, 'decision', meaning='unknown',
+                                 intent='', revision=operation.revision)
         finally:
             pcm = b''
-            pending, self.next_probe = self.next_probe, None
-            if pending is not None and not self.closed and pending[1:] == (self.epoch, self.revision):
-                self.recognition = asyncio.create_task(self.analyze(*pending))
+            self.recognition_scopes.pop(owner, None)
+            # An old finally must not consume a newer owner's pending probe.
+            pending = self.next_probe
+            if self.recognition is owner and pending is not None and pending[2] is owner:
+                self.next_probe = None
+                data, following, _ = pending
+                if following.valid() and not operation.cancelled and not owner.cancelling():
+                    self.recognition = asyncio.create_task(self._analyze(data, following))
 
     async def decision(self, text, meaning, revision, deadline):
         if meaning == 'new_turn':
@@ -298,13 +419,15 @@ class VoicePeer:
             self.awaiting_input = False
         await self.send('decision', meaning=meaning, intent=intent, revision=revision)
 
-    async def compact_memory(self, epoch):
+    async def compact_memory(self, epoch, operation=None):
+        operation = operation or Operation(self, epoch)
+        operation.ensure()
         if not hasattr(self.providers, 'compact'):
             return
         if max(len(self.session.public), len(self.session.private)) < 40 and len(self.session.revealed) < 80 and len(json.dumps(self.session.context(), ensure_ascii=False).encode()) < 24000:
             return
         snapshot = self.session.memory_snapshot(private=self.session.private_mode)
-        keep = await self.providers.compact(snapshot[-1])
+        keep = await self.owned(operation, self.providers.compact, snapshot[-1])
         if epoch != self.epoch:
             raise WireError('stale summary')
         self.session.compact(snapshot, keep)
@@ -312,23 +435,30 @@ class VoicePeer:
             # Replays remain rejected by exact pending-front ID and task sequence.
             self.session.revealed.intersection_update(s.name for s in self.session.pending)
 
-    async def respond(self, text, epoch):
-        session_id = self.session.session
+    def respond(self, text, epoch):
+        return self._respond(text, epoch, Operation(self, epoch))
+
+    async def _respond(self, text, epoch, operation):
+        owner = asyncio.current_task()
+        self.generation_scopes[owner] = operation
         stage = 'bind'
         try:
+            operation.ensure()
             while self.session.player is None:
                 self.changed.clear()
                 if not self.session._output_live():
                     return
-                await self.changed.wait()
+                await self.owned(operation, self.changed.wait)
+            operation.output = self.session.output
+            operation.ensure()
             # Unified model receives the authoritative played-only context. Supplier
             # adaptation belongs to M05; no unrestricted model-proposed facts enter it.
-            await self.compact_memory(epoch)
+            await self.compact_memory(epoch, operation)
             state = None
             if hasattr(self.providers, 'plan'):
                 context = self.session.context()
                 stage = 'plan'
-                plan = await self.providers.plan(text, context)
+                plan = await self.owned(operation, self.providers.plan, text, context)
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 action = plan['action']
@@ -337,10 +467,14 @@ class VoicePeer:
                                                          self.session.game, self.session.secrets)):
                     old = self.session
                     deadline = old.deadline
+                    transition_revision = self.revision
                     old.handoff()
                     await self.commands()
-                    if self.recognition is not None and not self.recognition.done():
-                        self.recognition.cancel()
+                    await self.cancel_recognition()
+                    if (self.session is not old or epoch != self.epoch or old.turn != operation.turn
+                            or self.revision != transition_revision or self.closed
+                            or asyncio.current_task().cancelling()):
+                        return
                     self.capture.clear()
                     self.analysis = self.next_probe = self.prepared = None
                     self.ack_identity = None
@@ -348,41 +482,46 @@ class VoicePeer:
                                            capacity=old.capacity, progress_timeout=old.progress_timeout)
                     # A normal client stop/epoch transition then binds a fresh track.
                     # The existing request keeps its original first-response deadline.
+                    if self.quarantined:
+                        await self.send('failure', code='voice')
+                        await self.close_quarantined()
+                        return
                     await self.decision(text, 'new_turn', self.revision, deadline)
                     return
                 elif action == 'private':
                     self.session.private_mode = True
                 elif action in {'change', 'leave'} and self.session.private_mode:
                     self.session.private_mode = False
-                    plan = await self.providers.plan(text, self.session.context(shared=True))
+                    plan = await self.owned(operation, self.providers.plan, text, operation.session.context(shared=True))
                 if action == 'leave':
                     plan.update(mode='chat', rules='', roles=[], secrets={})
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 stage = 'facts'
-                facts = await self.providers.facts(text)
+                facts = await self.owned(operation, self.providers.facts, text)
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 stage = 'fact_commit'
                 self.session.record_input(text, facts)
                 stage = 'safety'
-                if not await self.providers.safe(''.join(plan['sentences']), self.session.context()):
+                if not await self.owned(operation, self.providers.safe, ''.join(plan['sentences']), operation.session.context()):
                     raise WireError('safety')
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
                 @asynccontextmanager
                 async def planned():
                     async def items():
                         for sentence in plan['sentences']:
-                            if len(plan['sentences']) > 1 and not await self.providers.safe(sentence, self.session.context()):
+                            if len(plan['sentences']) > 1 and not await self.owned(operation, self.providers.safe, sentence, operation.session.context()):
                                 raise WireError('safety')
                             yield sentence
                     yield items()
                 manager = planned()
             else:
                 manager = self.providers.answer(text, self.session.context())
-            async with self.resource(manager) as sentences:
+            operation.ensure()
+            async with self.owned_resource(operation, lambda: manager) as sentences:
                 sentence_number = 0
-                async for proposed in sentences:
+                async for proposed in self.owned_items(operation, sentences):
                     sentence_number += 1
                     if not isinstance(proposed, str) or len(proposed) > 2048:
                         raise WireError('text capacity')
@@ -390,51 +529,59 @@ class VoicePeer:
                     if not approved:
                         raise WireError('policy')
                     stage = 'synthesis'
-                    async with self.resource(self.providers.synthesize(approved, 24000)) as chunks:
+                    async with self.owned_resource(operation, self.providers.synthesize, approved, 24000) as chunks:
                         # One-chunk lookahead marks the final chunk's public fact.
                         previous = None
-                        async for chunk in chunks:
+                        async for chunk in self.owned_items(operation, chunks):
                             if not isinstance(chunk, bytes) or not chunk or len(chunk) % 2 or len(chunk) > 4800:
                                 raise WireError('pcm capacity')
                             if previous is not None:
-                                await self.audio(previous, '', epoch)
+                                await self.audio(previous, '', epoch, operation=operation)
                             previous = chunk
                         if previous is None:
                             raise WireError('empty synthesis')
                         await self.audio(previous, approved, epoch,
                                          state=state if state is not None and sentence_number == len(plan['sentences']) else None,
-                                         anchors=tuple(k for k, i in plan['anchors'].items() if i == sentence_number-1) if state is not None else ())
+                                         anchors=tuple(k for k, i in plan['anchors'].items() if i == sentence_number-1) if state is not None else (), operation=operation)
             while self.session.pending:
                 self.changed.clear()
                 if epoch != self.epoch or not self.session._output_live():
                     raise WireError('revoked')
-                await self.changed.wait()
+                await self.owned(operation, self.changed.wait)
+            operation.ensure()
             self.session.deadline = 0
             await self.send('reply_end', head=self.session.head, public_facts=len(self.session.public))
+        except StaleOperation:
+            return
         except asyncio.CancelledError:
             raise
         except Exception as failure:
-            if epoch != self.epoch or session_id != self.session.session:
+            if not operation.valid():
                 return
             self.last_failure = dict(stage=stage, kind=type(failure).__name__)
             # Exception messages may contain provider content/credentials: never emit.
             self.session.interrupt()
             await self.commands()
+            if self.session is not operation.session or epoch != self.epoch or self.session.turn != operation.turn:
+                return
             await self.send('failure', code=failure.code if isinstance(failure, VoiceFault) else 'timeout' if isinstance(failure, TimeoutError) else 'voice')
             if self.quarantined:
-                await self.socket.close(1011, 'resource unavailable')
+                await self.close_quarantined()
         finally:
+            self.generation_scopes.pop(owner, None)
             text = ''
 
-    async def audio(self, pcm, public, epoch, state=None, anchors=()):
+    async def audio(self, pcm, public, epoch, state=None, anchors=(), operation=None):
+        operation = operation or Operation(self, epoch)
+        operation.ensure()
         while len(self.session.pending) >= 2 or self.suspended:
             self.changed.clear()
             if epoch != self.epoch or not self.session._output_live():
                 raise WireError('revoked')
-            await self.changed.wait()
+            await self.owned(operation, self.changed.wait)
         if epoch != self.epoch:
             raise WireError('revoked')
-        await self.compact_memory(epoch)
+        await self.compact_memory(epoch, operation)
         if epoch != self.epoch or not self.session._output_live():
             raise WireError('revoked')
         name, start = uuid4().hex, self.session.sent_end
@@ -449,6 +596,10 @@ class VoicePeer:
     async def monitor(self):
         while not self.closed:
             await asyncio.sleep(.1)
+            if self.quarantined:
+                await self.send('failure', code='voice')
+                await self.close_quarantined()
+                return
             if self.awaiting_input and self.input_budget.thinking_at is None:
                 try:
                     self.input_budget.remaining()
@@ -456,8 +607,7 @@ class VoicePeer:
                     self.session.interrupt()
                     await self.commands()
                     await self.cancel_generation()
-                    if self.recognition is not None:
-                        self.recognition.cancel()
+                    await self.cancel_recognition()
                     await self.send('failure', code='timeout')
                     return
             self.session.poll()
@@ -483,7 +633,7 @@ class VoicePeer:
             for task in (monitor, receiver, self.recognition):
                 if task is not None:
                     task.cancel()
-            tasks = {t for t in (monitor, receiver, self.recognition) if t is not None}
+            tasks = {t for t in (monitor, receiver, self.recognition) if t is not None} | self.retired_tasks
             done, pending = await asyncio.wait(tasks, timeout=.5)
             for task in done:
                 if not task.cancelled():

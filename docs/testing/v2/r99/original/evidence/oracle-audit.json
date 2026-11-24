@@ -1,0 +1,22 @@
+[
+  {
+    "synthetic_answer": "你喜欢狗，猫，你并不喜欢。",
+    "semantically_correct": true,
+    "original_oracle": false
+  },
+  {
+    "synthetic_answer": "你喜欢狗，猫我不喜欢。",
+    "semantically_correct": true,
+    "original_oracle": false
+  },
+  {
+    "synthetic_answer": "你喜欢狗，不喜欢的是猫。",
+    "semantically_correct": true,
+    "original_oracle": false
+  },
+  {
+    "synthetic_answer": "你喜欢狗，不喜欢猫。",
+    "semantically_correct": true,
+    "original_oracle": true
+  }
+]

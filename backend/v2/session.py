@@ -8,6 +8,7 @@ from collections import deque
 import math
 import json
 import uuid
+from hashlib import sha256
 from copy import deepcopy
 
 
@@ -333,35 +334,33 @@ class Session:
             raise ValueError('facts')
         candidate = deepcopy(self.facts)
         for fact in facts:
-            if (not isinstance(fact, dict) or set(fact) != {'key', 'start', 'end', 'value'} or
+            if (not isinstance(fact, dict) or set(fact) not in ({'key', 'start', 'end', 'value'}, {'key', 'start', 'end', 'value', 'dimension'}) or
                     fact['key'] not in {'nickname', 'preference', 'role', 'rule', 'clue', 'plot', 'promise'} or
                     type(fact['start']) is not int or type(fact['end']) is not int or
                     not 0 <= fact['start'] < fact['end'] <= len(text) or
                     fact['value'] != text[fact['start']:fact['end']] or len(fact['value']) > 256):
                 raise ValueError('fact provenance')
+            dimension = fact.get('dimension', 'unspecified')
+            if dimension not in {'unspecified', 'animal', 'color', 'food', 'sport', 'activity',
+                                  'music', 'place', 'person', 'object', 'other'}:
+                raise ValueError('fact dimension')
             # Public and private versions cannot overwrite each other.
             key = ('private:' if self.private_mode else 'public:') + fact['key']
+            source_id = sha256(json.dumps([text, fact['key'], dimension,
+                                           fact['start'], fact['end']], ensure_ascii=False).encode()).hexdigest()
             previous = candidate.get(key)
-            if previous is not None and previous.get('source_text') != text:
-                candidate[key + ':history:' + str(previous['turn'])] = previous
+            if previous is not None and previous.get('source_id') != source_id:
+                prior_id = previous.get('source_id') or sha256(previous['source_text'].encode()).hexdigest()
+                candidate[key + ':history:' + prior_id] = previous
             candidate[key] = dict(value=fact['value'], source='child', turn=self.turn,
                                   source_text=text, span=[fact['start'], fact['end']],
+                                  source_id=source_id, dimension=dimension,
                                   evidence_only=True, private=self.private_mode)
-            history = sorted((k for k in candidate if k.startswith(key + ':history:')),
-                             key=lambda k: candidate[k]['turn'])
-            for obsolete in history[:-3]:
-                del candidate[obsolete]
-        # Keep bounded source propositions, not bare entities masquerading as
-        # affirmative preferences. Old source history is the first to be evicted.
-        def child_bytes():
-            return len(json.dumps({k:v for k,v in candidate.items() if v['source']=='child'},
-                                  ensure_ascii=False).encode())
-        history = sorted((k for k in candidate if ':history:' in k),
-                         key=lambda k: candidate[k]['turn'])
-        while child_bytes() > 16000 and history:
-            del candidate[history.pop(0)]
-        if child_bytes() > 16000:
-            raise BufferError('protected source context capacity')
+        # Sources are protected evidence, not replaceable category slots.
+        # Same-dimension statements can coexist or correct each other; only the
+        # full proposition establishes which. Unknown dimensions never delete.
+        # Keep every distinct source until the existing unified byte limit,
+        # then reject the entire candidate atomically instead of silent eviction.
         recent = (self.recent + [dict(text=text, role='child', turn=self.turn, private=self.private_mode)])[-8:]
         if not self._fits(facts=candidate, recent=recent):
             raise BufferError('input context capacity')

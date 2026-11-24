@@ -14,7 +14,9 @@ SYSTEM = """你是瓦力，面向5–8岁儿童的AI语音玩伴。自然、简�
 回答追问时依据facts.source_text的完整原文命题和recent带角色的对话，不忽略孩子上一轮输入。
 facts是有来源的证据，不是自动成立的肯定断言；必须核对原文的主语、否定、过去时、疑问和纠正。
 例如我不喜欢猫、以前喜欢猫、妹妹喜欢猫、我喜欢猫吗不能当作孩子现在肯定喜欢猫。
-同类history可能是并存不同偏好，也可能被后文纠正，须结合完整来源解释，不机械只读value或最新槽。
+同类history保留互不替代的来源，dimension只是检索提示，不是肯定断言。
+不同维度偏好可同时成立；同维度也可能并存。只有原文明说否定/改口才按时间解释纠正，
+不能把最新preference槽当全部偏好，须综合所有source_text。
 支持普通聊天、轮流猜描述(guess)、共编故事(story)、角色冒险(adventure)、联想轮流说(association)。
 允许孩子改规则、换角色、放弃、跨玩法延续公开剧情。不可照固定题库重复。
 上下文heard才是已完整播放；partial_unknown不是已听；unrevealed不能在公共剧情或换人时泄漏。
@@ -142,8 +144,9 @@ private仅在孩子明确谈私事时使用；共享剧情不能出现私事。
             return []
         result = await self.request("""
 提取孩子明确说出的关键事实，不推断身份。只返回JSON {"facts":[
-{"key":"nickname|preference|role|rule|clue|plot|promise","value":"逐字复制的原文子串"}]}。
+{"key":"nickname|preference|role|rule|clue|plot|promise","value":"逐字复制的原文子串","dimension":"animal|color|food|sport|activity|music|place|person|object|other|unspecified"}]}。
 value必须完整逐字出现在本轮text中，不能总结改写或补词，不要返回字符索引。
+dimension仅分类线索，不能改变主语/否定或断言旧来源撤回；无法区分用unspecified。
 最多8项，每项最多256字。昵称、偏好、角色、规则、线索、剧情、约定分别用对应key；
 value优先复制完整命题，例如我不喜欢猫必须保留否定，不改写为喜欢猫。程序还会保留完整来源供核对。没有明确事实就空数组。""", dict(text=text), schemas.FACTS)
         if (not isinstance(result, dict) or set(result) != {'facts'} or
@@ -151,14 +154,18 @@ value优先复制完整命题，例如我不喜欢猫必须保留否定，不改
             raise ModelError('facts')
         facts = []
         for fact in result['facts']:
-            if (not isinstance(fact, dict) or set(fact) != {'key', 'value'} or
+            if (not isinstance(fact, dict) or set(fact) not in ({'key', 'value'}, {'key', 'value', 'dimension'}) or
                     fact['key'] not in {'nickname', 'preference', 'role', 'rule', 'clue', 'plot', 'promise'} or
                     not isinstance(fact['value'], str) or not 0 < len(fact['value']) <= 256 or
                     fact['value'] not in text):
                 raise ModelError('fact provenance')
+            dimension = fact.get('dimension', 'unspecified')
+            if dimension not in {'unspecified', 'animal', 'color', 'food', 'sport', 'activity',
+                                  'music', 'place', 'person', 'object', 'other'}:
+                raise ModelError('fact dimension')
             start = text.index(fact['value'])
             facts.append(dict(key=fact['key'], value=fact['value'], start=start,
-                              end=start + len(fact['value'])))
+                              end=start + len(fact['value']), dimension=dimension))
         return facts
 
     async def compact(self, facts):

@@ -266,7 +266,9 @@ class Memory(unittest.TestCase):
         for n in range(40):
             s.turn+=1;source=f'我喜欢第{n}种颜色'
             s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source)])
-        self.assertLessEqual(len([k for k in s.facts if k.startswith('public:preference')]),4)
+        self.assertEqual(len([k for k in s.facts if k.startswith('public:preference')]),43)
+        self.assertIn('我喜欢蓝色', str(s.context()['facts']))
+        self.assertIn('刚才说错了，我不喜欢猫，我喜欢狗', str(s.context()['facts']))
         self.assertTrue(s._fits())
 
     def test_private_proposition_sources_not_in_shared_projection(self):

@@ -1,0 +1,21 @@
+test_each_generation_upstream_step_rejects_old_session_or_turn_after_cancel (test_r99.GenerationIsolation.test_each_generation_upstream_step_rejects_old_session_or_turn_after_cancel) ... ok
+test_current_asr_and_endpoint_positive_pair (test_r99.Isolation.test_current_asr_and_endpoint_positive_pair) ... ok
+test_endpoint_inflight_only_keeps_authorized_old_snapshot (test_r99.Isolation.test_endpoint_inflight_only_keeps_authorized_old_snapshot) ... ok
+test_every_asr_await_rechecks_same_epoch_revision_before_upstream (test_r99.Isolation.test_every_asr_await_rechecks_same_epoch_revision_before_upstream) ... ok
+test_old_finally_cannot_consume_new_owner_pending (test_r99.Isolation.test_old_finally_cannot_consume_new_owner_pending) ... ok
+test_only_owning_finally_can_dispatch_valid_pending_revision (test_r99.Isolation.test_only_owning_finally_can_dispatch_valid_pending_revision) ... ok
+test_same_session_new_turn_also_revokes_old_request (test_r99.Isolation.test_same_session_new_turn_also_revokes_old_request) ... ok
+test_scope_captured_before_coroutine_is_scheduled (test_r99.Isolation.test_scope_captured_before_coroutine_is_scheduled) ... ok
+test_wrong_guard_negative_control_reproduces_cross_session_dispatch (test_r99.Isolation.test_wrong_guard_negative_control_reproduces_cross_session_dispatch) ... ok
+test_actual_byte_capacity_rejects_atomically_without_evicting_unwithdrawn_sources (test_r99.SourceMemory.test_actual_byte_capacity_rejects_atomically_without_evicting_unwithdrawn_sources) ... ok
+test_four_five_dimensions_and_unknown_dimensions_preserve_all_sources (test_r99.SourceMemory.test_four_five_dimensions_and_unknown_dimensions_preserve_all_sources) ... ok
+test_invalid_fact_does_not_partially_replace_existing_sources (test_r99.SourceMemory.test_invalid_fact_does_not_partially_replace_existing_sources) ... ok
+test_same_dimension_correction_retains_propositions_and_other_dimensions (test_r99.SourceMemory.test_same_dimension_correction_retains_propositions_and_other_dimensions) ... ok
+test_same_turn_sources_are_not_overwritten_by_turn_number_collision (test_r99.SourceMemory.test_same_turn_sources_are_not_overwritten_by_turn_number_collision) ... ok
+test_two_dimensions_in_one_utterance_keep_both_provenance_spans (test_r99.SourceMemory.test_two_dimensions_in_one_utterance_keep_both_provenance_spans) ... ok
+test_wrong_four_slot_negative_control_would_lose_animal_source (test_r99.SourceMemory.test_wrong_four_slot_negative_control_would_lose_animal_source) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 4.966s
+
+OK

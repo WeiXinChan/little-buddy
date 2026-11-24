@@ -17,9 +17,12 @@ PLAN = obj(dict(
     secrets=dict(type='object',additionalProperties=string(1000),maxProperties=8),
     sentences=dict(type='array',items=dict(type='string',minLength=1,maxLength=120),minItems=1,maxItems=4),
     anchors=dict(type='object',additionalProperties=dict(type='integer',minimum=0,maximum=3),maxProperties=16)))
-FACTS = obj(dict(facts=dict(type='array',maxItems=8,items=obj(dict(
+FACT_ITEM = obj(dict(
     key=enum('nickname','preference','role','rule','clue','plot','promise'),
-    value=dict(type='string',minLength=1,maxLength=256))))))
+    value=dict(type='string',minLength=1,maxLength=256),
+    dimension=enum('unspecified','animal','color','food','sport','activity','music','place','person','object','other')),
+    required=['key','value'])
+FACTS = obj(dict(facts=dict(type='array',maxItems=8,items=FACT_ITEM)))
 SAFETY = obj(dict(allow=dict(type='boolean')))
 ENDPOINT = obj(dict(completion=enum('complete','incomplete','thinking'),
                     meaning=enum('new_turn','stop','noise','backchannel','thinking','unknown')))
