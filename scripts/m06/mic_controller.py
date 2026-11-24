@@ -1,6 +1,7 @@
 """Synthetic Pulse source -> AVD microphone. No replacement of Android AudioRecord."""
 import subprocess,json,hashlib,re,sys,os
 from route_evidence import play_fixture
+from fixture_timing import FixtureTiming
 from pathlib import Path
 root=Path('app/src/androidTest/assets/m06-commands')
 allowed={r['name']:r['sha256'] for r in json.loads((root/'cases.json').read_text())['cases']}
@@ -22,6 +23,7 @@ if os.environ.get('M06_AUDIO_INPUT')=='grpc':
   raise RuntimeError('virtual mic setup '+type(e).__name__) from None
 p=subprocess.Popen(['adb','shell','am','instrument','-w','-r','-e','class','com.littlebuddy.V2MicrophoneCommandTest','com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
 output=[]
+timing=None
 try:
  for line in p.stdout:
   print(line,end='',flush=True);output.append(line)
@@ -30,21 +32,30 @@ try:
    if pkg!='com.littlebuddy.sim.v2' or q['user']!=0:raise ValueError('target user/package')
    if name not in allowed or not re.fullmatch(r'[a-z0-9_.]+',name) or not re.fullmatch(r'[a-f0-9-]{36}',nonce):raise ValueError('fixture/nonce allowlist')
    if not re.fullmatch(r'/[A-Za-z0-9_./]+',private) or not private.endswith('/'+pkg+'/files'):raise ValueError('private root')
+   timing=FixtureTiming(q) if name=='enter' and virtual_mic and os.environ.get('BUDDY_SYNTHETIC_AVD_PROBE')=='1' else None
+   if timing:timing.step('PWD_START')
    pwd=subprocess.check_output(['adb','shell','run-as',pkg,'pwd'],text=True,timeout=5).strip()
+   if timing:timing.step('PWD_DONE_READLINK_START')
    canonical=subprocess.check_output(['adb','shell','run-as',pkg,'readlink','-f',private],text=True,timeout=5).strip()
+   if timing:timing.step('READLINK_DONE_DIRECTORY_TEST_START')
    subprocess.run(['adb','shell','run-as',pkg,'test','-d',private],check=True,timeout=5)
+   if timing:timing.step('DIRECTORY_TEST_DONE')
    if canonical!=private:raise ValueError('private root mismatch')
    print(json.dumps(dict(event='handshake_ready',nonce=nonce,root=private,run_as_pwd=pwd)),flush=True)
    path=paths[name]
    if hashlib.sha256(path.read_bytes()).hexdigest()!=allowed[name] or q['sha256']!=allowed[name]:raise ValueError('fixture hash')
+   if timing:timing.step('FIXTURE_HASH_VERIFIED')
    fixture_metadata=dict(nonce=nonce,name=name,sha256=allowed[name])
-   diagnostic=virtual_mic.play(path,fixture_metadata) if virtual_mic else play_fixture(path,fixture_metadata,monitor=(name=="enter" and os.environ.get("BUDDY_SYNTHETIC_AVD_PROBE")=="1"))
+   diagnostic=virtual_mic.play(path,fixture_metadata,timing=timing) if virtual_mic else play_fixture(path,fixture_metadata,monitor=(name=="enter" and os.environ.get("BUDDY_SYNTHETIC_AVD_PROBE")=="1"))
    print(json.dumps(diagnostic),flush=True)
+   if timing:timing.step('PLAY_RETURNED')
    reply=json.dumps(dict(nonce=nonce,name=name,sha256=allowed[name],state='completed',playback_exit=0))
    subprocess.run(['adb','shell','run-as',pkg,'tee',private+'/m06-'+nonce+'.json'],input=reply,text=True,stdout=subprocess.PIPE,check=True,timeout=5)
+   if timing:timing.step('COMPLETION_FILE_WRITTEN')
  result=p.wait(timeout=30)
  if result or not any('OK (1 test)' in x for x in output):sys.exit(1)
-except Exception:
+except Exception as error:
+ if timing:timing.step('CONTROLLER_FAILED',error_class=type(error).__name__)
  # Let the bounded instrumentation await write real timeline/proof before cleanup.
  try:p.wait(timeout=40)
  except subprocess.TimeoutExpired:pass

@@ -15,6 +15,9 @@ internal class SyntheticInputProbe(private val a:V2VoiceActivity,private val non
  private var used=0
  private var firstFrame=-1L;private var lastFrame=-1L;private var session:Int?=null
  private var endedNs=startedNs;private var closed=false
+ private val watermarks=JSONArray();private var nextWatermark=0L
+ private var firstRejectedMs:Long?=null;private var firstRejectedFrame:Long?=null
+ private var frozenMs:Long?=null
  private val dir=File(i.targetContext.filesDir,"m06/synthetic-$nonce")
  private fun sha(bytes:ByteArray)=java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
  init {
@@ -25,15 +28,24 @@ internal class SyntheticInputProbe(private val a:V2VoiceActivity,private val non
   a.syntheticPcmObserver={data,count,proof->accept(data,count,proof)}
  }
  @Synchronized private fun accept(data:ShortArray,count:Int,proof:RecorderProof){
-  if(closed || SystemClock.elapsedRealtime()-startedMs>=8000 || used>=storage.size)return
+  if(closed)return
+  val now=SystemClock.elapsedRealtime()
+  if(now-startedMs>=8000 || used>=storage.size){
+   if(firstRejectedMs==null){firstRejectedMs=now;firstRejectedFrame=proof.frames}
+   return
+  }
   check(a.syntheticProbeAllowed())
   val n=minOf(count,(storage.size-used)/2)
   if(session==null){session=proof.session;firstFrame=proof.frames-count}
   check(session==proof.session)
   for(index in 0 until n){val v=data[index].toInt();storage[used++]=v.toByte();storage[used++]=(v shr 8).toByte()}
   lastFrame=proof.frames-count+n;endedNs=System.nanoTime()
+  if(now>=nextWatermark && watermarks.length()<34){
+   watermarks.put(JSONObject().put("elapsed_ms",now).put("monotonic_ns",endedNs).put("native_session",proof.session).put("native_read_end_frame",proof.frames).put("saved_end_frame",lastFrame).put("saved_samples",used/2))
+   nextWatermark=now+250
+  }
  }
- @Synchronized fun freeze(){closed=true;a.syntheticPcmObserver=null}
+ @Synchronized fun freeze(){if(frozenMs==null)frozenMs=SystemClock.elapsedRealtime();closed=true;a.syntheticPcmObserver=null}
  fun saveAndReplay(){
   freeze();check(used<=256000)
   dir.mkdirs();val raw=storage.copyOf(used)
@@ -44,6 +56,8 @@ internal class SyntheticInputProbe(private val a:V2VoiceActivity,private val non
     .put("sample_rate",16000).put("channels",1).put("encoding","signed PCM16 little endian")
     .put("session",session).put("first_frame",firstFrame).put("last_frame",lastFrame).put("samples",used/2)
     .put("armed_elapsed_ms",startedMs).put("armed_monotonic_ns",startedNs).put("last_read_monotonic_ns",endedNs)
+    .put("read_watermarks",watermarks).put("first_rejected_elapsed_ms",firstRejectedMs).put("first_rejected_native_frame",firstRejectedFrame).put("frozen_elapsed_ms",frozenMs)
+    .put("watermark_scope","observed production read completion; not hardware acquisition timestamps")
     .put("window_limit_ms",8000).put("sample_limit",128000)
     .put("native_format_evidence","SYNTHETIC_CAPTURE NATIVE_FORMAT in activity timeline; requested format recorded here")
    File(dir,"capture.json").writeText(report.toString(2))

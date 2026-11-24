@@ -156,7 +156,7 @@ class GrpcMic:
         assert not state.realAudioEnabled
         self.init.step('READY',loopback=True,anonymous_denied=True,host_mic=False)
         Path('render/grpc-mic-ready.json').write_text(json.dumps(dict(version=version[0],proto_sha256=PROTO_SHA,authenticated=True,loopback=True,host_mic=False)))
-    def play(self,path,metadata):
+    def play(self,path,metadata,timing=None):
         target=Path('render')/('mic-grpc-'+metadata['nonce']+'.json')
         row=dict(metadata,backend='EmulatorController.injectAudio',proto_sha256=PROTO_SHA,stages=[])
         def save(stage,**fields):
@@ -173,16 +173,21 @@ class GrpcMic:
             self.stub.setMicrophoneState(self.pb.MicrophoneState(realAudioEnabled=False),metadata=self.auth,timeout=3)
             assert not self.stub.getMicrophoneState(self.Empty(),metadata=self.auth,timeout=3).realAudioEnabled
             fmt=self.pb.AudioFormat(samplingRate=rate,channels=self.pb.AudioFormat.Mono,format=self.pb.AudioFormat.AUD_FMT_S16,mode=self.pb.AudioFormat.MODE_UNSPECIFIED)
+            if timing:timing.bridge('PRE_INJECT_GUEST_CLOCK')
             save('inject_started',rate=rate,channels=1,sample_format='s16le',source_samples=len(raw)//2,drain_ms=300,packet_ms=20,mode='MODE_UNSPECIFIED',host_mic=False)
             seconds=len(raw)/(rate*2)+3;deadline=time.monotonic()+seconds
             def packets():
                 nonlocal count,generator_failure
                 try:
-                    for p in packet_plan(raw,rate,self.pb.AudioPacket,fmt,deadline=deadline):count+=1;yield p
+                    for p in packet_plan(raw,rate,self.pb.AudioPacket,fmt,deadline=deadline):
+                        count+=1
+                        if timing and count==1:timing.step('FIRST_PACKET_YIELDED',audio_bytes=len(p.audio),rate=p.format.samplingRate,channels_enum=p.format.channels,format_enum=p.format.format,mode_enum=p.format.mode)
+                        yield p
                 except InjectionTimingError as error:
                     generator_failure=dict(reason=error.reason,index=error.index,late_ms=error.late_ms)
                     raise
             self.stub.injectAudio(packets(),metadata=self.auth,timeout=seconds)
+            if timing:timing.bridge('POST_INJECT_GUEST_CLOCK')
             save('inject_completed',rpc_code='OK',packets=count,playback_exit=0)
             return row
         except self.grpc.RpcError as e:
