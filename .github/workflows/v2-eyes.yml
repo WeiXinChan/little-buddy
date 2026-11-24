@@ -123,6 +123,8 @@ jobs:
           printf '%s\n' "$microphone_result" >render/microphone-exit.txt
           cat render/microphone.txt
           if ((microphone_result != 0)); then device_result=1; fi
+          adb shell am instrument -w -r -e class com.littlebuddy.V2CompletionLeaseTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/completion-lease.txt || device_result=1
+          grep -q 'OK (2 tests)' render/completion-lease.txt || device_result=1
           adb shell am instrument -w -r -e class com.littlebuddy.V2PendingConnectionTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/pending-connection.txt || device_result=1
           grep -q 'OK (2 tests)' render/pending-connection.txt || device_result=1
           adb shell am instrument -w -r -e class com.littlebuddy.V2ModelResetTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/model-reset.txt || device_result=1

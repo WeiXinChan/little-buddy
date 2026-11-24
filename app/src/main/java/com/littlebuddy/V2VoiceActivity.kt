@@ -56,6 +56,12 @@ class V2VoiceActivity : Activity() {
         !getSystemService(KeyguardManager::class.java).isKeyguardLocked
     private class ConnectionIntent(val id:Long,val generation:Long,val address:String,val credential:String)
     private val connectionSequence=java.util.concurrent.atomic.AtomicLong()
+    private val leaseWait=com.littlebuddy.v2.OwnerLeaseWait()
+    private fun awaitGlobalLease(){
+        val ticket=life.state.generation
+        releaseState="waiting_global_lease";mark("GLOBAL_LEASE_WAIT")
+        leaseWait.begin(connectionSequence.get(),ticket,{callback->Capture.whenLeaseAvailable{owner.post{callback()}}}) {if(eligible(ticket)){if(pendingConnection.present)resumeConnection() else localCommands()}}
+    }
     private val pendingConnection=com.littlebuddy.v2.PendingConnection<ConnectionIntent>()
     @Volatile private var releasedRecorder = RecorderProof()
     private var releasedPlayer = PlayerProof()
@@ -117,6 +123,7 @@ class V2VoiceActivity : Activity() {
         }
     }
     @Volatile internal var beforeManagementPrompt: (((()->Unit))->Unit)?=null
+    @Volatile internal var beforeCaptureLeaseReturn:()->Unit={}
     @Volatile internal var beforeCaptureDispose:()->Unit={}
     @Volatile internal var beforeManagementCommand: (String?)->Unit={}
     @Volatile internal var managementPromptSerial=0L;private set
@@ -204,6 +211,7 @@ class V2VoiceActivity : Activity() {
             if(id!=connectionSequence.get() || !eligible(ticket)){mark("STALE_CONNECT_REJECTED");return@post}
             afterEligible()
             if(id!=connectionSequence.get() || !eligible(ticket)){mark("STALE_CONNECT_REJECTED");return@post}
+            leaseWait.cancelAll()
             pendingConnection.offer(id,ticket,ConnectionIntent(id,ticket,address,credential))
             voice?.close();voice?.let{releasedPlayer=it.nativeProof()}
             if(voice?.quarantined!=true)voice=null
@@ -215,12 +223,12 @@ class V2VoiceActivity : Activity() {
         if(!pendingConnection.present)return
         val held=capture
         if(voice?.quarantined==true || held?.resourceFailed==true){pendingConnection.invalidate();mark("RECONNECT_RESOURCE_FAULT");return}
-        val ready=held==null || (held.workerDone && held.nativeProof.released && held.leaseReturned && !held.quarantined)
+        val ready=Capture.leaseAvailable && (held==null || (held.workerDone && held.nativeProof.released && held.leaseReturned && !held.quarantined))
         val intent=pendingConnection.take(connectionSequence.get(),::eligible,ready)
-        if(intent==null){if(pendingConnection.present){releaseState="waiting_disposal";mark("CONNECTION_PENDING_DISPOSAL")};return}
+        if(intent==null){if(pendingConnection.present){releaseState="waiting_disposal";mark("CONNECTION_PENDING_DISPOSAL");if(!Capture.leaseAvailable)awaitGlobalLease()};return}
         held?.let{releasedRecorder=it.nativeProof};capture=null
         val client=newClient();voice=client;releaseState="active"
-        if(!installCapture(client,intent.generation))return
+        if(!installCapture(client,intent.generation)){if(intent.id==connectionSequence.get() && eligible(intent.generation) && !Capture.leaseAvailable){pendingConnection.offer(intent.id,intent.generation,intent);awaitGlobalLease()};return}
         if(intent.id==connectionSequence.get() && eligible(intent.generation))client.connect(intent.address,intent.credential) else stopVoice()
     }
     private fun makeCapture(client: VoiceClient,ticket: Long): Capture {
@@ -230,7 +238,7 @@ class V2VoiceActivity : Activity() {
             { entering -> if(capture===created && life.allows(ticket))manage(entering) },
             { life.allows(ticket) },
             { event,proof,phase -> timeline.add(event,ticket,proof,phase) },
-            hooks=com.littlebuddy.v2.CaptureHooks(beforeDispose={beforeCaptureDispose()},beforeCommandDecision={beforeManagementCommand(it)}),
+            hooks=com.littlebuddy.v2.CaptureHooks(beforeDispose={beforeCaptureDispose()},beforeLeaseReturn={beforeCaptureLeaseReturn()},beforeCommandDecision={beforeManagementCommand(it)}),
             disposed = { owner.post {
                 mark("DISPOSE_CONSUME")
                 if(capture===created && created.workerDone && created.nativeProof.released && created.leaseReturned && !created.quarantined){
@@ -271,25 +279,28 @@ class V2VoiceActivity : Activity() {
                 else {mark("LOCAL_PENDING_DISPOSAL");return@post}
             }
             if(voice!=null || capture!=null || scene.management)return@post
-            val client=newClient();voice=client;releaseState="local_kws";installCapture(client,ticket)
+            if(!Capture.leaseAvailable){awaitGlobalLease();return@post}
+            val client=newClient();voice=client;releaseState="local_kws";if(!installCapture(client,ticket) && eligible(ticket) && !Capture.leaseAvailable)awaitGlobalLease()
         }
     }
     private fun stopVoice() {
         stopManagementPrompt()
         val cancelledRequest=connectionSequence.incrementAndGet()
+        val cancelledGeneration=life.state.generation
         val stopping=capture; val stoppingVoice=voice
         mark("STOP_ENQUEUE")
         stopping?.requestStop() // before owner queue or model destruction
         owner.post {
         mark("STOP_CONSUME")
         pendingConnection.invalidateThrough(cancelledRequest)
+        leaseWait.cancelThrough(cancelledRequest,cancelledGeneration)
         if(capture!==stopping || voice!==stoppingVoice) { mark("STALE_STOP_REJECTED"); return@post }
         scene.invalidate()
         voice?.close(); voice?.let { releasedPlayer = it.nativeProof() }
         if (voice?.quarantined != true) voice = null
         capture?.close(); capture?.let { releasedRecorder = it.nativeProof; lastCapturePhase = it.phase.name; lastCaptureFailure = it.failedPhase?.name ?: "NONE" }
         // Failed capture release keeps the object, preventing new ownership.
-        if (capture?.quarantined != true) capture = null
+        if (capture?.let{it.nativeProof.released && it.workerDone && it.leaseReturned && !it.quarantined} != false) capture = null
         releaseState = if (voice == null && capture == null) "released" else "quarantined"
         val ticket = scene.generation
         val mood = scene.mood

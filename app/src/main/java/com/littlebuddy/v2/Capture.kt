@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
-internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {},val beforeCommandDecision: (String?)->Unit = {})
+internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {},val beforeCommandDecision: (String?)->Unit = {},val beforeLeaseReturn:()->Unit = {})
 
 internal enum class CapturePhase { NOT_STARTED, THREAD_START, AUDIO_RECORD, WAKE_KWS, MANAGEMENT_KWS, START, READ, RELEASE, RELEASED, QUARANTINED }
 
@@ -28,7 +28,18 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                        private val hooks: CaptureHooks = CaptureHooks(),
                        private val disposed: ()->Unit = {},
                        private val managementPrompt: (String,()->Boolean,(Boolean)->Unit)->Unit = {_,_,_->}) {
-    companion object { private val lease=java.util.concurrent.atomic.AtomicReference<String?>(null) }
+    companion object {
+        private val lease=java.util.concurrent.atomic.AtomicReference<String?>(null)
+        private val leaseLock=Any()
+        private val leaseWaiters=linkedSetOf<()->Unit>()
+        val leaseAvailable get()=lease.get()==null
+        fun whenLeaseAvailable(callback:()->Unit):()->Unit {
+            val immediate=synchronized(leaseLock){leaseWaiters.add(callback);if(leaseAvailable){leaseWaiters.remove(callback);true}else false}
+            if(immediate)callback()
+            return {synchronized(leaseLock){leaseWaiters.remove(callback)};Unit}
+        }
+        private fun signalLeaseAvailable(){val ready=synchronized(leaseLock){if(leaseAvailable)leaseWaiters.toList().also{leaseWaiters.clear()}else emptyList()};ready.forEach{it()}}
+    }
     private val captureId=java.util.UUID.randomUUID().toString()
     val leaseReturned get()=!ownsLease && lease.get()!=captureId
     @Volatile private var operation="NOT_STARTED"
@@ -320,8 +331,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             val completedWorker=Thread.currentThread()
             Thread({
                 completedWorker.join()
+                hooks.beforeLeaseReturn()
                 // No JNI here: model/native cleanup is over and worker really ended.
-                if(ownsLease && !resourceFault){check(lease.compareAndSet(captureId,null));ownsLease=false;trace("LEASE_RETURN",nativeProof,captureId)}
+                if(ownsLease && !resourceFault){check(lease.compareAndSet(captureId,null));ownsLease=false;trace("LEASE_RETURN",nativeProof,captureId);signalLeaseAvailable()}
                 disposed()
             },"v2-capture-completion").start()
             if (!cancelled.get()) owner.post { failed() }
