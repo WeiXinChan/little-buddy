@@ -1,7 +1,7 @@
 """SDK37310 authenticated LOOPBACK virtual mic. Only hash-allowlisted fixtures reach here.
 RPC success is transport evidence, never a live AudioRecord/KWS assertion.
 """
-import hashlib,json,os,re,subprocess,time,wave,traceback
+import hashlib,json,os,re,subprocess,time,wave,traceback,ipaddress
 from pathlib import Path
 PROTO_SHA='9a4b0f704b0d4cdda652f89fbd50bb3d54da3d46ec8efe6e8b2a2a135ef10e69'
 
@@ -37,6 +37,38 @@ def owned_pid(pid,root_pid):
             pid=int(re.search(r'^PPid:\s+(\d+)',status,re.M)[1])
         except (OSError,TypeError,ValueError):return False
     return False
+
+def listener_endpoint(value):
+    """Only validated IP text/numeric port is journalled; unknown raw strings never are."""
+    result=dict(address='UNKNOWN',port=None,family='UNKNOWN',loopback=False,reason='INVALID_ENDPOINT')
+    if ':' not in value:return result
+    host,port=value.rsplit(':',1)
+    if not re.fullmatch(r'[0-9]{1,5}',port) or not 0<int(port)<=65535:return result
+    result['port']=int(port)
+    if host.startswith('['):
+        if not host.endswith(']'):return result
+        host=host[1:-1]
+    if '%' in host:return result
+    try:address=ipaddress.ip_address(host)
+    except ValueError:return result
+    result.update(address=str(address),observed_address=host,family='IPv4' if address.version==4 else 'IPv6')
+    mapped=address.ipv4_mapped if address.version==6 else None
+    result['mapped_ipv4']=str(mapped) if mapped is not None else None
+    result['loopback']=(address.is_loopback if address.version==4 else mapped.is_loopback if mapped is not None else address==ipaddress.IPv6Address('::1'))
+    result['reason']='LOOPBACK' if result['loopback'] else 'NON_LOOPBACK'
+    return result
+
+def target_listeners(text,descriptor_pid,root_pid,target=8554):
+    results=[]
+    for line in text.splitlines():
+        columns=line.split()
+        if len(columns)<5 or columns[0]!='LISTEN':continue
+        endpoint=listener_endpoint(columns[3])
+        if endpoint['port']!=target:continue
+        pids=[int(p) for p in re.findall(r'\bpid=(\d+)', ' '.join(columns[5:]))]
+        endpoint['owned_pid_match']=descriptor_pid in pids and owned_pid(descriptor_pid,root_pid)
+        results.append(endpoint)
+    return results
 
 def packet_plan(raw,rate,packet,fmt,clock=time.monotonic,sleep=time.sleep,deadline=None):
     """Recheck after sleep and immediately before yield; never renew total deadline."""
@@ -91,15 +123,15 @@ class GrpcMic:
             pid_match=bool(match) and owned_pid(int(match[1]),root_pid)
             d=dict(tuple(part.strip() for part in line.split('=',1)) for line in f.read_text().splitlines() if '=' in line)
             serials+=d.get('port.serial')=='5554';ports+=d.get('grpc.port')=='8554';tokens+=bool(d.get('grpc.token'));pids+=pid_match
-            if pid_match and d.get('port.serial')=='5554' and d.get('grpc.port')=='8554' and d.get('grpc.token'):configs.append(d)
+            if pid_match and d.get('port.serial')=='5554' and d.get('grpc.port')=='8554' and d.get('grpc.token'):configs.append((d,int(match[1])))
         self.init.step('DESCRIPTOR_CHECK',seen=seen,serial_matches=serials,port_matches=ports,token_present_count=tokens,owned_pid_matches=pids,selected=len(configs))
         assert len(configs)==1
-        token=configs[0]['grpc.token']  # private, own generated credential; never journal values
+        token=configs[0][0]['grpc.token'];descriptor_pid=configs[0][1]  # private, own generated credential; never journal values
         self.init.step('LOOPBACK_READ')
-        sockets=subprocess.check_output(['ss','-ltnH'],text=True)
-        addresses=[s.split()[3] for s in sockets.splitlines() if s.split()[3].endswith(':8554')]
-        valid=bool(addresses) and all(a in ('127.0.0.1:8554','[::1]:8554') for a in addresses)
-        self.init.step('LOOPBACK_CHECK',listeners=len(addresses),loopback_only=valid)
+        sockets=subprocess.check_output(['ss','-ltnpH'],text=True)
+        endpoints=target_listeners(sockets,descriptor_pid,root_pid)
+        valid=bool(endpoints) and all(e['loopback'] and e['owned_pid_match'] for e in endpoints)
+        self.init.step('LOOPBACK_CHECK',listeners=len(endpoints),endpoints=endpoints,loopback_only=valid)
         assert valid
         self.channel=grpc.insecure_channel('127.0.0.1:8554')
         self.init.step('CHANNEL_READY')

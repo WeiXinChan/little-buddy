@@ -31,19 +31,19 @@ class InitTests(unittest.TestCase):
    old=Path.cwd();os.chdir(base)
    try:
     journal=m.InitJournal(base/'journal.json')
-    with patch.dict(sys.modules,mods),patch.dict(os.environ,{'ANDROID_HOME':str(base/'sdk'),'RUNNER_TEMP':str(base),'XDG_RUNTIME_DIR':str(root),'M06_EMULATOR_PID':str(pid)}),patch.object(m,'PROTO_SHA',hashlib.sha256(proto).hexdigest()),patch.object(m,'owned_pid',return_value=variant!='pid'),patch.object(m.subprocess,'check_output',return_value='LISTEN 0 1 127.0.0.1:8554 0.0.0.0:*\n'):
+    with patch.dict(sys.modules,mods),patch.dict(os.environ,{'ANDROID_HOME':str(base/'sdk'),'RUNNER_TEMP':str(base),'XDG_RUNTIME_DIR':str(root),'M06_EMULATOR_PID':str(pid)}),patch.object(m,'PROTO_SHA',hashlib.sha256(proto).hexdigest()),patch.object(m,'owned_pid',return_value=variant!='pid'),patch.object(m.subprocess,'check_output',return_value=f'LISTEN 0 1 127.0.0.1:8554 0.0.0.0:* users:(("unit",pid={pid+1 if variant=="socket_pid" else pid},fd=7))\n'):
      if variant=='success':m.GrpcMic(journal).close()
      else:
       with self.assertRaises(RuntimeError):m.GrpcMic(journal)
     row=json.loads((base/'journal.json').read_text());encoded=json.dumps(row)
     self.assertNotIn(secret,encoded);self.assertNotIn('DO_NOT_EXPORT_RPC_BODY',encoded);self.assertNotIn('authorization',encoded)
-    stages={'sdk':'SDK_CHECK','mode':'PRIVATE_DIRECTORY_CHECK','pid':'DESCRIPTOR_CHECK','anonymous_ok':'ANONYMOUS_CHECK','anonymous_code':'ANONYMOUS_CHECK','auth':'AUTHENTICATED_STATUS_REQUEST','host_mic':'HOST_MIC_CHECK'}
+    stages={'sdk':'SDK_CHECK','mode':'PRIVATE_DIRECTORY_CHECK','pid':'DESCRIPTOR_CHECK','anonymous_ok':'ANONYMOUS_CHECK','anonymous_code':'ANONYMOUS_CHECK','auth':'AUTHENTICATED_STATUS_REQUEST','host_mic':'HOST_MIC_CHECK','socket_pid':'LOOPBACK_CHECK'}
     if variant=='success':self.assertEqual('READY',row['stage'])
     else:
      self.assertEqual(stages[variant],row['failure_stage']);self.assertTrue(row['events'][-1]['source'])
     if variant=='anonymous_code':self.assertEqual('PERMISSION_DENIED',next(e['rpc_code'] for e in row['events'] if e['stage']=='ANONYMOUS_CHECK'))
    finally:os.chdir(old)
  def test_safe_stage_failures_and_authentication_not_relaxed(self):
-  for variant in ['success','sdk','mode','pid','anonymous_ok','anonymous_code','auth','host_mic']:
+  for variant in ['success','sdk','mode','pid','anonymous_ok','anonymous_code','auth','host_mic','socket_pid']:
    with self.subTest(variant=variant):self.fixture(variant)
 if __name__=='__main__':unittest.main()
