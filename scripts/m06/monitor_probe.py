@@ -24,10 +24,27 @@ class MonitorProbe:
      out.write(b);self.size+=len(b)
   except Exception as e:self.info['read_error']=type(e).__name__
  def finish(self):
-  self.stop_event.set();self.worker.join(1)
-  assert not self.worker.is_alive(), 'bounded monitor consumer did not exit'
-  if self.process.poll() is None:self.process.terminate()
-  try:_,err=self.process.communicate(timeout=2)
-  except subprocess.TimeoutExpired:self.process.kill();_,err=self.process.communicate(timeout=2)
-  self.info.update(bytes=self.size,samples=self.size//2,seconds=self.size/32000,exit=self.process.returncode,stderr=err.decode(errors='replace')[-65536:],ended_unix_ns=time.time_ns(),ended_monotonic_ns=time.monotonic_ns(),capture_sha256=hashlib.sha256(self.path.read_bytes()).hexdigest(),file=self.path.name,stop='owned probe cleanup or cap; exit is diagnostic')
-  self.path.with_suffix('.json').write_text(json.dumps(self.info,indent=2));return self.info
+  primary=None;err=b''
+  self.stop_event.set()
+  try:
+   self.worker.join(1)
+   if self.worker.is_alive():raise RuntimeError('bounded monitor consumer did not exit')
+  except BaseException as error:primary=error
+  finally:
+   # Owned producer cleanup is unconditional, including join/assert failure.
+   try:
+    if self.process.poll() is None:self.process.terminate()
+    try:self.process.wait(timeout=2)
+    except subprocess.TimeoutExpired:self.process.kill();self.process.wait(timeout=2)
+    self.worker.join(1)
+    try:_,err=self.process.communicate(timeout=2)
+    except subprocess.TimeoutExpired:
+     self.process.kill();_,err=self.process.communicate(timeout=2)
+   except BaseException as error:
+    self.info['producer_cleanup_error']=type(error).__name__
+    if primary is None:primary=error
+   self.info.update(bytes=self.size,samples=self.size//2,seconds=self.size/32000,exit=self.process.poll(),stderr=err.decode(errors='replace')[-65536:],ended_unix_ns=time.time_ns(),ended_monotonic_ns=time.monotonic_ns(),reader_alive=self.worker.is_alive(),capture_sha256=hashlib.sha256(self.path.read_bytes()).hexdigest() if self.path.is_file() else None,file=self.path.name,stop='owned probe cleanup or cap; exit is diagnostic')
+   if primary is not None:self.info['finish_error']=type(primary).__name__
+   self.path.with_suffix('.json').write_text(json.dumps(self.info,indent=2))
+  if primary is not None:raise primary
+  return self.info

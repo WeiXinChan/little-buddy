@@ -50,6 +50,9 @@ jobs:
             result=$?
             if ((result != 0)); then cat render/emulator.log render/pulse.log 2>/dev/null || true; fi
             cleanup_error=0
+            if [[ -n "$emulator_pid" ]]; then
+              timeout 5s adb -s emulator-5554 shell run-as com.littlebuddy.sim.v2 find files/m06 -type f -name capture.s16le -print -delete >render/guest-pcm-final-cleanup.txt 2>&1 || cleanup_error=1
+            fi
             timeout 8s adb -s emulator-5554 emu kill || true
             stop_owned() {
               owned_pid=$1
@@ -136,6 +139,8 @@ jobs:
           printf '%s\n' "$microphone_result" >render/microphone-exit.txt
           cat render/microphone.txt
           if ((microphone_result != 0)); then device_result=1; fi
+          adb shell am instrument -w -r -e class com.littlebuddy.V2UploadHandoffTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/upload-handoff.txt || device_result=1
+          grep -q 'OK (2 tests)' render/upload-handoff.txt || device_result=1
           adb shell am instrument -w -r -e class com.littlebuddy.V2KwsCommandTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/kws-boundary-v21.txt || device_result=1
           grep -q 'OK (2 tests)' render/kws-boundary-v21.txt || device_result=1
           adb shell am instrument -w -r -e class com.littlebuddy.V2CompletionLeaseTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/completion-lease.txt || device_result=1

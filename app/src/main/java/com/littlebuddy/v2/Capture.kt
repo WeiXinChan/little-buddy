@@ -10,7 +10,6 @@ import android.os.Handler
 import com.littlebuddy.SherpaWake
 import com.littlebuddy.SpeechDetector
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {},val beforeCommandDecision: (String?)->Unit = {},val beforeLeaseReturn:()->Unit = {},val syntheticTrace:((String)->Unit)?=null,val syntheticEnabled:()->Boolean={false},val syntheticPcm:((ShortArray,Int,RecorderProof)->Unit)?=null)
@@ -56,12 +55,17 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     private val promptAck=java.util.concurrent.atomic.AtomicReference<PromptAck?>(null)
     private val commandGeneration = AtomicLong(0)
     @Volatile private var management = false
-    fun enterManagement() { commandGeneration.incrementAndGet(); management = true }
-    fun exitManagement() { commandGeneration.incrementAndGet(); management = false }
+    fun enterManagement() { commandGeneration.incrementAndGet(); management = true; uploads.invalidate() }
+    fun exitManagement() { commandGeneration.incrementAndGet(); management = false; uploads.invalidate() }
     @Volatile var phase = CapturePhase.NOT_STARTED; private set
     @Volatile var failedPhase: CapturePhase? = null; private set
     private val cancelled = AtomicBoolean(false)
-    private val pending = AtomicInteger(0)
+    private val uploads=CaptureUploads(
+        post={task->owner.post(task)},
+        eligible={ticket->!cancelled.get() && allowed() && !management && ticket==commandGeneration.get()},
+        deliver={data,speech,time->client.frame(data,speech,time)},
+        failed={e->trace("UPLOAD_DELIVERY_EXCEPTION",nativeProof,SafeFailure.describe(e));failedPhase=phase;requestStop();failed()},
+        waiting={trace("UPLOAD_BACKPRESSURE",nativeProof,"sampleCapacity=16000")})
     private var thread: Thread? = null
     @Volatile var nativeProof = RecorderProof(); private set
     @Volatile private var resourceFault = false
@@ -104,16 +108,12 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var detector = SpeechDetector(320, initialFloor = 36.0)
         var uploadSamples = 0
         val meter=SyntheticCaptureMeter()
-        fun upload(data: ShortArray, speech: Boolean) {
-            val ticket = commandGeneration.get()
-            val capturedAt = android.os.SystemClock.elapsedRealtime()
-            if (uploadSamples + data.size > 320000) error("input bound")
-            uploadSamples += data.size
-            check(pending.incrementAndGet() <= 20)
-            owner.post {
-                try { if (!cancelled.get() && allowed() && !management && ticket == commandGeneration.get()) client.frame(data, speech, capturedAt) }
-                finally { data.fill(0); pending.decrementAndGet() }
-            }
+        fun upload(data: List<ShortArray>, speech: Boolean) {
+            val samples=data.sumOf{it.size}
+            val ticket=commandGeneration.get()
+            if(uploadSamples+samples>320000)error("input bound")
+            progress("UPLOAD_ENQUEUE")
+            if(uploads.submit(data,speech,ticket,android.os.SystemClock.elapsedRealtime()))uploadSamples+=samples
         }
         try {
             if(cancelled.get() || !allowed())return
@@ -149,6 +149,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 progress("NATIVE_READ")
                 val count = native.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
                 if (cancelled.get() || !allowed()) break
+                if(count<0)trace("NATIVE_READ_ERROR",nativeProof,"result=$count")
                 check(count >= 0)
                 if (count == 0) { Thread.sleep(5); continue }
                 val accept=synchronized(nativeLock) {
@@ -219,6 +220,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                         trace(if(entering)"MANAGEMENT_ENTER" else "MANAGEMENT_EXIT",nativeProof,phase.name)
                         commandGeneration.incrementAndGet()
                         management = entering
+                        uploads.invalidate()
                         buffered.clear(); awake = false; voiced = false; uploadSamples = 0
                         if(cancelled.get() || !allowed())break
                         progress("WAKE_STREAM_RESET")
@@ -276,7 +278,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     }
                     if (continuation) {
                         voiced = true; firstAfterWake = false
-                        buffered.read().forEach { upload(it, true) }
+                        upload(buffered.read(),true)
                     }
                     continue
                 }
@@ -290,10 +292,10 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                         voiced = true
                         buffered.onset()
                         firstAfterWake = false
-                        buffered.read().forEach { upload(it, true) }
-                    } else buffered.read().forEach { upload(it, true) }
+                        upload(buffered.read(),true)
+                    } else upload(buffered.read(),true)
                 } else if (voiced && now - lastSpeech <= 300) {
-                    buffered.read().forEach { upload(it, false) }
+                    upload(buffered.read(),false)
                 } else {
                     owner.post { if (!cancelled.get() && allowed()) client.quiet() }
                     if (voiced) { voiced = false; detector = SpeechDetector(320, initialFloor = 36.0) }
@@ -303,7 +305,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 // the owner callback; the backend separately retains the 600s session.
                 if (uploadSamples >= 300000) error("input capacity")
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            trace("CAPTURE_EXCEPTION",nativeProof,"phase=${phase.name} operation=$operation ${SafeFailure.describe(e)}")
             if(operation.contains("STREAM_") || operation.contains("MODEL_"))resourceFault=true
             failedPhase = phase
             if (!cancelled.get()) owner.post { failed() }
@@ -311,6 +314,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             progress("FINALLY_ENTER")
             trace("FINALLY_ENTER",nativeProof,operation)
             phase = CapturePhase.RELEASE
+            uploads.close()
             frame.fill(0); buffered.clear()
             // Stop/release native collection before potentially slow model destruction.
             stopNative()
@@ -360,6 +364,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         commandGeneration.incrementAndGet()
         trace("CANCEL_REQUEST",nativeProof,phase.name)
         stopNative()
+        uploads.close()
     }
     fun close() {
         requestStop()

@@ -1,0 +1,7 @@
+JUnit version 4.13.2
+.reproduced original pending<=20: handoffSamples=8129 blocks=26 exception=java.lang.IllegalStateException at=LegacyHandoffTest.kt:11; paused owner, not old Android scheduling proof
+
+Time: 0.047
+
+OK (1 test)
+

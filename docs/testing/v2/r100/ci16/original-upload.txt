@@ -1,0 +1,8 @@
+        fun upload(data: ShortArray, speech: Boolean) {
+            val ticket = commandGeneration.get()
+            val capturedAt = android.os.SystemClock.elapsedRealtime()
+            if (uploadSamples + data.size > 320000) error("input bound")
+            uploadSamples += data.size
+            check(pending.incrementAndGet() <= 20)
+            owner.post {
+        

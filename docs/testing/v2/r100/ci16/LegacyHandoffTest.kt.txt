@@ -1,0 +1,17 @@
+package com.littlebuddy.v2
+import org.junit.Test
+import org.junit.Assert.*
+import java.util.concurrent.atomic.AtomicInteger
+class LegacyHandoffTest {
+ @Test fun pausedOwnerReproducesOriginalPendingCheckOn8129Handoff(){
+  val ring=WakeSamples();val input=ShortArray(38208){(it%30000).toShort()}
+  for(pos in input.indices step 320){val n=minOf(320,input.size-pos);ring.push(input.copyOfRange(pos,pos+n),n)}
+  ring.begin(32639);val batch=ring.read();assertEquals(8129,batch.sumOf{it.size});assertEquals(26,batch.size)
+  val pending=AtomicInteger();val owner=mutableListOf<()->Unit>();var delivered=0
+  fun upload(data:ShortArray){check(pending.incrementAndGet()<=20);owner.add{try{delivered+=data.size}finally{data.fill(0);pending.decrementAndGet()}}}
+  var failure:Exception?=null
+  try{batch.forEach{upload(it)}}catch(e:Exception){failure=e}
+  assertTrue(failure is IllegalStateException);assertEquals(21,pending.get());assertEquals(20,owner.size);assertEquals(0,delivered)
+  println("reproduced original pending<=20: handoffSamples=8129 blocks=26 exception=${failure!!.javaClass.name} at=${failure.stackTrace.first{it.className.startsWith("com.littlebuddy")}.fileName}:${failure.stackTrace.first{it.className.startsWith("com.littlebuddy")}.lineNumber}; paused owner, not old Android scheduling proof")
+ }
+}
