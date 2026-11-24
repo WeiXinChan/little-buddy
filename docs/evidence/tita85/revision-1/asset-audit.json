@@ -1,0 +1,1216 @@
+{
+  "baseline_commit": "1756055f08eeeff4b87b9175675956fbf8ab1964",
+  "changed_asset_ids": [
+    "airplane",
+    "bee",
+    "butterfly"
+  ],
+  "unchanged_asset_count": 57,
+  "unchanged_asset_files": 114,
+  "changed_sheets": [
+    2,
+    4
+  ],
+  "audit": [
+    {
+      "id": "cat",
+      "index": 1,
+      "files": [
+        {
+          "path": "assets/v2-default/source/cat.svg",
+          "before_sha256": "43014ab0206bdf5a97dbdc0041aa66a39e2918e9ec8a0d78f8536c0de1b7987f",
+          "after_sha256": "43014ab0206bdf5a97dbdc0041aa66a39e2918e9ec8a0d78f8536c0de1b7987f",
+          "changed": false,
+          "bytes": 2116
+        },
+        {
+          "path": "assets/v2-default/png/cat.png",
+          "before_sha256": "527b44e59bfe8841bedd42c012f5cbb2e7ec852a8a1496fcbe58b6ba7a9d0cf1",
+          "after_sha256": "527b44e59bfe8841bedd42c012f5cbb2e7ec852a8a1496fcbe58b6ba7a9d0cf1",
+          "changed": false,
+          "bytes": 28152
+        }
+      ]
+    },
+    {
+      "id": "dog",
+      "index": 2,
+      "files": [
+        {
+          "path": "assets/v2-default/source/dog.svg",
+          "before_sha256": "5c2436c2466ddcdc7a571d444f203e48ec5f427ea90147fc999897b72f8e41f4",
+          "after_sha256": "5c2436c2466ddcdc7a571d444f203e48ec5f427ea90147fc999897b72f8e41f4",
+          "changed": false,
+          "bytes": 1902
+        },
+        {
+          "path": "assets/v2-default/png/dog.png",
+          "before_sha256": "c8f3b9d5bbe5e715217c18b2c851d00b6235a515b983818762b33334d533e31f",
+          "after_sha256": "c8f3b9d5bbe5e715217c18b2c851d00b6235a515b983818762b33334d533e31f",
+          "changed": false,
+          "bytes": 25602
+        }
+      ]
+    },
+    {
+      "id": "rabbit",
+      "index": 3,
+      "files": [
+        {
+          "path": "assets/v2-default/source/rabbit.svg",
+          "before_sha256": "282b6118ad04f674306d8690a627b188544744ff11720cb1b226b733b2a2278d",
+          "after_sha256": "282b6118ad04f674306d8690a627b188544744ff11720cb1b226b733b2a2278d",
+          "changed": false,
+          "bytes": 1902
+        },
+        {
+          "path": "assets/v2-default/png/rabbit.png",
+          "before_sha256": "4d8e7ef06fe2fd654dd3e4c517b94087db0ba8437d6ec8349c24253d107ddbda",
+          "after_sha256": "4d8e7ef06fe2fd654dd3e4c517b94087db0ba8437d6ec8349c24253d107ddbda",
+          "changed": false,
+          "bytes": 28935
+        }
+      ]
+    },
+    {
+      "id": "bear",
+      "index": 4,
+      "files": [
+        {
+          "path": "assets/v2-default/source/bear.svg",
+          "before_sha256": "4e8760f84d59e7878cdf6f5ef0cfa65057b6060483fe6ece70215be4bd008afb",
+          "after_sha256": "4e8760f84d59e7878cdf6f5ef0cfa65057b6060483fe6ece70215be4bd008afb",
+          "changed": false,
+          "bytes": 1712
+        },
+        {
+          "path": "assets/v2-default/png/bear.png",
+          "before_sha256": "b99395491760a746632ddd8d07c85e18acbb3d46cd28af744152b261db3254c4",
+          "after_sha256": "b99395491760a746632ddd8d07c85e18acbb3d46cd28af744152b261db3254c4",
+          "changed": false,
+          "bytes": 23524
+        }
+      ]
+    },
+    {
+      "id": "fox",
+      "index": 5,
+      "files": [
+        {
+          "path": "assets/v2-default/source/fox.svg",
+          "before_sha256": "aea5fdd9868f4e00dc5684c27dcef25080acf85e931ba971a54e9e89569175aa",
+          "after_sha256": "aea5fdd9868f4e00dc5684c27dcef25080acf85e931ba971a54e9e89569175aa",
+          "changed": false,
+          "bytes": 2224
+        },
+        {
+          "path": "assets/v2-default/png/fox.png",
+          "before_sha256": "dffeed7b5a1c8f03787e49529ffd7f0c0315efea889084427e851ad5ab514c7c",
+          "after_sha256": "dffeed7b5a1c8f03787e49529ffd7f0c0315efea889084427e851ad5ab514c7c",
+          "changed": false,
+          "bytes": 26448
+        }
+      ]
+    },
+    {
+      "id": "panda",
+      "index": 6,
+      "files": [
+        {
+          "path": "assets/v2-default/source/panda.svg",
+          "before_sha256": "df949eed8d388d0bc5bfad04a675d4777a7f35e322ff91da132d2ef66a3f038d",
+          "after_sha256": "df949eed8d388d0bc5bfad04a675d4777a7f35e322ff91da132d2ef66a3f038d",
+          "changed": false,
+          "bytes": 2658
+        },
+        {
+          "path": "assets/v2-default/png/panda.png",
+          "before_sha256": "84604f777a1c1c1926cc70d0c54036bb4120ac00d20aeb328a99c766581897a2",
+          "after_sha256": "84604f777a1c1c1926cc70d0c54036bb4120ac00d20aeb328a99c766581897a2",
+          "changed": false,
+          "bytes": 24470
+        }
+      ]
+    },
+    {
+      "id": "tiger",
+      "index": 7,
+      "files": [
+        {
+          "path": "assets/v2-default/source/tiger.svg",
+          "before_sha256": "535adeb3fae7da4f332288041a1905b71c6452241c387a961e3d4a5dccc04453",
+          "after_sha256": "535adeb3fae7da4f332288041a1905b71c6452241c387a961e3d4a5dccc04453",
+          "changed": false,
+          "bytes": 1985
+        },
+        {
+          "path": "assets/v2-default/png/tiger.png",
+          "before_sha256": "7f70cef34c03d3c6acd6d549a955d771bdfd015921c8dbaf5bf29c70d8d48744",
+          "after_sha256": "7f70cef34c03d3c6acd6d549a955d771bdfd015921c8dbaf5bf29c70d8d48744",
+          "changed": false,
+          "bytes": 25888
+        }
+      ]
+    },
+    {
+      "id": "lion",
+      "index": 8,
+      "files": [
+        {
+          "path": "assets/v2-default/source/lion.svg",
+          "before_sha256": "080224d464914e3cf6cbe77525dccfebf3ce1e4f6f3b88d76700b9c17a57e03b",
+          "after_sha256": "080224d464914e3cf6cbe77525dccfebf3ce1e4f6f3b88d76700b9c17a57e03b",
+          "changed": false,
+          "bytes": 1809
+        },
+        {
+          "path": "assets/v2-default/png/lion.png",
+          "before_sha256": "e625da035f095d9cd76401cac3219905118c19089164e6c063baf52989f83823",
+          "after_sha256": "e625da035f095d9cd76401cac3219905118c19089164e6c063baf52989f83823",
+          "changed": false,
+          "bytes": 32587
+        }
+      ]
+    },
+    {
+      "id": "pig",
+      "index": 9,
+      "files": [
+        {
+          "path": "assets/v2-default/source/pig.svg",
+          "before_sha256": "d0a165e4585e33a5b720c8345904d64793653412c1fa1cab7a0a8fbb807494c7",
+          "after_sha256": "d0a165e4585e33a5b720c8345904d64793653412c1fa1cab7a0a8fbb807494c7",
+          "changed": false,
+          "bytes": 1993
+        },
+        {
+          "path": "assets/v2-default/png/pig.png",
+          "before_sha256": "4318da72a7e662ece9fac925f33b3080ad79396727c7958a0bf839f4b8c04d03",
+          "after_sha256": "4318da72a7e662ece9fac925f33b3080ad79396727c7958a0bf839f4b8c04d03",
+          "changed": false,
+          "bytes": 25321
+        }
+      ]
+    },
+    {
+      "id": "cow",
+      "index": 10,
+      "files": [
+        {
+          "path": "assets/v2-default/source/cow.svg",
+          "before_sha256": "9f421052f033e769448b38ca224dd1b8f92224824d0a4231e77c354857e77031",
+          "after_sha256": "9f421052f033e769448b38ca224dd1b8f92224824d0a4231e77c354857e77031",
+          "changed": false,
+          "bytes": 2372
+        },
+        {
+          "path": "assets/v2-default/png/cow.png",
+          "before_sha256": "63383e2598f7f8c107f927ea0c8d62410e956e132524f8d3c3b75ced9757d7c4",
+          "after_sha256": "63383e2598f7f8c107f927ea0c8d62410e956e132524f8d3c3b75ced9757d7c4",
+          "changed": false,
+          "bytes": 27769
+        }
+      ]
+    },
+    {
+      "id": "mouse",
+      "index": 11,
+      "files": [
+        {
+          "path": "assets/v2-default/source/mouse.svg",
+          "before_sha256": "04886b25a433ae89b5ee77e7ff4137d66334bff406f33294b77a46f8be1cd3f6",
+          "after_sha256": "04886b25a433ae89b5ee77e7ff4137d66334bff406f33294b77a46f8be1cd3f6",
+          "changed": false,
+          "bytes": 1902
+        },
+        {
+          "path": "assets/v2-default/png/mouse.png",
+          "before_sha256": "62c513aecfe6bb4ef15492f225cef5cf8494783a3ac070b3e500b5733d09b4ac",
+          "after_sha256": "62c513aecfe6bb4ef15492f225cef5cf8494783a3ac070b3e500b5733d09b4ac",
+          "changed": false,
+          "bytes": 24815
+        }
+      ]
+    },
+    {
+      "id": "monkey",
+      "index": 12,
+      "files": [
+        {
+          "path": "assets/v2-default/source/monkey.svg",
+          "before_sha256": "1f69b0f271f0cc17d71e8fe6ce67c4275c43b382df0ade01c75b7ef30153bfaa",
+          "after_sha256": "1f69b0f271f0cc17d71e8fe6ce67c4275c43b382df0ade01c75b7ef30153bfaa",
+          "changed": false,
+          "bytes": 2647
+        },
+        {
+          "path": "assets/v2-default/png/monkey.png",
+          "before_sha256": "8f133742ddae57d11ff582c79ce62117c6a1d81bcb407effb54d65784a497c5c",
+          "after_sha256": "8f133742ddae57d11ff582c79ce62117c6a1d81bcb407effb54d65784a497c5c",
+          "changed": false,
+          "bytes": 29828
+        }
+      ]
+    },
+    {
+      "id": "elephant",
+      "index": 13,
+      "files": [
+        {
+          "path": "assets/v2-default/source/elephant.svg",
+          "before_sha256": "3a71626222ed830c042624f46eb7c4da8ec89a5c46bebb16d139f3fbe5ea83b8",
+          "after_sha256": "3a71626222ed830c042624f46eb7c4da8ec89a5c46bebb16d139f3fbe5ea83b8",
+          "changed": false,
+          "bytes": 1265
+        },
+        {
+          "path": "assets/v2-default/png/elephant.png",
+          "before_sha256": "90bec8c1d36a7f0b32ff884b3e4c990a9c939ebd300eb056085e2f1364385db5",
+          "after_sha256": "90bec8c1d36a7f0b32ff884b3e4c990a9c939ebd300eb056085e2f1364385db5",
+          "changed": false,
+          "bytes": 23114
+        }
+      ]
+    },
+    {
+      "id": "giraffe",
+      "index": 14,
+      "files": [
+        {
+          "path": "assets/v2-default/source/giraffe.svg",
+          "before_sha256": "1a34f91c3d5985d1f52bbd0e78a49bfb80f0ab90c975ce245a64a121b3762c15",
+          "after_sha256": "1a34f91c3d5985d1f52bbd0e78a49bfb80f0ab90c975ce245a64a121b3762c15",
+          "changed": false,
+          "bytes": 1835
+        },
+        {
+          "path": "assets/v2-default/png/giraffe.png",
+          "before_sha256": "b01fd14105c382c22c85f27dfaa50b8980151ea9b024a05e4c976fd6db3234df",
+          "after_sha256": "b01fd14105c382c22c85f27dfaa50b8980151ea9b024a05e4c976fd6db3234df",
+          "changed": false,
+          "bytes": 20169
+        }
+      ]
+    },
+    {
+      "id": "duck",
+      "index": 15,
+      "files": [
+        {
+          "path": "assets/v2-default/source/duck.svg",
+          "before_sha256": "ada2f95b21b24e67622965d76b99546f4ac856a24bbb95d96e8b236a4aa32843",
+          "after_sha256": "ada2f95b21b24e67622965d76b99546f4ac856a24bbb95d96e8b236a4aa32843",
+          "changed": false,
+          "bytes": 1137
+        },
+        {
+          "path": "assets/v2-default/png/duck.png",
+          "before_sha256": "86fef86c70db1deb2d86fd437874e6ecc7b6679c20559fa75e1d67e42ade9e3e",
+          "after_sha256": "86fef86c70db1deb2d86fd437874e6ecc7b6679c20559fa75e1d67e42ade9e3e",
+          "changed": false,
+          "bytes": 18016
+        }
+      ]
+    },
+    {
+      "id": "penguin",
+      "index": 16,
+      "files": [
+        {
+          "path": "assets/v2-default/source/penguin.svg",
+          "before_sha256": "4f2383113c62013336c74e5d6b99f809875348bd0df8f1452c317e0900853c09",
+          "after_sha256": "4f2383113c62013336c74e5d6b99f809875348bd0df8f1452c317e0900853c09",
+          "changed": false,
+          "bytes": 1273
+        },
+        {
+          "path": "assets/v2-default/png/penguin.png",
+          "before_sha256": "228fc69c22dca7474b5d3f4b8ec3600255443a55669f657cc033af64b69d6d6d",
+          "after_sha256": "228fc69c22dca7474b5d3f4b8ec3600255443a55669f657cc033af64b69d6d6d",
+          "changed": false,
+          "bytes": 21553
+        }
+      ]
+    },
+    {
+      "id": "owl",
+      "index": 17,
+      "files": [
+        {
+          "path": "assets/v2-default/source/owl.svg",
+          "before_sha256": "955249acd2efed7e99b6008c3810349cc7258660eb254f655d02091655b49800",
+          "after_sha256": "955249acd2efed7e99b6008c3810349cc7258660eb254f655d02091655b49800",
+          "changed": false,
+          "bytes": 1529
+        },
+        {
+          "path": "assets/v2-default/png/owl.png",
+          "before_sha256": "bffee81f43939575330084a6312088baa3252cb6bb73f1e97b751c9a97c9d8d5",
+          "after_sha256": "bffee81f43939575330084a6312088baa3252cb6bb73f1e97b751c9a97c9d8d5",
+          "changed": false,
+          "bytes": 21838
+        }
+      ]
+    },
+    {
+      "id": "chicken",
+      "index": 18,
+      "files": [
+        {
+          "path": "assets/v2-default/source/chicken.svg",
+          "before_sha256": "8515efebf41994319b365889e7592e028872ad4d1c0dc708663ae38b419d76e8",
+          "after_sha256": "8515efebf41994319b365889e7592e028872ad4d1c0dc708663ae38b419d76e8",
+          "changed": false,
+          "bytes": 1463
+        },
+        {
+          "path": "assets/v2-default/png/chicken.png",
+          "before_sha256": "674050e16f7c836de15a7cd9f92b98d512e08249fa68016f99e70fdebcb4e991",
+          "after_sha256": "674050e16f7c836de15a7cd9f92b98d512e08249fa68016f99e70fdebcb4e991",
+          "changed": false,
+          "bytes": 20096
+        }
+      ]
+    },
+    {
+      "id": "fish",
+      "index": 19,
+      "files": [
+        {
+          "path": "assets/v2-default/source/fish.svg",
+          "before_sha256": "5ba2407ce63c0a71f9be09600e0341fc370318041e18bf799d4f711e47572a15",
+          "after_sha256": "5ba2407ce63c0a71f9be09600e0341fc370318041e18bf799d4f711e47572a15",
+          "changed": false,
+          "bytes": 1078
+        },
+        {
+          "path": "assets/v2-default/png/fish.png",
+          "before_sha256": "2537d6e9e4b4cafd23dcf98e9e4d5620291ad94d44dc28552db92bc46ec3554d",
+          "after_sha256": "2537d6e9e4b4cafd23dcf98e9e4d5620291ad94d44dc28552db92bc46ec3554d",
+          "changed": false,
+          "bytes": 18190
+        }
+      ]
+    },
+    {
+      "id": "whale",
+      "index": 20,
+      "files": [
+        {
+          "path": "assets/v2-default/source/whale.svg",
+          "before_sha256": "9eef65d150957a479778a0827161e94d1374116a568653c030c46c069e4dc568",
+          "after_sha256": "9eef65d150957a479778a0827161e94d1374116a568653c030c46c069e4dc568",
+          "changed": false,
+          "bytes": 964
+        },
+        {
+          "path": "assets/v2-default/png/whale.png",
+          "before_sha256": "f6b1ed1c88c3216282528ca49248202c9128cbc43cb48542dd3e3c96506161f4",
+          "after_sha256": "f6b1ed1c88c3216282528ca49248202c9128cbc43cb48542dd3e3c96506161f4",
+          "changed": false,
+          "bytes": 22646
+        }
+      ]
+    },
+    {
+      "id": "turtle",
+      "index": 21,
+      "files": [
+        {
+          "path": "assets/v2-default/source/turtle.svg",
+          "before_sha256": "6c4561c4dc1f99e30d733c7a2062be6bcaa0f36e80aa3cf3e9b6f19ad1591f32",
+          "after_sha256": "6c4561c4dc1f99e30d733c7a2062be6bcaa0f36e80aa3cf3e9b6f19ad1591f32",
+          "changed": false,
+          "bytes": 1183
+        },
+        {
+          "path": "assets/v2-default/png/turtle.png",
+          "before_sha256": "76d67112be633424b7038152d84319edf7dc4fe9aab00d8f58cf4fd495562d52",
+          "after_sha256": "76d67112be633424b7038152d84319edf7dc4fe9aab00d8f58cf4fd495562d52",
+          "changed": false,
+          "bytes": 19223
+        }
+      ]
+    },
+    {
+      "id": "butterfly",
+      "index": 22,
+      "files": [
+        {
+          "path": "assets/v2-default/source/butterfly.svg",
+          "before_sha256": "0ff2f875b3ca0c09119e3e68635405fa055067c4d37bda803fc05098c6a73888",
+          "after_sha256": "c620b2afda030ebe527e48ff3ff3005dead3b9cc5ec39c05a8dcacd595af37b1",
+          "changed": true,
+          "bytes": 2391
+        },
+        {
+          "path": "assets/v2-default/png/butterfly.png",
+          "before_sha256": "c5bcb02c5b2a7d87368860d6d10b27662e80e92d79adb77c859ef4fc76a7f560",
+          "after_sha256": "9fdc92b64aa29c4c73015698f30ed486c66458820a8539577945d4a7f7556f34",
+          "changed": true,
+          "bytes": 27616
+        }
+      ]
+    },
+    {
+      "id": "bee",
+      "index": 23,
+      "files": [
+        {
+          "path": "assets/v2-default/source/bee.svg",
+          "before_sha256": "295e099462b060c06a296bcb7923081100a01ac203c6f840e9d84249f5a5235d",
+          "after_sha256": "8ac5a43a91b341ee6334efc7723e8eb9d18e24dade87e2d56c312c9fca034efc",
+          "changed": true,
+          "bytes": 2337
+        },
+        {
+          "path": "assets/v2-default/png/bee.png",
+          "before_sha256": "5b5af53d44b2173f9dc3828a70e1c20315f1e4f6f8645f7c27dcb7723e7459d7",
+          "after_sha256": "6a8b93823225b2758578471938032161f3d4ec21fbe6de922e87e4ddc73bedbf",
+          "changed": true,
+          "bytes": 28671
+        }
+      ]
+    },
+    {
+      "id": "frog",
+      "index": 24,
+      "files": [
+        {
+          "path": "assets/v2-default/source/frog.svg",
+          "before_sha256": "6d9b60483573358a23d2cce6060ac1d136bba4c7c10c66e5a2dc470b079d5035",
+          "after_sha256": "6d9b60483573358a23d2cce6060ac1d136bba4c7c10c66e5a2dc470b079d5035",
+          "changed": false,
+          "bytes": 1299
+        },
+        {
+          "path": "assets/v2-default/png/frog.png",
+          "before_sha256": "38ae543a315508043fb4410f9d8b49f976a310d02d480b73c9373af97adb47d5",
+          "after_sha256": "38ae543a315508043fb4410f9d8b49f976a310d02d480b73c9373af97adb47d5",
+          "changed": false,
+          "bytes": 21639
+        }
+      ]
+    },
+    {
+      "id": "apple",
+      "index": 25,
+      "files": [
+        {
+          "path": "assets/v2-default/source/apple.svg",
+          "before_sha256": "0501c82a0c8fee0157b6b9ae568818037ee1c934cc66c8a47c8b087c160b6ea5",
+          "after_sha256": "0501c82a0c8fee0157b6b9ae568818037ee1c934cc66c8a47c8b087c160b6ea5",
+          "changed": false,
+          "bytes": 713
+        },
+        {
+          "path": "assets/v2-default/png/apple.png",
+          "before_sha256": "3a0121899d3c638d9a858cbd41cbad81d20ab22302d5a85b8f1d5f3dee626076",
+          "after_sha256": "3a0121899d3c638d9a858cbd41cbad81d20ab22302d5a85b8f1d5f3dee626076",
+          "changed": false,
+          "bytes": 14798
+        }
+      ]
+    },
+    {
+      "id": "banana",
+      "index": 26,
+      "files": [
+        {
+          "path": "assets/v2-default/source/banana.svg",
+          "before_sha256": "7fceaa483033dfcd2fd2386e40ad946b2a4809d4e21269e2cb3630c2d526e4fb",
+          "after_sha256": "7fceaa483033dfcd2fd2386e40ad946b2a4809d4e21269e2cb3630c2d526e4fb",
+          "changed": false,
+          "bytes": 539
+        },
+        {
+          "path": "assets/v2-default/png/banana.png",
+          "before_sha256": "f1652ada2a48d579014f0b7018f6c0df753d6c2419437399e46ba95733fd8451",
+          "after_sha256": "f1652ada2a48d579014f0b7018f6c0df753d6c2419437399e46ba95733fd8451",
+          "changed": false,
+          "bytes": 16140
+        }
+      ]
+    },
+    {
+      "id": "pear",
+      "index": 27,
+      "files": [
+        {
+          "path": "assets/v2-default/source/pear.svg",
+          "before_sha256": "c4a00dda23fa8ccb16dad18e9898a134c4cf0c036db4fbdeeba11fb6c06a8f9d",
+          "after_sha256": "c4a00dda23fa8ccb16dad18e9898a134c4cf0c036db4fbdeeba11fb6c06a8f9d",
+          "changed": false,
+          "bytes": 539
+        },
+        {
+          "path": "assets/v2-default/png/pear.png",
+          "before_sha256": "cb099bebe1b2599a75ec381174a21043762dc8a9f61a4ac68e7c23c29cdfc35a",
+          "after_sha256": "cb099bebe1b2599a75ec381174a21043762dc8a9f61a4ac68e7c23c29cdfc35a",
+          "changed": false,
+          "bytes": 12056
+        }
+      ]
+    },
+    {
+      "id": "orange",
+      "index": 28,
+      "files": [
+        {
+          "path": "assets/v2-default/source/orange.svg",
+          "before_sha256": "64cb7b0f655ecc4d40260ec21432c3ea3c0c03713418d46e63ce6459fe2888eb",
+          "after_sha256": "64cb7b0f655ecc4d40260ec21432c3ea3c0c03713418d46e63ce6459fe2888eb",
+          "changed": false,
+          "bytes": 777
+        },
+        {
+          "path": "assets/v2-default/png/orange.png",
+          "before_sha256": "c2ef3bc7bd7a9e0f91323dbd994cd2dab6b7ad344a0fe3c525f8b6d90d444305",
+          "after_sha256": "c2ef3bc7bd7a9e0f91323dbd994cd2dab6b7ad344a0fe3c525f8b6d90d444305",
+          "changed": false,
+          "bytes": 14133
+        }
+      ]
+    },
+    {
+      "id": "watermelon",
+      "index": 29,
+      "files": [
+        {
+          "path": "assets/v2-default/source/watermelon.svg",
+          "before_sha256": "598fa6570b7381a6beb9525d03fc129ab0bf6b67012efe565f87509cc38fca9f",
+          "after_sha256": "598fa6570b7381a6beb9525d03fc129ab0bf6b67012efe565f87509cc38fca9f",
+          "changed": false,
+          "bytes": 1164
+        },
+        {
+          "path": "assets/v2-default/png/watermelon.png",
+          "before_sha256": "554bfb801182288984b8eb474c0c634ccd7c2ba92290a824704b18dc8a490b74",
+          "after_sha256": "554bfb801182288984b8eb474c0c634ccd7c2ba92290a824704b18dc8a490b74",
+          "changed": false,
+          "bytes": 20905
+        }
+      ]
+    },
+    {
+      "id": "carrot",
+      "index": 30,
+      "files": [
+        {
+          "path": "assets/v2-default/source/carrot.svg",
+          "before_sha256": "23d44ede74ad1bd46f91409c91a1d3c4776b5e9e63ac13c1548e901c0a44c8f0",
+          "after_sha256": "23d44ede74ad1bd46f91409c91a1d3c4776b5e9e63ac13c1548e901c0a44c8f0",
+          "changed": false,
+          "bytes": 690
+        },
+        {
+          "path": "assets/v2-default/png/carrot.png",
+          "before_sha256": "ee3f33b103d1f4dfc454638839899a65745694694af1acf538f92b061b6ead2b",
+          "after_sha256": "ee3f33b103d1f4dfc454638839899a65745694694af1acf538f92b061b6ead2b",
+          "changed": false,
+          "bytes": 14474
+        }
+      ]
+    },
+    {
+      "id": "bread",
+      "index": 31,
+      "files": [
+        {
+          "path": "assets/v2-default/source/bread.svg",
+          "before_sha256": "89c49f7cc3a92fe27ced29fd2898b17d7efa0314865969a6303c5c7c3eaab442",
+          "after_sha256": "89c49f7cc3a92fe27ced29fd2898b17d7efa0314865969a6303c5c7c3eaab442",
+          "changed": false,
+          "bytes": 647
+        },
+        {
+          "path": "assets/v2-default/png/bread.png",
+          "before_sha256": "274474f3650ebf8f4883bdac342b9afa90859a9b564c2c15a8a734aca28023ee",
+          "after_sha256": "274474f3650ebf8f4883bdac342b9afa90859a9b564c2c15a8a734aca28023ee",
+          "changed": false,
+          "bytes": 12240
+        }
+      ]
+    },
+    {
+      "id": "rice",
+      "index": 32,
+      "files": [
+        {
+          "path": "assets/v2-default/source/rice.svg",
+          "before_sha256": "0ce5ea446000a74f353d2c548282fc5700ea7819ad1fa877de83fe403ab83961",
+          "after_sha256": "0ce5ea446000a74f353d2c548282fc5700ea7819ad1fa877de83fe403ab83961",
+          "changed": false,
+          "bytes": 1035
+        },
+        {
+          "path": "assets/v2-default/png/rice.png",
+          "before_sha256": "d7bc824c8398a42323afba219fbe21e4e3b8d5df1e683dbe72062b7f687c6429",
+          "after_sha256": "d7bc824c8398a42323afba219fbe21e4e3b8d5df1e683dbe72062b7f687c6429",
+          "changed": false,
+          "bytes": 13136
+        }
+      ]
+    },
+    {
+      "id": "cup",
+      "index": 33,
+      "files": [
+        {
+          "path": "assets/v2-default/source/cup.svg",
+          "before_sha256": "4ccdf9fb71f76dfce116c227772016d5f78d2409124670a0d5759415c05b4d2f",
+          "after_sha256": "4ccdf9fb71f76dfce116c227772016d5f78d2409124670a0d5759415c05b4d2f",
+          "changed": false,
+          "bytes": 612
+        },
+        {
+          "path": "assets/v2-default/png/cup.png",
+          "before_sha256": "e611e589ddb6c5d702b16e7afc344b281f25e4f386199fac7dbc4c558ee975a4",
+          "after_sha256": "e611e589ddb6c5d702b16e7afc344b281f25e4f386199fac7dbc4c558ee975a4",
+          "changed": false,
+          "bytes": 13248
+        }
+      ]
+    },
+    {
+      "id": "book",
+      "index": 34,
+      "files": [
+        {
+          "path": "assets/v2-default/source/book.svg",
+          "before_sha256": "97f0928e15ae5b823337aeabc375a3d53197c039267f9581188cac2414a9b843",
+          "after_sha256": "97f0928e15ae5b823337aeabc375a3d53197c039267f9581188cac2414a9b843",
+          "changed": false,
+          "bytes": 956
+        },
+        {
+          "path": "assets/v2-default/png/book.png",
+          "before_sha256": "cfd700cc82f2c1d337e8806b2adc2da89fe4fd87fe065e7cae8a2eb07aad26e1",
+          "after_sha256": "cfd700cc82f2c1d337e8806b2adc2da89fe4fd87fe065e7cae8a2eb07aad26e1",
+          "changed": false,
+          "bytes": 17641
+        }
+      ]
+    },
+    {
+      "id": "ball",
+      "index": 35,
+      "files": [
+        {
+          "path": "assets/v2-default/source/ball.svg",
+          "before_sha256": "6b6a1d079c284b6975b72bd20a28bd2179ba2383d73322aa1b1565bdc0ad7105",
+          "after_sha256": "6b6a1d079c284b6975b72bd20a28bd2179ba2383d73322aa1b1565bdc0ad7105",
+          "changed": false,
+          "bytes": 493
+        },
+        {
+          "path": "assets/v2-default/png/ball.png",
+          "before_sha256": "670025b0782736b7e78483da0345ce7cf10fa24806017ada1e8f4769ab4a306f",
+          "after_sha256": "670025b0782736b7e78483da0345ce7cf10fa24806017ada1e8f4769ab4a306f",
+          "changed": false,
+          "bytes": 17215
+        }
+      ]
+    },
+    {
+      "id": "umbrella",
+      "index": 36,
+      "files": [
+        {
+          "path": "assets/v2-default/source/umbrella.svg",
+          "before_sha256": "81522a67aa6e5a00959db06416c148eae6167b193e4c01fea8c1efedf40c910c",
+          "after_sha256": "81522a67aa6e5a00959db06416c148eae6167b193e4c01fea8c1efedf40c910c",
+          "changed": false,
+          "bytes": 745
+        },
+        {
+          "path": "assets/v2-default/png/umbrella.png",
+          "before_sha256": "6469e371d004a3198e9f1ac21d5ed0d378c78e3524f85a3e0003f6a57b53e6b1",
+          "after_sha256": "6469e371d004a3198e9f1ac21d5ed0d378c78e3524f85a3e0003f6a57b53e6b1",
+          "changed": false,
+          "bytes": 17308
+        }
+      ]
+    },
+    {
+      "id": "shoe",
+      "index": 37,
+      "files": [
+        {
+          "path": "assets/v2-default/source/shoe.svg",
+          "before_sha256": "1ad2cb930dae1b165d4b34c1d2b2da4f7a92df2b1a6f2372ae3c228db97ce695",
+          "after_sha256": "1ad2cb930dae1b165d4b34c1d2b2da4f7a92df2b1a6f2372ae3c228db97ce695",
+          "changed": false,
+          "bytes": 703
+        },
+        {
+          "path": "assets/v2-default/png/shoe.png",
+          "before_sha256": "be36ca38a3a2fe1cdc2f7c675f24491f593e74aceb63fc2eac3d673ce114d961",
+          "after_sha256": "be36ca38a3a2fe1cdc2f7c675f24491f593e74aceb63fc2eac3d673ce114d961",
+          "changed": false,
+          "bytes": 9510
+        }
+      ]
+    },
+    {
+      "id": "hat",
+      "index": 38,
+      "files": [
+        {
+          "path": "assets/v2-default/source/hat.svg",
+          "before_sha256": "216ea66f673e008638b504917f4ec4e569c764c6876f230dde3884a4c425cefc",
+          "after_sha256": "216ea66f673e008638b504917f4ec4e569c764c6876f230dde3884a4c425cefc",
+          "changed": false,
+          "bytes": 614
+        },
+        {
+          "path": "assets/v2-default/png/hat.png",
+          "before_sha256": "ba90aefc76331e1d58fdb972fc1bbfad96df6e644a4d45766caa4ba3afdb6e36",
+          "after_sha256": "ba90aefc76331e1d58fdb972fc1bbfad96df6e644a4d45766caa4ba3afdb6e36",
+          "changed": false,
+          "bytes": 11511
+        }
+      ]
+    },
+    {
+      "id": "clock",
+      "index": 39,
+      "files": [
+        {
+          "path": "assets/v2-default/source/clock.svg",
+          "before_sha256": "4e548717b13b3c776a67077522e56feedb13683cfc17f8c9d34a1d4aaf9507b3",
+          "after_sha256": "4e548717b13b3c776a67077522e56feedb13683cfc17f8c9d34a1d4aaf9507b3",
+          "changed": false,
+          "bytes": 2200
+        },
+        {
+          "path": "assets/v2-default/png/clock.png",
+          "before_sha256": "6b50778317649509104b1caab2fa35c65671fd75b052aa3444dbe379c6fb8016",
+          "after_sha256": "6b50778317649509104b1caab2fa35c65671fd75b052aa3444dbe379c6fb8016",
+          "changed": false,
+          "bytes": 23640
+        }
+      ]
+    },
+    {
+      "id": "backpack",
+      "index": 40,
+      "files": [
+        {
+          "path": "assets/v2-default/source/backpack.svg",
+          "before_sha256": "d5f943b3275967b8003218f089f38f2e138b3bbb3411126d2bdc1cc2a1f88a9d",
+          "after_sha256": "d5f943b3275967b8003218f089f38f2e138b3bbb3411126d2bdc1cc2a1f88a9d",
+          "changed": false,
+          "bytes": 803
+        },
+        {
+          "path": "assets/v2-default/png/backpack.png",
+          "before_sha256": "579949c5534e8c94d3935a2fd423f97351cc954a4b37c1607c9f1ed388981e10",
+          "after_sha256": "579949c5534e8c94d3935a2fd423f97351cc954a4b37c1607c9f1ed388981e10",
+          "changed": false,
+          "bytes": 11998
+        }
+      ]
+    },
+    {
+      "id": "bus",
+      "index": 41,
+      "files": [
+        {
+          "path": "assets/v2-default/source/bus.svg",
+          "before_sha256": "2a6e68bd5ccc26104deafb7ed96a1e53810e4a338bab16449164d76be363b927",
+          "after_sha256": "2a6e68bd5ccc26104deafb7ed96a1e53810e4a338bab16449164d76be363b927",
+          "changed": false,
+          "bytes": 1124
+        },
+        {
+          "path": "assets/v2-default/png/bus.png",
+          "before_sha256": "59dc2cf253096c2f0724dcc06ec03c671b5b3c2a3574ca119dd7c41102c1b93e",
+          "after_sha256": "59dc2cf253096c2f0724dcc06ec03c671b5b3c2a3574ca119dd7c41102c1b93e",
+          "changed": false,
+          "bytes": 9793
+        }
+      ]
+    },
+    {
+      "id": "train",
+      "index": 42,
+      "files": [
+        {
+          "path": "assets/v2-default/source/train.svg",
+          "before_sha256": "c8ede104af1940063140cff913d59f8e6167215474137ed22886b6d3b33d1621",
+          "after_sha256": "c8ede104af1940063140cff913d59f8e6167215474137ed22886b6d3b33d1621",
+          "changed": false,
+          "bytes": 1353
+        },
+        {
+          "path": "assets/v2-default/png/train.png",
+          "before_sha256": "bdf6974ee945614366e741c25c12d455de9469e7686a69d866d1856934988e56",
+          "after_sha256": "bdf6974ee945614366e741c25c12d455de9469e7686a69d866d1856934988e56",
+          "changed": false,
+          "bytes": 11223
+        }
+      ]
+    },
+    {
+      "id": "bicycle",
+      "index": 43,
+      "files": [
+        {
+          "path": "assets/v2-default/source/bicycle.svg",
+          "before_sha256": "c71457e7e53cd4fa51fd0d10ab13356dc985b4cfe4bfa434e5c98a08f10d311b",
+          "after_sha256": "c71457e7e53cd4fa51fd0d10ab13356dc985b4cfe4bfa434e5c98a08f10d311b",
+          "changed": false,
+          "bytes": 1163
+        },
+        {
+          "path": "assets/v2-default/png/bicycle.png",
+          "before_sha256": "c40e1f175e662591328c625c64eedad6b18caa4d14594a744c52fe2441823213",
+          "after_sha256": "c40e1f175e662591328c625c64eedad6b18caa4d14594a744c52fe2441823213",
+          "changed": false,
+          "bytes": 17370
+        }
+      ]
+    },
+    {
+      "id": "boat",
+      "index": 44,
+      "files": [
+        {
+          "path": "assets/v2-default/source/boat.svg",
+          "before_sha256": "e6ef620de8ae6d94efa1466f81b3ce8b786c3c6e5c521c8c1a75984ce3347b72",
+          "after_sha256": "e6ef620de8ae6d94efa1466f81b3ce8b786c3c6e5c521c8c1a75984ce3347b72",
+          "changed": false,
+          "bytes": 936
+        },
+        {
+          "path": "assets/v2-default/png/boat.png",
+          "before_sha256": "cacf8da126ba171f1907d7cecc02f06202b0e7ebf84a256faf6ee31ceddf816b",
+          "after_sha256": "cacf8da126ba171f1907d7cecc02f06202b0e7ebf84a256faf6ee31ceddf816b",
+          "changed": false,
+          "bytes": 12979
+        }
+      ]
+    },
+    {
+      "id": "airplane",
+      "index": 45,
+      "files": [
+        {
+          "path": "assets/v2-default/source/airplane.svg",
+          "before_sha256": "d78f44a2adf547e0d0b17a67297496cdacfc274058db72fd415818e5533cd1f1",
+          "after_sha256": "680cd0e9d40f4e9f0cae0bde733107eae5121ad87b55b65d485d275e7b3da515",
+          "changed": true,
+          "bytes": 1280
+        },
+        {
+          "path": "assets/v2-default/png/airplane.png",
+          "before_sha256": "14649cbbf460c5377ada1baefb208d30e43e456a284bded0395a15bdc860de5d",
+          "after_sha256": "f5e61ecbc9446b677deb2809e0815eb0d7973ec0c4648105e545aad6f962fb6e",
+          "changed": true,
+          "bytes": 17119
+        }
+      ]
+    },
+    {
+      "id": "rocket",
+      "index": 46,
+      "files": [
+        {
+          "path": "assets/v2-default/source/rocket.svg",
+          "before_sha256": "63d70f4b1a91ce7d847103306906a3330036d71300a473e5711a444e9f5f6f09",
+          "after_sha256": "63d70f4b1a91ce7d847103306906a3330036d71300a473e5711a444e9f5f6f09",
+          "changed": false,
+          "bytes": 983
+        },
+        {
+          "path": "assets/v2-default/png/rocket.png",
+          "before_sha256": "47b7388a033bdfb497cb58f5f60f2ac7cd773ba9b5be57617dc09a18fdca523c",
+          "after_sha256": "47b7388a033bdfb497cb58f5f60f2ac7cd773ba9b5be57617dc09a18fdca523c",
+          "changed": false,
+          "bytes": 18630
+        }
+      ]
+    },
+    {
+      "id": "telescope",
+      "index": 47,
+      "files": [
+        {
+          "path": "assets/v2-default/source/telescope.svg",
+          "before_sha256": "1a409370ffcfe694abea440dd40e9fa64b9be51542d052ad4b453a6e4bcf777a",
+          "after_sha256": "1a409370ffcfe694abea440dd40e9fa64b9be51542d052ad4b453a6e4bcf777a",
+          "changed": false,
+          "bytes": 779
+        },
+        {
+          "path": "assets/v2-default/png/telescope.png",
+          "before_sha256": "f5e742c5f511885343ddaab8c380a004ad6e1b389d2e3e88adec0f571da8ac28",
+          "after_sha256": "f5e742c5f511885343ddaab8c380a004ad6e1b389d2e3e88adec0f571da8ac28",
+          "changed": false,
+          "bytes": 16160
+        }
+      ]
+    },
+    {
+      "id": "magnifier",
+      "index": 48,
+      "files": [
+        {
+          "path": "assets/v2-default/source/magnifier.svg",
+          "before_sha256": "55d00d2c9c96f8f1cf3fd2bc8c2e82ebffeb29de7289f46175b8a8ceb04bd995",
+          "after_sha256": "55d00d2c9c96f8f1cf3fd2bc8c2e82ebffeb29de7289f46175b8a8ceb04bd995",
+          "changed": false,
+          "bytes": 668
+        },
+        {
+          "path": "assets/v2-default/png/magnifier.png",
+          "before_sha256": "0dd478c9ea02531ac0175256d8897ed77f5b2a2bfd53e329479e8818a6d3397e",
+          "after_sha256": "0dd478c9ea02531ac0175256d8897ed77f5b2a2bfd53e329479e8818a6d3397e",
+          "changed": false,
+          "bytes": 19740
+        }
+      ]
+    },
+    {
+      "id": "forest",
+      "index": 49,
+      "files": [
+        {
+          "path": "assets/v2-default/source/forest.svg",
+          "before_sha256": "64f01c6c4d44dd17b45597b8f6aecc22d9c565cb0aff7bd1199aa50fdde332f3",
+          "after_sha256": "64f01c6c4d44dd17b45597b8f6aecc22d9c565cb0aff7bd1199aa50fdde332f3",
+          "changed": false,
+          "bytes": 1588
+        },
+        {
+          "path": "assets/v2-default/png/forest.png",
+          "before_sha256": "a7311f2e8abcd09d95668bc47194b8697ac66e0978880a39728f19b888ef9239",
+          "after_sha256": "a7311f2e8abcd09d95668bc47194b8697ac66e0978880a39728f19b888ef9239",
+          "changed": false,
+          "bytes": 24381
+        }
+      ]
+    },
+    {
+      "id": "garden",
+      "index": 50,
+      "files": [
+        {
+          "path": "assets/v2-default/source/garden.svg",
+          "before_sha256": "e9355e673d3f08a7435efefc12bec2d395d1a5a03035c313e7e25e1f2db04031",
+          "after_sha256": "e9355e673d3f08a7435efefc12bec2d395d1a5a03035c313e7e25e1f2db04031",
+          "changed": false,
+          "bytes": 3000
+        },
+        {
+          "path": "assets/v2-default/png/garden.png",
+          "before_sha256": "1c0fb657a7e0d7d7f10879286df9a910271eac1e4e4265f62f650909bf1fec80",
+          "after_sha256": "1c0fb657a7e0d7d7f10879286df9a910271eac1e4e4265f62f650909bf1fec80",
+          "changed": false,
+          "bytes": 22514
+        }
+      ]
+    },
+    {
+      "id": "beach",
+      "index": 51,
+      "files": [
+        {
+          "path": "assets/v2-default/source/beach.svg",
+          "before_sha256": "51e39564e2e9741143c340ee3ec51bcaaaa287e836adeb569b63d130c0570285",
+          "after_sha256": "51e39564e2e9741143c340ee3ec51bcaaaa287e836adeb569b63d130c0570285",
+          "changed": false,
+          "bytes": 1248
+        },
+        {
+          "path": "assets/v2-default/png/beach.png",
+          "before_sha256": "01d1fd5ba80d7cfb81d296bdd3eadd0e818322da6893e4e3a42865c5d6124a17",
+          "after_sha256": "01d1fd5ba80d7cfb81d296bdd3eadd0e818322da6893e4e3a42865c5d6124a17",
+          "changed": false,
+          "bytes": 13005
+        }
+      ]
+    },
+    {
+      "id": "mountain",
+      "index": 52,
+      "files": [
+        {
+          "path": "assets/v2-default/source/mountain.svg",
+          "before_sha256": "5b667017ac1a3b765f7c583d4db79d34273e601bb360e4ae7637b65625861dbd",
+          "after_sha256": "5b667017ac1a3b765f7c583d4db79d34273e601bb360e4ae7637b65625861dbd",
+          "changed": false,
+          "bytes": 887
+        },
+        {
+          "path": "assets/v2-default/png/mountain.png",
+          "before_sha256": "f1a661a30d2ad43a8d589d829dc1b69ead15869713508b86724ccb6764bd312a",
+          "after_sha256": "f1a661a30d2ad43a8d589d829dc1b69ead15869713508b86724ccb6764bd312a",
+          "changed": false,
+          "bytes": 17428
+        }
+      ]
+    },
+    {
+      "id": "rain",
+      "index": 53,
+      "files": [
+        {
+          "path": "assets/v2-default/source/rain.svg",
+          "before_sha256": "0cc0323ab4644af70b7982f5d7db7bda68920b5ce74aabced947e53c1d35f470",
+          "after_sha256": "0cc0323ab4644af70b7982f5d7db7bda68920b5ce74aabced947e53c1d35f470",
+          "changed": false,
+          "bytes": 1522
+        },
+        {
+          "path": "assets/v2-default/png/rain.png",
+          "before_sha256": "da7df1e5c61236d63b046a40a3c9d57d85a785eda724470144fde9fbf9a89325",
+          "after_sha256": "da7df1e5c61236d63b046a40a3c9d57d85a785eda724470144fde9fbf9a89325",
+          "changed": false,
+          "bytes": 15381
+        }
+      ]
+    },
+    {
+      "id": "night",
+      "index": 54,
+      "files": [
+        {
+          "path": "assets/v2-default/source/night.svg",
+          "before_sha256": "a221bf6d4a1f1d67de7c05706031e047979b5b36435290212e84c09c82b7b005",
+          "after_sha256": "a221bf6d4a1f1d67de7c05706031e047979b5b36435290212e84c09c82b7b005",
+          "changed": false,
+          "bytes": 1351
+        },
+        {
+          "path": "assets/v2-default/png/night.png",
+          "before_sha256": "4cb0168288e53fc02ebb6961c83cd27a779b9ae4660d30cb9d515a3bf3009456",
+          "after_sha256": "4cb0168288e53fc02ebb6961c83cd27a779b9ae4660d30cb9d515a3bf3009456",
+          "changed": false,
+          "bytes": 16856
+        }
+      ]
+    },
+    {
+      "id": "snow",
+      "index": 55,
+      "files": [
+        {
+          "path": "assets/v2-default/source/snow.svg",
+          "before_sha256": "281cade22ca95c12e6e8d9781a8c39f18a0ee5903bf9b1f97898f94d6881e922",
+          "after_sha256": "281cade22ca95c12e6e8d9781a8c39f18a0ee5903bf9b1f97898f94d6881e922",
+          "changed": false,
+          "bytes": 1700
+        },
+        {
+          "path": "assets/v2-default/png/snow.png",
+          "before_sha256": "2e83d6c02b5a0688eaffe6096db6df307c9387df2d4bbf37142eb46bb3c4a368",
+          "after_sha256": "2e83d6c02b5a0688eaffe6096db6df307c9387df2d4bbf37142eb46bb3c4a368",
+          "changed": false,
+          "bytes": 17687
+        }
+      ]
+    },
+    {
+      "id": "library",
+      "index": 56,
+      "files": [
+        {
+          "path": "assets/v2-default/source/library.svg",
+          "before_sha256": "ef4c228c31a589550e3bd75239f70ddc48623e1ec4b731a47a0bd87e2b4c2b6b",
+          "after_sha256": "ef4c228c31a589550e3bd75239f70ddc48623e1ec4b731a47a0bd87e2b4c2b6b",
+          "changed": false,
+          "bytes": 1879
+        },
+        {
+          "path": "assets/v2-default/png/library.png",
+          "before_sha256": "03c5e7ccf19fdd30b5e3f7e36606f0742c4d1fcb668ba04e24d9e741ddd37914",
+          "after_sha256": "03c5e7ccf19fdd30b5e3f7e36606f0742c4d1fcb668ba04e24d9e741ddd37914",
+          "changed": false,
+          "bytes": 12322
+        }
+      ]
+    },
+    {
+      "id": "cloud-dragon",
+      "index": 57,
+      "files": [
+        {
+          "path": "assets/v2-default/source/cloud-dragon.svg",
+          "before_sha256": "4d2133f1b44a8be722437ad3026672ce17343e733895f54080dcc90ab8f526a5",
+          "after_sha256": "4d2133f1b44a8be722437ad3026672ce17343e733895f54080dcc90ab8f526a5",
+          "changed": false,
+          "bytes": 2166
+        },
+        {
+          "path": "assets/v2-default/png/cloud-dragon.png",
+          "before_sha256": "20119fd144984f046d9db6d7ece498f32256c8253ea9deb8dbad65b3739d1ab6",
+          "after_sha256": "20119fd144984f046d9db6d7ece498f32256c8253ea9deb8dbad65b3739d1ab6",
+          "changed": false,
+          "bytes": 28611
+        }
+      ]
+    },
+    {
+      "id": "star-bunny",
+      "index": 58,
+      "files": [
+        {
+          "path": "assets/v2-default/source/star-bunny.svg",
+          "before_sha256": "2afb743809a1b3d17c1ac4176129538c4cf524655ceb85593a5cf497aead5d82",
+          "after_sha256": "2afb743809a1b3d17c1ac4176129538c4cf524655ceb85593a5cf497aead5d82",
+          "changed": false,
+          "bytes": 1774
+        },
+        {
+          "path": "assets/v2-default/png/star-bunny.png",
+          "before_sha256": "fda6219857f71782df6f6be1dc7d0944128766be0702b50b810672a0f27b8a03",
+          "after_sha256": "fda6219857f71782df6f6be1dc7d0944128766be0702b50b810672a0f27b8a03",
+          "changed": false,
+          "bytes": 23804
+        }
+      ]
+    },
+    {
+      "id": "moon-robot",
+      "index": 59,
+      "files": [
+        {
+          "path": "assets/v2-default/source/moon-robot.svg",
+          "before_sha256": "b607a03598957608c9be6b3e79114ffcffd96949322e1e90b2231fc4b2dea852",
+          "after_sha256": "b607a03598957608c9be6b3e79114ffcffd96949322e1e90b2231fc4b2dea852",
+          "changed": false,
+          "bytes": 1449
+        },
+        {
+          "path": "assets/v2-default/png/moon-robot.png",
+          "before_sha256": "238c5a6264c9df222eb2c20ae9ebadff5e66e35c4f72e39bbf6d92a40ca4eab4",
+          "after_sha256": "238c5a6264c9df222eb2c20ae9ebadff5e66e35c4f72e39bbf6d92a40ca4eab4",
+          "changed": false,
+          "bytes": 13309
+        }
+      ]
+    },
+    {
+      "id": "leaf-spirit",
+      "index": 60,
+      "files": [
+        {
+          "path": "assets/v2-default/source/leaf-spirit.svg",
+          "before_sha256": "ecf7be1e214fa2e72a49a2e6b5c14695aa56ad24bfa70e639a0a67f6e41274c7",
+          "after_sha256": "ecf7be1e214fa2e72a49a2e6b5c14695aa56ad24bfa70e639a0a67f6e41274c7",
+          "changed": false,
+          "bytes": 1412
+        },
+        {
+          "path": "assets/v2-default/png/leaf-spirit.png",
+          "before_sha256": "8c0ebefda1115d937328052c6d80e7dec3a4ead7b19a23f20355d7be793be74a",
+          "after_sha256": "8c0ebefda1115d937328052c6d80e7dec3a4ead7b19a23f20355d7be793be74a",
+          "changed": false,
+          "bytes": 20334
+        }
+      ]
+    }
+  ]
+}
