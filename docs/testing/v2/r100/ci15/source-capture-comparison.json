@@ -1,0 +1,182 @@
+{
+  "ci15_artifact_sha": "bb75974a5d5d4934254667b0cfdd3591bf5a4bfcb8c5c60f0599aa9524c03b8d",
+  "fixture_sha": "c53eb146203afc87fd8092f60721e49a20d30baaa0811da715788a40fe582e34",
+  "fixture": {
+    "rate": 16000,
+    "channels": 1,
+    "sample_bytes": 2,
+    "frames": 64960
+  },
+  "source_buckets": [
+    {
+      "start": 0,
+      "count": 16000,
+      "rms": 1123,
+      "nonzero": 2256,
+      "peak": 17609
+    },
+    {
+      "start": 16000,
+      "count": 16000,
+      "rms": 2433,
+      "nonzero": 15849,
+      "peak": 17791
+    },
+    {
+      "start": 32000,
+      "count": 16000,
+      "rms": 2332,
+      "nonzero": 10990,
+      "peak": 17905
+    },
+    {
+      "start": 48000,
+      "count": 16000,
+      "rms": 0,
+      "nonzero": 0,
+      "peak": 0
+    },
+    {
+      "start": 64000,
+      "count": 960,
+      "rms": 0,
+      "nonzero": 0,
+      "peak": 0
+    }
+  ],
+  "capture": [
+    {
+      "ms": 51776,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 16128,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=16128 count=16128 rms=0 nonzero=357 peak=2 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 53039,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 32320,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=32320 count=16192 rms=3233 nonzero=5750 peak=32767 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 54062,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 48512,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=48512 count=16192 rms=0 nonzero=0 peak=0 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 55224,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 64512,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=64512 count=16000 rms=0 nonzero=0 peak=0 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 56287,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 80640,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=80640 count=16128 rms=0 nonzero=0 peak=0 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 57400,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 96704,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=96704 count=16064 rms=0 nonzero=0 peak=0 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 58224,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 112832,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=112832 count=16128 rms=0 nonzero=0 peak=0 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 59653,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 129088,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=129088 count=16256 rms=0 nonzero=0 peak=0 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 60646,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 145216,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=145216 count=16128 rms=0 nonzero=0 peak=0 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 61701,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 161408,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=161408 count=16192 rms=0 nonzero=0 peak=0 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 62885,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 177408,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=177408 count=16000 rms=0 nonzero=0 peak=0 source=VOICE_COMMUNICATION route=15 aec=null"
+    },
+    {
+      "ms": 63943,
+      "event": "SYNTHETIC_CAPTURE",
+      "generation": 2,
+      "session": 81,
+      "frames": 193536,
+      "recording": true,
+      "stopped": false,
+      "released": false,
+      "phase": "PCM end=193536 count=16128 rms=0 nonzero=0 peak=0 source=VOICE_COMMUNICATION route=15 aec=null"
+    }
+  ],
+  "inference": "route and nonzero input proven; source/capture temporal and peak mismatch observed; no raw captured PCM available, so no captured-KWS replay or definitive format/loss root cause"
+}

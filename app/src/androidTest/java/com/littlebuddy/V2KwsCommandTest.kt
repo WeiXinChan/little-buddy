@@ -15,22 +15,29 @@ class V2KwsCommandTest {
   return ShortArray((bytes.size-44)/2).also{ByteBuffer.wrap(bytes,44,bytes.size-44).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(it)}
  }
  @Test fun actualModelCompleteCommandsAndVariants() {
-  val rows=JSONObject(inst.context.assets.open("m06-commands/cases.json").bufferedReader().use{it.readText()}).getJSONArray("cases")
+  val manifest=inst.context.assets.open("m06-commands/event-oracle-v2.1.tsv").use{it.readBytes()}
+  val hash=java.security.MessageDigest.getInstance("SHA-256").digest(manifest).joinToString(""){"%02x".format(it)}
+  assertEquals("pinned reviewed v2.1 oracle","ddaade9cf6da9be4f5b48378a6ed668485cf38feb6f74a58564f2e49d6ddb276",hash)
+  val rows=manifest.toString(Charsets.UTF_8).lineSequence().filter{it.startsWith("case\t")}.map{it.split('\t')}.toList()
+  assertEquals(49,rows.size);assertEquals(43,rows.count{it[3]==it[4]});assertEquals(6,rows.count{it[3]!=it[4]})
   val output=JSONArray();var failures=0
-  for(i in 0 until rows.length()) {
-   val row=rows.getJSONObject(i);val name=row.getString("name");val expected=if(row.isNull("expected"))null else row.getString("expected")
+  for(row in rows) {
+   val name=row[1];val expected=if(row[4]=="NONE")null else row[4];val managed=row[2]=="true"
+   val wav=inst.context.assets.open("m06-commands/$name.wav").use{it.readBytes()}
+   assertEquals("preserved WAV $name",row[5],java.security.MessageDigest.getInstance("SHA-256").digest(wav).joinToString(""){"%02x".format(it)})
    val boundary=CommandBoundary();val decisions=mutableListOf<String>();val audio=pcm(name)
    SherpaWake(inst.targetContext.assets,"*","wake/manage.txt",8).use { kws ->
     for(pos in audio.indices step 320) {
      val frame=audio.copyOfRange(pos,minOf(pos+320,audio.size));val tail=kws.accept(frame,frame.size)
      val hit=tail?.let {CommandBoundary.Hit(checkNotNull(kws.detectedKeyword),kws.matchedStart,it)}
-     boundary.frame(frame,frame.size,hit,row.getBoolean("managed"))?.let{decisions+=it}
+     boundary.frame(frame,frame.size,hit,managed)?.let{decisions+=it}
     }
-    repeat(60) {val frame=ShortArray(320);val tail=kws.accept(frame,320);boundary.frame(frame,320,tail?.let{CommandBoundary.Hit(checkNotNull(kws.detectedKeyword),kws.matchedStart,it)},row.getBoolean("managed"))?.let{decisions+=it}}
+    repeat(60) {val frame=ShortArray(320);val tail=kws.accept(frame,320);boundary.frame(frame,320,tail?.let{CommandBoundary.Hit(checkNotNull(kws.detectedKeyword),kws.matchedStart,it)},managed)?.let{decisions+=it}}
    }
+   if(managed && (row[3]=="NONE" || row[3]!=row[4]))assertTrue("shared no-exit invariant $name",decisions.none{it in listOf("取消","退出管理")})
    val passed=decisions==if(expected==null)emptyList<String>() else listOf(expected)
    if(!passed)failures++
-   output.put(JSONObject().put("name",name).put("expected",expected).put("decisions",JSONArray(decisions)).put("passed",passed))
+   output.put(JSONObject().put("name",name).put("oracle","v2.1").put("legacy_expected",row[3]).put("expected",expected).put("decisions",JSONArray(decisions)).put("passed",passed))
   }
   File(inst.targetContext.filesDir,"m06").mkdirs();File(inst.targetContext.filesDir,"m06/kws-model-boundary.json").writeText(output.toString(2))
   assertEquals("real same-version KWS + production boundary corpus failures",0,failures)

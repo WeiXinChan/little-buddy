@@ -1,5 +1,6 @@
 """Synthetic Pulse source -> AVD microphone. No replacement of Android AudioRecord."""
-import subprocess,json,hashlib,re,sys,time,wave
+import subprocess,json,hashlib,re,sys,os
+from route_evidence import play_fixture
 from pathlib import Path
 root=Path('app/src/androidTest/assets/m06-commands')
 allowed={r['name']:r['sha256'] for r in json.loads((root/'cases.json').read_text())['cases']}
@@ -29,21 +30,8 @@ try:
    print(json.dumps(dict(event='handshake_ready',nonce=nonce,root=private,run_as_pwd=pwd)),flush=True)
    path=paths[name]
    if hashlib.sha256(path.read_bytes()).hexdigest()!=allowed[name] or q['sha256']!=allowed[name]:raise ValueError('fixture hash')
-   with wave.open(str(path)) as wav: fixture=dict(rate=wav.getframerate(),samples=wav.getnframes(),seconds=wav.getnframes()/wav.getframerate())
-   diagnostic=dict(event='synthetic_route',nonce=nonce,name=name,sha256=allowed[name],fixture=fixture)
-   playback=subprocess.Popen(['paplay','--device=m06_input',str(path)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
-   try:
-    time.sleep(.2)
-    for kind in ['clients','sources','source-outputs','sink-inputs']:
-     state=subprocess.run(['pactl','-f','json','list',kind],capture_output=True,text=True,timeout=5)
-     diagnostic[kind]=dict(exit=state.returncode,stderr=state.stderr,data=json.loads(state.stdout) if state.returncode==0 else None)
-    stdout,stderr=playback.communicate(timeout=20)
-    diagnostic['playback_exit']=playback.returncode;diagnostic['playback_stderr']=stderr
-    print(json.dumps(diagnostic),flush=True)
-    Path('render').mkdir(exist_ok=True);Path('render',f'mic-route-{nonce}.json').write_text(json.dumps(diagnostic,indent=2))
-    if playback.returncode:raise RuntimeError('paplay failed; preserved route/exit/stderr')
-   finally:
-    if playback.poll() is None:playback.terminate();playback.communicate(timeout=5)
+   diagnostic=play_fixture(path,dict(nonce=nonce,name=name,sha256=allowed[name]),monitor=(name=="enter" and os.environ.get("BUDDY_SYNTHETIC_AVD_PROBE")=="1"))
+   print(json.dumps(diagnostic),flush=True)
    reply=json.dumps(dict(nonce=nonce,name=name,sha256=allowed[name],state='completed',playback_exit=0))
    subprocess.run(['adb','shell','run-as',pkg,'tee',private+'/m06-'+nonce+'.json'],input=reply,text=True,stdout=subprocess.PIPE,check=True,timeout=5)
  result=p.wait(timeout=30)

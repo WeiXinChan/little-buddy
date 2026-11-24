@@ -42,6 +42,8 @@ class V2VoiceActivity : Activity() {
     internal fun captureHasResources()=capture?.let{!it.leaseReturned || !it.workerDone || it.nativeProof.session!=null} ?: (releasedRecorder.session!=null)
     internal fun captureWorkerEvidence()=capture?.workerEvidence() ?: "no_capture leaseAvailable=${Capture.leaseAvailable}"
     @Volatile internal var syntheticCaptureDiagnostics=false
+    @Volatile internal var syntheticPcmObserver:((ShortArray,Int,RecorderProof)->Unit)?=null
+    internal fun syntheticProbeAllowed()=BuildConfig.DEBUG && BuildConfig.SYNTHETIC_PCM_PROBE && packageName=="com.littlebuddy.sim.v2" && android.os.Build.HARDWARE in listOf("ranchu","goldfish")
     internal val captureWorkerDone get()=capture?.let{it.workerDone && it.leaseReturned} ?: true
     internal fun immediateRecorder()=capture?.nativeProof ?: releasedRecorder
     internal fun mark(name: String) { timeline.add(name,life.state.generation,immediateRecorder(),capture?.phase?.name ?: lastCapturePhase) }
@@ -240,7 +242,7 @@ class V2VoiceActivity : Activity() {
             { entering -> if(capture===created && life.allows(ticket))manage(entering) },
             { life.allows(ticket) },
             { event,proof,phase -> timeline.add(event,ticket,proof,phase) },
-            hooks=com.littlebuddy.v2.CaptureHooks(syntheticEnabled={syntheticCaptureDiagnostics},syntheticTrace={detail->if(syntheticCaptureDiagnostics)timeline.add("SYNTHETIC_CAPTURE",ticket,immediateRecorder(),detail)},beforeDispose={beforeCaptureDispose()},beforeLeaseReturn={beforeCaptureLeaseReturn()},beforeCommandDecision={beforeManagementCommand(it)}),
+            hooks=com.littlebuddy.v2.CaptureHooks(syntheticPcm={data,count,proof->if(syntheticCaptureDiagnostics && syntheticProbeAllowed())syntheticPcmObserver?.invoke(data,count,proof)},syntheticEnabled={syntheticCaptureDiagnostics},syntheticTrace={detail->if(syntheticCaptureDiagnostics)timeline.add("SYNTHETIC_CAPTURE",ticket,immediateRecorder(),detail)},beforeDispose={beforeCaptureDispose()},beforeLeaseReturn={beforeCaptureLeaseReturn()},beforeCommandDecision={beforeManagementCommand(it)}),
             disposed = { owner.post {
                 mark("DISPOSE_CONSUME")
                 if(capture===created && created.workerDone && created.nativeProof.released && created.leaseReturned && !created.quarantined){

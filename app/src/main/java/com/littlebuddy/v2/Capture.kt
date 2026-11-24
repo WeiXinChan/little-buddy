@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
-internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {},val beforeCommandDecision: (String?)->Unit = {},val beforeLeaseReturn:()->Unit = {},val syntheticTrace:((String)->Unit)?=null,val syntheticEnabled:()->Boolean={false})
+internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {},val beforeCommandDecision: (String?)->Unit = {},val beforeLeaseReturn:()->Unit = {},val syntheticTrace:((String)->Unit)?=null,val syntheticEnabled:()->Boolean={false},val syntheticPcm:((ShortArray,Int,RecorderProof)->Unit)?=null)
 
 internal enum class CapturePhase { NOT_STARTED, THREAD_START, AUDIO_RECORD, WAKE_KWS, MANAGEMENT_KWS, START, READ, RELEASE, RELEASED, QUARANTINED }
 
@@ -144,6 +144,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 trace("NATIVE_START",nativeProof,phase.name)
             }
             phase = CapturePhase.READ
+            if(hooks.syntheticEnabled())hooks.syntheticTrace?.invoke("NATIVE_FORMAT rate=${native.sampleRate} channels=${native.channelCount} encoding=${native.audioFormat} bufferFrames=${native.bufferSizeInFrames} source=${native.audioSource} hardware=${android.os.Build.HARDWARE}")
             while (!cancelled.get()) {
                 progress("NATIVE_READ")
                 val count = native.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
@@ -160,6 +161,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if(!accept)break
                 progress("BEFORE_DECODE")
                 capturedSamples+=count
+                if(hooks.syntheticEnabled())hooks.syntheticPcm?.invoke(frame,count,nativeProof)
                 if(hooks.syntheticEnabled())meter.accept(frame,count)?.let{hooks.syntheticTrace?.invoke("$it source=VOICE_COMMUNICATION route=${native.routedDevice?.type} aec=${aec?.enabled}")}
                 val completedPrompt=promptAck.getAndSet(null)?.takeIf{it.nonce==activePromptNonce && it.generation==commandGeneration.get()}
                 if(completedPrompt!=null)promptPermit.revoke(completedPrompt.nonce,completedPrompt.generation)

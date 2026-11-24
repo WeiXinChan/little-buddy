@@ -142,6 +142,7 @@ android {
         versionCode = 13
         versionName = "0.1.12-animal-private"
         buildConfigField("boolean", "BUDDY_SSH", "false")
+        buildConfigField("boolean", "SYNTHETIC_PCM_PROBE", "false")
         testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
     testBuildType = if (providers.gradleProperty("v2Test").isPresent) "v2Debug" else "debug"
@@ -153,6 +154,7 @@ android {
         create("v2Debug") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".v2"
+            buildConfigField("boolean", "SYNTHETIC_PCM_PROBE", (providers.gradleProperty("v2SyntheticProbe").isPresent && providers.gradleProperty("v2Test").isPresent && providers.gradleProperty("v2Emulator").isPresent).toString())
             if (!providers.gradleProperty("v2Emulator").isPresent) ndk.abiFilters += "arm64-v8a"
             versionNameSuffix = "-v2-m04"
             matchingFallbacks += "debug"

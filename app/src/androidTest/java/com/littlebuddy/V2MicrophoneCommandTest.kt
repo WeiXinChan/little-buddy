@@ -50,6 +50,7 @@ class V2MicrophoneCommandTest {
   }
   assertTrue(name,condition())
  }
+ private var syntheticProbe:SyntheticInputProbe?=null
  private val requests=mutableMapOf<String,JSONObject>()
  private fun completed(name:String):Boolean {
   val q=requests[name] ?: return false
@@ -64,6 +65,7 @@ class V2MicrophoneCommandTest {
   val bytes=(if(name.startsWith("prod_"))inst.targetContext.assets else inst.context.assets).open(if(name.startsWith("prod_"))"management/${name.removePrefix("prod_")}.wav" else if(name.startsWith("v2_"))"m06-protocol-v2/${name.removePrefix("v2_")}.wav" else "m06-commands/$name.wav").use{it.readBytes()}
   val hash=java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
   val q=JSONObject().put("name",name).put("sha256",hash).put("nonce",java.util.UUID.randomUUID().toString()).put("root",root.canonicalPath).put("package",inst.targetContext.packageName).put("user",android.os.Process.myUid()/100000)
+  if(name=="enter" && syntheticProbe==null && diagnosticHost?.syntheticProbeAllowed()==true)syntheticProbe=SyntheticInputProbe(checkNotNull(diagnosticHost),q.getString("nonce"),bytes,hash)
   requests[name]=q
   File(root,"m06").mkdirs()
   File(root,"m06/handshake-root.json").writeText(q.toString())
@@ -92,7 +94,8 @@ class V2MicrophoneCommandTest {
    // head is asynchronous, keep observing without replacing native progress.
    await("native output really progressed"){var head=false;val l=java.util.concurrent.CountDownLatch(1);activity.observeNative{head=it.player.observedHead>0;l.countDown()};l.await(1,java.util.concurrent.TimeUnit.SECONDS);head}
    play("enter")
-   Thread.sleep(1500)
+   await("authorized enter fixture playback completed"){completed("enter")}
+   Thread.sleep(1600);syntheticProbe?.freeze()
    inst.runOnMainSync {activity.pictureResolver={Bitmap.createBitmap(40,40,Bitmap.Config.ARGB_8888).apply{eraseColor(Color.GREEN)}};activity.revealImage("synthetic",1)}
    await("AudioRecord/KWS entered management"){activity.isManaging}
    assertFalse(activity.showingImage)
@@ -126,6 +129,11 @@ class V2MicrophoneCommandTest {
    assertEquals("return must not resume old cloud upload",uploads,wire.inputs.get())
    File(ctx.filesDir,"m06").mkdirs();File(ctx.filesDir,"m06/microphone-management.json").writeText(JSONObject().put("real_AudioRecord",true).put("KWS",true).put("network_adapter","synthetic WebSocket; cloud ASR/LLM not tested").put("managed_input_delta",wire.inputs.get()-before).put("timeline",org.json.JSONArray(activity.timelineJson())).toString(2))
   } catch(t:Throwable){primary=t;try{V2HostFixture.snapshot(activity,"microphone-first")}catch(e:Throwable){t.addSuppressed(e)};throw t
-  } finally {try{V2HostFixture.finish(activity)}catch(e:Throwable){if(primary!=null)primary.addSuppressed(e) else throw e}}
+  } finally {
+   var cleanup:Throwable?=null
+   try{syntheticProbe?.saveAndReplay()}catch(e:Throwable){cleanup=e}
+   try{V2HostFixture.finish(activity)}catch(e:Throwable){if(cleanup!=null)cleanup.addSuppressed(e) else cleanup=e}
+   if(cleanup!=null){if(primary!=null)primary.addSuppressed(cleanup)else throw cleanup}
+  }
  }
 }

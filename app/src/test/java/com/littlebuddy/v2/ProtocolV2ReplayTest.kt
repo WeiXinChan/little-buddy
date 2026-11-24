@@ -5,7 +5,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 class ProtocolV2ReplayTest {
- @Test fun sameModelNativeHitsAndRealSyntheticPcmUseProductionBoundary() = replay("native-replay.tsv",7)
+ @Test fun sameModelNativeHitsAndRealSyntheticPcmUseProductionBoundary() = replay("native-replay.tsv",12)
  private fun replay(file: String,minimum: Int) {
   val root=listOf(File("src/androidTest/assets/m06-protocol-v2"),File("app/src/androidTest/assets/m06-protocol-v2")).first{it.isDirectory}
   val lines=File(root,file).readLines();var i=0;val failures=mutableListOf<String>();var cases=0
@@ -27,7 +27,7 @@ class ProtocolV2ReplayTest {
    if(results!=expected)failures+="$name expected=$expected actual=$results"
    cases++
   }
-  assertTrue("actual native replay corpus required",cases>=minimum)
+  assertEquals("all twelve protocol scenarios must execute",minimum,cases)
   assertEquals(failures.joinToString("; "),emptyList<String>(),failures)
  }
 }

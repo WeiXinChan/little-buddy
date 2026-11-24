@@ -26,9 +26,9 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0' 'emulator' 'system-images;android-36;google_apis;x86_64'
           mkdir -p render
           unit_result=0
-          ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator :app:testV2DebugUnitTest >render/unit.txt 2>&1 || unit_result=$?
+          ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator -Pv2SyntheticProbe :app:testV2DebugUnitTest >render/unit.txt 2>&1 || unit_result=$?
           printf '%s\n' "$unit_result" >render/unit-exit.txt
-          ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator :app:assembleV2Debug :app:assembleV2DebugAndroidTest
+          ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator -Pv2SyntheticProbe :app:assembleV2Debug :app:assembleV2DebugAndroidTest
           git rev-parse HEAD > render/source.txt
           sha256sum app/build/outputs/apk/v2Debug/*.apk app/build/outputs/apk/androidTest/v2Debug/*.apk > render/apk-sha256.txt
           sudo -n apt-get -o Acquire::http::Timeout=15 -o Acquire::Retries=0 install -y --no-install-recommends libpulse0 pulseaudio pulseaudio-utils xvfb xauth libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
@@ -130,12 +130,14 @@ jobs:
           pactl -f json list source-outputs >render/pulse-source-outputs-before-mic.json
           device_result=0
           set +e
-          python3 scripts/m06/mic_controller.py >render/microphone.txt 2>render/microphone-stderr.txt
+          BUDDY_SYNTHETIC_AVD_PROBE=1 python3 scripts/m06/mic_controller.py >render/microphone.txt 2>render/microphone-stderr.txt
           microphone_result=$?
           set -e
           printf '%s\n' "$microphone_result" >render/microphone-exit.txt
           cat render/microphone.txt
           if ((microphone_result != 0)); then device_result=1; fi
+          adb shell am instrument -w -r -e class com.littlebuddy.V2KwsCommandTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/kws-boundary-v21.txt || device_result=1
+          grep -q 'OK (2 tests)' render/kws-boundary-v21.txt || device_result=1
           adb shell am instrument -w -r -e class com.littlebuddy.V2CompletionLeaseTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/completion-lease.txt || device_result=1
           grep -q 'OK (2 tests)' render/completion-lease.txt || device_result=1
           adb shell am instrument -w -r -e class com.littlebuddy.V2PendingConnectionTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/pending-connection.txt || device_result=1
@@ -149,6 +151,9 @@ jobs:
           adb shell am instrument -w -r -e class com.littlebuddy.V2EyesTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/instrumentation.txt || device_result=1
           adb exec-out run-as com.littlebuddy.sim.v2 tar -C files -cf - m06 > render/screens.tar
           tar -xf render/screens.tar -C render
+          # Only authorized synthetic capture files; export once, then purge AVD PCM.
+          adb shell run-as com.littlebuddy.sim.v2 find files/m06 -type f -name capture.s16le -delete
+          python3 scripts/m06/analyze_capture.py render/m06 >render/captured-alignment.txt 2>&1 || device_result=1
           test "$(find render/m06 -name '[0-9][0-9]-*.png' | wc -l)" -eq 16
           python3 - <<'PYCODE'
           import pathlib, struct
@@ -175,3 +180,11 @@ jobs:
           path: |
             app/build/outputs/apk/v2Debug/*.apk
             app/build/outputs/apk/androidTest/v2Debug/*.apk
+
+      - name: Remove synthetic PCM working copies after evidence export
+        if: always()
+        run: |
+          if [[ -d render ]]; then
+            find render -type f \( -name 'capture.s16le' -o -name 'mic-host-*.s16le' \) -delete
+            rm -f render/screens.tar
+          fi
