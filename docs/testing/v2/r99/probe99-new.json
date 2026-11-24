@@ -1,0 +1,10 @@
+{
+  "handoff_cancel_swallowed": true,
+  "stale_analysis_rejected": true,
+  "stale_asr_dispatched_with_new_context": false,
+  "four_dimensions_cat_present": true,
+  "unretracted_animal_preference_survives": true,
+  "memory_bytes": 2655,
+  "no_product_failure": true,
+  "late_endpoint_analysis_rejected": true
+}

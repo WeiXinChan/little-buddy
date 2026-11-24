@@ -38,8 +38,10 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
     private var decisionAt = 0L
     private var prompted = false
     private var soloSent = false
-    fun wake() {
-        awake = true; wakeAt = now(); lastInteraction = now()
+    fun wake(observedAt: Long = now()) {
+        require(observedAt in 0..now())
+        if (awake) return
+        awake = true; wakeAt = observedAt; lastInteraction = now()
         hasInput = false; speaking = false; soloSent = false; prompted = false
         completion = null; probing = false
         responsePending = false; thinkingAt = null; excludedThinkingMs = 0
@@ -73,7 +75,7 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
         if (!awake) return
         checkResponseDeadline()
         val time = now()
-        if (!hasInput && !soloSent && time - wakeAt >= waits.solo) { soloSent = true; solo() }
+        if (!hasInput && !soloSent && time - wakeAt >= waits.solo) { soloSent = true; responsePending = true; responseDeadline = wakeAt + 15000; checkResponseDeadline(); solo() }
         if (hasInput && !speaking) {
             if (completion == null && !probing && time - lastSpeech >= waits.probe) {
                 probing = true; probe(revision)

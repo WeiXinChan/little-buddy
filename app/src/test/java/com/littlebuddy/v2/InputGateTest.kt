@@ -43,7 +43,7 @@ class InputGateTest {
     }
     @Test fun idleAtSixtySecondsDoesNotEndBackendRetentionAndBusyOutputExcludesIdle() {
         val lab = Lab(); val g = lab.gate
-        g.wake(); lab.time = 60000; g.tick(true); assertTrue(g.awake)
+        g.wake(); lab.time = 500; g.tick(true); g.effectivePlayed(); lab.time = 60000; g.tick(true); assertTrue(g.awake)
         g.tick(false); assertFalse(g.awake); assertTrue(lab.calls.contains("idle"))
     }
     @Test fun absoluteKwsTailCopiesPreserveFirstSamplesUnderOwnerDelay() {
@@ -96,4 +96,23 @@ class InputGateTest {
         lab.gate.effectivePlayed();lab.time=16000;lab.gate.checkResponseDeadline()
     }
 
+    @Test fun delayedWakeBudgetIsAnchoredAndRepeatWakeCannotRenew() {
+        val lab=Lab();lab.time=6000;lab.gate.wake(0)
+        lab.gate.tick(false)
+        assertEquals(15000L,lab.gate.responseDeadline)
+        lab.time=10000;lab.gate.wake();lab.gate.tick(true)
+        assertEquals(15000L,lab.gate.responseDeadline)
+        lab.time=15000
+        try {lab.gate.checkResponseDeadline();fail()}catch(_:IllegalStateException){}
+    }
+    @Test fun soloBudgetExistsBeforeSendAndEffectivePlayAloneReleasesIt() {
+        var time=0L
+        lateinit var g: InputGate
+        var atSend=0L
+        g=InputGate(Waits(),{time},{},{},{},{atSend=g.responseDeadline},{},{})
+        g.wake();time=500;g.tick(false)
+        assertEquals(15000L,atSend)
+        time=14000;g.tick(true);assertEquals(15000L,g.responseDeadline)
+        g.effectivePlayed();time=16000;g.checkResponseDeadline()
+    }
 }

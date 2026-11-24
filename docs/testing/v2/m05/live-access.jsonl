@@ -1,0 +1,3 @@
+{"model": "qwen-flash", "case": "confirmation_um", "pass_": false, "ms": 286, "error": "ModelError"}
+{"access_probe": true, "model": "qwen-flash", "last_status": 403, "last_code": "insufficient_quota", "usage": {"requests": 1, "failures": 1, "prompt_tokens": 0, "completion_tokens": 0}, "results": [{"case": "confirmation_um", "pass_": false, "ms": 286, "error": "ModelError"}]}
+{"summary": [], "real_child": false, "acoustics": false, "billing": "token usage only; monetary bill not verified"}

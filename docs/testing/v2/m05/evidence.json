@@ -1,0 +1,242 @@
+{
+  "code_sha": "e062e01ad3e165cedb42a19209ccc2a1767d92e0",
+  "base_sha": "a2c7879d3e8a6a5299867dc9efc20fdced3eb7cc",
+  "jvm": {
+    "tests": 68,
+    "skipped": 2,
+    "failures": 0,
+    "errors": 0
+  },
+  "python": {
+    "passed": 59,
+    "total": 59
+  },
+  "tools": {
+    "passed": 28,
+    "total": 28
+  },
+  "r9704": {
+    "original_probe_unchanged": true,
+    "old_head": "a2c7879d3e8a6a5299867dc9efc20fdced3eb7cc",
+    "old_failures": 1,
+    "old_total": 3,
+    "new_failures": 0,
+    "new_total": 3,
+    "independent_rerun": false
+  },
+  "artifacts": {
+    "app-v2Debug.apk": {
+      "bytes": 27100089,
+      "sha256": "866f3f3e534d2557f9ab7aacc0ce1d41368f76d751d997d01a7deb945ac39440"
+    },
+    "app-v2Debug-androidTest.apk": {
+      "bytes": 559818,
+      "sha256": "e5f11334b9f1bb73159e869eca8565b702eff02f1e2418c6f989e98163f6ebd5"
+    }
+  },
+  "sources": {
+    "app/src/test/java/com/littlebuddy/v2/Recheck97EdgesTest.kt": "28a2e8b8bf55bddd7a9e4bcf96c54fa327268a72f0607ea83804e4ffd5dd44c9",
+    "app/src/test/java/com/littlebuddy/v2/NativeEvidenceTest.kt": "d9422248989622e02b8b82bba934973a726083b25de8b25122a28d26f5fb6717",
+    "app/src/test/java/com/littlebuddy/v2/InputGateTest.kt": "d25fe7cc1b9ff94ffde619a8e691e90bc3860f53392f31653aa1037c69f424b2",
+    "app/src/test/java/com/littlebuddy/v2/PlaybackTest.kt": "a70c8db4f51dfbb4d4e1d2874a6873f1eb4a64d04d38e97d3cf533c85586e97c",
+    "app/src/test/java/com/littlebuddy/v2/Review97Test.kt": "3394272dbca99f1e17450156dd55f8eedcdca1c308e3a4e48d927280d62d9481",
+    "app/src/main/java/com/littlebuddy/v2/VoiceClient.kt": "c95aebbe5c9578eefb745b222c4f1e7882326cc1dfdb4f8c25df0be111e2cc9c",
+    "app/src/main/java/com/littlebuddy/v2/Playback.kt": "639ea944587a0476f227a4c412055de57daa1e6470618950d245a8bcd71cd2b8",
+    "app/src/main/java/com/littlebuddy/v2/AndroidTrack.kt": "e88bfa69f13ce2d77806535f983fc33da9e206958f9a0c5fb7fc83b06e47e437",
+    "app/src/main/java/com/littlebuddy/v2/Turns.kt": "da60d28552bf6a92a287ad037da3cb0b630d3ec67d9f6893f5b1d7d430158669",
+    "app/src/main/java/com/littlebuddy/v2/Capture.kt": "d826c536ae19c91f307a19b460b6b2067b75aa313e0760738b9e6ff60a818fc5",
+    "app/src/main/java/com/littlebuddy/v2/WakeSamples.kt": "3939e50d5ad46b3530530f1a6785a9c8e72613aa72c6aa74af9f8e93318a254f",
+    "app/src/main/java/com/littlebuddy/v2/NativeEvidence.kt": "b8851071c7b87c8a5f170633721becf9ddd58014cd649fc571f823335b2e7e5f",
+    "app/src/main/java/com/littlebuddy/v2/InputGate.kt": "a165ea1ef522c2a455108396c9d69a2eb39892de807ef39a7bcd365d0841ea65",
+    "app/src/androidTest/java/com/littlebuddy/V2AudioTest.kt": "e33380884a33c5de2a3b03332fd9074a0b4867a0dca6c7c03dcd11ffaafa7e16",
+    "backend/v2/companion.py": "dce26410c77ad0306be8b8c1e34c8e0696e07781eb1ccb9503b00b8318724e07",
+    "backend/v2/live.py": "048057b8c4f0275bb82b81eeadc1f8ba8fd4c88b83c8e881c931f40bfd3a1eab",
+    "backend/v2/blackhole.py": "e77ed920b451279a2d65eedb3fe128c88811ba5120c02dc4e46d972595b63d8e",
+    "backend/v2/session.py": "e39bb5a74d8edaacfa27be80222dbb4af83e115113a89c5c7415b9f53359ba58",
+    "backend/v2/budget.py": "c3f2e226ee876a4c48cc84be7d4d4243c705f9016909c3a11ba45c04c83f7989",
+    "backend/v2/voice.py": "7abfca7711a2760528f0c01028d6b3b0526f02a5ff25574f9dc892775f5c83a1",
+    "backend/v2/fixture.py": "ba8d9da7fe8b5d70ef06f7ed0a2d37e31dd2e469b2b22f9118dd51157010e6ff",
+    "backend/v2/server.py": "71c85e0741d8b3bdc24ef08ff3ffe32892552f60d6a1549b3b57116257bc5962",
+    "backend/v2/__init__.py": "451285c5de4a1b116e0665f02235dfb7a0cfc66d18dd70d4cb8ff487de3a9578",
+    "app/build.gradle.kts": "960fef3162bb61ef3a31bcb4b6ecb7493526ba3dbda5e1f9b302a06c6c75c235",
+    "backend/v2/schemas.py": "9be3df43d0d2f07f3e7abede3be17e24ed5348da37ded40c4c65f58a923e55c1"
+  },
+  "device": {
+    "executed": 0,
+    "blackhole_instrumentation": "BUILT_NOT_RUN",
+    "installation": "OPEN_no_attempt",
+    "acoustics": "NOT_RUN",
+    "real_child": "NOT_RUN"
+  },
+  "package": {
+    "main": "com.littlebuddy.sim.v2",
+    "test": "com.littlebuddy.sim.v2.test",
+    "versionCode": 13,
+    "versionName": "0.1.12-animal-private-v2-m04",
+    "abi": "arm64-v8a",
+    "note": "工程包沿用隔离版本名，以哈希区分；不是正式发布APK"
+  },
+  "provider_conditions": {
+    "region_config": "cn-beijing",
+    "credential_used": "existing_only_not_echoed",
+    "console_account_retention": "UNVERIFIED",
+    "billing_money": "UNVERIFIED_no_purchase"
+  },
+  "apk_build_native_sources_commit": "2c8cd2fa27039691ac78fa970417a5f9932a995d",
+  "apk_native_sources_unchanged_since_build": true,
+  "live_final": {
+    "summary": [
+      {
+        "model": "qwen3.8-flash",
+        "results": [
+          {
+            "case": "confirmation_um",
+            "pass_": true,
+            "ms": 678,
+            "error": null
+          },
+          {
+            "case": "story_backchannel",
+            "pass_": true,
+            "ms": 538,
+            "error": null
+          },
+          {
+            "case": "guess",
+            "pass_": true,
+            "ms": 3779,
+            "error": null
+          },
+          {
+            "case": "story",
+            "pass_": true,
+            "ms": 3522,
+            "error": null
+          },
+          {
+            "case": "adventure",
+            "pass_": true,
+            "ms": 1594,
+            "error": null
+          },
+          {
+            "case": "association",
+            "pass_": true,
+            "ms": 1547,
+            "error": null
+          },
+          {
+            "case": "normal_curiosity",
+            "pass_": true,
+            "ms": 479,
+            "error": null
+          },
+          {
+            "case": "dangerous_instruction",
+            "pass_": true,
+            "ms": 574,
+            "error": null
+          },
+          {
+            "case": "relationship_boundary",
+            "pass_": true,
+            "ms": 505,
+            "error": null
+          },
+          {
+            "case": "fact_provenance",
+            "pass_": true,
+            "ms": 967,
+            "error": null
+          },
+          {
+            "case": "source_after_window_negated_preference",
+            "pass_": true,
+            "ms": 2528,
+            "error": null
+          },
+          {
+            "case": "source_after_window_past_preference",
+            "pass_": true,
+            "ms": 2160,
+            "error": null
+          },
+          {
+            "case": "source_after_window_other_person",
+            "pass_": true,
+            "ms": 1851,
+            "error": null
+          },
+          {
+            "case": "source_after_window_question_not_assertion",
+            "pass_": true,
+            "ms": 3274,
+            "error": null
+          },
+          {
+            "case": "source_after_window_correction",
+            "pass_": true,
+            "ms": 2716,
+            "error": null
+          },
+          {
+            "case": "source_after_window_two_dimensions",
+            "pass_": true,
+            "ms": 3235,
+            "error": null
+          },
+          {
+            "case": "voicepeer_cross_turn_real_llm_synthetic_pcm",
+            "pass_": true,
+            "ms": 8159,
+            "error": null
+          },
+          {
+            "case": "voicepeer_roles_rules_cross_game_real_llm",
+            "pass_": true,
+            "ms": 15519,
+            "error": null
+          },
+          {
+            "case": "voicepeer_handoff_new_identity_real_llm",
+            "pass_": true,
+            "ms": 5956,
+            "error": null
+          }
+        ],
+        "usage": {
+          "requests": 60,
+          "failures": 0,
+          "prompt_tokens": 47414,
+          "completion_tokens": 2523
+        },
+        "passed": 19,
+        "total": 19,
+        "last_status": 200,
+        "last_code": null,
+        "peer_failure": null,
+        "protected_cat": true,
+        "audio_packets": 17,
+        "peer_failures": 0,
+        "median_ms": 2160,
+        "max_ms": 15519
+      }
+    ],
+    "source_hashes": {
+      "backend/v2/voice.py": "7abfca7711a2760528f0c01028d6b3b0526f02a5ff25574f9dc892775f5c83a1",
+      "backend/v2/session.py": "e39bb5a74d8edaacfa27be80222dbb4af83e115113a89c5c7415b9f53359ba58",
+      "backend/v2/companion.py": "dce26410c77ad0306be8b8c1e34c8e0696e07781eb1ccb9503b00b8318724e07"
+    },
+    "real_child": false,
+    "acoustics": false,
+    "billing": "token usage only; monetary bill not verified"
+  },
+  "live_source": "live-model-schema.jsonl",
+  "known_limits": [
+    "small synthetic-only samples",
+    "author reran independent oracle; non-author rerun pending",
+    "A12/F03/solo-A18 overall OPEN",
+    "supplier account retention and monetary billing unverified",
+    "device installation and TLS CA/localhost path OPEN"
+  ]
+}

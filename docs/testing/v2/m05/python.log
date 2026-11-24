@@ -1,0 +1,5 @@
+Executing <Task pending name='Task-51' coro=<TlsTests.test_full_duplex_wire_stream_coordinates_and_auth() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-83-d42512126b7c/workdir/little-buddy/tests/v2/test_m04_transport.py:28> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.268 seconds
+----------------------------------------------------------------------
+Ran 59 tests in 2.529s
+
+OK

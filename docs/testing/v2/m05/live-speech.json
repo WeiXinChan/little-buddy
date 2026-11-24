@@ -1,0 +1,1 @@
+{"input": "synthetic_only", "real_child": false, "acoustics": false, "region": "cn-beijing", "asr": "fun-asr-realtime", "tts": "cosyvoice-v3-flash", "voice": "longanyang", "tts_first_pcm_ms": 608, "tts_total_ms": 2360, "tts_samples": 80160, "asr_ms": 1685, "recognized_cat": true, "recognized_moon": true, "passed": true}

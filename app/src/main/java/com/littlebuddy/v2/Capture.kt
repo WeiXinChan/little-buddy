@@ -90,7 +90,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     awake = true
                     wake?.close(); wake = null
                     detector = SpeechDetector(320, initialFloor = 36.0)
-                    owner.post { if (!cancelled.get()) client.wake() }
+                    val wakeBoundary = (android.os.SystemClock.elapsedRealtime() -
+                        ((position - (wakeBase + tail).coerceIn(0, position)) * 1000 / 16000)).coerceAtLeast(0)
+                    owner.post { if (!cancelled.get()) client.wake(wakeBoundary) }
                     // Absolute ring and KWS-local coordinates share a recorded origin.
                     lastSpeech = android.os.SystemClock.elapsedRealtime()
                     val absoluteTail = (wakeBase + tail).coerceIn(0, position)

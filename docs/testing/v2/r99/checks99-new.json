@@ -1,0 +1,27 @@
+{
+  "checks": {
+    "valid_send": true,
+    "bad_ack_connection": true,
+    "bad_ack_session": true,
+    "bad_ack_turn": true,
+    "bad_ack_output": true,
+    "bad_ack_task": true,
+    "bad_ack_sequence": true,
+    "valid_ack": true,
+    "old_summary_rejected": true,
+    "old_image_rejected": true,
+    "old_session_all_empty": true,
+    "capacity_atomic": true,
+    "role_change_preserves_session": true,
+    "long_production_140_turns": true,
+    "long_protected_child_source": true,
+    "long_no_failures": true
+  },
+  "passed": 16,
+  "total": 16,
+  "cumulative_input_bytes": 120010,
+  "cumulative_output_bytes": 75600,
+  "failure": null,
+  "audio": 142,
+  "retained": 20
+}
