@@ -32,6 +32,7 @@ jobs:
           export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0' 'emulator' 'system-images;android-36;google_apis;x86_64'
+          git fetch --no-tags --depth=1 origin b2ccf61d3ef002aa0b43cc488627d21038f4fdfc
           mkdir -p render
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/m06/tests -v >render/host-script-tests.txt 2>&1
           # This authorized host-only experiment does not compile Android.

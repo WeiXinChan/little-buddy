@@ -2,6 +2,8 @@
 Only whitelisted audio settings are retained; never dump command/environment data.
 """
 import json
+import traceback
+from collections import Counter
 import os
 from pathlib import Path
 import re
@@ -42,6 +44,24 @@ def descendant(pid,root,uid):
         if pid==root: return True
         s=Path(f'/proc/{pid}/status').read_text();pid=int(re.search(r'^PPid:\s+(\d+)',s,re.M)[1])
     return False
+
+
+def safe_failure(error):
+    return dict(error_class=type(error).__name__,source=[dict(file=Path(f.filename).name,line=f.lineno) for f in traceback.extract_tb(error.__traceback__) if Path(f.filename).name in ('sdk_input_gate.py','grpc_mic.py')][-6:])
+
+
+def module_ids(modules,short_text):
+    # PulseAudio 16.1 JSON has no module index. Short TEXT carries the ID.
+    if not isinstance(modules,list) or len(modules)!=3:raise IsolationError('MODULE_SCHEMA')
+    allowed={'module-native-protocol-unix','module-null-sink'}
+    if any(not isinstance(m,dict) or m.get('name') not in allowed for m in modules):raise IsolationError('NON_NULL_MODULE')
+    rows=[]
+    for line in short_text.splitlines():
+        fields=line.split('\t',2)  # Discard arguments; never log them.
+        if len(fields)<2 or not re.fullmatch('[0-9]{1,10}',fields[0]) or fields[1] not in allowed:raise IsolationError('MODULE_ID_SCHEMA')
+        rows.append(dict(index=int(fields[0]),name=fields[1]))
+    if len(rows)!=3 or len({r['index'] for r in rows})!=3 or Counter(r['name'] for r in rows)!=Counter(m['name'] for m in modules):raise IsolationError('MODULE_ID_MISMATCH')
+    return rows
 
 
 def topology(sources,sinks,modules,clients,outputs,owned_qemu):
@@ -90,6 +110,16 @@ class PrivatePulse:
         if info['status']!='AVAILABLE': raise IsolationError('PULSE_QUERY_UNAVAILABLE')
         return json.loads(raw)
 
+    def module_summary(self,modules):
+        from native_input_metadata import bounded
+        raw,info=bounded(['pactl','list','short','modules'],limit=16384,seconds=.4)
+        if info['status']!='AVAILABLE':raise IsolationError('MODULE_IDS_UNAVAILABLE')
+        result=module_ids(modules,raw.decode('utf-8','strict'))
+        # Fixed keys/type-only schema; no arguments/properties/unknown values.
+        summary=dict(count=len(modules),fields={k:sorted({type(m[k]).__name__ for m in modules if k in m}) for k in ('index','name','argument','usage_counter','properties')},ids=result)
+        self.schema=summary
+        return result
+
     def verify(self):
         if not owner(self.pulse,self.uid) or not owner(self.root,self.uid): raise IsolationError('OWNER_CHANGED')
         if Path(f'/proc/{self.pulse}/exe').resolve().name!='pulseaudio': raise IsolationError('PULSE_EXECUTABLE')
@@ -113,7 +143,8 @@ class PrivatePulse:
         if not linked:raise IsolationError('PULSE_SOCKET_NOT_OWNED')
         s=self.socket.stat()
         if not stat.S_ISSOCK(s.st_mode) or s.st_uid!=self.uid: raise IsolationError('PRIVATE_SOCKET')
-        row=topology(self.pactl('sources'),self.pactl('sinks'),self.pactl('modules'),self.pactl('clients'),self.pactl('source-outputs'),lambda p:descendant(p,self.root,self.uid))
+        row=topology(self.pactl('sources'),self.pactl('sinks'),self.module_summary(self.pactl('modules')),self.pactl('clients'),self.pactl('source-outputs'),lambda p:descendant(p,self.root,self.uid))
+        row['module_schema']=self.schema
         audio={}
         expected={'PULSE_SERVER':self.server,'QEMU_PA_SERVER':self.server,'PULSE_SOURCE':'m06_input.monitor','QEMU_PA_SOURCE':'m06_input.monitor','PULSE_SINK':'v2_playback','QEMU_PA_SINK':'v2_playback'}
         for pid in row['qemu_pids']:
@@ -168,7 +199,11 @@ class InputGateObserver:
         self.row['events'].append(dict(event=kind,monotonic_ns=time.monotonic_ns(),**fields))
         self.path.write_text(json.dumps(self.row,indent=2))
     def begin(self):
-        self.row['isolation_before']=self.prove()
+        self.save('ISOLATION_BEGIN')
+        try:
+            self.row['isolation_before']=self.prove()
+        except Exception as error:
+            self.save('ISOLATION_FAILED',**safe_failure(error));raise
         self.thread.start()
     def first_packet(self): self.started.set()  # Producer does no RPC/proof/disk work here.
     def _sample(self):
@@ -192,7 +227,7 @@ class InputGateObserver:
                 elif not value:self.save('GATE_FALSE_OBSERVED_NO_RETRY',enabled=False)
                 self.stop.wait(.2)
         except Exception as error:
-            self.failure=type(error).__name__;self.save('OBSERVER_FAILED',error_class=self.failure)
+            self.failure=type(error).__name__;self.save('OBSERVER_FAILED',**safe_failure(error))
     def finish(self):
         self.stop.set()
         if self.thread.ident is not None:self.thread.join(20)

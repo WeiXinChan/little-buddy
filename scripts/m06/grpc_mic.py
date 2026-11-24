@@ -178,6 +178,7 @@ class GrpcMic:
             assert not self.stub.getMicrophoneState(self.Empty(),metadata=self.auth,timeout=3).realAudioEnabled
             if gate_mode:
                 from sdk_input_gate import PrivatePulse,InputGateObserver
+                save('sdk_isolation_prepare')
                 proof=PrivatePulse()
                 observer=InputGateObserver(
                     read=lambda:self.stub.getMicrophoneState(self.Empty(),metadata=self.auth,timeout=.4).realAudioEnabled,
@@ -208,7 +209,9 @@ class GrpcMic:
             save('rpc_failed',rpc_code=e.code().name,packets=count,generator_failure=generator_failure)  # no message/details/token
             raise RuntimeError('virtual mic RPC '+e.code().name) from None
         except Exception as e:
-            save('failed',error=type(e).__name__);raise
+            from sdk_input_gate import safe_failure
+            failed_phase=row['stage']
+            save('failed',failure_stage=failed_phase,**safe_failure(e));raise
         finally:
             if observer:
                 primary=sys.exception()

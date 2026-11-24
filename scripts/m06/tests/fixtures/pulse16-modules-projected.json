@@ -1,0 +1,28 @@
+{
+  "provenance": "Ubuntu24.04 actual pactl16.1 private -n null server; argument/properties values removed; key/type shape retained",
+  "version": [
+    "pactl 16.1",
+    "Compiled with libpulse 16.1.0",
+    "Linked with libpulse 16.1.0"
+  ],
+  "modules": [
+    {
+      "name": "module-native-protocol-unix",
+      "usage_counter": "n/a",
+      "argument": "",
+      "properties": {}
+    },
+    {
+      "name": "module-null-sink",
+      "usage_counter": "0",
+      "argument": "",
+      "properties": {}
+    },
+    {
+      "name": "module-null-sink",
+      "usage_counter": "0",
+      "argument": "",
+      "properties": {}
+    }
+  ]
+}

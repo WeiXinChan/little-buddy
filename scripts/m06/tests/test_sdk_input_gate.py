@@ -1,11 +1,13 @@
 import copy
+import json
 from pathlib import Path
 import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from sdk_input_gate import topology,PrivatePulse,IsolationError,InputGateObserver,GateError
+from sdk_input_gate import topology,PrivatePulse,IsolationError,InputGateObserver,GateError,module_ids,safe_failure
 
 def fixture():
  modules=[dict(index=0,name='module-native-protocol-unix'),dict(index=1,name='module-null-sink'),dict(index=2,name='module-null-sink')]
@@ -27,6 +29,35 @@ class IsolationTests(unittest.TestCase):
  def test_non_gha_or_non_synthetic_platform_never_probes_proc(self):
   for env in ({},{'GITHUB_ACTIONS':'true'},{'GITHUB_ACTIONS':'true','RUNNER_ENVIRONMENT':'self-hosted'}):
    with self.assertRaises(IsolationError):PrivatePulse(env)
+
+class ModuleSchemaTests(unittest.TestCase):
+ def actual_schema(self):
+  return json.loads((Path(__file__).parent/'fixtures/pulse16-modules-projected.json').read_text())['modules']
+ def short(self):return '0\tmodule-native-protocol-unix\tauth-anonymous=1\n1\tmodule-null-sink\tsink_name=v2_playback\n2\tmodule-null-sink\tsink_name=m06_input\n'
+ def test_official_16_1_json_no_index_cross_checked_with_short_ids(self):
+  raw=self.actual_schema()
+  with self.assertRaises(KeyError):[m['index'] for m in raw]
+  rows=fixture();rows[2]=module_ids(raw,self.short())
+  self.assertTrue(topology(*rows,lambda p:p==42)['source_output_present'])
+ def test_missing_duplicate_changed_ids_and_non_null_modules_fail_closed(self):
+  for short in (self.short().replace('2\t','1\t'),self.short().splitlines()[0],self.short().replace('module-null-sink','module-alsa-source'),self.short().replace('2\t','99\t')):
+   with self.assertRaises(IsolationError):
+    rows=fixture();rows[2]=module_ids(self.actual_schema(),short);topology(*rows,lambda p:p==42)
+  for raw in (self.actual_schema()+[dict(name='module-alsa-source')],self.actual_schema()[1:]):
+   with self.assertRaises(IsolationError):module_ids(raw,self.short())
+ def test_bounded_bytes_to_module_summary_full_path(self):
+  private=object.__new__(PrivatePulse)
+  with patch('native_input_metadata.bounded',return_value=(self.short().encode(),dict(status='AVAILABLE'))) as command:
+   result=private.module_summary(self.actual_schema())
+  self.assertEqual([r['index'] for r in result],[0,1,2]);self.assertEqual(private.schema['fields']['index'],[])
+  command.assert_called_once_with(['pactl','list','short','modules'],limit=16384,seconds=.4)
+  with patch('native_input_metadata.bounded',return_value=(b'\xff',dict(status='AVAILABLE'))):
+   with self.assertRaises(UnicodeDecodeError):private.module_summary(self.actual_schema())
+ def test_safe_failure_contains_only_project_location_not_message(self):
+  try:module_ids([],self.short())
+  except IsolationError as e:
+   row=safe_failure(e);self.assertEqual(row['error_class'],'IsolationError');self.assertTrue(row['source']);self.assertNotIn('MODULE_SCHEMA',str(row))
+
 
 class ObserverTests(unittest.TestCase):
  def make(self,initial=False,prove=lambda:dict(private=True)):
