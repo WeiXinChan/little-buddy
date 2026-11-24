@@ -1,0 +1,206 @@
+{
+  "head": "c54ff0a6369a46c1ac7a87233702976376ae2f7b",
+  "scope": "independent module synthetic checks",
+  "checks": [
+    {
+      "case": "send_only_at_15",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "partial_at_15",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "feedback_at_15",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "effective_at_15",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "story_100s",
+      "expected": [
+        11,
+        15
+      ],
+      "actual": [
+        11,
+        15
+      ],
+      "passed": true
+    },
+    {
+      "case": "retry_deadline",
+      "expected": [
+        15,
+        false
+      ],
+      "actual": [
+        15,
+        false
+      ],
+      "passed": true
+    },
+    {
+      "case": "callbacks_do_not_extend_progress",
+      "expected": [
+        null,
+        true
+      ],
+      "actual": [
+        null,
+        true
+      ],
+      "passed": true
+    },
+    {
+      "case": "reservation_rejects_second_pending",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "reservation_rejection_atomic",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "reservation_final_total",
+      "expected": 128,
+      "actual": 128,
+      "passed": true
+    },
+    {
+      "case": "invalid_atomic_0",
+      "expected": [
+        true,
+        true
+      ],
+      "actual": [
+        true,
+        true
+      ],
+      "passed": true
+    },
+    {
+      "case": "invalid_atomic_1",
+      "expected": [
+        true,
+        true
+      ],
+      "actual": [
+        true,
+        true
+      ],
+      "passed": true
+    },
+    {
+      "case": "invalid_atomic_2",
+      "expected": [
+        true,
+        true
+      ],
+      "actual": [
+        true,
+        true
+      ],
+      "passed": true
+    },
+    {
+      "case": "invalid_atomic_3",
+      "expected": [
+        true,
+        true
+      ],
+      "actual": [
+        true,
+        true
+      ],
+      "passed": true
+    },
+    {
+      "case": "invalid_atomic_4",
+      "expected": [
+        true,
+        true
+      ],
+      "actual": [
+        true,
+        true
+      ],
+      "passed": true
+    },
+    {
+      "case": "invalid_atomic_5",
+      "expected": [
+        true,
+        true
+      ],
+      "actual": [
+        true,
+        true
+      ],
+      "passed": true
+    },
+    {
+      "case": "mixed_capacity_atomic",
+      "expected": [
+        true,
+        true
+      ],
+      "actual": [
+        true,
+        true
+      ],
+      "passed": true
+    },
+    {
+      "case": "detached_input_and_context",
+      "expected": [
+        [
+          "child"
+        ],
+        {
+          "answer": "hidden"
+        }
+      ],
+      "actual": [
+        [
+          "child"
+        ],
+        {
+          "answer": "hidden"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "unchanged_playback_head_must_not_extend_watchdog",
+      "expected": [
+        null,
+        true
+      ],
+      "actual": [
+        null,
+        true
+      ],
+      "passed": true
+    }
+  ],
+  "attempts": 19,
+  "failed": 0,
+  "sha256": {
+    "review96_followup.py": "d5f5213d282d5d660abe168ce9bfd1665a8aa23dda375b6145d2966c635a7e45",
+    "little-buddy/backend/v2/session.py": "8eca96e56fe2e6680ff3f7a95c400698e1e259821d09fe3ea883163160be6ec9"
+  }
+}

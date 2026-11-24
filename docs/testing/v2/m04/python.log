@@ -1,0 +1,39 @@
+test_context_is_provided_for_same_short_word_without_local_shortcut (test_m04.EndpointRaceTests.test_context_is_provided_for_same_short_word_without_local_shortcut) ... ok
+test_continuation_invalidates_prepared_intent (test_m04.EndpointRaceTests.test_continuation_invalidates_prepared_intent) ... ok
+test_late_async_probe_ignored_and_continuation_samples_merged (test_m04.EndpointRaceTests.test_late_async_probe_ignored_and_continuation_samples_merged) ... ok
+test_close_failure_quarantines (test_m04.PeerTests.test_close_failure_quarantines) ... ok
+test_real_session_adapter_pcm_ack_and_fact (test_m04.PeerTests.test_real_session_adapter_pcm_ack_and_fact) ... ok
+test_revoked_epoch_input_has_no_effect (test_m04.PeerTests.test_revoked_epoch_input_has_no_effect) ... ok
+test_sequence_duplicate_and_unknown_fields_fail (test_m04.PeerTests.test_sequence_duplicate_and_unknown_fields_fail) ... ok
+test_late_cannot_revive_even_without_poll (test_m04.ProgressTests.test_late_cannot_revive_even_without_poll) ... ok
+test_partial_real_progress_extends (test_m04.ProgressTests.test_partial_real_progress_extends) ... ok
+test_same_head_new_sequence_does_not_extend (test_m04.ProgressTests.test_same_head_new_sequence_does_not_extend) ... ok
+test_sends_never_extend_progress (test_m04.ProgressTests.test_sends_never_extend_progress) ... ok
+test_full_duplex_wire_stream_coordinates_and_auth (test_m04_transport.TlsTests.test_full_duplex_wire_stream_coordinates_and_auth) ... Executing <Task pending name='Task-51' coro=<TlsTests.test_full_duplex_wire_stream_coordinates_and_auth() running at <checkout>/tests/v2/test_m04_transport.py:28> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.342 seconds
+ok
+test_r96_01_no_response_deadline_and_late_ack (test_r96.Review96Tests.test_r96_01_no_response_deadline_and_late_ack) ... ok
+test_r96_01_partial_or_feedback_is_not_response (test_r96.Review96Tests.test_r96_01_partial_or_feedback_is_not_response) ... ok
+test_r96_01_progress_timeout_is_independent (test_r96.Review96Tests.test_r96_01_progress_timeout_is_independent) ... ok
+test_r96_01_retry_does_not_reset_budget (test_r96.Review96Tests.test_r96_01_retry_does_not_reset_budget) ... ok
+test_r96_01_story_after_effective_audio_ack (test_r96.Review96Tests.test_r96_01_story_after_effective_audio_ack) ... ok
+test_r96_02_reserve_pending_and_atomic_rejection (test_r96.Review96Tests.test_r96_02_reserve_pending_and_atomic_rejection) ... ok
+test_r96_03_copy_failure_and_success_detachment (test_r96.Review96Tests.test_r96_03_copy_failure_and_success_detachment) ... ok
+test_r96_03_invalid_schema_preserves_entire_state (test_r96.Review96Tests.test_r96_03_invalid_schema_preserves_entire_state) ... ok
+test_adapter_and_negative_controls (test_session.CoreTests.test_adapter_and_negative_controls) ... ok
+test_all_stream_resets (test_session.CoreTests.test_all_stream_resets) ... ok
+test_combined_capacity_atomic (test_session.CoreTests.test_combined_capacity_atomic) ... ok
+test_end_handoff_and_expiry (test_session.CoreTests.test_end_handoff_and_expiry) ... ok
+test_heartbeat_never_extends_expiry (test_session.CoreTests.test_heartbeat_never_extends_expiry) ... ok
+test_late_safety_image_and_reconnect (test_session.CoreTests.test_late_safety_image_and_reconnect) ... ok
+test_long_interaction_then_idle_expiry (test_session.CoreTests.test_long_interaction_then_idle_expiry) ... ok
+test_order_and_queue (test_session.CoreTests.test_order_and_queue) ... ok
+test_partial (test_session.CoreTests.test_partial) ... ok
+test_prefix_and_secret (test_session.CoreTests.test_prefix_and_secret) ... ok
+test_retry_deadline (test_session.CoreTests.test_retry_deadline) ... ok
+test_shared_context_and_roles (test_session.CoreTests.test_shared_context_and_roles) ... ok
+test_six_identity_dimensions (test_session.CoreTests.test_six_identity_dimensions) ... ok
+
+----------------------------------------------------------------------
+Ran 33 tests in 0.527s
+
+OK

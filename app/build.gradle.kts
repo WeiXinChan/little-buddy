@@ -144,10 +144,17 @@ android {
         buildConfigField("boolean", "BUDDY_SSH", "false")
         testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
+    testBuildType = if (providers.gradleProperty("v2Test").isPresent) "v2Debug" else "debug"
     buildTypes {
         val release = getByName("release") {
             buildConfigField("boolean", "BUDDY_SSH", "true")
             ndk.abiFilters += "arm64-v8a"
+        }
+        create("v2Debug") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".v2"
+            versionNameSuffix = "-v2-m04"
+            matchingFallbacks += "debug"
         }
         create("ciRelease") {
             initWith(release)
@@ -165,6 +172,11 @@ android {
     }
     sourceSets {
         getByName("release").assets.srcDirs(familyAssets, sshAssets)
+        getByName("v2Debug") {
+            java.srcDir("src/debug/java")
+            res.srcDir("src/debug/res")
+            assets.srcDir("src/debug/assets")
+        }
         getByName("ciRelease") {
             java.srcDir("src/release/java")
             manifest.srcFile("src/release/AndroidManifest.xml")

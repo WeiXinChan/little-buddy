@@ -3,6 +3,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application android:usesCleartextTraffic="false" android:label="瓦力" android:allowBackup="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".V2VoiceActivity" android:exported="false" />
         <activity android:name=".BuddyActivity" android:screenOrientation="sensorLandscape" />
     </application>
 </manifest>
