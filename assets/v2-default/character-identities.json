@@ -1,0 +1,19 @@
+{
+ "status":"Design configuration only; not wired to runtime",
+ "identities":[
+  {"id":"cloud-dragon","species":"fantasy dragon","primary_color":"#79a887","invariants":["two gold horns","two blue wings","gold scarf","rounded green face"],"reference":"png/cloud-dragon.png"},
+  {"id":"star-bunny","species":"fantasy rabbit","primary_color":"#e4d3bd","invariants":["two long ears with pink inner ears","blue scarf","gold star brooch"],"reference":"png/star-bunny.png"},
+  {"id":"moon-robot","species":"fantasy robot","primary_color":"#84b5c7","invariants":["rounded blue head","two dark eyes","gold antenna sphere","gold chest lamp"],"reference":"png/moon-robot.png"},
+  {"id":"leaf-spirit","species":"fantasy plant spirit","primary_color":"#b5c69c","invariants":["oval pale green body","two dark green crown leaves","gold waist band"],"reference":"png/leaf-spirit.png"}
+ ],
+ "story_policy":{
+  "key":["session_id","story_id","character_id","appearance_revision"],
+  "required_fields":["species","primary_color","invariants","accessories","explicit_child_edits"],
+  "prepare":"Copy current identity and explicit edits into one image job; exclude unrelated dialogue/personal identifiers",
+  "edit":"Explicit child edit creates next appearance_revision, overrides only the changed attribute and cancels obsolete jobs",
+  "display":"At final consumption compare current appearance_revision plus session/turn/topic validity; static hash is not a consistency test",
+  "quality":"Check species/color/distinctive features/accessories on every prepared scene; reject or reuse an approved matching picture if wrong",
+  "clear":"Delete all story identities, edits and prepared outputs at session end/expiry",
+  "unverified":["cross-scene generation","repeated generation","accessory edit propagation","late-result rejection","runtime cleanup"]
+ }
+}
