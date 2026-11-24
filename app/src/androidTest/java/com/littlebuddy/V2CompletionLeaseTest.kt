@@ -15,8 +15,9 @@ class V2CompletionLeaseTest {
  private val i get()=InstrumentationRegistry.getInstrumentation()
  private fun await(message:String,f:()->Boolean){val until=SystemClock.elapsedRealtime()+15000;while(!f() && SystemClock.elapsedRealtime()<until)Thread.sleep(20);assertTrue(message,f())}
  private fun runCase(explicit:Boolean){
-  val a=i.startActivitySync(Intent(i.targetContext,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as V2VoiceActivity
+  val a=V2HostFixture.launch()
   val joined=CountDownLatch(1);val allowReturn=CountDownLatch(1);val timeout=AtomicBoolean();val connects=AtomicInteger()
+  var primary:Throwable?=null
   try {
    await("initial native READ"){a.immediateRecorder().recording && a.immediateRecorder().frames>0};val old=a.immediateRecorder().session
    a.beforeCaptureLeaseReturn={joined.countDown();if(!allowReturn.await(6,TimeUnit.SECONDS))timeout.set(true)}
@@ -24,13 +25,14 @@ class V2CompletionLeaseTest {
    if(explicit)i.runOnMainSync{a.startVoice("wss://localhost:1/v2/voice","SyntheticOnly".repeat(4))}
    else i.uiAutomation.executeShellCommand("input keyevent KEYCODE_HOME").use{java.io.FileInputStream(it.fileDescriptor).readBytes()}
    assertTrue("worker joined before lease return barrier",joined.await(6,TimeUnit.SECONDS));assertTrue(a.immediateRecorder().released);assertFalse(Capture.leaseAvailable)
-   if(!explicit)i.startActivitySync(Intent(i.targetContext,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+   if(!explicit)assertSame("restore same Host",a,V2HostFixture.launch())
    val observed=CountDownLatch(1);var evidence="";a.observeDiagnostics{evidence=it;observed.countDown()};assertTrue(observed.await(2,TimeUnit.SECONDS))
    assertTrue("old owner retained while completion paused: $evidence",evidence.contains("ownsLease=true"));assertEquals(old,a.immediateRecorder().session);assertEquals(0,connects.get());assertFalse(timeout.get())
    a.beforeCaptureLeaseReturn={};allowReturn.countDown()
    await("one new owner after natural lease return"){val p=a.immediateRecorder();p.session!=old && p.recording && p.frames>0}
    assertEquals(if(explicit)1 else 0,connects.get());Thread.sleep(100);assertEquals(if(explicit)1 else 0,connects.get())
-  }finally{a.beforeCaptureLeaseReturn={};allowReturn.countDown();i.runOnMainSync{a.finish()};await("fixture real worker and lease completion"){a.immediateRecorder().released && a.captureWorkerDone}}
+  }catch(t:Throwable){primary=t;try{V2HostFixture.snapshot(a,"completion-first")}catch(e:Throwable){t.addSuppressed(e)};throw t
+  }finally{a.beforeCaptureLeaseReturn={};allowReturn.countDown();try{V2HostFixture.finish(a)}catch(e:Throwable){if(primary!=null)primary.addSuppressed(e)else throw e}}
  }
  @Test fun stopThenLocalStartKeepsOwnerUntilCompletionReturnsLease()=runCase(false)
  @Test fun explicitIntentCannotBypassLeaseWhenWorkerAlreadyEnded()=runCase(true)

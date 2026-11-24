@@ -31,7 +31,7 @@ jobs:
           ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator :app:assembleV2Debug :app:assembleV2DebugAndroidTest
           git rev-parse HEAD > render/source.txt
           sha256sum app/build/outputs/apk/v2Debug/*.apk app/build/outputs/apk/androidTest/v2Debug/*.apk > render/apk-sha256.txt
-          sudo -n apt-get -o Acquire::http::Timeout=15 -o Acquire::Retries=0 install -y --no-install-recommends libpulse0 pulseaudio pulseaudio-utils
+          sudo -n apt-get -o Acquire::http::Timeout=15 -o Acquire::Retries=0 install -y --no-install-recommends libpulse0 pulseaudio pulseaudio-utils xvfb xauth libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
           export ANDROID_AVD_HOME="$RUNNER_TEMP/v2-avd"
           mkdir -m 700 -p "$ANDROID_AVD_HOME"
           export PULSE_SERVER="unix:$ANDROID_AVD_HOME/pulse.sock"
@@ -45,6 +45,7 @@ jobs:
           pulseaudio -n -F "$ANDROID_AVD_HOME/pulse.pa" --daemonize=no --exit-idle-time=-1 --use-pid-file=no >render/pulse.log 2>&1 &
           pulse_pid=$!
           emulator_pid=
+          display_pid=
           cleanup() {
             result=$?
             if ((result != 0)); then cat render/emulator.log render/pulse.log 2>/dev/null || true; fi
@@ -65,6 +66,7 @@ jobs:
               wait "$owned_pid" || true
             }
             if [[ -n "$emulator_pid" ]]; then stop_owned "$emulator_pid"; fi
+            if [[ -n "$display_pid" ]]; then stop_owned "$display_pid"; fi
             stop_owned "$pulse_pid"
             if ((result == 0 && cleanup_error != 0)); then result=1; fi
             exit "$result"
@@ -72,7 +74,16 @@ jobs:
           trap cleanup EXIT
           timeout 15s bash -c 'until pactl get-default-sink 2>/dev/null | grep -Fx v2_playback; do sleep 1; done'
           echo 'no' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n v2eyes -k 'system-images;android-36;google_apis;x86_64' --force
-          PULSE_SOURCE=m06_input.monitor QEMU_AUDIO_DRV=pa "$ANDROID_HOME/emulator/emulator" -avd v2eyes -port 5554 -accel on -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
+          # -no-window selects a headless emulator whose PA implementation is a stub.
+          # Keep the real GUI/audio backend on our private virtual display instead.
+          export DISPLAY=:99
+          Xvfb "$DISPLAY" -screen 0 1920x1080x24 -nolisten tcp >render/xvfb.log 2>&1 &
+          display_pid=$!
+          timeout 10s bash -c 'until [[ -S /tmp/.X11-unix/X99 ]]; do sleep 0.2; done'
+          export PULSE_SOURCE=m06_input.monitor PULSE_SINK=v2_playback
+          export QEMU_PA_SERVER="$PULSE_SERVER" QEMU_PA_SOURCE=m06_input.monitor QEMU_PA_SINK=v2_playback
+          "$ANDROID_HOME/emulator/emulator" -version >render/emulator-version.txt 2>&1
+          "$ANDROID_HOME/emulator/emulator" -avd v2eyes -port 5554 -accel on -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
           emulator_pid=$!
           test -f "$ANDROID_AVD_HOME/v2eyes.ini"
           printf '%s\n' 'avdmanager/emulator use the same explicit ANDROID_AVD_HOME; v2eyes.ini exists' >render/avd-path-check.txt
@@ -115,6 +126,8 @@ jobs:
           adb shell wm density >render/display-density.txt
           adb shell wm user-rotation >render/display-rotation.txt
           adb emu avd hostmicon >render/hostmic.txt
+          pactl -f json list clients >render/pulse-clients-before-mic.json
+          pactl -f json list source-outputs >render/pulse-source-outputs-before-mic.json
           device_result=0
           set +e
           python3 scripts/m06/mic_controller.py >render/microphone.txt 2>render/microphone-stderr.txt
@@ -136,10 +149,10 @@ jobs:
           adb shell am instrument -w -r -e class com.littlebuddy.V2EyesTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/instrumentation.txt || device_result=1
           adb exec-out run-as com.littlebuddy.sim.v2 tar -C files -cf - m06 > render/screens.tar
           tar -xf render/screens.tar -C render
-          test "$(find render/m06 -name '*.png' | wc -l)" -eq 16
+          test "$(find render/m06 -name '[0-9][0-9]-*.png' | wc -l)" -eq 16
           python3 - <<'PYCODE'
           import pathlib, struct
-          for path in pathlib.Path('render/m06').glob('*.png'):
+          for path in pathlib.Path('render/m06').glob('[0-9][0-9]-*.png'):
               width, height = struct.unpack('>II', path.read_bytes()[16:24])
               assert width > height, (path.name, width, height)
               print(path.name, width, height)

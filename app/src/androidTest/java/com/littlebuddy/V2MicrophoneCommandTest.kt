@@ -73,9 +73,11 @@ class V2MicrophoneCommandTest {
   val ctx=inst.targetContext
   check(ctx.filesDir.mkdirs() || ctx.filesDir.isDirectory)
   check(ctx.filesDir.canWrite())
-  val activity=inst.startActivitySync(Intent(ctx,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as V2VoiceActivity
+  val activity=V2HostFixture.launch()
+  activity.syntheticCaptureDiagnostics=true
   diagnosticHost=activity
   lateinit var wire:Wire
+  var primary:Throwable?=null
   try {
    await("focused host"){activity.hasWindowFocus() && activity.resumed}
    inst.runOnMainSync {
@@ -119,10 +121,11 @@ class V2MicrophoneCommandTest {
    await("explicit session HOME paused/focus lost"){!activity.resumed && !activity.hasWindowFocus()}
    await("explicit session HOME native released and worker done"){val p=activity.immediateRecorder();p.session==old.session && p.stopped && p.released && !p.recording && activity.captureWorkerDone}
    val stoppedFrames=activity.immediateRecorder().frames;Thread.sleep(100);assertEquals(stoppedFrames,activity.immediateRecorder().frames)
-   inst.startActivitySync(Intent(ctx,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+   assertSame(activity,V2HostFixture.launch())
    await("explicit session returns new local KWS READ"){val p=activity.immediateRecorder();activity.resumed && activity.hasWindowFocus() && p.session!=old.session && p.recording && p.frames>0}
    assertEquals("return must not resume old cloud upload",uploads,wire.inputs.get())
    File(ctx.filesDir,"m06").mkdirs();File(ctx.filesDir,"m06/microphone-management.json").writeText(JSONObject().put("real_AudioRecord",true).put("KWS",true).put("network_adapter","synthetic WebSocket; cloud ASR/LLM not tested").put("managed_input_delta",wire.inputs.get()-before).put("timeline",org.json.JSONArray(activity.timelineJson())).toString(2))
-  } finally {inst.runOnMainSync{activity.finish()};await("Host native release before next instrumentation"){activity.immediateRecorder().released && activity.captureWorkerDone}}
+  } catch(t:Throwable){primary=t;try{V2HostFixture.snapshot(activity,"microphone-first")}catch(e:Throwable){t.addSuppressed(e)};throw t
+  } finally {try{V2HostFixture.finish(activity)}catch(e:Throwable){if(primary!=null)primary.addSuppressed(e) else throw e}}
  }
 }

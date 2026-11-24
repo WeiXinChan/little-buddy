@@ -6,7 +6,7 @@ import com.littlebuddy.SpeechDetector
  * VAD rejects short transients; prefix context survives ordinary thinking pauses.
  * No audio/text leaves this component. Bounds are general safety policy, not fixture offsets.
  */
-internal class CommandBoundary(now:()->Long=android.os.SystemClock::elapsedRealtime) {
+internal class CommandBoundary(private val diagnostic:((String)->Unit)?=null,now:()->Long=android.os.SystemClock::elapsedRealtime) {
     data class Hit(val name: String,val start: Long,val end: Long)
     private val protocol=ManagementExitProtocol(now)
     val awaitingPromptCompletion get()=protocol.state==ManagementExitProtocol.State.PREPARING
@@ -42,6 +42,7 @@ internal class CommandBoundary(now:()->Long=android.os.SystemClock::elapsedRealt
         if(c!=null && position-lastSpeech>=24000) { // 1.5s complete-command quiet: retain post-keyword context
             val start=first ?: position
             val valid=c.start-start in -4800L..4800L && lastSpeech-c.end<=7680 && lastSpeech-start<=96000
+            diagnostic?.invoke("BOUNDARY name=${c.name} valid=$valid first=$start last=$lastSpeech hitStart=${c.start} hitEnd=${c.end} position=$position managed=$managed")
             clear()
             if(managed) {
                 if(valid)return protocol.accept(c.name,c.start,c.end,position,generation)

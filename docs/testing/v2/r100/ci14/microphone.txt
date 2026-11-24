@@ -1,0 +1,47 @@
+INSTRUMENTATION_STATUS: class=com.littlebuddy.V2MicrophoneCommandTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.littlebuddy.V2MicrophoneCommandTest:
+INSTRUMENTATION_STATUS: test=actualMicrophoneManagementAndNegativeCommands
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: m06_request={"name":"enter","sha256":"c53eb146203afc87fd8092f60721e49a20d30baaa0811da715788a40fe582e34","nonce":"28719299-d93c-48d4-b362-8399b6bac42a","root":"\/data\/data\/com.littlebuddy.sim.v2\/files","package":"com.littlebuddy.sim.v2","user":0}
+{"event": "handshake_ready", "nonce": "28719299-d93c-48d4-b362-8399b6bac42a", "root": "/data/data/com.littlebuddy.sim.v2/files", "run_as_pwd": "/data/user/0/com.littlebuddy.sim.v2"}
+INSTRUMENTATION_STATUS_CODE: 30
+INSTRUMENTATION_STATUS: class=com.littlebuddy.V2MicrophoneCommandTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: AudioRecord/KWS entered management
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.littlebuddy.V2MicrophoneCommandTest.await(V2MicrophoneCommandTest.kt:51)
+	at com.littlebuddy.V2MicrophoneCommandTest.actualMicrophoneManagementAndNegativeCommands(V2MicrophoneCommandTest.kt:95)
+
+INSTRUMENTATION_STATUS: stream=
+Error in actualMicrophoneManagementAndNegativeCommands(com.littlebuddy.V2MicrophoneCommandTest):
+java.lang.AssertionError: AudioRecord/KWS entered management
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.littlebuddy.V2MicrophoneCommandTest.await(V2MicrophoneCommandTest.kt:51)
+	at com.littlebuddy.V2MicrophoneCommandTest.actualMicrophoneManagementAndNegativeCommands(V2MicrophoneCommandTest.kt:95)
+
+INSTRUMENTATION_STATUS: test=actualMicrophoneManagementAndNegativeCommands
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 26.753
+There was 1 failure:
+1) actualMicrophoneManagementAndNegativeCommands(com.littlebuddy.V2MicrophoneCommandTest)
+java.lang.AssertionError: AudioRecord/KWS entered management
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.littlebuddy.V2MicrophoneCommandTest.await(V2MicrophoneCommandTest.kt:51)
+	at com.littlebuddy.V2MicrophoneCommandTest.actualMicrophoneManagementAndNegativeCommands(V2MicrophoneCommandTest.kt:95)
+
+FAILURES!!!
+Tests run: 1,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1

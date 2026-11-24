@@ -39,7 +39,9 @@ class V2VoiceActivity : Activity() {
     internal var afterEligible: ()->Unit = {}
     private val life=LifecycleGate()
     private val timeline=StopTimeline(SystemClock::elapsedRealtime)
-    internal fun captureWorkerEvidence()=capture?.workerEvidence() ?: "no_capture"
+    internal fun captureHasResources()=capture?.let{!it.leaseReturned || !it.workerDone || it.nativeProof.session!=null} ?: (releasedRecorder.session!=null)
+    internal fun captureWorkerEvidence()=capture?.workerEvidence() ?: "no_capture leaseAvailable=${Capture.leaseAvailable}"
+    @Volatile internal var syntheticCaptureDiagnostics=false
     internal val captureWorkerDone get()=capture?.let{it.workerDone && it.leaseReturned} ?: true
     internal fun immediateRecorder()=capture?.nativeProof ?: releasedRecorder
     internal fun mark(name: String) { timeline.add(name,life.state.generation,immediateRecorder(),capture?.phase?.name ?: lastCapturePhase) }
@@ -238,7 +240,7 @@ class V2VoiceActivity : Activity() {
             { entering -> if(capture===created && life.allows(ticket))manage(entering) },
             { life.allows(ticket) },
             { event,proof,phase -> timeline.add(event,ticket,proof,phase) },
-            hooks=com.littlebuddy.v2.CaptureHooks(beforeDispose={beforeCaptureDispose()},beforeLeaseReturn={beforeCaptureLeaseReturn()},beforeCommandDecision={beforeManagementCommand(it)}),
+            hooks=com.littlebuddy.v2.CaptureHooks(syntheticEnabled={syntheticCaptureDiagnostics},syntheticTrace={detail->if(syntheticCaptureDiagnostics)timeline.add("SYNTHETIC_CAPTURE",ticket,immediateRecorder(),detail)},beforeDispose={beforeCaptureDispose()},beforeLeaseReturn={beforeCaptureLeaseReturn()},beforeCommandDecision={beforeManagementCommand(it)}),
             disposed = { owner.post {
                 mark("DISPOSE_CONSUME")
                 if(capture===created && created.workerDone && created.nativeProof.released && created.leaseReturned && !created.quarantined){

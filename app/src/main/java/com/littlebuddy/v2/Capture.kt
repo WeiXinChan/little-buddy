@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
-internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {},val beforeCommandDecision: (String?)->Unit = {},val beforeLeaseReturn:()->Unit = {})
+internal data class CaptureHooks(val beforeDecode: ()->Unit = {},val beforeDispose: ()->Unit = {},val beforeCommandDecision: (String?)->Unit = {},val beforeLeaseReturn:()->Unit = {},val syntheticTrace:((String)->Unit)?=null,val syntheticEnabled:()->Boolean={false})
 
 internal enum class CapturePhase { NOT_STARTED, THREAD_START, AUDIO_RECORD, WAKE_KWS, MANAGEMENT_KWS, START, READ, RELEASE, RELEASED, QUARANTINED }
 
@@ -85,7 +85,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var aec: AcousticEchoCanceler? = null
         var wake: SherpaWake? = null
         var commands: SherpaWake? = null
-        val commandBoundary=CommandBoundary()
+        val commandBoundary=CommandBoundary(diagnostic={detail->hooks.syntheticTrace?.invoke(detail)})
         val buffered = WakeSamples()
         val frame = ShortArray(320)
         var activePromptNonce=-1L
@@ -103,6 +103,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var idle = 0L
         var detector = SpeechDetector(320, initialFloor = 36.0)
         var uploadSamples = 0
+        val meter=SyntheticCaptureMeter()
         fun upload(data: ShortArray, speech: Boolean) {
             val ticket = commandGeneration.get()
             val capturedAt = android.os.SystemClock.elapsedRealtime()
@@ -159,6 +160,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if(!accept)break
                 progress("BEFORE_DECODE")
                 capturedSamples+=count
+                if(hooks.syntheticEnabled())meter.accept(frame,count)?.let{hooks.syntheticTrace?.invoke("$it source=VOICE_COMMUNICATION route=${native.routedDevice?.type} aec=${aec?.enabled}")}
                 val completedPrompt=promptAck.getAndSet(null)?.takeIf{it.nonce==activePromptNonce && it.generation==commandGeneration.get()}
                 if(completedPrompt!=null)promptPermit.revoke(completedPrompt.nonce,completedPrompt.generation)
                 if(completedPrompt?.success==false){
@@ -186,6 +188,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if(cancelled.get() || !allowed())break
                 val commandTail=commands?.accept(frame,count)
                 val hit=if(commandTail!=null) CommandBoundary.Hit(checkNotNull(commands?.detectedKeyword),checkNotNull(commands).matchedStart,commandTail) else null
+                if(hit!=null)hooks.syntheticTrace?.invoke("KWS name=${hit.name} start=${hit.start} end=${hit.end} sample=$capturedSamples paths=8 score=1.5 threshold=.25 trailing=2")
                 hooks.beforeCommandDecision(hit?.name)
                 if(cancelled.get() || !allowed())break
                 progress("COMMAND_BOUNDARY")
