@@ -514,6 +514,33 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
                                  [f"聊第{number}只小猫" for number in (range(8, 11) if trial else range(21, 24))])
                 self.assertTrue(any(("llm=12" if trial else "llm=25") in line for line in logs))
 
+    async def test_standalone_total_deadline_is_trial_only(self):
+        timeout = asyncio.timeout
+        shortened_deadline = 0.1
+
+        def accelerate_total_timeout(delay):
+            return timeout(shortened_deadline if delay == 900 else delay)
+
+        for trial in (False, True):
+            with self.subTest(trial=trial), patch.object(asyncio, "timeout", accelerate_total_timeout):
+                demo = SpeechFixture(["我想聊天"])
+                logs = []
+                async with self.standalone(demo, logs, trial=trial) as (server, token):
+                    async with self.open(server, token, standalone=True) as ws:
+                        await self.start(ws, conversation=True)
+                        receipt = await self.reply(ws)
+                        await asyncio.sleep(shortened_deadline * 2)
+                        if trial:
+                            with self.assertRaises(ConnectionClosed) as closed:
+                                await asyncio.wait_for(ws.recv(), 3)
+                            self.assertEqual(closed.exception.rcvd.code, 1011)
+                            self.assertTrue(any(line.startswith("animal_usage reason=timeout ") for line in logs))
+                        else:
+                            await self.speech(ws, receipt)
+                            response = await self.reply(ws)
+                            self.assertEqual((response["mode"], response["next_action"]), ("chat", "listen"))
+                            self.assertEqual(demo.requests, 1)
+
     async def test_private_fixture_faults_and_fresh_connection(self):
         for scenario in ("asr", "first-pcm", "between", "blackhole", "disconnect"):
             with self.subTest(scenario=scenario):
