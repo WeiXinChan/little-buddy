@@ -1,0 +1,12 @@
+{
+  "bash_syntax": "PASS",
+  "required_pixels": "1080x1920 natural, user rotation lock=1; actual PNG width>height asserted",
+  "density_dpi": 420,
+  "scope": "fresh CI AVD only; no OPPO settings touched",
+  "immersive_confirmation": "confirmed with get-value assertion; native focus/release assertions retained",
+  "transfer": "original ZIP/PNG via connected GitHub artifact URL; no PNG log encoding",
+  "references": [
+    "https://developer.android.com/about/versions/16/behavior-changes-16",
+    "https://android.googlesource.com/platform/cts.git/+/0c55e5e18e604b0b890dc73e2d63a0cd6f2b1159%5E%21/"
+  ]
+}

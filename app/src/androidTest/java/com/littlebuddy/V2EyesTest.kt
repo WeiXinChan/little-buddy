@@ -9,6 +9,8 @@ import android.os.SystemClock
 import android.view.ViewGroup
 import android.widget.Button
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import com.littlebuddy.v2.*
 import org.json.JSONObject
 import okhttp3.Request
@@ -40,6 +42,7 @@ class V2EyesTest {
         val bitmap = checkNotNull(inst.uiAutomation.takeScreenshot())
         val out = File(inst.targetContext.filesDir, "m06").apply { mkdirs() }
         File(out,"$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
+        assertTrue("actual screenshot must be landscape: ${bitmap.width}x${bitmap.height}",bitmap.width > bitmap.height)
     }
     private fun proof(activity: V2VoiceActivity): NativeEvidence {
         val latch = CountDownLatch(1); val result = AtomicReference<NativeEvidence>()
@@ -50,6 +53,23 @@ class V2EyesTest {
         val latch=CountDownLatch(1); val result=AtomicReference<String>()
         activity.observeDiagnostics { result.set(it); latch.countDown() }
         return if (latch.await(3,TimeUnit.SECONDS)) result.get() else "OWNER_UNRESPONSIVE"
+    }
+    private fun resumedHost(): V2VoiceActivity? {
+        var host: V2VoiceActivity? = null
+        main { host=ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).filterIsInstance<V2VoiceActivity>().singleOrNull() }
+        return host
+    }
+    private fun readyLocalHost(exclude: V2VoiceActivity? = null): V2VoiceActivity? {
+        val deadline=SystemClock.elapsedRealtime()+15000
+        while(SystemClock.elapsedRealtime()<deadline) {
+            val host=resumedHost()
+            if(host != null && host !== exclude && host.hasWindowFocus()) {
+                val recorder=proof(host).recorder
+                if(recorder.started && recorder.recording && recorder.frames>0) return host
+            }
+            Thread.sleep(50)
+        }
+        return null
     }
     @Test fun realWindowAndProductionWireStates() {
         val context = inst.targetContext
@@ -136,6 +156,7 @@ class V2EyesTest {
             }
             Thread.sleep(300); shot("14-button-cancel-wake")
             val before = proof(activity).recorder
+            assertTrue("HOME precondition real recorder READ",before.started && before.recording && before.frames>0)
             inst.uiAutomation.executeShellCommand("input keyevent KEYCODE_HOME").use {
                 java.io.FileInputStream(it.fileDescriptor).readBytes()
             }
@@ -143,15 +164,27 @@ class V2EyesTest {
             val stopped = proof(activity).recorder
             assertEquals(before.session, stopped.session)
             assertTrue(stopped.stopped && stopped.released && !stopped.recording)
+            Thread.sleep(100); assertEquals(stopped.frames,proof(activity).recorder.frames)
             context.startActivity(Intent(context,V2VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
-            Thread.sleep(500); shot("15-home-return-wake")
-            assertEquals(EyeMood.WAKE, activity.currentMood)
-            val noUpload = CountDownLatch(1)
-            activity.withVoice { local ->
-                assertFalse(local.connectionActive); assertEquals(0L, local.sentPackets); noUpload.countDown()
+            val returned=readyLocalHost()
+            val returnedDiagnostics=diagnostics(returned ?: resumedHost() ?: activity)
+            File(context.filesDir,"m06/home-return-diagnostics.txt").writeText(returnedDiagnostics)
+            shot("15-home-return-wake")
+            assertNotNull("resumed/focused new recorder READ required: $returnedDiagnostics",returned)
+            val host=checkNotNull(returned)
+            assertEquals("local_kws",host.releaseState)
+            assertNotEquals("new KWS must not reuse old native recorder session",before.session,proof(host).recorder.session)
+            assertEquals(EyeMood.WAKE,host.currentMood)
+            val noUpload=CountDownLatch(1)
+            host.withVoice { local ->
+                assertFalse(local.connectionActive); assertEquals(0L,local.sentPackets); noUpload.countDown()
             }
-            assertTrue(noUpload.await(3,TimeUnit.SECONDS))
-            main { activity.recreate() }; Thread.sleep(500); shot("16-restart-default")
-        } finally { main { client.close(); activity.finish() } }
+            assertTrue("new local KWS/zero upload proof missing: $returnedDiagnostics",noUpload.await(3,TimeUnit.SECONDS))
+            main { host.recreate() }
+            val restarted=readyLocalHost(host)
+            assertNotNull("recreate must return to focused local KWS READ",restarted)
+            assertEquals(EyeMood.WAKE,checkNotNull(restarted).currentMood)
+            shot("16-restart-default")
+        } finally { val current=resumedHost(); main { client.close(); current?.finish(); if(!activity.isFinishing) activity.finish() } }
     }
 }

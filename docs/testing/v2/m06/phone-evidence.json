@@ -1,0 +1,29 @@
+{
+  "main_sources_unchanged_from": "5dca5543bf0707b41900bbe078e55b2ad839d34a",
+  "local_build": "test APK only under global lock; main APK reused without modification",
+  "jvm": "same main source: prior 68 PASS / 2 skipped / 0 failures (70 total); not redundantly rerun",
+  "artifacts": [
+    {
+      "name": "app-v2Debug.apk",
+      "bytes": 27237622,
+      "sha256": "fd255a7d75c4f4337acee5012f30173f04c781a28d66f97fe2a015a908700d91"
+    },
+    {
+      "name": "app-v2Debug-androidTest.apk",
+      "bytes": 668822,
+      "sha256": "2cb5253d3fe91dbf75a6075584ad81cdf92ce914005848ffe52c8ffeca663784"
+    }
+  ],
+  "ci5": {
+    "run": 45400187896,
+    "instrumentation_tests": 1,
+    "failures": 1,
+    "png_count": 15,
+    "png_dimensions": [
+      "(1080, 1920)"
+    ],
+    "failed_at": "HOME returned local KWS noUpload latch",
+    "observed": "portrait screenshots; Android fullscreen help dialog on return; not a proven single root cause"
+  },
+  "pending_device": "first real-install fullscreen tutorial recovery remains device verification; CI preconfirmation does not establish product resolution"
+}

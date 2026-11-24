@@ -84,6 +84,17 @@ jobs:
           adb shell dumpsys window policy | grep -E 'keyguard|Keyguard|mCurrentFocus' >render/window-after-unlock.txt || true
           adb shell cmd package resolve-activity --brief --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.littlebuddy.sim.v2 | tee render/launcher.txt
           grep -q V2VoiceActivity render/launcher.txt
+          # Phone-sized dp configuration: API36 otherwise ignores fixed orientation on large screens.
+          adb shell wm size 1080x1920
+          adb shell wm density 420
+          adb shell wm user-rotation lock 1
+          # Fresh synthetic AVD only; acknowledge the OS one-time fullscreen tutorial.
+          adb shell settings put secure immersive_mode_confirmations confirmed
+          adb shell settings get secure immersive_mode_confirmations >render/immersive-confirmation.txt
+          grep -q '^confirmed' render/immersive-confirmation.txt
+          adb shell wm size >render/display-size.txt
+          adb shell wm density >render/display-density.txt
+          adb shell wm user-rotation >render/display-rotation.txt
           adb shell am instrument -w -r -e class com.littlebuddy.V2EyesTest com.littlebuddy.sim.v2.test/com.littlebuddy.SimUiRunner | tee render/instrumentation.txt
           adb exec-out run-as com.littlebuddy.sim.v2 tar -C files -cf - m06 > render/screens.tar
           tar -xf render/screens.tar -C render
