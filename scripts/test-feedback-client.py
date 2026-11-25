@@ -22,6 +22,7 @@ def compile_client(out):
     sources=[base/'feedback'/(n+'.kt') for n in names]
     sources += [base/'parent'/(n+'.kt') for n in ['ParentDomain','ParentCodec','ParentEnvelope','ParentCommit','ParentConfiguration']]
     sources += list((ROOT/'scripts/testing/feedback').glob('*.kt'))
+    sources += [ROOT/'app/src/test/java/android/util/JsonReader.kt',ROOT/'app/src/test/java/org/json/JSONObject.kt']
     subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler',
         '-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',str(out/'classes'),*map(str,sources)],check=True)
     return os.pathsep.join([str(out/'classes'),*runtime])

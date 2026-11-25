@@ -35,6 +35,10 @@ class FeedbackExpiryTest {
             override fun submit(idempotencyKey: String, payload: FeedbackPayload, admit: () -> Boolean): SubmitReceipt {
                 check(admit()); return SubmitReceipt(clock.time)
             }
+            override fun read(key: String, binding: String?, admit: (() -> Unit) -> Boolean): FeedbackRemote {
+                check(admit {})
+                return FeedbackRemote(1000L, 1000L + WEEK, FeedbackState.REPLIED, "R87_02_SYNTHETIC_REPLY")
+            }
             override fun withdraw(idempotencyKey: String) = DeleteReceipt(clock.time, false)
         }
         val engine = FeedbackEngine(work, ui, { router -> FeedbackCore(FeedbackVault(PrivateVaultFiles(dir), key), clock, router, provider).also { core = it } }, { true })
@@ -59,7 +63,7 @@ class FeedbackExpiryTest {
         override fun close() { page.close(); dir.deleteRecursively() }
     }
     @Test fun exactBoundaryWithFreshAuthorityRefreshesReplyAndRepeatedTicks() = Rig().use { r ->
-        val id = r.send(); r.core.receiveReply(id, "R87_02_SYNTHETIC_REPLY")
+        val id = r.send(); r.page.refresh(id); r.drain()
         r.clock.time += WEEK - 1; r.fresh(id)
         assertNotNull((r.screens.last() as FeedbackScreen.Detail).item.reply)
         r.tick(); assertNotNull((r.screens.last() as FeedbackScreen.Detail).item.description)
