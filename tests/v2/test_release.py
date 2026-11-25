@@ -117,8 +117,16 @@ class Preflight(unittest.TestCase):
         raw=b'# synthetic release fixture\n';(folder/'backend/v2/live.py').write_bytes(raw)
         metadata=dict(format=1,source_sha='a'*40,protocol_contract=CONTRACT,
             files={'backend/v2/live.py':dict(size=len(raw),sha256=sha256(raw).hexdigest())})
+        (folder/'assets/v2-default').mkdir(parents=True)
+        assets=b'[]';(folder/'assets/v2-default/manifest.json').write_bytes(assets)
+        metadata['assets_manifest_sha256']=sha256(assets).hexdigest()
+        metadata['files']['assets/v2-default/manifest.json']=dict(size=len(assets),sha256=sha256(assets).hexdigest())
         (folder/'release-manifest.json').write_text(json.dumps(metadata))
         verify(folder,'a'*40)
+        wrong=dict(metadata,assets_manifest_sha256='0'*64)
+        (folder/'release-manifest.json').write_text(json.dumps(wrong))
+        with self.assertRaisesRegex(ValueError,'assets_version_mismatch'):verify(folder,'a'*40)
+        (folder/'release-manifest.json').write_text(json.dumps(metadata))
         with self.assertRaises(ValueError):verify(folder,'b'*40)
         (folder/'backend/v2/extra.py').write_text('bad')
         with self.assertRaisesRegex(ValueError,'extra_or_missing'):verify(folder,'a'*40)
@@ -182,6 +190,7 @@ class Loopback(unittest.IsolatedAsyncioTestCase):
                 async with connect(url,ssl=trust,additional_headers={'Authorization':'Bearer '+fixture.token},proxy=None) as ws:
                     await ws.send(json.dumps(dict(v=2,type='scope',epoch=0,seq=0)))
                     scope=json.loads(await ws.recv())
+                    self.assertEqual(scope['protocol_contract'],CONTRACT)
                     await ws.send(json.dumps(dict(v=2,type='management_pause',epoch=1,seq=0,
                         session=scope['session'],turn=scope['turn'],revision=1)))
                     events=[]

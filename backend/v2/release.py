@@ -16,6 +16,7 @@ def selected(path):
             path.startswith('backend/v2/') and path.endswith('.py') or
             path.startswith('backend/deploy/v2-') or
             path in {'docs/testing/v2/release-ready/runbook.md','docs/testing/v2/release-ready/resources.md',
+                     'docs/testing/v2/release-ready/handshake.md',
                      'docs/testing/v2/management-v1.md','docs/testing/v2/images-v1/protocol.md',
                      'docs/testing/v2/r88-01/protocol.md'} or
             path in {'assets/v2-default/manifest.json','assets/v2-default/character-identities.json'} or
@@ -30,6 +31,7 @@ def package(ref,output):
     if 'backend/v2/live.py' not in files or 'backend/requirements-v2.lock' not in files:
         raise ValueError('release_source_incomplete')
     metadata=dict(format=1,source_sha=ref,protocol_contract=CONTRACT,models=MODELS,region='cn-beijing',
+                  assets_manifest_sha256=sha256(files['assets/v2-default/manifest.json']).hexdigest(),
                   python='>=3.11',bind='127.0.0.1',path='/v2/voice',files=inventory,
                   ownership_issuer='not_included',credentials='external_only')
     files['release-manifest.json']=(json.dumps(metadata,sort_keys=True,indent=2)+'\n').encode()
@@ -54,6 +56,10 @@ def verify(root,expected):
         metadata.get('protocol_contract')!=CONTRACT):raise ValueError('release_version_mismatch')
     inventory=metadata['files']
     if not isinstance(inventory,dict) or len(inventory)>1000:raise ValueError('release_inventory_invalid')
+    if (not isinstance(metadata.get('assets_manifest_sha256'),str) or
+        not re.fullmatch('[a-f0-9]{64}',metadata['assets_manifest_sha256']) or
+        metadata['assets_manifest_sha256']!=inventory.get('assets/v2-default/manifest.json',{}).get('sha256')):
+        raise ValueError('release_assets_version_mismatch')
     for path,receipt in inventory.items():
         if not selected(path) or '..' in Path(path).parts or Path(path).is_absolute():raise ValueError('release_path_invalid')
         target=root/path
