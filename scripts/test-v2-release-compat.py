@@ -9,7 +9,7 @@ pairing=importlib.util.module_from_spec(spec);spec.loader.exec_module(pairing)
 
 class Pairing(unittest.TestCase):
     def setUp(self):
-        self.apk=dict(format=1,protocol_contract=pairing.CONTRACT,wire=2,images_v=1,management_v=1,
+        self.apk=dict(format=1,protocol_contract=pairing.CONTRACT,wire=2,images_v=2,volume_v=1,management_v=1,
             local_help_v=1,session_end_v=1,resources_manifest_sha256='a'*64)
         self.backend=dict(format=1,source_sha='b'*40,protocol_contract=pairing.CONTRACT,assets_manifest_sha256='a'*64,
             files={'assets/v2-default/manifest.json':{'sha256':'a'*64}})
@@ -18,7 +18,7 @@ class Pairing(unittest.TestCase):
         self.backend['protocol_contract']='future'
         with self.assertRaises(ValueError):pairing.compatible(self.apk,self.backend)
     def test_unknown_apk_capability(self):
-        self.apk['images_v']=2
+        self.apk['images_v']=3
         with self.assertRaises(ValueError):pairing.compatible(self.apk,self.backend)
     def test_different_resource_library(self):
         self.backend['files']['assets/v2-default/manifest.json']['sha256']='c'*64
