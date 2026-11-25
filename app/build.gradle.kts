@@ -24,7 +24,14 @@ val releaseVersionName = providers.gradleProperty("buddyVersionName").map {
 require(releaseVersionCode.isPresent == releaseVersionName.isPresent) {
     "Provide buddyVersionCode and buddyVersionName together"
 }
+val v2Release = JsonSlurper().parse(file("v2-release.json")) as Map<*, *>
+val v2Code = (v2Release["version_code"] as Number).toInt()
+val v2Name = v2Release["version_name"] as String
+require(v2Code >= 15 && v2Name.matches(Regex("[0-9]+[.][0-9]+[.][0-9]+(?:-[a-zA-Z0-9.]+)?")))
 androidComponents {
+    onVariants(selector().withBuildType("v2Debug")) { variant ->
+        variant.outputs.forEach { it.versionCode.set(v2Code); it.versionName.set(v2Name) }
+    }
     onVariants(selector().withBuildType("release")) { variant ->
         variant.outputs.forEach { output ->
             if (releaseVersionCode.isPresent) {
@@ -34,6 +41,19 @@ androidComponents {
         }
     }
 }
+
+val v2Metadata = layout.buildDirectory.dir("generated/v2-release")
+val prepareV2Metadata by tasks.registering(Exec::class) {
+    workingDir(rootProject.projectDir)
+    inputs.files(rootProject.fileTree("app/src") { exclude("test/**", "androidTest/**", "release/**") },
+        rootProject.fileTree("assets/v2-default"),rootProject.fileTree("app/libs"),
+        rootProject.fileTree("gradle/wrapper"),rootProject.file("app/v2-release.json"),
+        rootProject.file("app/build.gradle.kts"),rootProject.file("scripts/v2-build-metadata.py"),
+        rootProject.file("settings.gradle.kts"),rootProject.file("gradle.properties"))
+    outputs.dir(v2Metadata)
+    commandLine("python3","scripts/v2-build-metadata.py","--output",v2Metadata.get().asFile.absolutePath)
+}
+tasks.matching { it.name == "preV2DebugBuild" }.configureEach { dependsOn(prepareV2Metadata) }
 
 val imageAssets = layout.buildDirectory.dir("generated/v2-images")
 val prepareV2Images by tasks.registering(Sync::class) {
@@ -182,7 +202,6 @@ android {
             initWith(getByName("debug"))
             applicationIdSuffix = ".v2"
             ndk.abiFilters += "arm64-v8a"
-            versionNameSuffix = "-v2-m04"
             matchingFallbacks += "debug"
         }
         create("ciRelease") {
@@ -206,6 +225,7 @@ android {
             res.srcDir("src/debug/res")
             assets.srcDir("src/debug/assets")
             assets.srcDir(imageAssets)
+            assets.srcDir(v2Metadata)
         }
         getByName("ciRelease") {
             java.srcDir("src/release/java")

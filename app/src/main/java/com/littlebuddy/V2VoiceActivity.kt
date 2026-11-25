@@ -41,6 +41,7 @@ class V2VoiceActivity : Activity() {
     private var managementReturning=false
     @Volatile private var foreground = false
     private var permissionRequested = false
+    @Volatile private var connectionNotice="尚未配置V2连接；进入家长验证后可导入已发行的配置。"
     private fun eyes() {
         if (eyesAttached) return
         imageRoute?.clear()
@@ -94,7 +95,7 @@ class V2VoiceActivity : Activity() {
     private fun openManagementPage(ticket: Long) {
         if (ticket!=managementRevision || !foreground || !hasWindowFocus() || !managementRequested) return
         managementRequested=false; managementVisible=true; eyesAttached=false
-        panel=AndroidParentPanel(this, { leaveManagement() }, { stopVoice() }).also { it.open() }
+        panel=AndroidParentPanel(this, { leaveManagement() }, { stopVoice() }, { connectionNotice }).also { it.open() }
         startExitCapture(ticket)
     }
     private fun startExitCapture(ticket: Long) { owner.post {
@@ -174,7 +175,12 @@ class V2VoiceActivity : Activity() {
             runOnUiThread {
                 if (ticket != managementRevision || !foreground || !hasWindowFocus() || managementVisible || managementRequested || helpVisible) return@runOnUiThread
                 if (configuration != null) execution = configuration.playback
-                val connection = configuration?.connection ?: return@runOnUiThread
+                val connection = configuration?.connection
+                if (connection==null) {
+                    connectionNotice=if (configuration==null) "安全配置不可用或尚未初始化；请从家长验证检查，不会自动连接。"
+                        else "尚未配置V2连接；PIN验证后选择系统验证并导入连接配置。"
+                    return@runOnUiThread
+                }
                 if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                     if (!permissionRequested) { permissionRequested = true; requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 804) }
                     return@runOnUiThread
@@ -194,8 +200,14 @@ class V2VoiceActivity : Activity() {
             if (ticket != transportRevision || !foreground || voice != null || capture != null || releaseState == "quarantined") return@post
             releaseState = "active"; budget = PlaybackBudget(android.os.SystemClock::elapsedRealtime, settings.durationSeconds)
             val client = VoiceClient(owner, { status ->
+                connectionNotice=when(status) {
+                    "incompatible" -> "服务协议不兼容，儿童收音未启用；请管理员核对候选包与服务契约。"
+                    "compatibility" -> "正在核对已配置服务协议；核对前不启动儿童收音。"
+                    "wake", "listening", "speaking" -> "V2连接与协议已核对；退出管理回待唤醒。"
+                    else -> "连接暂不可用，不代表配置发行或设备验收成功。"
+                }
                 if (status == "listening" && voice?.isAwake == true) budget?.begin()
-            }, {}, { _, _ -> }, { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
+            }, { images?.clear() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 playbackSettings = settings,
                 localHelp = { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 management = { runOnUiThread { if (ticket == transportRevision) requestParentManagement() } },
@@ -203,11 +215,11 @@ class V2VoiceActivity : Activity() {
                 managed = { phase -> runOnUiThread { if (ticket==transportRevision) managementChanged(phase) } },
                 sessionEnded = { runOnUiThread { if (ticket==transportRevision) {
                     managementRevision++; releaseAudio { quiet -> if (quiet && foreground) { eyes(); resumeConfigured() } }
-                } } })
+                } } }, requiredContract=ReleaseCompatibility.CONTRACT,
+                ready={ if (ticket==transportRevision && foreground && !managementRequested && !managementVisible) startChildCapture(checkNotNull(voice),ticket) })
             voice = client
             try { client.connect(address, credential)
-                startChildCapture(client,ticket)
-                owner.postDelayed(durationLimit, 250)
+                // Capture starts only from the authenticated, compatible scope callback.
             } catch (_: Exception) { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } }
         }
     }
