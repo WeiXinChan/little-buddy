@@ -1,0 +1,18 @@
+test_device_expiry_closes_active_scope_and_rejects_new_handshake (tests.v2.test_release.Loopback.test_device_expiry_closes_active_scope_and_rejects_new_handshake) ... ok
+test_real_cli_tls_auth_management_and_sigterm_safe_logs_without_cloud (tests.v2.test_release.Loopback.test_real_cli_tls_auth_management_and_sigterm_safe_logs_without_cloud) ... ok
+test_control_start_stop_rollback_are_plan_only_without_apply (tests.v2.test_release.Preflight.test_control_start_stop_rollback_are_plan_only_without_apply) ... ok
+test_dependency_and_model_versions_are_exact_and_config_is_not_shell (tests.v2.test_release.Preflight.test_dependency_and_model_versions_are_exact_and_config_is_not_shell) ... ok
+test_key_modes_symlink_hardlink_fifo_and_untrusted_directory_rejected (tests.v2.test_release.Preflight.test_key_modes_symlink_hardlink_fifo_and_untrusted_directory_rejected) ... ok
+test_negative_control_disabling_secret_mode_gate_is_detected (tests.v2.test_release.Preflight.test_negative_control_disabling_secret_mode_gate_is_detected) ... ok
+test_offline_entry_has_no_network_and_no_secret_or_workspace_output (tests.v2.test_release.Preflight.test_offline_entry_has_no_network_and_no_secret_or_workspace_output) ... ok
+test_release_integrity_ref_and_extra_code_rejected (tests.v2.test_release.Preflight.test_release_integrity_ref_and_extra_code_rejected) ... ok
+test_tls_wrong_name_key_and_untrusted_chain_rejected_without_raw_details (tests.v2.test_release.Preflight.test_tls_wrong_name_key_and_untrusted_chain_rejected_without_raw_details) ... ok
+test_v1_scope_hash_expiry_and_contract_mismatch_rejected (tests.v2.test_release.Preflight.test_v1_scope_hash_expiry_and_contract_mismatch_rejected) ... ok
+test_settings_are_literal_allowlisted_and_manifest_never_contains_credential_or_workspace (tests.v2.test_safety_help.RuntimeSettings.test_settings_are_literal_allowlisted_and_manifest_never_contains_credential_or_workspace) ... ok
+test_shell_substitution_and_missing_credential_do_not_execute_or_fall_back (tests.v2.test_safety_help.RuntimeSettings.test_shell_substitution_and_missing_credential_do_not_execute_or_fall_back) ... ok
+test_503_is_local_enum_payload_with_preestablished_scope_and_no_tts (tests.v2.test_safety_help.SafetyHelp.test_503_is_local_enum_payload_with_preestablished_scope_and_no_tts) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 1.019s
+
+OK

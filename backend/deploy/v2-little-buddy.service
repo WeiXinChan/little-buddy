@@ -1,0 +1,48 @@
+[Unit]
+Description=Little Buddy V2 isolated voice service
+After=network-online.target
+Wants=network-online.target
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+[Service]
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=15
+DynamicUser=yes
+WorkingDirectory=/opt/little-buddy-v2/current
+Environment=PYTHONDONTWRITEBYTECODE=1
+LoadCredential=v2-service-env:/etc/little-buddy-v2/service.env
+LoadCredential=v2-device-token:/etc/little-buddy-v2/v2-device-token
+LoadCredential=v2-device-scope:/etc/little-buddy-v2/device-scope.json
+LoadCredential=dashscope-api-key:/etc/little-buddy-v2/dashscope-api-key
+LoadCredential=v2-tls-certificate:/etc/little-buddy-v2/tls-certificate.pem
+LoadCredential=v2-tls-private-key:/etc/little-buddy-v2/tls-private-key.pem
+LoadCredential=v2-trust-anchor:/etc/little-buddy-v2/trust-anchor.pem
+ExecStartPre=/opt/little-buddy-v2/current/.venv/bin/python -B -m backend.v2.release verify --directory . --ref selected
+ExecStartPre=/opt/little-buddy-v2/current/.venv/bin/python -B -m backend.v2.live --check --port 19483 --cert %d/v2-tls-certificate --key %d/v2-tls-private-key --ca-file %d/v2-trust-anchor --tls-name 127.0.0.1 --token-file %d/v2-device-token --device-scope %d/v2-device-scope --service-env %d/v2-service-env --credential-directory %d --apk-contract v2-voice2-safety1-images1-management1-end1
+ExecStart=/opt/little-buddy-v2/current/.venv/bin/python -B -m backend.v2.live --port 19483 --cert %d/v2-tls-certificate --key %d/v2-tls-private-key --ca-file %d/v2-trust-anchor --tls-name 127.0.0.1 --token-file %d/v2-device-token --device-scope %d/v2-device-scope --service-env %d/v2-service-env --credential-directory %d --apk-contract v2-voice2-safety1-images1-management1-end1
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+MemoryMax=256M
+MemorySwapMax=0
+LimitCORE=0
+TasksMax=32
+UMask=0077
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=60
+
+[Install]
+WantedBy=multi-user.target

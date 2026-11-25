@@ -1,0 +1,20 @@
+test_full_memory_is_normal_spoken_confirmation_not_voice_failure_or_fake_saved_fact (tests.v2.test_memory_growth.FullConversation.test_full_memory_is_normal_spoken_confirmation_not_voice_failure_or_fake_saved_fact) ... ok
+test_capacity_keeps_accepted_evidence_and_recent_input_with_explicit_gap (tests.v2.test_memory_growth.Growth.test_capacity_keeps_accepted_evidence_and_recent_input_with_explicit_gap) ... ok
+test_compaction_keeps_heard_key_facts_but_never_proposed_facts (tests.v2.test_memory_growth.Growth.test_compaction_keeps_heard_key_facts_but_never_proposed_facts) ... ok
+test_exact_duplicate_does_not_grow_archive_or_erase_correction (tests.v2.test_memory_growth.Growth.test_exact_duplicate_does_not_grow_archive_or_erase_correction) ... ok
+test_five_hundred_growing_sources_compress_and_retrieve_first_exact_negation (tests.v2.test_memory_growth.Growth.test_five_hundred_growing_sources_compress_and_retrieve_first_exact_negation) ... ok
+test_invalid_provenance_remains_atomic_after_archive_compression (tests.v2.test_memory_growth.Growth.test_invalid_provenance_remains_atomic_after_archive_compression) ... ok
+test_negative_control_discarding_cold_evidence_is_detected (tests.v2.test_memory_growth.Growth.test_negative_control_discarding_cold_evidence_is_detected) ... ok
+test_private_archive_not_retrieved_or_counted_by_shared_projection_and_handoff_clears (tests.v2.test_memory_growth.Growth.test_private_archive_not_retrieved_or_counted_by_shared_projection_and_handoff_clears) ... ok
+test_actual_byte_capacity_reports_gap_without_evicting_unwithdrawn_sources (test_r99.SourceMemory.test_actual_byte_capacity_reports_gap_without_evicting_unwithdrawn_sources) ... ok
+test_four_five_dimensions_and_unknown_dimensions_preserve_all_sources (test_r99.SourceMemory.test_four_five_dimensions_and_unknown_dimensions_preserve_all_sources) ... ok
+test_invalid_fact_does_not_partially_replace_existing_sources (test_r99.SourceMemory.test_invalid_fact_does_not_partially_replace_existing_sources) ... ok
+test_same_dimension_correction_retains_propositions_and_other_dimensions (test_r99.SourceMemory.test_same_dimension_correction_retains_propositions_and_other_dimensions) ... ok
+test_same_turn_sources_are_not_overwritten_by_turn_number_collision (test_r99.SourceMemory.test_same_turn_sources_are_not_overwritten_by_turn_number_collision) ... ok
+test_two_dimensions_in_one_utterance_keep_both_provenance_spans (test_r99.SourceMemory.test_two_dimensions_in_one_utterance_keep_both_provenance_spans) ... ok
+test_wrong_four_slot_negative_control_would_lose_animal_source (test_r99.SourceMemory.test_wrong_four_slot_negative_control_would_lose_animal_source) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 8.491s
+
+OK

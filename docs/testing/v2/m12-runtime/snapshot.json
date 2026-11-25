@@ -1,0 +1,63 @@
+{
+  "configured": {
+    "region": "cn-beijing",
+    "models": {
+      "asr": "fun-asr-realtime",
+      "llm": "qwen3.8-flash",
+      "tts": "cosyvoice-v3-flash",
+      "voice": "longanyang"
+    },
+    "model_revision": "provider_alias_not_immutable_revision",
+    "runtime": {
+      "python": "3.12.3",
+      "dependencies": {
+        "httpx": "0.28.1",
+        "websockets": "17.4"
+      }
+    },
+    "deployment": {
+      "bind": "127.0.0.1",
+      "default_port": 19483,
+      "tls_minimum": "1.2",
+      "max_tokens": 1400,
+      "thinking": false,
+      "speech_rate": 24000,
+      "context_bytes": 65536,
+      "device_token": "explicit_v2_scope_required"
+    },
+    "transports": [
+      "regional_https_chat",
+      "regional_wss_asr_tts"
+    ],
+    "device_credential": "separately_required",
+    "feedback_provider": "not_configured",
+    "prices": "not_verified",
+    "new_cloud_samples": 0
+  },
+  "configuration_evidence": "PR45 docs/testing/v2/r88-01/resources.md: prior read-only project configuration; not a new availability probe",
+  "dependency_head": "ffe9dae3035b6ea017c2cf00f194b3d3531b84ee",
+  "historical": {
+    "path": "docs/testing/v2/m05/live-model-final.jsonl",
+    "sha256": "6f7eabfd8fc184aa30a96068d36cff31f98aabdacda710d843cdf58e5998abca",
+    "passed": 10,
+    "total": 13,
+    "failures": 3,
+    "usage": {
+      "requests": 27,
+      "failures": 0,
+      "prompt_tokens": 12608,
+      "completion_tokens": 1367
+    },
+    "reported_median_ms": 771,
+    "reported_max_ms": 12154,
+    "latency_scope": "historical mixed model/VoicePeer cases including failed oracles; not current acoustic or E2E acceptance",
+    "cost": {
+      "monetary": null,
+      "status": "token_usage_only_bill_and_rates_not_verified"
+    },
+    "asr_tts_cost": "not_recorded",
+    "immutable_provider_revision": "not_returned"
+  },
+  "new_cloud_samples": 0,
+  "deployment_performed": false
+}

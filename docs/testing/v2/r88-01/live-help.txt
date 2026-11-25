@@ -1,0 +1,16 @@
+usage: live.py [-h] --cert CERT --key KEY --token-file TOKEN_FILE
+               [--port PORT] [--service-env SERVICE_ENV]
+               [--credential-directory CREDENTIAL_DIRECTORY]
+
+options:
+  -h, --help            show this help message and exit
+  --cert CERT
+  --key KEY
+  --token-file TOKEN_FILE
+  --port PORT
+  --service-env SERVICE_ENV
+                        Read only reviewed model fields; never shell-source
+                        the file
+  --credential-directory CREDENTIAL_DIRECTORY
+                        Existing systemd credential directory; no copying or
+                        generation
