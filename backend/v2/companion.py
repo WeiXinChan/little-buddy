@@ -12,6 +12,7 @@ from backend.v2 import schemas
 from backend.v2.safety import SafetyFault
 from backend.v2.images import DefaultImages
 from backend.v2.dynamic_images import ImageFailure
+from backend.v2.models import TEXT_MODEL
 from contextlib import asynccontextmanager
 
 SYSTEM = """你是瓦力，面向5–8岁儿童的AI语音玩伴。自然、简短、不过度夸奖或连续追问。
@@ -288,7 +289,7 @@ class DashScopeModel:
                     dict(role='user', content=json.dumps(data, ensure_ascii=False))],
                     stream=False, enable_thinking=False, max_tokens=1400,
                     response_format=(dict(type='json_schema',json_schema=dict(name='v2_response',strict=True,schema=schema))
-                                     if schema is not None and self.model.startswith('qwen3.8-flash')
+                                     if schema is not None and self.model == TEXT_MODEL
                                      else dict(type='json_object'))))
             self.last_status = response.status_code
             if not response.is_success:

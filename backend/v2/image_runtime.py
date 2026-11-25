@@ -7,6 +7,7 @@ from pathlib import Path
 from backend.v2.dynamic_images import ImageConfig, QwenImages
 from backend.v2.files import ConfigurationError, read_checked
 from backend.v2.image_review import ModelImageReview, unique_object
+from backend.v2.models import TEXT_MODEL
 
 PROMPT_POLICY = 'wali-image-prompt-v1'
 IMAGE_POLICY = 'wali-image-png-v1'
@@ -29,7 +30,7 @@ def read_image_runtime(path, credential_directory, expected_workspace):
         names = {'enabled', 'region', 'workspace', 'model', 'review_model', 'resource_review_id',
                  'prompt_policy', 'image_policy', 'width', 'height', 'timeout', 'result_ttl'}
         if (type(value) is not dict or set(value) != names or value['enabled'] is not True or
-            value['workspace'] != expected_workspace or value['review_model'] != 'qwen3.8-flash' or
+            value['workspace'] != expected_workspace or value['review_model'] != TEXT_MODEL or
             value['prompt_policy'] != PROMPT_POLICY or value['image_policy'] != IMAGE_POLICY):
             raise ValueError()
         config = ImageConfig(**{k: v for k, v in value.items() if k != 'review_model'})
