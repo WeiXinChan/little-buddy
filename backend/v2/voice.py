@@ -16,6 +16,7 @@ from backend.v2.session import Identity, Session
 from backend.v2.budget import ResponseBudget
 from backend.v2.safety import SafetyFault, local_help
 from backend.v2.images import revealable
+from backend.v2.protocol import CONTRACT
 
 
 class VoiceFault(Exception):
@@ -216,6 +217,7 @@ class VoicePeer:
             task.exception()
 
     async def send(self, kind, **fields):
+        if kind=='scope':fields['protocol_contract']=CONTRACT
         if kind in {'bound', 'open','scope','management_state'}:
             # Establish scope on normal authenticated control frames, never learn it from a fault.
             fields.setdefault('session', self.session.session)

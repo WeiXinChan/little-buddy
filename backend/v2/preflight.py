@@ -15,8 +15,8 @@ import time
 from urllib.parse import urlsplit
 
 from backend.v2.files import ConfigurationError,checked_file,read_checked,disable_core_dumps
+from backend.v2.protocol import CONTRACT
 
-CONTRACT='v2-voice2-safety1-images1-management1-end1'
 MODELS=dict(asr='fun-asr-realtime',llm='qwen3.8-flash',tts='cosyvoice-v3-flash',voice='longanyang')
 LOCK=Path(__file__).resolve().parents[1]/'requirements-v2.lock'
 
