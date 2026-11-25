@@ -37,7 +37,8 @@ class FeedbackTransportContractTest {
             try {FeedbackJson.parse(text);fail("unbounded receipt")}catch(_:Exception){}
         }
     }    @Test fun bothTargetInterceptorsAcceptOnlyTheirExactPinnedLogicalRoute() {
-        val directory=java.io.File("app/src/v2Debug/assets/v2-transport")
+        val directory=java.io.File("src/v2Debug/assets/v2-transport").takeIf { it.isDirectory }
+            ?: java.io.File("app/src/v2Debug/assets/v2-transport")
         val properties=java.util.Properties().apply {java.io.File(directory,"ssh.properties").inputStream().use{load(it)}}
         val profile=V2SshProfile(properties.getProperty("host"),"v2-feedback-fixture",properties.getProperty("hostKey"),
             V2SshProfile.trustFor(java.io.File(directory,"ca.pem").readBytes()))

@@ -49,6 +49,10 @@ class FeedbackSweepFailureTest {
             override fun submit(idempotencyKey: String, payload: FeedbackPayload, admit: () -> Boolean): SubmitReceipt {
                 check(admit()); return SubmitReceipt(clock.time)
             }
+            override fun read(key: String, binding: String?, admit: (() -> Unit) -> Boolean): FeedbackRemote {
+                check(admit {})
+                return FeedbackRemote(1000L, 1000L + WEEK, FeedbackState.REPLIED, "R87_03_SYNTHETIC_REPLY")
+            }
             override fun withdraw(idempotencyKey: String) = DeleteReceipt(clock.time, true)
         }
         val engine = FeedbackEngine(work, ui, { router -> FeedbackCore(FeedbackVault(files, key), clock, router, provider).also { core = it } }, { true })
@@ -57,7 +61,7 @@ class FeedbackSweepFailureTest {
         fun prepare(list: Boolean = false, render: Boolean = false) {
             drain(); page.preview(Category.OTHER, "R87_03_SYNTHETIC_BODY", null, null); drain()
             page.submit(); drain(); val id = (screens.last() as FeedbackScreen.Issues).items.single().id
-            core.receiveReply(id, "R87_03_SYNTHETIC_REPLY")
+            page.refresh(id); drain()
             clock.time += WEEK - 1; auth = Auth(); page = engine.open(auth, screens::add); drain()
             if (list) page.showList() else page.detail(id)
             work.drain(); if (render) ui.drain()

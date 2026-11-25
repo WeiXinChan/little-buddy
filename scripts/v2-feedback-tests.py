@@ -12,7 +12,7 @@ base=root/'app/src/main/java/com/littlebuddy/v2'
 sources=[base/'transport/V2Ssh.kt']
 sources += [base/'parent'/(n+'.kt') for n in ['ParentDomain','ParentCodec','ParentEnvelope','ParentCommit','ParentConfiguration','ParentPanelModel']]
 sources += [base/'feedback'/(n+'.kt') for n in ['Contracts','FeedbackKeys','FeedbackCore','FeedbackEngine','FeedbackAuthority','Vault','FeedbackWireProvider','FeedbackJson','FeedbackVisibility']]
-sources += [root/'scripts/testing/feedback/JsonReaderPort.kt',root/'scripts/testing/feedback/JsonObjectPort.kt']
+sources += [root/'app/src/test/java/android/util/JsonReader.kt',root/'app/src/test/java/org/json/JSONObject.kt']
 sources += [root/'app/src/test/java/com/littlebuddy/v2/feedback'/(n+'.kt') for n in ['FeedbackFlowTest','FeedbackTransportContractTest','FeedbackAdmissionTest','FeedbackVisibilityTest']]
 
 with tempfile.TemporaryDirectory(dir=root,prefix='image-tests-') as out:
