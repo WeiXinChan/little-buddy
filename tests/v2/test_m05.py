@@ -259,16 +259,28 @@ class Memory(unittest.TestCase):
             s.turn+=1
             s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source)])
         for n in range(20):s.record_input(f'背景{n}',[])
+        from copy import deepcopy
+        from backend.v2.memory import unpack
+        expected={v['source_id']:deepcopy(v) for v in s.facts.values() if v.get('source')=='child'}
         sources=[f['source_text'] for k,f in s.facts.items() if k.startswith('public:preference')]
         self.assertIn('我喜欢蓝色',sources)
         self.assertIn('我喜欢猫',sources)
         self.assertIn('刚才说错了，我不喜欢猫，我喜欢狗',sources)
         for n in range(40):
             s.turn+=1;source=f'我喜欢第{n}种颜色'
-            s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source)])
-        self.assertEqual(len([k for k in s.facts if k.startswith('public:preference')]),43)
-        self.assertIn('我喜欢蓝色', str(s.context()['facts']))
-        self.assertIn('刚才说错了，我不喜欢猫，我喜欢狗', str(s.context()['facts']))
+            self.assertTrue(s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source)]))
+            expected[s.facts['public:preference']['source_id']]=deepcopy(s.facts['public:preference'])
+        cold=unpack(s.source_archive)
+        all_records=list(s.facts.items())+list(cold.values())
+        self.assertEqual(len(all_records),43)
+        self.assertEqual(len({v['source_id'] for k,v in all_records}),43)
+        self.assertEqual({v['source_id']:v for k,v in all_records},expected)
+        self.assertFalse({v['source_id'] for v in s.facts.values()} & set(cold))
+        cat=s.context(query='猫')['facts']
+        self.assertIn('我喜欢猫',[v['source_text'] for v in cat.values()])
+        self.assertIn('刚才说错了，我不喜欢猫，我喜欢狗',[v['source_text'] for v in cat.values()])
+        self.assertIn('我喜欢蓝色',[v['source_text'] for v in s.context(query='蓝色')['facts'].values()])
+        self.assertTrue(all(v['evidence_only'] for v in cat.values()))
         self.assertTrue(s._fits())
 
     def test_private_proposition_sources_not_in_shared_projection(self):
@@ -294,11 +306,33 @@ class Memory(unittest.TestCase):
         self.assertLessEqual(len(s.facts),16)
 
     def test_new_memory_fields_share_capacity_and_input_update_is_atomic(self):
-        s=self.fresh();s.public=['x'*(s.content_limit-150)]
-        before=(list(s.recent),dict(s.facts),s.memory_revision)
-        with self.assertRaises(BufferError):
-            s.record_input('我喜欢猫',[dict(key='preference',start=0,end=4,value='我喜欢猫')])
-        self.assertEqual((s.recent,s.facts,s.memory_revision),before)
+        from copy import deepcopy
+        from backend.v2.memory import unpack
+        s=self.fresh()
+        for n in range(43):
+            s.turn+=1;source=f'我喜欢第{n}种颜色'
+            self.assertTrue(s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source)]))
+        self.assertTrue(s.source_archive)
+        baseline=len(json.dumps(dict(public=s.public,private=s.private,game=s.game,secrets=s.secrets,
+            recent=s.recent,facts=s.facts,source_archive=s.source_archive,memory_limited=s.memory_limited,
+            pending=[]),ensure_ascii=False).encode())
+        s.public=['x'*(s.content_limit-baseline-1024)]
+        self.assertEqual(s.content_limit,65536);self.assertTrue(s._fits())
+        before=deepcopy((s.facts,s.source_archive,s.memory_revision,list(s.public)))
+        source='我喜欢合成海豚'
+        self.assertFalse(s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source)]))
+        self.assertEqual((s.facts,s.source_archive,s.public),(before[0],before[1],before[3]))
+        self.assertEqual(s.memory_revision,before[2]+1)
+        self.assertTrue(s._fits());self.assertTrue(s.memory_limited)
+        self.assertLessEqual(len(s.recent),8);self.assertEqual(s.recent[-1]['text'],source)
+        self.assertTrue(s.context()['memory']['capacity_limited'])
+        self.assertNotIn(source,[v['source_text'] for v in s.context()['facts'].values()])
+        self.assertEqual(len(s.facts)+len(unpack(s.source_archive)),43)
+        atomic=deepcopy((s.facts,s.source_archive,s.recent,s.memory_revision,s.memory_limited))
+        with self.assertRaises(ValueError):
+            s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source),
+                                   dict(key='plot',start=0,end=1,value='不存在的来源')])
+        self.assertEqual((s.facts,s.source_archive,s.recent,s.memory_revision,s.memory_limited),atomic)
         self.assertFalse(s._fits(recent=[dict(text='x'*65536)]))
         self.assertFalse(s._fits(facts={'bad':'x'*65536}))
 

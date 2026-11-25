@@ -5,6 +5,18 @@ import re
 import zlib
 
 MAX_SOURCE_BYTES = 1024 * 1024
+# Query-only grammatical/utterance particles, never removed from source evidence.
+# Single Han topics are added only for short (<=4 content-character) queries.
+QUERY_PARTICLES = frozenset('的了着呢啊呀吧吗么嘛哦喔嗯呐啦哎诶和与及或也就都还我你他她它们这那是有')
+
+
+def query_terms(query):
+    words=set(re.findall(r'[a-z0-9]+',query))
+    grams={query[i:i+2] for i in range(max(0,len(query)-1))
+           if any(c.isalnum() and c not in QUERY_PARTICLES for c in query[i:i+2])}
+    han=[c for c in query if '\u4e00'<=c<='\u9fff' and c not in QUERY_PARTICLES]
+    topics=set(han) if 0<len(han)<=4 else set()
+    return words,grams,topics
 
 
 def unpack(encoded):
@@ -42,20 +54,20 @@ def retrieve(facts, archive, query, private):
     # Lexical relevance only: complete source evidence is returned, never a
     # rewritten/merged claim. Latest facts stay separate from historical evidence.
     query=query.casefold()
-    words=set(re.findall(r'[a-z0-9]+',query))
-    grams={query[i:i+2] for i in range(max(0,len(query)-1))}
+    words,grams,topics=query_terms(query)
+    def relevance(value):
+        text=value.get('source_text',value['value']).casefold()
+        return sum(3 for w in words if w in text)+sum(1 for g in grams if g in text)+sum(1 for c in topics if c in text)
     def score(item):
-        text=item[1]['source_text'].casefold()
-        return (sum(3 for w in words if w in text)+sum(1 for g in grams if g in text),item[1]['turn'])
+        return (relevance(item[1]),item[1]['turn'])
     ranked=sorted(cold,key=score,reverse=True)
-    selected=ranked[:12] if query else ranked[:4]
+    selected=ranked[:12] if words or grams or topics else ranked[:4]
     for k,v in selected:visible[k]=v
     # Projection is bounded too, including unusually long full source_text.
     # Omitted evidence remains in owner memory and is declared, not rewritten.
     def priority(item):
-        k,v=item;text=v.get('source_text',v['value']).casefold()
-        relevance=sum(3 for w in words if w in text)+sum(1 for g in grams if g in text)
-        return (relevance,':played:' in k,':history:' not in k,v['turn'])
+        k,v=item
+        return (relevance(v),':played:' in k,':history:' not in k,v['turn'])
     bounded={};used=2
     for k,v in sorted(visible.items(),key=priority,reverse=True):
         cost=len(json.dumps({k:v},ensure_ascii=False).encode())

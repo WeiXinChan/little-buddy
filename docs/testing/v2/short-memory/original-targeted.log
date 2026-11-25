@@ -1,0 +1,23 @@
+test_correction_and_two_preference_dimensions_keep_bounded_sources (tests.v2.test_m05.Memory.test_correction_and_two_preference_dimensions_keep_bounded_sources) ... FAIL
+test_new_memory_fields_share_capacity_and_input_update_is_atomic (tests.v2.test_m05.Memory.test_new_memory_fields_share_capacity_and_input_update_is_atomic) ... FAIL
+
+======================================================================
+FAIL: test_correction_and_two_preference_dimensions_keep_bounded_sources (tests.v2.test_m05.Memory.test_correction_and_two_preference_dimensions_keep_bounded_sources)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_m05.py", line 269, in test_correction_and_two_preference_dimensions_keep_bounded_sources
+    self.assertEqual(len([k for k in s.facts if k.startswith('public:preference')]),43)
+AssertionError: 5 != 43
+
+======================================================================
+FAIL: test_new_memory_fields_share_capacity_and_input_update_is_atomic (tests.v2.test_m05.Memory.test_new_memory_fields_share_capacity_and_input_update_is_atomic)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_m05.py", line 299, in test_new_memory_fields_share_capacity_and_input_update_is_atomic
+    with self.assertRaises(BufferError):
+AssertionError: BufferError not raised
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.036s
+
+FAILED (failures=2)

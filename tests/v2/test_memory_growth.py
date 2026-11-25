@@ -91,11 +91,93 @@ class Growth(unittest.TestCase):
             approved=True,effective=True,anchors=('promise.current',)))
         s.interrupt()
         self.assertNotIn('错误承诺',str(s.context()))
+        self.assertEqual(s.context(query='猫呢')['facts']['public:played:promise.current']['value'],
+                         '猫船长答应先去森林，再找蓝色钥匙。')
 
     def test_negative_control_discarding_cold_evidence_is_detected(self):
         s=self.grow(90);s.source_archive=''
         with self.assertRaises(AssertionError):
             self.assertIn('我喜欢第0种动物，但不喜欢它的玩偶',str(s.context(query='第0种动物')))
+
+
+class ShortTopics(unittest.TestCase):
+    def scenario(self,*,noise=False):
+        s=Session(lambda:0);expected={}
+        for source in ('我喜欢猫','我喜欢蓝色','刚才说错了，我不喜欢猫，我喜欢狗'):
+            s.turn+=1
+            self.assertTrue(s.record_input(source,[dict(key='preference',value=source,start=0,end=len(source))]))
+            expected[source]=deepcopy(s.facts['public:preference'])
+        for n in range(20):s.record_input(f'背景{n}',[])
+        for n in range(40):
+            s.turn+=1;source=f'我喜欢第{n}种颜色'+('呢吧吗啊' if noise else '')
+            self.assertTrue(s.record_input(source,[dict(key='preference',value=source,start=0,end=len(source))]))
+            expected[source]=deepcopy(s.facts['public:preference'])
+        self.assertEqual(len(s.facts)+len(unpack(s.source_archive)),43)
+        return s,expected
+
+    def assert_source(self,context,expected):
+        entries={v['source_id']:v for v in context['facts'].values() if v.get('source')=='child'}
+        self.assertEqual(entries.get(expected['source_id']),expected)
+
+    def test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction(self):
+        s,expected=self.scenario()
+        for query in ('猫','猫呢','猫狗','猫、狗','猫和狗呢'):
+            with self.subTest(query=query):
+                context=s.context(query=query)
+                self.assert_source(context,expected['我喜欢猫'])
+                self.assert_source(context,expected['刚才说错了，我不喜欢猫，我喜欢狗'])
+                self.assertGreater(context['memory']['omitted_sources'],0)
+        for query in ('狗','狗呢'):
+            context=s.context(query=query)
+            self.assert_source(context,expected['刚才说错了，我不喜欢猫，我喜欢狗'])
+        self.assert_source(s.context(query='蓝色呢'),expected['我喜欢蓝色'])
+
+    def test_particles_never_make_forty_unrelated_new_sources_pseudo_relevant(self):
+        s,expected=self.scenario(noise=True)
+        for query in ('猫呢','狗呢','猫狗吧'):
+            context=s.context(query=query)
+            self.assert_source(context,expected['刚才说错了，我不喜欢猫，我喜欢狗'])
+        # Particle-only input has no topic signal and uses the unchanged empty-query tail.
+        self.assertEqual(s.context(query='呢吧吗啊')['facts'],s.context(query='')['facts'])
+
+    def test_negation_subject_time_and_question_remain_full_propositions(self):
+        s=Session(lambda:0);expected=[]
+        for source in ('我不喜欢猫','以前喜欢猫','妹妹喜欢猫','我喜欢猫吗'):
+            s.turn+=1;s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source)])
+            expected.append(deepcopy(s.facts['public:preference']))
+        for n in range(45):
+            s.turn+=1;source=f'我喜欢第{n}种颜色'
+            self.assertTrue(s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source)]))
+        context=s.context(query='猫呢')
+        for item in expected:self.assert_source(context,item)
+        self.assertTrue(all(item['evidence_only'] for item in context['facts'].values()))
+
+    def test_short_query_filters_private_cold_sources_before_scoring_and_coverage(self):
+        s,expected=self.scenario();s.private_mode=True
+        source='私事是我不喜欢猫'
+        s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source)])
+        private_id=s.facts['private:preference']['source_id']
+        for n in range(40):
+            s.turn+=1;source=f'私事里第{n}种颜色'
+            s.record_input(source,[dict(key='preference',start=0,end=len(source),value=source)])
+        private=s.context(query='猫呢');shared=s.context(shared=True,query='猫呢')
+        self.assertIn(private_id,{v.get('source_id') for v in private['facts'].values()})
+        self.assertNotIn('私事',str(shared));self.assertNotIn(private_id,str(shared))
+        public_cold=[v for k,v in unpack(s.source_archive).values() if not v['private']]
+        self.assertEqual(shared['memory']['archived_sources'],len(public_cold))
+        self.assert_source(shared,expected['我喜欢猫'])
+        s.private_mode=False;self.assertNotIn('私事',str(s.context(query='猫呢')))
+        s.handoff();self.assertEqual(s.context(query='猫呢'),{})
+
+    def test_short_query_is_bounded_projection_without_rewriting_stored_sources(self):
+        s,expected=self.scenario();before=deepcopy((s.facts,s.source_archive,s.memory_revision))
+        for query in ('猫','狗呢','猫狗','喜欢猫','刚才说错了'):
+            context=s.context(query=query)
+            self.assertLessEqual(context['memory']['retrieved_sources'],12)
+            self.assertLessEqual(len(json.dumps(context['facts'],ensure_ascii=False).encode()),18000)
+            self.assertEqual((s.facts,s.source_archive,s.memory_revision),before)
+        all_values=[v for k,v in list(s.facts.items())+list(unpack(s.source_archive).values())]
+        self.assertEqual({v['source_id']:v for v in all_values},{v['source_id']:v for v in expected.values()})
 
 
 class FullConversation(unittest.IsolatedAsyncioTestCase):

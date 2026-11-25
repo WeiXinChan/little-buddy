@@ -1,0 +1,103 @@
+{
+  "hot": 5,
+  "cold": 38,
+  "total_unique": 43,
+  "queries": {
+    "猫": {
+      "我喜欢猫": true,
+      "我喜欢蓝色": false,
+      "刚才说错了，我不喜欢猫，我喜欢狗": true,
+      "coverage": {
+        "archived_sources": 38,
+        "retrieved_sources": 12,
+        "omitted_sources": 26,
+        "mode": "exact_evidence",
+        "capacity_limited": false
+      }
+    },
+    "猫呢": {
+      "我喜欢猫": true,
+      "我喜欢蓝色": false,
+      "刚才说错了，我不喜欢猫，我喜欢狗": true,
+      "coverage": {
+        "archived_sources": 38,
+        "retrieved_sources": 12,
+        "omitted_sources": 26,
+        "mode": "exact_evidence",
+        "capacity_limited": false
+      }
+    },
+    "狗": {
+      "我喜欢猫": false,
+      "我喜欢蓝色": false,
+      "刚才说错了，我不喜欢猫，我喜欢狗": true,
+      "coverage": {
+        "archived_sources": 38,
+        "retrieved_sources": 12,
+        "omitted_sources": 26,
+        "mode": "exact_evidence",
+        "capacity_limited": false
+      }
+    },
+    "狗呢": {
+      "我喜欢猫": false,
+      "我喜欢蓝色": false,
+      "刚才说错了，我不喜欢猫，我喜欢狗": true,
+      "coverage": {
+        "archived_sources": 38,
+        "retrieved_sources": 12,
+        "omitted_sources": 26,
+        "mode": "exact_evidence",
+        "capacity_limited": false
+      }
+    },
+    "猫狗": {
+      "我喜欢猫": true,
+      "我喜欢蓝色": false,
+      "刚才说错了，我不喜欢猫，我喜欢狗": true,
+      "coverage": {
+        "archived_sources": 38,
+        "retrieved_sources": 12,
+        "omitted_sources": 26,
+        "mode": "exact_evidence",
+        "capacity_limited": false
+      }
+    },
+    "猫、狗": {
+      "我喜欢猫": true,
+      "我喜欢蓝色": false,
+      "刚才说错了，我不喜欢猫，我喜欢狗": true,
+      "coverage": {
+        "archived_sources": 38,
+        "retrieved_sources": 12,
+        "omitted_sources": 26,
+        "mode": "exact_evidence",
+        "capacity_limited": false
+      }
+    },
+    "猫和狗呢": {
+      "我喜欢猫": true,
+      "我喜欢蓝色": false,
+      "刚才说错了，我不喜欢猫，我喜欢狗": true,
+      "coverage": {
+        "archived_sources": 38,
+        "retrieved_sources": 12,
+        "omitted_sources": 26,
+        "mode": "exact_evidence",
+        "capacity_limited": false
+      }
+    },
+    "蓝色呢": {
+      "我喜欢猫": false,
+      "我喜欢蓝色": true,
+      "刚才说错了，我不喜欢猫，我喜欢狗": false,
+      "coverage": {
+        "archived_sources": 38,
+        "retrieved_sources": 12,
+        "omitted_sources": 26,
+        "mode": "exact_evidence",
+        "capacity_limited": false
+      }
+    }
+  }
+}
