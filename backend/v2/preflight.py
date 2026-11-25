@@ -37,6 +37,7 @@ class Prepared:
     config:dict=field(repr=False)
     expires_at:int
     report:dict
+    images:object=field(default=None,repr=False)
 
 
 def dependencies():
@@ -107,7 +108,10 @@ def prepare(args,*,now=time.time):
     except (OSError,ValueError,ssl.SSLError,subprocess.SubprocessError):
         raise ConfigurationError('tls_chain_name_or_key_invalid') from None
     report=manifest(config)
+    from backend.v2.image_runtime import read_image_runtime
+    images=read_image_runtime(getattr(args,'image_config',None),directory,config['workspace'])
     report.update(protocol_contract=CONTRACT,checks='offline_pass',
                   device_scope='operator_bound_v2_only_not_family_ownership_proof',
-                  ingress_tls='not_probed',new_cloud_samples=0)
-    return Prepared(tls,token,provider_key,config,scope['not_after'],report)
+                  ingress_tls='not_probed',new_cloud_samples=0,
+                  dynamic_images='configured_not_cloud_verified' if images is not None else 'disabled')
+    return Prepared(tls,token,provider_key,config,scope['not_after'],report,images)
