@@ -27,13 +27,34 @@ Overflow, refused post, stale data and consumer failure wipe queued and rejected
 An in-flight consumer's current array is wiped in finally; cancellation cannot retract IO entered
 before cancellation. VoiceClient retains its own lifecycle/management gate.
 
-Before another native read, a full queue can wait only within configured native buffer duration
-minus one 20ms frame. Cancellation wakes this wait. The native buffer remains bounded at
-max(minimum,6400) bytes with minimum <=32000. Delayed reads exceeding this native retention room
-fail explicitly. Cached frame timestamps derive from the original native read observation, never
-KWS completion or a later upload time; queue freshness is one ring (1000ms) plus configured native
-room. Read observation and buffer size are conservative software boundaries, not device timestamp
-or acoustic latency proof. No arbitrary sample dropping or unlimited owner backlog.
+NativeReadLedger uses cumulative `AudioRecord.getTimestamp(TIMEBASE_MONOTONIC)` framePosition
+minus cumulative successful reads, not elapsed-time-at-16kHz since start. Every read/wait/KWS/model
+step consumes the same remaining room; successful reads only credit samples actually removed.
+A 320-sample guard remains below the configured native buffer; buffer size is not enlarged.
+Native counter snapshots are checked before and after read and before wake/batch admission.
+
+API24+ provides this capture frame/time pair and may report it unavailable; frame count resets on
+restart ([AudioRecord API](https://developer.android.com/reference/android/media/AudioRecord#getTimestamp(android.media.AudioTimestamp,%20int))).
+`TIMEBASE_MONOTONIC` is System.nanoTime's timebase; recorded sample times come from the hardware pair
+([AudioTimestamp API](https://developer.android.com/reference/android/media/AudioTimestamp)).
+CaptureMonotonic uses that exact clock. An immutable conservative bridge to elapsedRealtime is
+sampled BOOT-before-MONOTONIC, checked for >5ms drift/suspend; it is never rebased to freshen audio.
+
+Missing startup stamps permit no reads/uploads and only a bounded native-room startup wait. Once
+primed, the prior pair may be extrapolated only while <=100ms old (or less for a smaller buffer).
+No timestamp resets the read count. Positions/times must be monotonic, stationary positions may
+not receive a new time, and observed rate must remain within 15984..16016 frames/s (+/-1000ppm,
+with two-PCM-sample quantization allowance, not two320-sample batches). This short-window rate bound is explicit; it is not a
+session-long assertion of exactly 16kHz. New snapshots account for hardware drift directly, including
+600s +/-100ppm tests. Missing/stale/incoherent/out-of-bound clocks fail closed, not software fallback.
+Hardware timestamp availability, estimates, driver semantics and real oscillator error remain OPPO
+validation gaps. These tests do NOT certify acoustic/native continuity on a physical device.
+
+PCM times use the original hardware frame coordinates and conservative lower-rate lookback (plus
+bridge rounding), not read-return, KWS completion or upload time. The <=16000-sample ring and native
+buffer remain unchanged. An already-blocked JNI call can overrun native storage before returning;
+on return the cumulative check fails before further wake/PCM admission, cancels and wipes buffers.
+No claim is made to interrupt that JNI call or physically prevent hardware overrun inside it.
 
 On re-wake, the current frame is already pushed: the new KWS origin is position-count, i.e. its
 first actual sample. Existing absolute ring and 2560-sample pre-roll behavior are retained.
@@ -79,3 +100,27 @@ playback. A reply completion returns to the current InputGate waiting state. Nat
 without a recorder; clarify -> WAITING_CHILD only with confirmed capture. These states are visually
 separate and never turn server speaking into native playback. Local help/parent/image pages may
 cover the eyes; the reducer cannot claim their rendering or actual acoustic state.
+
+### R75-01 evidence and coordinate oracle
+
+The 14b7b20 baseline uses actual Capture against a continuously producing, real-process-time native
+FIFO: 16kHz production, independent read calls and a 3200-sample native capacity. Each 100ms KWS
+step is individually below 200ms yet accumulates unread data; the baseline silently overwrites
+samples and reports no failure. Short 60ms burst then catch-up is the positive control; a third
+case proves backlog sample age is not the later read-return time. Original baseline logs are retained.
+
+Original finite fixtures previously froze the clock at100000ms. The original re-wake oracle99980ms
+meant current time minus the already-fed320 samples; buggy origin gave100000ms. The finite fixture
+now advances20ms per320 samples: first frame starts100000ms, second frame starts100020ms.
+The sample-coordinate oracle is therefore origin+320/16, with a conservative 2ms hardware/bridge
+rounding interval. It still rejects the original extra-count shift (100040ms), and does not change
+ring cursor/tail samples or weaken the21/50-frame assertions. The separate continuous fixture uses
+actual process time, not that finite-source clock. Pure ledger checks additionally cover hardware
+rate bias over600s, start delay, timestamp loss/staleness, counter/rate/clock errors and unread budget.
+
+Timestamp provider calls are bracketed by monotonic reads; all age, future and remaining-room checks
+use the post-call mono/boot observation. API/JNI delay is charged to the same cumulative budget.
+Two controlled provider-clock tests cover a legitimate later new pair and an old pair that loses
+room and expires while the API is delayed. The continuous native fixture also blocks the first
+getTimestamp call for80ms while production continues: a valid fresh pair must not be rejected as
+future simply because it postdates the pre-call observation. No future tolerance is enlarged.

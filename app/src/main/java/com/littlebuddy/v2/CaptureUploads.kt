@@ -43,7 +43,7 @@ internal class CaptureUploads(private val post:(Runnable)->Boolean, private val 
                 failure=!cancelled && allowed();cancelled=true;clear()
             } else {
                 var remaining=count
-                batch.forEach { remaining-=it.size;queue.addLast(Frame(it,speech,capturedAt-remaining/16));samples+=it.size }
+                batch.forEach { remaining-=it.size;queue.addLast(Frame(it,speech,capturedAt-NativeReadLedger.durationMs(remaining)));samples+=it.size }
                 if(!scheduled && queue.isNotEmpty()){scheduled=true;schedule=true}
             }
         }

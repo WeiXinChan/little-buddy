@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.res.AssetManager
 import android.media.AudioFormat
 import android.media.AudioRecord
+import android.media.AudioTimestamp
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.os.Handler
@@ -57,12 +58,16 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var idle = 0L
         var detector = SpeechDetector(320, initialFloor = 36.0)
         var lastCapturedAt=android.os.SystemClock.elapsedRealtime()
+        var ledger:NativeReadLedger?=null
         var uploadSamples = 0
         fun upload(batch: List<ShortArray>, speech: Boolean) {
-            val count=batch.sumOf{it.size}
-            if(uploadSamples+count>320000){batch.forEach{it.fill(0)};error("input bound")}
-            uploadSamples+=count
-            check(uploads.offer(batch,speech,lastCapturedAt))
+            try {
+                checkNotNull(ledger).check()
+                val count=batch.sumOf{it.size}
+                if(uploadSamples+count>320000)error("input bound")
+                uploadSamples+=count
+                check(uploads.offer(batch,speech,lastCapturedAt))
+            }catch(failure:Exception){batch.forEach{it.fill(0)};throw failure}
         }
         var attemptedNative=false
         var attemptedWake=false
@@ -72,7 +77,6 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                                                        AudioFormat.ENCODING_PCM_16BIT)
             check(minimum in 1..32000)
             val nativeBytes=maxOf(minimum,6400)
-            val nativeRoomMs=nativeBytes/32L
             uploads.nativeRoom(nativeBytes)
             if(cancelled.get() || !allowed())return
             attemptedNative=true
@@ -95,20 +99,25 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
             nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
             runCatching{recording(true)}
-            var lastRead=android.os.SystemClock.elapsedRealtime()
+            val timestamp=AudioTimestamp()
+            val continuity=NativeReadLedger(nativeBytes/2,CaptureMonotonic::nowMs,
+                android.os.SystemClock::elapsedRealtime) {
+                if(native.getTimestamp(timestamp,AudioTimestamp.TIMEBASE_MONOTONIC)==AudioRecord.SUCCESS)
+                    CaptureStamp(timestamp.framePosition,timestamp.nanoTime) else null
+            }
+            ledger=continuity
             while (!cancelled.get() && allowed()) {
-                check(uploads.awaitRoom(frame.size,maxOf(1L,nativeRoomMs-20))){"capture queue continuity"}
-                val beforeRead=android.os.SystemClock.elapsedRealtime()
-                check(beforeRead-lastRead in 0..nativeRoomMs){"native buffer continuity"}
-                val count = native.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
-                lastRead=android.os.SystemClock.elapsedRealtime()
+                val room=continuity.remainingMs()
+                if(!continuity.ready){Thread.sleep(5);continue}
+                check(uploads.awaitRoom(frame.size,room)){"capture queue continuity"}
+                continuity.check()
+                val count=native.read(frame,0,frame.size,AudioRecord.READ_NON_BLOCKING)
                 if(cancelled.get() || !allowed())break
-                check(lastRead-beforeRead in 0..nativeRoomMs){"native read continuity"}
                 check(count in 0..frame.size)
+                lastCapturedAt=continuity.read(count)
                 if (count == 0) { Thread.sleep(5); continue }
                 check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
                 nativeProof = nativeProof.copy(recording=true, frames=nativeProof.frames+count)
-                lastCapturedAt=lastRead // never relabel cached PCM with a later KWS/upload timestamp
                 buffered.push(frame, count)
                 position = buffered.position
                 if (awake && idle != client.idleSerial) {
@@ -120,18 +129,20 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 }
                 if (!awake) {
                     if(cancelled.get() || !allowed())break
-                    val tail = wake?.accept(frame, count) ?: continue
+                    val candidate=wake?.accept(frame,count)
+                    continuity.check()
+                    val tail=candidate ?: continue
                     if(cancelled.get() || !allowed())break
                     awake = true
                     try {wake?.close()}catch(failure:Exception){modelUncertain=true;wake=null;throw failure}
                     wake = null
                     detector = SpeechDetector(320, initialFloor = 36.0)
-                    val wakeBoundary = (android.os.SystemClock.elapsedRealtime() -
-                        ((position - (wakeBase + tail).coerceIn(0, position)) * 1000 / 16000)).coerceAtLeast(0)
+                    continuity.check()
+                    val absoluteTail=(wakeBase+tail).coerceIn(0,position)
+                    val wakeBoundary=continuity.sampleTime(absoluteTail).coerceAtLeast(0)
                     owner.post { if (!cancelled.get()) client.wake(wakeBoundary) }
                     // Absolute ring and KWS-local coordinates share a recorded origin.
                     lastSpeech = android.os.SystemClock.elapsedRealtime()
-                    val absoluteTail = (wakeBase + tail).coerceIn(0, position)
                     buffered.begin(absoluteTail)
                     firstAfterWake = true
                     var continuation = false

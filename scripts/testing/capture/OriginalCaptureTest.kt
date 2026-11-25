@@ -20,8 +20,8 @@ class OriginalCaptureTest {
   try {runCatching{b.start()};Thread.sleep(100);assertTrue(AudioRecord.maximum.get()<=1)}finally{SherpaWake.blockClose=null;block.countDown();a.close();b.close();h.drain()}
  }
  @Test fun reWakeOriginIsFirstSampleOfAlreadyPushedFrame(){AudioRecord.reset(2);SherpaWake.detectAfter=1;val h=Handler();val c=VoiceClient();AudioRecord.onRead={if(it==2)c.idleSerial++}
-  val a=Capture(AssetManager(),h,c,{true}){};a.start()
-  try {await{a.nativeProof.frames>=640};Thread.sleep(50);h.drain();assertEquals(2,c.wakes.size);assertEquals(99980L,c.wakes[1])}finally{a.close();h.drain()}
+  val origin=android.os.SystemClock.elapsedRealtime();val a=Capture(AssetManager(),h,c,{true}){};a.start()
+  try {await{a.nativeProof.frames>=640};Thread.sleep(50);h.drain();assertEquals(2,c.wakes.size);assertTrue("first fed sample at start+320/16ms; conservative bridge bound",c.wakes[1] in (origin+320/16-2)..(origin+320/16))}finally{a.close();h.drain()}
  }
 
  @Test fun childAndManagementNeverOwnNativeRecorderTogether(){AudioRecord.reset(1);SherpaWake.detectAfter=100

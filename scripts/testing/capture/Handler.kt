@@ -5,4 +5,9 @@ class Handler {
  fun post(job:Runnable):Boolean {jobs.add(job);return true}
  fun drain() {while(true)(jobs.poll() ?: break).run()}
 }
-object SystemClock {fun elapsedRealtime()=100000L}
+object SystemClock {
+ @Volatile var realtime=false
+ @Volatile var manualNow=100000L
+ fun uptimeMillis()=elapsedRealtime()
+ fun elapsedRealtime()=if(realtime)System.nanoTime()/1_000_000 else manualNow
+}

@@ -8,16 +8,16 @@ compiler=[jar('org.jetbrains.kotlin',a,v) for a,v in [('kotlin-compiler-embeddab
 runtime=[compiler[1],jar('junit','junit','4.13.2'),jar('org.hamcrest','hamcrest-core','1.3')]
 sources=list((root/'scripts/testing/capture').glob('*.kt'))
 sources=[s for s in sources if s.name!='NativeEvidence.kt']
-if os.environ.get('CAPTURE_SOURCE_BASE'):sources=[s for s in sources if s.name!='CaptureSafetyTest.kt']
+if os.environ.get('CAPTURE_SOURCE_BASE'):sources=[s for s in sources if s.name not in ['CaptureSafetyTest.kt','NativeLedgerTest.kt']]
 base=Path(os.environ.get('CAPTURE_SOURCE_BASE',str(root/'app/src/main/java/com/littlebuddy/v2')))
 sources += [base/(n+'.kt') for n in ['Capture','ManagementCapture','WakeSamples']]
 sources += [root/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['Playback','NativeEvidence']]
-for n in ['CaptureUploads','RecorderLease','EyeState','WakeOrigin','InputGate']:
+for n in ['CaptureUploads','RecorderLease','EyeState','WakeOrigin','InputGate','NativeReadLedger']:
  if (base/(n+'.kt')).exists():sources.append(base/(n+'.kt'))
 with tempfile.TemporaryDirectory(dir=root,prefix='capture-tests-') as out:
  subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',out,*map(str,sources)],check=True)
- subprocess.run(['java','-Xmx256m','-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.v2.OriginalCaptureTest',*(['com.littlebuddy.v2.CaptureSafetyTest'] if not os.environ.get('CAPTURE_SOURCE_BASE') else [])],check=True)
-if not os.environ.get('CAPTURE_SOURCE_BASE'):
+ subprocess.run(['java','-Xmx256m','-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore',*(['com.littlebuddy.v2.ContinuousCaptureTest'] if os.environ.get('CAPTURE_CONTINUOUS_ONLY') else ['com.littlebuddy.v2.OriginalCaptureTest',*(['com.littlebuddy.v2.CaptureSafetyTest','com.littlebuddy.v2.ContinuousCaptureTest','com.littlebuddy.v2.NativeLedgerTest'] if not os.environ.get('CAPTURE_SOURCE_BASE') else [])])],check=True)
+if not os.environ.get('CAPTURE_SOURCE_BASE') and not os.environ.get('CAPTURE_CONTINUOUS_ONLY'):
  sources=[root/'scripts/testing/capture'/n for n in ['Assets.kt','Onnx.kt']]
  sources+=list((root/'scripts/testing/wake-cancel').glob('*.kt'))
  sources+=[root/'app/src/main/java/com/littlebuddy/WakeReader.kt']
