@@ -11,6 +11,7 @@ from backend.v2.voice import VoiceFault
 from backend.v2 import schemas
 from backend.v2.safety import SafetyFault
 from backend.v2.images import DefaultImages
+from backend.v2.dynamic_images import ImageFailure
 from contextlib import asynccontextmanager
 
 SYSTEM = """你是瓦力，面向5–8岁儿童的AI语音玩伴。自然、简短、不过度夸奖或连续追问。
@@ -68,9 +69,10 @@ class CompanionPolicy:
 
 
 class UnifiedProviders:
-    def __init__(self, speech, model, *, images=None):
+    def __init__(self, speech, model, *, images=None, dynamic_images=None):
         self.speech, self.model = speech, model
         self.images = DefaultImages() if images is None else images
+        self.dynamic_images=dynamic_images
 
     def recognize(self, rate):
         return self.speech.recognize(rate)
@@ -95,6 +97,22 @@ class UnifiedProviders:
     async def prepare_visual(self, request):
         image=await self.images.prepare(request)
         return image if self.images.accepts(image) else None
+
+    async def prepare_generated_image(self,description,scope,is_current):
+        if self.dynamic_images is None:raise ImageFailure('unavailable')
+        return await self.dynamic_images.generate(description,scope,is_current)
+
+    async def prepare_dynamic_visual(self,request,scope,is_current):
+        # Existing tool schema needs no chat/context field or identity export.
+        if (not isinstance(request,dict) or set(request)!={'kind','asset_id'} or
+            request['kind']!='generate_image' or not isinstance(request['asset_id'],str)):
+            raise ImageFailure('prompt')
+        names={item['id']:item['name'] for item in self.images.catalogue()}
+        if request['asset_id'] not in names:raise ImageFailure('prompt')
+        return await self.prepare_generated_image('儿童插画：'+names[request['asset_id']],scope,is_current)
+
+    def cancel_generated_image(self,scope):
+        return self.dynamic_images.cancel(scope) if self.dynamic_images is not None else False
 
     async def request(self, task, data, schema):
         async with asyncio.timeout(8):
