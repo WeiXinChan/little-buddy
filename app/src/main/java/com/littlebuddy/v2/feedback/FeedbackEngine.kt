@@ -43,9 +43,10 @@ internal class FeedbackEngine(private val queue: FeedbackQueue, private val ui: 
             val screen = try { router.asPage(controller.authority) { action(core()) } }
             catch (error: FeedbackFailure) { FeedbackScreen.Notice(error.reason) }
             catch (_: Exception) { FeedbackScreen.Notice(Failure.STORAGE) }
+            controller.stage(version, screen)
             ui.post {
                 if (controller.matches(version)) {
-                    if (current(controller)) controller.deliver(screen) else controller.pause()
+                    if (current(controller)) controller.deliverPending(version) else controller.pause()
                 }
             }
         }
@@ -74,11 +75,35 @@ internal class FeedbackController(private val engine: FeedbackEngine, internal v
     private val version = AtomicLong(0)
     @Volatile private var sink: ((FeedbackScreen) -> Unit)? = render
     private var token: Confirmation? = null // worker only
+    private class Pending(val version: Long, val screen: FeedbackScreen)
+    private val pending = AtomicReference<Pending?>()
+    // Worker metadata contains no description/reply/log snapshot. UI closures carry only a version.
+    private class Refresh(val version: Long, val mode: Int, val id: String? = null)
+    private var refresh: Refresh? = null // worker only
+    internal fun stage(requested: Long, screen: FeedbackScreen) {
+        refresh = when (screen) {
+            is FeedbackScreen.Detail -> Refresh(requested, 1, screen.item.id)
+            is FeedbackScreen.Issues -> Refresh(requested, 2)
+            is FeedbackScreen.Preview -> Refresh(requested, 3)
+            else -> null
+        }
+        if (matches(requested)) {
+            val value = Pending(requested, screen)
+            pending.set(value)
+            // pause/edit can race the worker between the early check and publication.
+            if (!matches(requested)) pending.compareAndSet(value, null)
+        }
+    }
+    internal fun deliverPending(requested: Long) {
+        val value = pending.get() ?: return
+        if (value.version == requested && pending.compareAndSet(value, null)) deliver(value.screen)
+    }
     fun matches(value: Long) = value == version.get() && sink != null
     internal fun deliver(screen: FeedbackScreen) { sink?.invoke(screen) }
     private fun action(invalidate: Boolean = true, work: (FeedbackCore) -> FeedbackScreen) {
         if (invalidate) authority.invalidate()
         val requested = version.incrementAndGet()
+        pending.set(null)
         engine.run(this, requested, work)
     }
     fun showList() = action { value ->
@@ -115,18 +140,31 @@ internal class FeedbackController(private val engine: FeedbackEngine, internal v
         FeedbackScreen.Issues(value.list(), engine.providerAvailable())
     }
     internal fun afterSweep(value: FeedbackCore) {
-        val previous = token ?: return
-        if (!value.confirmationCurrent(previous)) {
-            token = null
-            // Post using the SAME presentation epoch: a later user edit must not be overwritten.
-            val requested = version.get()
-            engine.run(this, requested) { FeedbackScreen.Editor("选定日志已到期，请重新预览确认。") }
+        val previous = refresh ?: return
+        if (previous.mode == 3 && token?.let { value.confirmationCurrent(it) } == true) return
+        // Claim only the result actually produced before sweep, never a later queued edit/route.
+        val requested = previous.version + 1
+        if (!version.compareAndSet(previous.version, requested)) return
+        pending.set(null) // release an unrendered pre-expiry snapshot; old UI jobs cannot restore it
+        engine.run(this, requested) { current ->
+            when (previous.mode) {
+                1 -> {
+                    val items = current.list()
+                    items.find { it.id == previous.id }?.let { FeedbackScreen.Detail(it) }
+                        ?: FeedbackScreen.Issues(items, engine.providerAvailable())
+                }
+                2 -> FeedbackScreen.Issues(current.list(), engine.providerAvailable())
+                else -> {
+                    token = null
+                    FeedbackScreen.Editor("选定日志已到期，请重新预览确认。")
+                }
+            }
         }
     }
     fun pause() {
-        version.incrementAndGet(); authority.close()
+        version.incrementAndGet(); pending.set(null); authority.close()
         deliver(FeedbackScreen.Locked); engine.close(this)
     }
     fun close() { pause(); sink = null }
-    internal fun retire() { version.incrementAndGet(); authority.close(); deliver(FeedbackScreen.Locked); sink = null }
+    internal fun retire() { version.incrementAndGet(); pending.set(null); authority.close(); deliver(FeedbackScreen.Locked); sink = null }
 }

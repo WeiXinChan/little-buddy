@@ -70,6 +70,7 @@ def main():
             ('route-borrows-new-grant', 'borrow-route', 'FeedbackFlowTest#routerDoesNotBorrowNewPageAuthorityForAlreadyRunningOldWork'),
             ('late-ui-restores-data', 'late-ui', 'FeedbackFlowTest#delayedUiCompletionAfterPauseCannotRestoreSensitiveSnapshot'),
             ('gate-boolean-without-decision', 'gate-boolean', 'FeedbackFlowTest#adapterCannotAcceptBooleanWithoutDecision'),
+            ('expired-detail-cache', 'detail-cache', 'Review40Probe#systemSweepMustRetireDisplayedExpiredDetails'),
         ]
     report = {'source_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(source_bytes.get(p, p.read_bytes())).hexdigest()
                                for p in sources + tests}, 'results': [], 'source_ref': args.source_ref,
@@ -116,8 +117,10 @@ fun main(args: Array<String>) {
                 if mutant == 'borrow-route' and source.name == 'FeedbackAuthority.kt':
                     value = value.replace('if (caller.get() !== owner) return null', '')
                 if mutant == 'late-ui' and source.name == 'FeedbackEngine.kt':
-                    value = value.replace('if (controller.matches(version)) {\n                    if (current(controller)) controller.deliver(screen) else controller.pause()',
+                    value = value.replace('if (controller.matches(version)) {\n                    if (current(controller)) controller.deliverPending(version) else controller.pause()',
                                           'if (true) {\n                    controller.deliver(screen)')
+                if mutant == 'detail-cache' and source.name == 'FeedbackEngine.kt':
+                    value = value.replace('val previous = refresh ?: return', 'if (token == null) return\n        val previous = refresh ?: return')
                 if mutant == 'gate-boolean' and source.name == 'FeedbackAuthority.kt':
                     value = value.replace('        gate.accept(domain, grant) {', '        val result = gate.accept(domain, grant) {')
                     value = value.replace('        return decided', '        if (result && !decided) { acceptance(); return true }\n        return decided')

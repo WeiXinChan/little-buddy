@@ -172,7 +172,9 @@ private class AndroidFeedbackPage(private val activity: Activity, authority: Fee
         clearViewText(column); column.removeAllViews()
     }
     private fun clearViewText(view: View) {
+        if (view.hasOnClickListeners()) view.setOnClickListener(null) // release obsolete detail/reply closures
         if (view is EditText) view.text.clear()
+        else if (view is TextView) view.text = ""
         if (view is android.view.ViewGroup) for (index in 0 until view.childCount) clearViewText(view.getChildAt(index))
     }
     override fun pause() { if (!closed) { scrub(); controller.pause() } }
