@@ -1,0 +1,19 @@
+{
+  "source_sha256": {
+    "app/src/main/java/com/littlebuddy/v2/feedback/Contracts.kt": "b3fb78d7b46cb3af72ba46d2e4d22bbcfefbc62fc3b802bc0e2599b824c35965",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackCore.kt": "de69119271f8457fa6c0d21061f58bc760ee39c6d8e6f80f7a0bca37a0b10cb5",
+    "app/src/main/java/com/littlebuddy/v2/feedback/Vault.kt": "06dab1077496ac401674c7dfc30628fbf297c59e381d3d5f3888e964e98cf25f",
+    "app/src/test/java/com/littlebuddy/v2/feedback/FeedbackCoreTest.kt": "6890a9381b1cf6d617f108e63d322e779f32f46be39a142fec69ed0358fc15c3"
+  },
+  "results": [
+    {
+      "name": "baseline",
+      "tests": 34,
+      "failures": 0,
+      "skipped": 0,
+      "expected_failure": false,
+      "detected": true
+    }
+  ],
+  "scope": "actual Kotlin core, synthetic clock/auth/provider, real files; no Android Keystore/device/platform"
+}

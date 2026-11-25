@@ -1,0 +1,24 @@
+{
+  "source_sha256": {
+    "app/src/main/java/com/littlebuddy/v2/feedback/AndroidFeedbackVault.kt": "a8fe45e92e4358fa31204dcf5492bb81ac69b7f9a054e1a9d62ae66da6c60897",
+    "app/src/main/java/com/littlebuddy/v2/feedback/Contracts.kt": "b3fb78d7b46cb3af72ba46d2e4d22bbcfefbc62fc3b802bc0e2599b824c35965",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackCore.kt": "ff1e253ddac3af5327879a54acb6091612fc5bf06c9a27b0b4d6651ee1b21715",
+    "app/src/main/java/com/littlebuddy/v2/feedback/Vault.kt": "06dab1077496ac401674c7dfc30628fbf297c59e381d3d5f3888e964e98cf25f",
+    "app/src/test/java/com/littlebuddy/v2/feedback/DraftExpiryTest.kt": "f2df44af827abed72b26a2233caf2bdd981ce8b824c1948c4dc633c119d237ab",
+    "app/src/test/java/com/littlebuddy/v2/feedback/FeedbackCoreTest.kt": "6890a9381b1cf6d617f108e63d322e779f32f46be39a142fec69ed0358fc15c3",
+    "app/src/test/java/com/littlebuddy/v2/feedback/Review39Probe.kt": "d49f75426f14c48de72210740956312bb747098dd9e97b1c5f6c4b59c30eeafa"
+  },
+  "results": [
+    {
+      "name": "baseline",
+      "tests": 50,
+      "failures": 0,
+      "skipped": 0,
+      "expected_failure": false,
+      "detected": true
+    }
+  ],
+  "source_ref": null,
+  "android_jar_sha256": "7123df2cceaebc66f3991a480964968c9d9603f6abd542ea8878c39db70fcb07",
+  "scope": "actual Kotlin core, synthetic clock/auth/provider, real files; no Android Keystore/device/platform"
+}
