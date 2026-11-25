@@ -83,6 +83,9 @@ class GeneratedImage:
             self.release();raise
         return bytes(self._png)
 
+    def remaining_seconds(self):
+        return max(0.,self._timer.when()-asyncio.get_running_loop().time()) if not self._released else 0.
+
     def release(self):
         if not self._released:
             self._released=True;self._timer.cancel()

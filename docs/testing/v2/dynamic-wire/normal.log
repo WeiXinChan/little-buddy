@@ -1,0 +1,28 @@
+test_actual_dynamic_png_transport_only_after_full_played_ack (tests.v2.test_dynamic_wire.Wire.test_actual_dynamic_png_transport_only_after_full_played_ack) ... ok
+test_blocked_chunk_scope_change_rejects_all_later_delivery_and_erases (tests.v2.test_dynamic_wire.Wire.test_blocked_chunk_scope_change_rejects_all_later_delivery_and_erases) ... ok
+test_changed_rules_cannot_migrate_old_image_as_control (tests.v2.test_dynamic_wire.Wire.test_changed_rules_cannot_migrate_old_image_as_control) ... ok
+test_disabled_resource_is_unavailable_not_fake_dynamic_or_fee (tests.v2.test_dynamic_wire.Wire.test_disabled_resource_is_unavailable_not_fake_dynamic_or_fee) ... ok
+test_final_retention_expiry_clears_real_buffer_without_another_input (tests.v2.test_dynamic_wire.Wire.test_final_retention_expiry_clears_real_buffer_without_another_input) ... ok
+test_legacy_images_v1_only_static_fallback_never_dynamic_bytes (tests.v2.test_dynamic_wire.Wire.test_legacy_images_v1_only_static_fallback_never_dynamic_bytes) ... ok
+test_natural_control_reshow_extend_hide_rebind_without_renewing_material_ttl (tests.v2.test_dynamic_wire.Wire.test_natural_control_reshow_extend_hide_rebind_without_renewing_material_ttl) ... ok
+test_natural_hide_tool_returns_eyes_without_new_image_calls (tests.v2.test_dynamic_wire.Wire.test_natural_hide_tool_returns_eyes_without_new_image_calls) ... ok
+test_new_scope_contract_required_for_images_v2 (tests.v2.test_dynamic_wire.Wire.test_new_scope_contract_required_for_images_v2) ... ok
+test_private_and_unspoken_riddle_never_dispatch_image_request (tests.v2.test_dynamic_wire.Wire.test_private_and_unspoken_riddle_never_dispatch_image_request) ... ok
+test_revoke_during_http_never_sends_late_image_or_keeps_buffer (tests.v2.test_dynamic_wire.Wire.test_revoke_during_http_never_sends_late_image_or_keeps_buffer) ... ok
+test_session_topic_turn_epoch_revision_connection_and_player_isolation (tests.v2.test_dynamic_wire.Wire.test_session_topic_turn_epoch_revision_connection_and_player_isolation) ... ok
+test_spoken_answer_is_not_exported_until_exact_ack (tests.v2.test_dynamic_wire.Wire.test_spoken_answer_is_not_exported_until_exact_ack) ... ok
+test_story_duration_and_auto_hide_restore_eyes_keep_only_bounded_cache (tests.v2.test_dynamic_wire.Wire.test_story_duration_and_auto_hide_restore_eyes_keep_only_bounded_cache) ... ok
+test_transfer_failure_cleans_cache_and_never_publishes_or_retries (tests.v2.test_dynamic_wire.Wire.test_transfer_failure_cleans_cache_and_never_publishes_or_retries) ... ok
+test_actual_analyze_read_request_seal_routes_volume_without_plan_or_tts (tests.v2.test_dynamic_wire.Volume.test_actual_analyze_read_request_seal_routes_volume_without_plan_or_tts) ... ok
+test_endpoint_fixed_direction_schema_and_actual_scoped_once_event_no_media_reset (tests.v2.test_dynamic_wire.Volume.test_endpoint_fixed_direction_schema_and_actual_scoped_once_event_no_media_reset) ... ok
+test_revoke_at_scope_write_prevents_volume_and_failed_write_never_retries_raise (tests.v2.test_dynamic_wire.Volume.test_revoke_at_scope_write_prevents_volume_and_failed_write_never_retries_raise) ... ok
+test_stale_expired_paused_closed_and_waiting_scopes_cannot_control (tests.v2.test_dynamic_wire.Volume.test_stale_expired_paused_closed_and_waiting_scopes_cannot_control) ... ok
+test_up_and_new_revision_are_independent_once_only_controls (tests.v2.test_dynamic_wire.Volume.test_up_and_new_revision_are_independent_once_only_controls) ... ok
+test_ready_is_hidden_partial_ack_cannot_reveal_and_full_ack_is_once (tests.v2.test_images.ImageRoutes.test_ready_is_hidden_partial_ack_cannot_reveal_and_full_ack_is_once) ... ok
+test_private_and_unspoken_riddle_cannot_prepare_answer (tests.v2.test_images.ImageRoutes.test_private_and_unspoken_riddle_cannot_prepare_answer) ... ok
+test_actual_response_plan_recovers_once_and_is_heard_once (tests.v2.test_read_retry.ReadRetry.test_actual_response_plan_recovers_once_and_is_heard_once) ... ok
+
+----------------------------------------------------------------------
+Ran 23 tests in 0.523s
+
+OK
