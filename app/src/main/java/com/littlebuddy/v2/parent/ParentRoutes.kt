@@ -2,8 +2,9 @@ package com.littlebuddy.v2.parent
 
 import android.app.Activity
 import android.view.View
+import com.littlebuddy.v2.feedback.FeedbackPageFactory
 
-/** M08-owned host port. Later composition wraps M09 FeedbackPageHandle; no parallel host edits. */
+/** M08-owned host port wrapping the M09 handle; feedback owns its view, host owns the route. */
 internal interface ParentRoutePage {
     val view: View
     fun pause()
@@ -13,9 +14,20 @@ internal fun interface ParentFeedbackRoute {
     fun create(activity: Activity, domain: ParentDomain, grant: ParentDomain.Grant,
                onExit: () -> Unit): ParentRoutePage?
 }
-internal object PendingFeedbackRoute : ParentFeedbackRoute {
+/** Only this host adapter supplies the production gate. The binding is captured per real page. */
+internal object AndroidParentFeedbackRoute : ParentFeedbackRoute {
     override fun create(activity: Activity, domain: ParentDomain, grant: ParentDomain.Grant,
-                        onExit: () -> Unit): ParentRoutePage? = null
+                        onExit: () -> Unit): ParentRoutePage? {
+        val binding = ParentFeedbackBinding(domain, grant)
+        return binding.build {
+            val handle = FeedbackPageFactory.create(activity, domain, grant, binding.gate, onExit)
+            object : ParentRoutePage {
+                override val view get() = handle.view
+                override fun pause() = binding.pause { handle.pause() }
+                override fun close() = binding.close { handle.close() }
+            }
+        }
+    }
 }
 
 /** No trusted device binding/owner issuer has been configured. Never substitute an installation

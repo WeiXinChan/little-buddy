@@ -19,29 +19,26 @@ import android.widget.TextView
 
 /** Actual native widgets. No PIN String, saved input, autofill, suggestions or clipboard import. */
 internal class ParentPanelView(private val activity: Activity, private val model: ParentPanelModel,
-    private val feedback: ParentFeedbackRoute = PendingFeedbackRoute) {
+    private val feedback: ParentFeedbackRoute = AndroidParentFeedbackRoute) {
     private val inputs = mutableListOf<EditText>()
-    private var child: ParentRoutePage? = null
-    private var routeRevision = -1L
-    fun pause() { clearInputs(); child?.pause() }
-    fun close() { clearInputs(); child?.close(); child = null; routeRevision = -1 }
+    private val routes = ParentRouteSlot<ParentRoutePage>({ it.pause() }, { it.close() })
+    fun pause() { clearInputs(); routes.pause() }
+    fun close() { clearInputs(); routes.close() }
     private fun clearInputs() { inputs.forEach { it.text?.clear() }; inputs.clear() }
     fun render(state: PanelState) {
         clearInputs()
         val route = if (state.mode == PanelMode.FEEDBACK) model.currentRoute() else null
         if (route != null) {
-            if (routeRevision != route.revision) {
-                child?.close(); routeRevision = route.revision
-                child = feedback.create(activity, route.domain, route.grant) {
+            routes.mount(route.revision, {
+                feedback.create(activity, route.domain, route.grant) {
                     activity.runOnUiThread { model.routeExit(route.revision) }
                 }
-            }
-            val page = child
-            if (page == null) { model.routeExit(route.revision, unavailable = true); return }
-            activity.setContentView(page.view)
+            }, { page -> activity.setContentView(page.view) }, {
+                model.routeFailed(route.revision) { routes.close(route.revision) }
+            })
             return
         }
-        child?.close(); child = null; routeRevision = -1
+        routes.close()
         val token = model.viewToken
         val body = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL; setPadding(32, 24, 32, 24); isSaveEnabled = false
@@ -128,6 +125,6 @@ internal class ParentPanelView(private val activity: Activity, private val model
         PanelNotice.PIN_MISMATCH -> "两次 PIN 须一致，且都是 6 位数字。"
         PanelNotice.PIN_CHANGED -> "PIN 已更新，请用新 PIN 验证。"
         PanelNotice.RECOVERY_UNAVAILABLE -> "安全恢复尚不可用，不会清除配对或重置 PIN。"
-        PanelNotice.FEEDBACK_UNAVAILABLE -> "帮助与反馈尚未接通。"
+        PanelNotice.FEEDBACK_UNAVAILABLE -> "帮助与反馈暂不可用，请重新验证后再试。"
     }
 }

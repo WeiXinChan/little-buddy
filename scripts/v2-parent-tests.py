@@ -43,13 +43,74 @@ sources = [source / "ParentDomain.kt", source / "ParentCodec.kt", source / "Pare
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ExpiryConfirmationTest.kt",
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentIntegrationTest.kt",
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentPanelModelTest.kt"]
+sources += [source / "ParentFeedbackBinding.kt", source / "ParentRouteSlot.kt",
+            ROOT / "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackAuthority.kt",
+            ROOT / "app/src/main/java/com/littlebuddy/v2/feedback/Contracts.kt"]
 android = os.environ.get("PARENT_ANDROID_JAR")
 if android:
     sources.append(source / "AndroidParentStore.kt")
     sources += [source / "ParentRoutes.kt", source / "ParentPanelView.kt", source / "AndroidParentPanel.kt",
                 ROOT / "app/src/main/java/com/littlebuddy/v2/V2EyesView.kt"]
+    sources += [p for p in (ROOT / "app/src/main/java/com/littlebuddy/v2/feedback").glob("*.kt")
+                if p not in sources]
     runtime.append(android)
 with tempfile.TemporaryDirectory(prefix="parent-tests-", dir=ROOT) as output:
+    composition = "--composition-only" in sys.argv
+    combined = "--combined" in sys.argv
+    repair = "--r86-04" in sys.argv
+    binding_mutant = next((arg.split("=", 1)[1] for arg in sys.argv if arg.startswith("--binding-mutant=")), None)
+    if composition or binding_mutant or combined or repair:
+        sources.append(ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentFeedbackCompositionTest.kt")
+        sources.append(ROOT / "app/src/test/java/com/littlebuddy/v2/parent/IndependentCompositionTest.kt")
+        sources.append(ROOT / "app/src/test/java/com/littlebuddy/v2/parent/RecoveryBoundaryTest.kt")
+        sources.append(ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentRouteSlotReentryTest.kt")
+        sources += [p for p in (ROOT / "app/src/main/java/com/littlebuddy/v2/feedback").glob("*.kt")
+                    if p not in sources and p.name in {"Contracts.kt", "Vault.kt", "FeedbackCore.kt", "FeedbackAuthority.kt", "FeedbackEngine.kt"}]
+    if combined:
+        sources += list((ROOT / "app/src/test/java/com/littlebuddy/v2/feedback").glob("*.kt"))
+    binding_case = {"borrow": "bindingGateRejectsForeignDomainAndNewGrantOnOldBinding",
+                    "scope": "returnRotatesGrantBeforeOldCloseAndSettingsStillSaves",
+                    "expiry": "expiryDuringStagingRejectsAtFinalGateEvenWithoutHostTick",
+                    "recovery": "failedMountMustKeepRenderedCancelOperable",
+                    "reentry": "factoryReentryMustNotOverwriteNewHandleOrLoseRelease",
+                    "dispose-reentry": "oldCloseReentryPreemptsOuterFactoryBeforeConstruction"}
+    if binding_mutant:
+        runner = Path(output) / "BindingMutationRunner.kt"
+        runner.write_text("""import org.junit.runner.JUnitCore
+import org.junit.runner.Request
+fun main(args: Array<String>) {
+    val result = JUnitCore().run(Request.method(Class.forName(args[1]), args[0]))
+    result.failures.forEach { println(it.toString() + "\\n" + it.trace) }
+    println("RESULT ${result.runCount} ${result.failureCount} ${result.ignoreCount}")
+    if (!result.wasSuccessful()) kotlin.system.exitProcess(1)
+}
+""")
+        sources.append(runner)
+        original = source / ("ParentRouteSlot.kt" if binding_mutant in {"reentry", "dispose-reentry"} else
+                             "ParentPanelModel.kt" if binding_mutant == "recovery" else "ParentFeedbackBinding.kt")
+        contents = original.read_text()
+        if binding_mutant == "reentry":
+            contents = subprocess.check_output(["git", "show", "29317ba8a3ae7b4f7c32b6e458b8c2aaf92293c0:app/src/main/java/com/littlebuddy/v2/parent/ParentRouteSlot.kt"], cwd=ROOT, text=True)
+        elif binding_mutant == "dispose-reentry":
+            checked = "owner = next // reserve before old disposal; a later reentrant request wins\n        retire(old)"
+            assert contents.count(checked) == 1
+            contents = contents.replace(checked, "retire(old)\n        owner = next")
+        elif binding_mutant == "borrow":
+            contents = contents.replace("token !== grant || ", "").replace("domain.acceptProtected(grant)", "domain.acceptProtected(token)")
+        elif binding_mutant == "scope":
+            contents = contents.replace("domain.revokePage(grant)", "domain.revoke()")
+        elif binding_mutant == "recovery":
+            checked = "if (revision.get() != retired || active) return\n        active = true"
+            assert contents.count(checked) == 1
+            contents = contents.replace(checked, "if (revision.get() != retired || active) return\n        active = false")
+        elif binding_mutant == "expiry":
+            contents = contents.replace("domain.acceptProtected(grant) {", "run {")
+            contents = contents.replace("if (alive.get()) { decision(); published = true }", "if (alive.get()) { decision(); published = true }; true")
+        else:
+            raise SystemExit("unknown binding mutant")
+        mutant = Path(output) / original.name
+        mutant.write_text(contents)
+        sources[sources.index(original)] = mutant
     negative = "--r86-key-loss-negative-control" in sys.argv
     revoke_negative = "--r86-revoke-negative-control" in sys.argv
     expiry_negative = "--r86-expiry-negative-control" in sys.argv
@@ -94,7 +155,10 @@ with tempfile.TemporaryDirectory(prefix="parent-tests-", dir=ROOT) as output:
                     "-d", output, *map(str, sources)], check=True)
     if "--compile-only" not in sys.argv:
         tests = ["com.littlebuddy.v2.parent.ParentKeyStoreTest"]
-        if ui_negative:
+        if composition or binding_mutant:
+            tests = ["com.littlebuddy.v2.parent.ParentFeedbackCompositionTest", "com.littlebuddy.v2.parent.IndependentCompositionTest",
+                     "com.littlebuddy.v2.parent.RecoveryBoundaryTest", "com.littlebuddy.v2.parent.ParentRouteSlotReentryTest"]
+        elif ui_negative:
             tests = ["com.littlebuddy.v2.parent.ParentPanelModelTest"]
         elif expiry_negative:
             tests = ["com.littlebuddy.v2.parent.ExpiryCasTest"]
@@ -110,15 +174,30 @@ with tempfile.TemporaryDirectory(prefix="parent-tests-", dir=ROOT) as output:
                       "com.littlebuddy.v2.parent.ExpiryConfirmationTest",
                       "com.littlebuddy.v2.parent.ParentIntegrationTest",
                       "com.littlebuddy.v2.parent.ParentPanelModelTest"]
+        if combined or repair:
+            tests += ["com.littlebuddy.v2.parent.ParentFeedbackCompositionTest", "com.littlebuddy.v2.parent.IndependentCompositionTest",
+                     "com.littlebuddy.v2.parent.RecoveryBoundaryTest", "com.littlebuddy.v2.parent.ParentRouteSlotReentryTest"]
+        if combined:
+            tests += ["com.littlebuddy.v2.feedback." + p.stem
+                      for p in sorted((ROOT / "app/src/test/java/com/littlebuddy/v2/feedback").glob("*.kt"))]
         command = ["java", "-Xmx256m", "-cp", os.pathsep.join([output, *runtime]),
                    "org.junit.runner.JUnitCore", *tests]
-        if negative or revoke_negative or expiry_negative or ui_negative:
+        if binding_mutant:
+            command = command[:-len(tests)-1] + ["BindingMutationRunnerKt", binding_case[binding_mutant],
+                "com.littlebuddy.v2.parent." + ("RecoveryBoundaryTest" if binding_mutant == "reentry" else
+                  "ParentRouteSlotReentryTest" if binding_mutant == "dispose-reentry" else "ParentFeedbackCompositionTest")]
+        if negative or revoke_negative or expiry_negative or ui_negative or binding_mutant:
             result = subprocess.run(command, text=True, capture_output=True)
             print(result.stdout, end="")
             print(result.stderr, end="")
             expected = ("Tests run: 16,  Failures: 1" if ui_negative else
                         "Tests run: 2,  Failures: 1" if revoke_negative or expiry_negative else "Tests run: 11,  Failures: 2")
-            assert result.returncode == 1 and expected in result.stdout
+            if binding_mutant:
+                target = binding_case[binding_mutant]
+                assert result.returncode == 1 and target in result.stdout and "RESULT 1 1 0" in result.stdout
+                expected = "binding " + binding_mutant + " detected by " + target
+            else:
+                assert result.returncode == 1 and expected in result.stdout
             print("R86 negative control detected as expected: " + expected)
         else:
             subprocess.run(command, check=True)
