@@ -37,11 +37,16 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
     private var written = 0L
     private var head = 0L
     private var progress = 0L
+    private var actualOutput:(Boolean)->Unit={}
+    fun observeOutput(observer:(Boolean)->Unit){actualOutput=observer}
+    private var audible=false
+    private fun reportOutput(value:Boolean){if(audible!=value){audible=value;actualOutput(value)}}
     private var started = false
     private var reported = -1L
 
     fun bind(value: Binding) {
         check(!quarantined && binding == null && track == null)
+        reportOutput(false)
         val native = factory()
         track = native
         binding = value
@@ -68,6 +73,7 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
             if (queue.isNotEmpty()) check(now() - progress < 60_000)
             // A native counter reset/wrap or impossible head invalidates the stream.
             check(position >= head && position <= written)
+            if(position>head && !suspended && queue.isNotEmpty())reportOutput(true)
             if (position > head) { head = position; progress = now() }
             val packet = queue.firstOrNull()
             if (packet != null && position != reported) {
@@ -76,6 +82,7 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
             }
             if (packet != null && offset == packet.pcm.size && position >= packet.end) {
                 queue.removeFirst().pcm.fill(0); offset = 0; reported = -1
+                if(queue.isEmpty())reportOutput(false)
             }
             if (!suspended) {
                 val next = queue.firstOrNull()
@@ -101,11 +108,12 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
         track?.let { check(it.setVolume(percent)) }
     }
 
-    fun suspendOutput() { track?.pause(); suspended = true }
+    fun suspendOutput() { reportOutput(false); track?.pause(); suspended = true }
     fun resumeConfirmedNoise() { check(suspended); track?.play(); suspended = false }
 
     fun stop(): StopResult {
         // Revoke before any fallible native call. Late ACK/audio cannot bind again.
+        reportOutput(false)
         val previousBinding = binding
         binding = null
         val native = track

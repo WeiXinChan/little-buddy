@@ -33,7 +33,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val http: OkHttpClient = OkHttpClient.Builder().retryOnConnectionFailure(false)
                                .followRedirects(false).followSslRedirects(false).proxy(java.net.Proxy.NO_PROXY)
                                .connectTimeout(4, TimeUnit.SECONDS).build(),
-                           private val closeTransport: () -> Unit = {}) {
+                           private val closeTransport: () -> Unit = {},
+                           private val actualOutput: (Boolean)->Unit = {}) {
     fun nativeProof() = player.nativeProof()
     private var controlQuarantined=false
     val quarantined get() = player.quarantined || controlQuarantined
@@ -53,14 +54,15 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var outputBusy = false
     private var responseRevision = -1L
     private val gate: InputGate = InputGate(waits, SystemClock::elapsedRealtime,
-        { version -> entryGate.clear(); childVolume.clear(); images?.inputChanged(); send("advance", "revision" to version); candidate() },
+        { version -> entryGate.clear(); childVolume.clear(); images?.inputChanged(); send("advance", "revision" to version); candidate();status("listening") },
         { version -> send("probe", "revision" to version) },
-        { version -> send("seal", "revision" to version); inputSerial++ ; outputBusy = true },
-        { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true },
-        { send("thinking_prompt", "revision" to gateVersion()); status("thinking") },
+        { version -> send("seal", "revision" to version); inputSerial++ ; outputBusy = true;status("thinking") },
+        { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true;status("thinking") },
+        { send("thinking_prompt", "revision" to gateVersion()); status("waiting_thinking") },
         { isAwake = false; idleSerial++; interrupt(); status("wake") })
     private fun gateDeadline(): Long = gate.responseDeadline
     private fun gateVersion(): Long = gate.revision
+    private fun inputEyeStatus()=gate.endpointCompletion?.eyeStatus() ?: "listening"
     private val helpScope = LocalHelpScope()
     private val entryGate=ManagementEntryGate(SystemClock::elapsedRealtime)
     private var ackIdentity: JSONObject? = null
@@ -76,7 +78,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         val sent = send("ack", "identity" to copy, "player" to ack.binding.player,
              "stream" to ack.binding.stream, "segment" to ack.segment, "head" to ack.head)
         if (sent) recordImageAck(ack)
-    }
+    }.also { it.observeOutput { playing->actualOutput(playing && permitted() && !childBlocked) } }
     private val pump = object : Runnable {
         override fun run() {
             if (!active) return
@@ -179,7 +181,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 }
             }
             "endpoint" -> {
-                gate.decision(event.getLong("revision"), Completion.valueOf(event.getString("completion").uppercase()))
+                val completion=Completion.valueOf(event.getString("completion").uppercase())
+                if(gate.decision(event.getLong("revision"),completion))status(completion.eyeStatus())
             }
             "open" -> {
                 if (event.getLong("revision") != gate.revision) return
@@ -219,7 +222,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                     if (player.suspended) player.resumeConfirmedNoise()
                     send("resume_noise"); outputBusy = player.hasPending
                 }
-                "thinking" -> status("listening")
+                "thinking" -> status("waiting_thinking")
                 "new_turn" -> interrupt(event.optString("intent", ""),preservePublicImage=true)
                 "stop" -> { gate.noResponseExpected(); interrupt() }
                 else -> status("clarify") // Unknown recognition never resumes audio.
@@ -275,8 +278,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             "reveal" -> if(images==null && player.binding!=null && !player.suspended) {
                 reveal(event.getString("effect"),event.getInt("topic"))
             }
-            "thinking_wait" -> status("thinking")
-            "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status("listening") }
+            "thinking_wait" -> status(inputEyeStatus())
+            "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status(inputEyeStatus()) }
             "session_end" -> {
                 if (event.getString("reason") != "conversation_ended" || !imageScopeCurrent(event)) return
                 close(); sessionEnded()
