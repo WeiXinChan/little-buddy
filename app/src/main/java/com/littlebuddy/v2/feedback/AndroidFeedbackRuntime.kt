@@ -49,6 +49,7 @@ internal object AndroidFeedbackRuntime {
     private val worker = Executors.newSingleThreadScheduledExecutor { work -> Thread(work, "v2-feedback-local") }
     private var instance: FeedbackEngine? = null
     private var transport: AndroidFeedbackTransport? = null
+    private var clock: AndroidFeedbackClock? = null
     private var provider: FeedbackWireProvider? = null
     private var maintenance: FeedbackMaintenance? = null
     private var owner: FeedbackCoreOwner? = null // retained for process lifetime, all access on worker
@@ -59,13 +60,14 @@ internal object AndroidFeedbackRuntime {
     @Synchronized fun open(context: Context): FeedbackEngine {
         instance?.let { return it }
         val app = context.applicationContext
+        val sourceClock=AndroidFeedbackClock().also { clock=it }
         val configured=AndroidFeedbackTransport(app).also { transport=it }
         val network=FeedbackWireProvider(configured::configuration).also { provider=it }
         val queue = FeedbackQueue { action -> worker.execute(action) }
         val next = FeedbackEngine(queue, FeedbackQueue { action -> main.post(action) }, { authorizer ->
             check(Looper.myLooper() != Looper.getMainLooper())
             val store = owner ?: FeedbackCoreOwner(File(app.noBackupFilesDir, "m09-feedback.owner"),
-                { AndroidFeedbackVault.open(app) }, AndroidFeedbackClock(), network).also { owner = it }
+                { AndroidFeedbackVault.open(app) }, sourceClock, network).also { owner = it }
             store.open(authorizer)
         }, network::available, network::cancelActive, { authority,action->network.asPage(authority,action) })
         val cleanup = FeedbackMaintenance(queue, next, AndroidFeedbackJobSchedule(app), FeedbackPeriodic { tick ->
@@ -75,6 +77,7 @@ internal object AndroidFeedbackRuntime {
         cleanup.start()
         return next
     }
+    @Synchronized fun presentationClock(): FeedbackClock = checkNotNull(clock)
     @Synchronized fun configure(context: Context, domain: ParentDomain) { open(context);transport!!.configure(domain) }
     fun record(context: Context, stage: LogStage, error: LogError = LogError.NONE) {
         val version=context.packageManager.getPackageInfo(context.packageName,0).versionCode
