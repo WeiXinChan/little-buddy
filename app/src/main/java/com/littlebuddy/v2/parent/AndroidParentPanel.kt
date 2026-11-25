@@ -6,7 +6,8 @@ import android.os.Looper
 import java.util.concurrent.Executors
 
 /** Serial IO/KDF worker. System prompts never retain a Grant or an old PIN buffer. */
-internal class AndroidParentPanel(private val activity: Activity, leave: () -> Unit) {
+internal class AndroidParentPanel(private val activity: Activity, leave: () -> Unit,
+                                  private val securityRevoked: () -> Unit = {}) {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { run -> Thread(run, "v2-parent-io") }
     private lateinit var page: ParentPanelView
@@ -15,7 +16,7 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
     private var viewFocused = false
     val model = ParentPanelModel({ AndroidParentRuntime.load(activity) },
         { task -> worker.execute(task) }, { task -> main.post(task) }, { state -> page.render(state) }, leave,
-        { operation -> beginOwner(operation) }, AndroidParentRuntime::discard)
+        { operation -> beginOwner(operation) }, AndroidParentRuntime::discard, securityRevoked)
     private val tick = object : Runnable {
         override fun run() { if (!closed) { model.tick(); main.postDelayed(this, 500) } }
     }
@@ -23,7 +24,7 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
         page = ParentPanelView(activity, model)
         prompt = AndroidOwnerPrompt(activity, { task -> worker.execute(task) }, { if (!closed && activity.hasWindowFocus()) open(force = true) })
     }
-    private fun beginOwner(operation: OwnerOperation) { model.pause { page.pause() }; prompt.begin(operation) }
+    private fun beginOwner(operation: OwnerOperation) { securityRevoked(); model.pause { page.pause() }; prompt.begin(operation) }
     fun open(force: Boolean = false) {
         if (closed || (viewFocused && !force)) return
         viewFocused = true

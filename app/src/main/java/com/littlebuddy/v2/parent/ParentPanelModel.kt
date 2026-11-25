@@ -21,7 +21,8 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     private val work: (() -> Unit) -> Unit, private val ui: (() -> Unit) -> Unit,
     private val render: (PanelState) -> Unit, private val leave: () -> Unit,
     private val ownerRequest: (OwnerOperation) -> Unit = {},
-    private val ownerDiscard: (OwnerChallenge) -> Unit = {}) {
+    private val ownerDiscard: (OwnerChallenge) -> Unit = {},
+    private val securityRevoked: () -> Unit = {}) {
     private val domain = AtomicReference<ParentDomain?>()
     private val revision = AtomicLong()
     private val viewRevision = AtomicLong()
@@ -74,7 +75,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
      */
     fun routeFailed(ticket: Long, release: () -> Unit) {
         if (!live(ticket) || state.mode != PanelMode.FEEDBACK) { runCatching(release); return }
-        invalidate()
+        securityRevoked(); invalidate()
         val retired = revision.get()
         runCatching(release)
         if (revision.get() != retired || active) return
@@ -84,8 +85,12 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         else locked(d, PanelNotice.FEEDBACK_UNAVAILABLE)
     }
     fun close() { invalidate() }
-    fun exit() { invalidate(); leave() }
+    fun exit() {
+        if (grant?.let { domain.get()?.isAuthorized(it) } == false) securityRevoked()
+        invalidate(); leave()
+    }
     private fun locked(d: ParentDomain, notice: PanelNotice? = null) {
+        if (grant != null || d.state() == ParentDomain.State.QUARANTINED) securityRevoked()
         grant = null
         val reason = when (d.state()) {
             ParentDomain.State.UNOWNED -> PanelNotice.UNOWNED
@@ -97,6 +102,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
             PanelMode.UNAVAILABLE else PanelMode.VERIFY, reason))
     }
     private fun lock(d: ParentDomain) {
+        securityRevoked()
         revision.incrementAndGet(); if (page >= 0) d.invalidatePage(page); grant = null
         pending.forEach { it.fill('\u0000') }; pending.clear()
         page = -1L; locked(d, PanelNotice.LOCKED)
@@ -191,7 +197,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
                 catch (_: Exception) { false } finally { pin.fill('\u0000'); pending.remove(pin) }
             ui {
                 if (!live(ticket)) return@ui
-                grant = null; page = -1L
+                securityRevoked(); grant = null; page = -1L
                 locked(d, if (changed) PanelNotice.PIN_CHANGED else PanelNotice.LOCKED)
             }
         }

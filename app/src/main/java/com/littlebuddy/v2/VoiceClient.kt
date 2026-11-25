@@ -21,13 +21,19 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val observed: (PlaybackAck) -> Unit = {},
                            private val completed: (Long, Int) -> Unit = { _, _ -> },
                            private val allowAck: (PlaybackAck) -> Boolean = { true },
-                           private val playbackSettings: com.littlebuddy.v2.parent.ParentPlaybackSettings = com.littlebuddy.v2.parent.ParentPlaybackSettings(),
+                           private var playbackSettings: com.littlebuddy.v2.parent.ParentPlaybackSettings = com.littlebuddy.v2.parent.ParentPlaybackSettings(),
                            private val localHelp: (LocalHelpReason) -> Unit = {},
                            private val management: () -> Unit = {},
                            private val permitted: () -> Boolean = { true },
-                           private val images: ImagePort? = null) {
+                           private var images: ImagePort? = null,
+                           private val managed: (ManagementState.Phase) -> Unit = {},
+                           private val sessionEnded: () -> Unit = {}) {
     fun nativeProof() = player.nativeProof()
-    val quarantined get() = player.quarantined
+    private var controlQuarantined=false
+    val quarantined get() = player.quarantined || controlQuarantined
+    private val managementState = ManagementState(SystemClock::elapsedRealtime)
+    @Volatile private var childBlocked = false
+    private var managementPending = false
     private var socket: WebSocket? = null
     private var epoch = 0L
     private var sequence = 0L
@@ -67,7 +73,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         override fun run() {
             if (!active) return
             if (!permitted()) { fail("lifecycle"); return }
-            try { gate.checkResponseDeadline(); player.tick(); gate.tick(outputBusy) } catch (_: Exception) { fail("playback"); return }
+            try { managementState.checkDeadline(); if (!childBlocked) { gate.checkResponseDeadline(); player.tick(); gate.tick(outputBusy) } } catch (_: Exception) { fail("playback"); return }
             handler.postDelayed(this, 10)
         }
     }
@@ -118,14 +124,40 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         val event = JSONObject(text)
         require(event.getInt("v") == 2)
         if (event.getLong("epoch") != epoch) return
-        when (event.getString("type")) {
+        val kind=event.getString("type")
+        if (childBlocked && kind !in setOf("scope", "management_state", "revoke", "failure")) return
+        when (kind) {
+            "scope" -> {
+                if (!managementPending || event.getInt("management_v") != 1 ||
+                    event.getString("state") !in setOf("active", "waiting_wake")) return
+                val request = managementState.scoped(managementScope(event)) ?: return
+                moveManagementEpoch(request.scope)
+                send("management_pause", "session" to request.scope.session, "turn" to request.scope.turn,
+                    "revision" to request.scope.revision)
+            }
+            "management_state" -> {
+                if (event.getInt("management_v") != 1) return
+                val scope=managementScope(event)
+                when (event.getString("state")) {
+                    "expired" -> fail("expired")
+                    "paused" -> if (managementState.paused(scope,event.getString("pause"))) {
+                        managementPending=false; managed(ManagementState.Phase.PAUSED)
+                    }
+                    "waiting_wake" -> if (event.has("pause") && event.isNull("pause") && managementState.waiting(scope)) {
+                        managementPending=false; isAwake=false; idleSerial++
+                        managed(ManagementState.Phase.WAITING_WAKE)
+                    }
+                }
+            }
             "endpoint" -> {
                 gate.decision(event.getLong("revision"), Completion.valueOf(event.getString("completion").uppercase()))
             }
             "open" -> {
                 if (event.getLong("revision") != gate.revision) return
-                if (event.has("session") && event.has("turn"))
+                if (event.has("session") && event.has("turn")) {
                     helpScope.bind(event.getString("session"), event.getLong("turn"), epoch, gate.revision)
+                    managementState.normal(managementScope(event))
+                }
                 outputBusy = true
                 responseRevision = gate.revision
                 check(player.binding == null)
@@ -138,6 +170,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 if (event.has("revision") && event.getLong("revision") != gate.revision) return
                 ackIdentity = event.getJSONObject("identity"); ackSequence = 0
                 helpScope.bind(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision)
+                managementState.normal(ManagementScope(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"),epoch,gate.revision))
                 player.bind(Binding(epoch, checkNotNull(playerName), event.getInt("stream")))
                 images?.bind(ImageScope(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision))
             }
@@ -187,12 +220,17 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             }
             "thinking_wait" -> status("thinking")
             "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status("listening") }
+            "session_end" -> {
+                if (event.getString("reason") != "conversation_ended" || !imageScopeCurrent(event)) return
+                close(); sessionEnded()
+            }
             "management" -> {
                 if (event.getLong("revision") != gate.revision || !helpScope.matches(event.getString("session"),
                     event.getLong("turn"), epoch, gate.revision)) return
-                interrupt(); management()
+                management()
             }
             "failure" -> {
+                if (childBlocked) { fail("management"); return }
                 if (event.has("local_help")) {
                     if (event.optString("code") != "safety") return
                     val help = runCatching {
@@ -207,6 +245,33 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             }
             else -> error("unknown event")
         }
+    }
+    private fun managementScope(event: JSONObject) = ManagementScope(event.getString("session"), event.getLong("turn"),
+        event.getLong("epoch"),event.getLong("revision"))
+    private fun moveManagementEpoch(scope: ManagementScope) {
+        epoch=scope.epoch; sequence=0; gate.managementWaiting(scope.revision)
+        ackIdentity=null; playerName=null; helpScope.clear(); images?.clear()
+    }
+    /** Caller has already stopped the children's recorder; no network action until native release confirms. */
+    fun stopForManagement(): Boolean {
+        childBlocked=true; isAwake=false; idleSerial++; images?.clear(); hideImage()
+        val stopped=player.stop(); ackIdentity=null; playerName=null; outputBusy=false
+        if (!stopped.stopped || !stopped.released) { fail("release"); return false }
+        return true
+    }
+    fun pauseManagement(): Boolean {
+        if (!active || !childBlocked) return false
+        return try { managementState.begin(epoch,gate.revision); managementPending=true; send("scope") }
+            catch (_: Exception) { fail("management"); false }
+    }
+    fun resumeManagement(settings: com.littlebuddy.v2.parent.ParentPlaybackSettings, route: ImagePort?): Boolean {
+        if (!active) return false
+        return try {
+            val request=managementState.resume() ?: return false
+            images?.clear(); images=route; playbackSettings=settings; managementPending=true; moveManagementEpoch(request.scope)
+            send("management_resume", "session" to request.scope.session, "turn" to request.scope.turn,
+                "revision" to request.scope.revision, "pause" to checkNotNull(request.receipt))
+        } catch (_: Exception) { fail("management"); false }
     }
     private fun recordImageAck(ack: PlaybackAck) {
         if (ack.completed && !player.suspended && ack.binding == player.binding && responseRevision == gate.revision)
@@ -224,7 +289,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             event.getInt("topic"), event.getString("token"), ImageAsset(id, sha, 512, 512))
     }
     fun input(samples: ShortArray, count: Int, speech: Boolean = true, capturedAt: Long = SystemClock.elapsedRealtime()) {
-        if (!permitted()) { samples.fill(0); return }
+        if (!permitted() || childBlocked || !managementState.mediaAllowed) { samples.fill(0); return }
         val age = SystemClock.elapsedRealtime() - capturedAt
         require(age in 0..20000) { "capture age" }
         require(count in 1..3200)
@@ -233,14 +298,16 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         send("input", "pcm" to Base64.encodeToString(bytes.array(), Base64.NO_WRAP), "speech" to speech, "age_ms" to age)
         bytes.array().fill(0)
     }
-    fun wake(observedAt: Long = SystemClock.elapsedRealtime()) { if (isAwake) return; isAwake = true; gate.wake(observedAt); send("wake"); status("listening") }
+    fun wake(observedAt: Long = SystemClock.elapsedRealtime()) { if (isAwake || !active || !managementState.wake()) return; childBlocked=false; isAwake = true; gate.wake(observedAt); send("wake"); status("listening") }
     fun frame(samples: ShortArray, speech: Boolean, capturedAt: Long = SystemClock.elapsedRealtime()) {
+        if (childBlocked || !managementState.mediaAllowed) { samples.fill(0); return }
         if (speech) gate.speech(capturedAt) else gate.quiet()
         input(samples, samples.size, speech, capturedAt)
         samples.fill(0)
     }
-    fun quiet() { gate.quiet() }
+    fun quiet() { if (!childBlocked) gate.quiet() }
     fun candidate() {
+        if (childBlocked) return
         if (player.binding != null && !player.suspended) {
             images?.clear(); player.suspendOutput(); send("suspend")
         }
@@ -254,8 +321,13 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         if (!stopped.stopped || !stopped.released) { fail("release"); return }
         send("stop", "intent" to intent) // Only after local native calls completed.
     }
-    private fun fail(code: String) { close(); status(code); failed() }
+    private fun fail(code: String) {
+        val pending=childBlocked
+        if (pending && code!="expired") controlQuarantined=true
+        close(); if (pending) managed(ManagementState.Phase.DEAD); status(code); failed()
+    }
     fun close() {
+        managementState.close(); childBlocked=true; managementPending=false
         images?.clear()
         active = false; isAwake = false; outputBusy = false; helpScope.clear()
         player.stop(); ackIdentity = null; hideImage()

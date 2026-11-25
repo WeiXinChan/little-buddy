@@ -113,7 +113,7 @@ internal class ParentPanelView(private val activity: Activity, private val model
                 if (state.notice == PanelNotice.UNOWNED) {
                     label("首次使用先重新验证本机系统凭据，再设置PIN；不会读取或修改其他应用配对。")
                     button("系统验证并初始化 PIN") { model.requestSystemOwner(OwnerOperation.INITIALIZE_PIN) }
-                } else label("需Android 11以上、安全锁屏和可用系统认证；旧密钥/记录异常不会自动重建。")
+                } else label("需安全锁屏与可用系统认证；Android 8–10还需已登记的硬件指纹。旧密钥/记录异常不会自动重建。")
             }
         }
         button(if (state.mode == PanelMode.SETTINGS) "退出管理" else "取消", true) { model.exit() }
