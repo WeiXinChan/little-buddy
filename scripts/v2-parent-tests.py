@@ -32,7 +32,7 @@ runtime = [compiler[1], jar("junit", "junit", "4.13.2"),
            jar("org.hamcrest", "hamcrest-core", "1.3")]
 source = ROOT / "app/src/main/java/com/littlebuddy/v2/parent"
 sources = [source / "ParentDomain.kt", source / "ParentCodec.kt", source / "ParentEnvelope.kt",
-           source / "SealedParentStore.kt", source / "ParentCommit.kt",
+           source / "SealedParentStore.kt", source / "ParentCommit.kt", source / "ParentPanelModel.kt",
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentDomainTest.kt",
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentKeyStoreTest.kt",
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/RevocationBoundaryTest.kt",
@@ -40,15 +40,28 @@ sources = [source / "ParentDomain.kt", source / "ParentCodec.kt", source / "Pare
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/RevocationCommitTest.kt",
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/PreparedPublicationTest.kt",
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ExpiryCasTest.kt",
-           ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ExpiryConfirmationTest.kt"]
+           ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ExpiryConfirmationTest.kt",
+           ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentIntegrationTest.kt",
+           ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentPanelModelTest.kt"]
 android = os.environ.get("PARENT_ANDROID_JAR")
 if android:
     sources.append(source / "AndroidParentStore.kt")
+    sources += [source / "ParentRoutes.kt", source / "ParentPanelView.kt", source / "AndroidParentPanel.kt",
+                ROOT / "app/src/main/java/com/littlebuddy/v2/V2EyesView.kt"]
     runtime.append(android)
 with tempfile.TemporaryDirectory(prefix="parent-tests-", dir=ROOT) as output:
     negative = "--r86-key-loss-negative-control" in sys.argv
     revoke_negative = "--r86-revoke-negative-control" in sys.argv
     expiry_negative = "--r86-expiry-negative-control" in sys.argv
+    ui_negative = "--ui-stale-view-negative-control" in sys.argv
+    if ui_negative:
+        original = source / "ParentPanelModel.kt"
+        contents = original.read_text()
+        checked = "if (!active || token != viewRevision.get()) return false"
+        assert contents.count(checked) == 1
+        mutant = Path(output) / original.name
+        mutant.write_text(contents.replace(checked, "if (!active) return false"))
+        sources[sources.index(original)] = mutant
     if expiry_negative:
         original = source / "ParentCommit.kt"
         contents = original.read_text()
@@ -81,7 +94,9 @@ with tempfile.TemporaryDirectory(prefix="parent-tests-", dir=ROOT) as output:
                     "-d", output, *map(str, sources)], check=True)
     if "--compile-only" not in sys.argv:
         tests = ["com.littlebuddy.v2.parent.ParentKeyStoreTest"]
-        if expiry_negative:
+        if ui_negative:
+            tests = ["com.littlebuddy.v2.parent.ParentPanelModelTest"]
+        elif expiry_negative:
             tests = ["com.littlebuddy.v2.parent.ExpiryCasTest"]
         elif revoke_negative:
             tests = ["com.littlebuddy.v2.parent.RevocationBoundaryTest"]
@@ -92,14 +107,17 @@ with tempfile.TemporaryDirectory(prefix="parent-tests-", dir=ROOT) as output:
                       "com.littlebuddy.v2.parent.RevocationCommitTest",
                       "com.littlebuddy.v2.parent.PreparedPublicationTest",
                       "com.littlebuddy.v2.parent.ExpiryCasTest",
-                      "com.littlebuddy.v2.parent.ExpiryConfirmationTest"]
+                      "com.littlebuddy.v2.parent.ExpiryConfirmationTest",
+                      "com.littlebuddy.v2.parent.ParentIntegrationTest",
+                      "com.littlebuddy.v2.parent.ParentPanelModelTest"]
         command = ["java", "-Xmx256m", "-cp", os.pathsep.join([output, *runtime]),
                    "org.junit.runner.JUnitCore", *tests]
-        if negative or revoke_negative or expiry_negative:
+        if negative or revoke_negative or expiry_negative or ui_negative:
             result = subprocess.run(command, text=True, capture_output=True)
             print(result.stdout, end="")
             print(result.stderr, end="")
-            expected = "Tests run: 2,  Failures: 1" if revoke_negative or expiry_negative else "Tests run: 11,  Failures: 2"
+            expected = ("Tests run: 16,  Failures: 1" if ui_negative else
+                        "Tests run: 2,  Failures: 1" if revoke_negative or expiry_negative else "Tests run: 11,  Failures: 2")
             assert result.returncode == 1 and expected in result.stdout
             print("R86 negative control detected as expected: " + expected)
         else:

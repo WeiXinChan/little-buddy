@@ -26,6 +26,10 @@ internal class ParentEpoch {
         val before = stamp.get()
         return before.page == page && stamp.compareAndSet(before, Stamp(page))
     }
+    fun advance(page: Long): Long? {
+        val before = stamp.get()
+        return if (before.page == page && stamp.compareAndSet(before, Stamp(page + 1))) page + 1 else null
+    }
 }
 
 /** Early checks do not commit. Exactly the final publication callback calls claim().

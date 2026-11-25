@@ -82,6 +82,35 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     fun enterPage(): Long = epoch.revoke()
     /** HOME/onPause/focus/page invalidation performs only an atomic update, never waits for IO. */
     fun revoke() { epoch.revoke() }
+    /** A departing child must not revoke an already mounted, later page. */
+    fun revokePage(candidate: Grant) { epoch.revokeIf(candidate.pageEpoch) }
+    fun invalidatePage(page: Long) { epoch.revokeIf(page) }
+    fun isAuthorized(candidate: Grant): Boolean = synchronized(lock) {
+        valid(candidate) // UI/prepare observation only; acceptProtected performs final admission.
+    }
+    /** Internal navigation retains the verified session and deadline, but replaces page capability.
+     * No IO, no queued navigation. Post-CAS time witness prevents an expired transfer. */
+    fun nextPage(candidate: Grant): Grant? = synchronized(lock) {
+        if (worker.isLocked || !valid(candidate)) return null
+        val limit = deadline
+        val next = epoch.advance(candidate.pageEpoch) ?: return null
+        if (now() >= limit) { epoch.revokeIf(next); grant = null; return null }
+        generation++
+        Grant(generation, next).also { grant = it }
+    }
+    /** Only the concrete, synchronous in-memory decision belongs here. Never IO or callbacks
+     * to providers. The decision is published in this call, not a reusable Boolean permission.
+     * Used by the feedback ParentAuthorizer at its final staged publication/admission point. */
+    fun acceptProtected(candidate: Grant, decision: () -> Unit): Boolean {
+        requireWorker()
+        if (worker.isHeldByCurrentThread || !worker.tryLock()) return false
+        try {
+            val tx = transaction(candidate.pageEpoch, candidate.generation, { deadline }) { valid(candidate) }
+            try { tx.claim() } catch (_: ParentCommitRejected) { return false }
+            try { decision() } catch (failure: Exception) { revokePage(candidate); throw failure }
+            return true
+        } finally { worker.unlock() }
+    }
     fun state(): State = synchronized(lock) {
         when {
             quarantined -> State.QUARANTINED
@@ -152,6 +181,27 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
                 if (committed) synchronized(lock) {
                     cooldownUntil = 0; generation++; grant = null; challenge = null
                     epoch.revokeIf(page)
+                }
+                return committed
+            } finally { worker.unlock() }
+        } finally { pin.fill('\u0000') }
+    }
+
+    /** Normal PIN change requires the existing verified session, unlike forgotten-PIN recovery.
+     * New material is staged on the worker and the actual Grant is checked again at publication. */
+    fun changePin(candidate: Grant, pin: CharArray): Boolean {
+        try {
+            requireWorker()
+            if (!asciiPin(pin) || worker.isHeldByCurrentThread || !worker.tryLock()) return false
+            try {
+                val limit = synchronized(lock) { if (!valid(candidate)) return false; record!!.volumeLimit }
+                val salt = ByteArray(16).also(SecureRandom()::nextBytes)
+                val hash = hasher.derive(pin, salt)
+                val committed = persist(ParentRecord(salt, hash, volumeLimit = limit),
+                    transaction(candidate.pageEpoch, candidate.generation, { deadline }) { valid(candidate) })
+                if (committed) synchronized(lock) {
+                    cooldownUntil = 0; generation++; grant = null; challenge = null
+                    epoch.revokeIf(candidate.pageEpoch)
                 }
                 return committed
             } finally { worker.unlock() }
