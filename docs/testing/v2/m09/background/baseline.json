@@ -1,0 +1,47 @@
+{
+  "source_sha256": {
+    "app/src/main/java/com/littlebuddy/v2/feedback/AndroidFeedbackApplication.kt": "d767a9e97997ae25ba9cf7f0c95c29000e494a63a001f985719c454a6a7129ed",
+    "app/src/main/java/com/littlebuddy/v2/feedback/AndroidFeedbackRuntime.kt": "e820cdd35ad6301941ad8ba780fb08806c0ba56bc5e913c2e2212c4a46488ae2",
+    "app/src/main/java/com/littlebuddy/v2/feedback/AndroidFeedbackVault.kt": "a8fe45e92e4358fa31204dcf5492bb81ac69b7f9a054e1a9d62ae66da6c60897",
+    "app/src/main/java/com/littlebuddy/v2/feedback/Contracts.kt": "476df47cb55087735c1327190c84ab352930e9dc1809cd0a1a96ed0d347b6d0b",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackAuthority.kt": "462cf2365a844cc7390d839e997ec7f3d062671670efe53929d2bcfa4f120ddf",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackCore.kt": "4fa1f2f5fcaffb15d7f111b8e48963fc95cb3eca7fdcaa761e6456088fff501d",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackCoreOwner.kt": "784430909f9361946af6cdbcb2ba4a57ed03d500f2fa60c77361c641e5273ca3",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackEngine.kt": "b990af28a7441b3cfd2e56bf6b2076d931f1bde644f2bc087b9bbfbcf7bbfc52",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackMaintenance.kt": "dc7f17e2793efe50c8acd38d5adda1d2c80951bf7c15bd4bdf5db2625975108f",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackPageFactory.kt": "6b12c8a8aa1cbdc7bf8b4f61c59b8f7d0273beebbe93e3c56a7b7600be179e2e",
+    "app/src/main/java/com/littlebuddy/v2/feedback/Vault.kt": "06dab1077496ac401674c7dfc30628fbf297c59e381d3d5f3888e964e98cf25f",
+    "app/src/main/java/com/littlebuddy/v2/parent/AndroidParentPanel.kt": "e5e7b173388a82ef1cc2151127cdbe2d8daabf092ee02ab15af6a3d0427594fd",
+    "app/src/main/java/com/littlebuddy/v2/parent/AndroidParentStore.kt": "633198af2f3a07105834a0ebc4a0aa08d78ea004b2c1871a0abf566ecb34cbe7",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentCodec.kt": "abce2a868140471dd6204d6aed69d7caa40109e6f8049f6ae0e1a320f045d62a",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentCommit.kt": "2cc046a88018a909e62af52d4915a6b7a9fa7b8dfeacfafd5257b4f227e99789",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentDomain.kt": "e199e7186be81eb32aba63034d32625073b7b732d0b77ae236754acde1c7c678",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentEnvelope.kt": "e7ca9b4b90c0a37cca886c5c1c0729bf3a438ea3b7b977d2266cae95608bdc5b",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentPanelModel.kt": "c42cf5c965a7c5799a1773455fd949020841ddecacf13ab42b48ef636bb56c68",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentPanelView.kt": "008dd3b88aebed466e84330366d149a37a5a29035e3434ba63247dcc81af2439",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentRoutes.kt": "340883c9edd1664268ffd47aed5f6bbf9db9ca5fd0af42135f0ef04d35b043f3",
+    "app/src/main/java/com/littlebuddy/v2/parent/SealedParentStore.kt": "f1cf79acf300c97977bae91ea7187017acf479cff17cf2ea07513d29d4f1d77b",
+    "app/src/test/java/com/littlebuddy/v2/feedback/DraftExpiryTest.kt": "f2df44af827abed72b26a2233caf2bdd981ce8b824c1948c4dc633c119d237ab",
+    "app/src/test/java/com/littlebuddy/v2/feedback/FeedbackCoreTest.kt": "6890a9381b1cf6d617f108e63d322e779f32f46be39a142fec69ed0358fc15c3",
+    "app/src/test/java/com/littlebuddy/v2/feedback/FeedbackExpiryTest.kt": "40d2fb03098bb1f492796719441474548c7508a2cf533800f794be0fc66a69c1",
+    "app/src/test/java/com/littlebuddy/v2/feedback/FeedbackFlowTest.kt": "b65c08894bce2706c557e018c7c11a9bb3948b223c06f520001447429ef27e89",
+    "app/src/test/java/com/littlebuddy/v2/feedback/FeedbackMaintenanceTest.kt": "355ae74e26e833b6ee1eb58b2ac21f16d5dacf9e7aad0c579f00dbb15ba69e9d",
+    "app/src/test/java/com/littlebuddy/v2/feedback/FeedbackSweepFailureTest.kt": "feb763bef1e6d8aa5264f22cd812ffc58cf2b67d378971d3897ffa460257bac7",
+    "app/src/test/java/com/littlebuddy/v2/feedback/Review39Probe.kt": "d49f75426f14c48de72210740956312bb747098dd9e97b1c5f6c4b59c30eeafa",
+    "app/src/test/java/com/littlebuddy/v2/feedback/Review40Probe.kt": "2d136d1240ca288896aa69b2a8c1ffcc3f37010752e7e8d2132a4dec569cb413",
+    "app/src/test/java/com/littlebuddy/v2/feedback/Review40RepairProbe.kt": "dbae3babadcd12d83526cfd5b558b1561f9158912184111aa42566e316395d6a"
+  },
+  "results": [
+    {
+      "name": "baseline",
+      "tests": 111,
+      "failures": 0,
+      "skipped": 0,
+      "expected_failure": false,
+      "detected": true
+    }
+  ],
+  "source_ref": null,
+  "android_jar_sha256": "7123df2cceaebc66f3991a480964968c9d9603f6abd542ea8878c39db70fcb07",
+  "scope": "actual Kotlin core, synthetic clock/auth/provider, real files; no Android Keystore/device/platform"
+}

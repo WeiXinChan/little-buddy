@@ -47,7 +47,7 @@ def main():
     if args.source_ref:
         existing = set(subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', args.source_ref], cwd=ROOT, text=True).splitlines())
         candidates = [p for p in candidates if str(p.relative_to(ROOT)) in existing]
-    android_sources = {'AndroidFeedbackVault.kt', 'AndroidFeedbackRuntime.kt', 'FeedbackPageFactory.kt', 'AndroidParentStore.kt'}
+    android_sources = {'AndroidFeedbackVault.kt', 'AndroidFeedbackRuntime.kt', 'AndroidFeedbackApplication.kt', 'FeedbackPageFactory.kt', 'AndroidParentStore.kt', 'AndroidParentPanel.kt', 'ParentPanelView.kt', 'ParentRoutes.kt'}
     sources = [p for p in candidates if args.android_jar or p.name not in android_sources]
     tests = sorted((ROOT / 'app/src/test/java/com/littlebuddy/v2/feedback').glob('*.kt'))
     if args.source_ref:
@@ -73,6 +73,10 @@ def main():
             ('expired-detail-cache', 'detail-cache', 'Review40Probe#systemSweepMustRetireDisplayedExpiredDetails'),
             ('failed-sweep-cache', 'failed-sweep', 'Review40RepairProbe#failedExpirySweepMustNotDeliverQueuedExpiredDetail'),
             ('late-failure-target', 'late-target', 'FeedbackSweepFailureTest#editAfterTickEnqueuedBeforeWorkerStartsIsPreserved'),
+            ('missing-startup-sweep', 'startup-sweep', 'FeedbackMaintenanceTest#startupSweepWithoutAnyPageExpiresActualVaultAndPreservesMinimalLogs'),
+            ('ignored-store-lock', 'store-lock', 'FeedbackMaintenanceTest#realStoreLockConflictRefusesSecondWriterAndCanRetryAfterOwnerRelease'),
+            ('reschedule-active-job', 'job-replace', 'FeedbackMaintenanceTest#matchingPersistedJobIsNotReplacedByServiceRestart'),
+            ('late-maintenance-target', 'late-maintenance', 'FeedbackMaintenanceTest#backgroundRegistrationIoCannotCancelEditorRequestedAfterTick'),
         ]
     report = {'source_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(source_bytes.get(p, p.read_bytes())).hexdigest()
                                for p in sources + tests}, 'results': [], 'source_ref': args.source_ref,
@@ -121,6 +125,16 @@ fun main(args: Array<String>) {
                 if mutant == 'late-ui' and source.name == 'FeedbackEngine.kt':
                     value = value.replace('if (controller.matches(version)) {\n                    if (current(controller)) controller.deliverPending(version) else controller.pause()',
                                           'if (true) {\n                    controller.deliver(screen)')
+                if mutant == 'startup-sweep' and source.name == 'FeedbackMaintenance.kt':
+                    value = value.replace('        request() // cold start', '        // request() // cold start')
+                if mutant == 'store-lock' and source.name == 'FeedbackCoreOwner.kt':
+                    value = value.replace('            if (lease == null) throw FeedbackFailure(Failure.STORAGE)', '')
+                if mutant == 'job-replace' and source.name == 'FeedbackMaintenance.kt':
+                    value = value.replace('override fun ensure() = matches() || register()', 'override fun ensure() = register()')
+                if mutant == 'late-maintenance' and source.name == 'FeedbackMaintenance.kt':
+                    value = value.replace('worker.post { jobScheduled = try { schedule.ensure() } catch (_: Exception) { false } }',
+                                          'worker.post { jobScheduled = try { schedule.ensure() } catch (_: Exception) { false }; engine.sweep(::finish) }')
+                    value = value.replace('            engine.sweep(::finish)', '')
                 if mutant == 'late-target' and source.name == 'FeedbackEngine.kt':
                     value = value.replace('        val target = page.get()\n        val requested = target?.presentationVersion()\n        queue.post {', '        queue.post {\n            val target = page.get()\n            val requested = target?.presentationVersion()')
                 if mutant == 'failed-sweep' and source.name == 'FeedbackEngine.kt':
