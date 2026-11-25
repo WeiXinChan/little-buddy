@@ -211,7 +211,8 @@ class FeedbackStore:
             else:
                 # A permanently inadmissible key needs no retained identifier.
                 try:deadline = admission(key, now)
-                except FeedbackError:
+                except FeedbackError as failure:
+                    if failure.code not in {'expired', 'invalid'}:raise
                     return dict(id=key, received_at=now, store_deleted=True, delete_by=now)
                 submitted = None
             self.db.execute('INSERT OR REPLACE INTO issues VALUES (?,?,?,?,?,?,?,?,?,?)',

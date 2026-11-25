@@ -113,3 +113,17 @@ class Receiver(unittest.IsolatedAsyncioTestCase):
         replay = self.receiver.request(upload)
         self.assertEqual(replay['error'], 'expired')
         self.assertEqual(self.store.db.execute('SELECT count(*) FROM issues').fetchone()[0], 0)
+
+    async def test_future_key_withdrawal_never_falsely_acknowledges_deletion(self):
+        now = int(time.time()*1000)+100
+        self.store.clock = lambda: now
+        self.key = key_at(now+120001)
+        receipt = self.receiver.request(self.message('withdraw'))
+        self.assertFalse(receipt['ok'])
+        self.assertEqual(receipt['error'], 'clock')
+        self.assertNotIn('result', receipt)
+        now += 1
+        # A later valid submission is not resurrection of a successful deletion:
+        # the earlier operation explicitly failed and cannot display DELETED.
+        submitted = self.receiver.request(self.message('submit', category='OTHER', description='synthetic', logs=''))
+        self.assertTrue(submitted['ok'])
