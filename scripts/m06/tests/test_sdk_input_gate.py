@@ -11,8 +11,8 @@ from sdk_input_gate import topology,PrivatePulse,IsolationError,InputGateObserve
 
 def fixture():
  modules=[dict(index=0,name='module-native-protocol-unix'),dict(index=1,name='module-null-sink'),dict(index=2,name='module-null-sink')]
- sinks=[dict(index=i,name=n,owner_module=i+1,driver='module-null-sink.c') for i,n in enumerate(('v2_playback','m06_input'))]
- sources=[dict(index=i,name=s['name']+'.monitor',monitor_of_sink=i,owner_module=s['owner_module'],driver='module-null-sink.c') for i,s in enumerate(sinks)]
+ sinks=[dict(index=i,name=n,owner_module=i+1,driver='module-null-sink.c',monitor_source=n+'.monitor') for i,n in enumerate(('v2_playback','m06_input'))]
+ sources=[dict(index=i,name=s['name']+'.monitor',monitor_source=s['name'],owner_module=s['owner_module'],driver='module-null-sink.c') for i,s in enumerate(sinks)]
  clients=[dict(index=1,properties={'application.process.id':'42'})]
  outputs=[dict(index=0,client=1,source=1,corked=False)]
  return [sources,sinks,modules,clients,outputs]
@@ -29,6 +29,28 @@ class IsolationTests(unittest.TestCase):
  def test_non_gha_or_non_synthetic_platform_never_probes_proc(self):
   for env in ({},{'GITHUB_ACTIONS':'true'},{'GITHUB_ACTIONS':'true','RUNNER_ENVIRONMENT':'self-hosted'}):
    with self.assertRaises(IsolationError):PrivatePulse(env)
+
+class ActualTopologyTests(unittest.TestCase):
+ def actual(self):return json.loads((Path(__file__).parent/'fixtures/pulse16-topology-projected.json').read_text())
+ def run_graph(self,data):
+  raw=json.loads((Path(__file__).parent/'fixtures/pulse16-modules-projected.json').read_text())['modules']
+  short='0\tmodule-native-protocol-unix\t\n1\tmodule-null-sink\t\n2\tmodule-null-sink\t\n'
+  def bounded(args,**kw):
+   if args==['pactl','list','short','modules']:return short.encode(),dict(status='AVAILABLE')
+   return json.dumps(raw if args[-1]=='modules' else data[args[-1]]).encode(),dict(status='AVAILABLE')
+  private=object.__new__(PrivatePulse)
+  with patch('native_input_metadata.bounded',side_effect=bounded):
+   sources=private.pactl('sources');sinks=private.pactl('sinks');mods=private.module_summary(private.pactl('modules'));clients=private.pactl('clients');outputs=private.pactl('source-outputs')
+  return topology(sources,sinks,mods,clients,outputs,lambda pid:pid==data['owned_pid'])
+ def test_actual_entire_bounded_json_short_pipeline_and_client_pid(self):
+  result=self.run_graph(self.actual());self.assertTrue(result['source_output_present']);self.assertTrue(result['qemu_source_outputs'][0]['corked'])
+ def test_missing_conflicting_cross_owner_physical_duplicate_unowned_fail(self):
+  mutations=[lambda d:d['sources'][0].pop('monitor_source'),lambda d:d['sinks'][0].update(monitor_source='m06_input.monitor'),lambda d:d['sources'][0].update(owner_module=2),lambda d:d['sources'][0].update(driver='module-alsa-source.c'),lambda d:d['sources'].append(dict(index=9,name='alsa_input')),lambda d:d['sources'][0].update(index=1),lambda d:d['sinks'][0].update(owner_module=2),lambda d:d.update(owned_pid=99999999),lambda d:d['source-outputs'][0].update(source=0)]
+  for mutation in mutations:
+   with self.subTest(mutation=mutation):
+    data=self.actual();mutation(data)
+    with self.assertRaises((IsolationError,KeyError)):self.run_graph(data)
+
 
 class ModuleSchemaTests(unittest.TestCase):
  def actual_schema(self):
@@ -56,7 +78,7 @@ class ModuleSchemaTests(unittest.TestCase):
  def test_safe_failure_contains_only_project_location_not_message(self):
   try:module_ids([],self.short())
   except IsolationError as e:
-   row=safe_failure(e);self.assertEqual(row['error_class'],'IsolationError');self.assertTrue(row['source']);self.assertNotIn('MODULE_SCHEMA',str(row))
+   row=safe_failure(e);self.assertEqual(row['error_class'],'IsolationError');self.assertTrue(row['source']);self.assertEqual(row['isolation_reason'],'MODULE_SCHEMA');self.assertNotIn('message',row)
 
 
 class ObserverTests(unittest.TestCase):

@@ -1,0 +1,69 @@
+{
+  "sources": [
+    {
+      "index": 0,
+      "name": "v2_playback.monitor",
+      "driver": "module-null-sink.c",
+      "owner_module": 1,
+      "monitor_source": "v2_playback"
+    },
+    {
+      "index": 1,
+      "name": "m06_input.monitor",
+      "driver": "module-null-sink.c",
+      "owner_module": 2,
+      "monitor_source": "m06_input"
+    }
+  ],
+  "sinks": [
+    {
+      "index": 0,
+      "name": "v2_playback",
+      "driver": "module-null-sink.c",
+      "owner_module": 1,
+      "monitor_source": "v2_playback.monitor"
+    },
+    {
+      "index": 1,
+      "name": "m06_input",
+      "driver": "module-null-sink.c",
+      "owner_module": 2,
+      "monitor_source": "m06_input.monitor"
+    }
+  ],
+  "modules": [
+    {
+      "name": "module-native-protocol-unix"
+    },
+    {
+      "name": "module-null-sink"
+    },
+    {
+      "name": "module-null-sink"
+    }
+  ],
+  "source-outputs": [
+    {
+      "index": 0,
+      "client": "0",
+      "source": 1,
+      "corked": true
+    }
+  ],
+  "clients": [
+    {
+      "index": 0,
+      "properties": {
+        "application.process.id": "3181131"
+      }
+    },
+    {
+      "index": 10,
+      "properties": {
+        "application.process.id": "3181146"
+      }
+    }
+  ],
+  "owned_pid": 3181131,
+  "provenance": "Actual Ubuntu24.04 Pulse16.1 -n two-null server; client START_CORKED/no reads; only fixed fields retained; owned_pid is metadata test Python client, not QEMU."
+}

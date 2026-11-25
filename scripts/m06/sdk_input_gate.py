@@ -12,7 +12,9 @@ import subprocess
 import threading
 import time
 
-class IsolationError(RuntimeError): pass
+class IsolationError(RuntimeError):
+    def __init__(self,code):
+        super().__init__(code);self.reason=code if re.fullmatch('[A-Z_]{1,64}',code) else 'UNKNOWN'
 class GateError(RuntimeError): pass
 
 
@@ -47,7 +49,7 @@ def descendant(pid,root,uid):
 
 
 def safe_failure(error):
-    return dict(error_class=type(error).__name__,source=[dict(file=Path(f.filename).name,line=f.lineno) for f in traceback.extract_tb(error.__traceback__) if Path(f.filename).name in ('sdk_input_gate.py','grpc_mic.py')][-6:])
+    return dict(error_class=type(error).__name__,isolation_reason=getattr(error,'reason',None),source=[dict(file=Path(f.filename).name,line=f.lineno) for f in traceback.extract_tb(error.__traceback__) if Path(f.filename).name in ('sdk_input_gate.py','grpc_mic.py')][-6:])
 
 
 def module_ids(modules,short_text):
@@ -64,18 +66,31 @@ def module_ids(modules,short_text):
     return rows
 
 
+def topology_projection(sources,sinks,modules,clients,outputs):
+    names={'v2_playback','m06_input','v2_playback.monitor','m06_input.monitor'}
+    def number(v):return int(v) if re.fullmatch('[0-9]{1,10}',str(v)) else None
+    def nodes(rows):
+        return [{k:(number(v) if k in ('index','owner_module') else v if (v in names or (k=='driver' and v=='module-null-sink.c')) else 'OTHER') for k,v in r.items() if k in ('index','name','driver','owner_module','monitor_source')} for r in rows[:8]]
+    return dict(sources=nodes(sources),sinks=nodes(sinks),modules=[dict(index=number(m.get('index')),name=m.get('name') if m.get('name') in ('module-null-sink','module-native-protocol-unix') else 'OTHER') for m in modules[:8]],clients=[dict(index=number(c.get('index')),pid=number(c.get('properties',{}).get('application.process.id'))) for c in clients[:16]],outputs=[dict(index=number(o.get('index')),client=number(o.get('client')),source=number(o.get('source')),corked=o.get('corked') if isinstance(o.get('corked'),bool) else None) for o in outputs[:16]])
+
+
 def topology(sources,sinks,modules,clients,outputs,owned_qemu):
     expected={'v2_playback','m06_input'}
     if len(sources)!=2 or len(sinks)!=2 or {s['name'] for s in sinks}!=expected: raise IsolationError('NON_PRIVATE_TOPOLOGY')
     mods={str(m['index']):m for m in modules}
     if sorted(m['name'] for m in modules)!=['module-native-protocol-unix','module-null-sink','module-null-sink']: raise IsolationError('NON_NULL_MODULE')
-    sink_ids={str(s['index']):s for s in sinks}
+    sink_names={s['name']:s for s in sinks}
+    if len({str(s['index']) for s in sinks})!=2 or len({str(s['index']) for s in sources})!=2 or {s['name'] for s in sources}!={n+'.monitor' for n in expected}:raise IsolationError('DUPLICATE_OR_UNKNOWN_MONITOR')
+    if len({str(s['owner_module']) for s in sinks})!=2:raise IsolationError('SHARED_SINK_OWNER')
     for sink in sinks:
         m=mods.get(str(sink['owner_module']),{})
         if sink.get('driver')!='module-null-sink.c' or m.get('name')!='module-null-sink': raise IsolationError('NON_NULL_SINK')
     for source in sources:
-        sink=sink_ids.get(str(source.get('monitor_of_sink')), {})
-        if not sink or source['name']!=sink['name']+'.monitor' or source.get('driver')!='module-null-sink.c' or str(source['owner_module'])!=str(sink['owner_module']): raise IsolationError('NON_MONITOR_SOURCE')
+        sink=sink_names.get(source.get('monitor_source'), {})
+        if not sink:raise IsolationError('SOURCE_UNKNOWN_SINK')
+        if source['name']!=sink['name']+'.monitor' or sink.get('monitor_source')!=source['name']:raise IsolationError('MONITOR_NAME_MISMATCH')
+        if source.get('driver')!='module-null-sink.c':raise IsolationError('MONITOR_DRIVER_MISMATCH')
+        if str(source['owner_module'])!=str(sink['owner_module']):raise IsolationError('MONITOR_OWNER_MISMATCH')
     qclients={str(c['index']):int(c.get('properties',{}).get('application.process.id','0')) for c in clients}
     qclients={key:pid for key,pid in qclients.items() if owned_qemu(pid)}
     if not qclients: raise IsolationError('NO_OWNED_QEMU_CLIENT')
@@ -143,8 +158,11 @@ class PrivatePulse:
         if not linked:raise IsolationError('PULSE_SOCKET_NOT_OWNED')
         s=self.socket.stat()
         if not stat.S_ISSOCK(s.st_mode) or s.st_uid!=self.uid: raise IsolationError('PRIVATE_SOCKET')
-        row=topology(self.pactl('sources'),self.pactl('sinks'),self.module_summary(self.pactl('modules')),self.pactl('clients'),self.pactl('source-outputs'),lambda p:descendant(p,self.root,self.uid))
+        sources=self.pactl('sources');sinks=self.pactl('sinks');modules=self.module_summary(self.pactl('modules'));clients=self.pactl('clients');outputs=self.pactl('source-outputs')
+        self.topology_snapshot=topology_projection(sources,sinks,modules,clients,outputs)
+        row=topology(sources,sinks,modules,clients,outputs,lambda p:descendant(p,self.root,self.uid))
         row['module_schema']=self.schema
+        row['topology_snapshot']=self.topology_snapshot
         audio={}
         expected={'PULSE_SERVER':self.server,'QEMU_PA_SERVER':self.server,'PULSE_SOURCE':'m06_input.monitor','QEMU_PA_SOURCE':'m06_input.monitor','PULSE_SINK':'v2_playback','QEMU_PA_SINK':'v2_playback'}
         for pid in row['qemu_pids']:
@@ -203,7 +221,7 @@ class InputGateObserver:
         try:
             self.row['isolation_before']=self.prove()
         except Exception as error:
-            self.save('ISOLATION_FAILED',**safe_failure(error));raise
+            self.save('ISOLATION_FAILED',topology_snapshot=getattr(getattr(self.prove,'__self__',None),'topology_snapshot',None),**safe_failure(error));raise
         self.thread.start()
     def first_packet(self): self.started.set()  # Producer does no RPC/proof/disk work here.
     def _sample(self):
