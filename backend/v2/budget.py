@@ -12,6 +12,9 @@ class ResponseBudget:
         self.anchor = None
         self.thinking_at = None
         self.thinking_seconds = 0.0
+        # Shared by endpoint, planning and fact reads for this expression. A
+        # player/turn rebuild must not grant another retry or a fresh deadline.
+        self.read_retry_revision = None
 
     def speech(self, age_ms=0):
         if type(age_ms) is not int or not 0 <= age_ms <= 20000:
