@@ -53,6 +53,9 @@ internal class FeedbackEngine(private val queue: FeedbackQueue, private val ui: 
     }
     /** Scheduled worker path: no PIN, no parent page, no new submit capability. */
     fun sweep(done: (Boolean) -> Unit = {}) {
+        // Bind when scheduled, including edits/routes queued before the worker starts IO.
+        val target = page.get()
+        val requested = target?.presentationVersion()
         queue.post {
             val success = try {
                 val value = core(); value.sweep(); value.drainDeletions()
@@ -63,7 +66,16 @@ internal class FeedbackEngine(private val queue: FeedbackQueue, private val ui: 
                 }
                 true
             } catch (_: Exception) { false }
-            if (!success) page.get()?.let { active -> ui.post { if (page.get() === active) active.deliver(FeedbackScreen.Notice(Failure.STORAGE)) } }
+            if (!success && target != null && requested != null && page.get() === target) {
+                target.failedSweep(requested)?.let { failureVersion ->
+                    core?.cancelDraft() // memory only; no PIN, persistence, or recovery of quarantined IO
+                    ui.post {
+                        if (target.matches(failureVersion)) {
+                            if (current(target)) target.deliverPending(failureVersion) else target.pause()
+                        }
+                    }
+                }
+            }
             done(success)
         }
     }
@@ -97,6 +109,15 @@ internal class FeedbackController(private val engine: FeedbackEngine, internal v
     internal fun deliverPending(requested: Long) {
         val value = pending.get() ?: return
         if (value.version == requested && pending.compareAndSet(value, null)) deliver(value.screen)
+    }
+    internal fun presentationVersion() = version.get()
+    internal fun failedSweep(requested: Long): Long? {
+        val failureVersion = requested + 1
+        if (!version.compareAndSet(requested, failureVersion)) return null
+        pending.set(null)
+        token = null; refresh = null
+        stage(failureVersion, FeedbackScreen.Notice(Failure.STORAGE))
+        return failureVersion
     }
     fun matches(value: Long) = value == version.get() && sink != null
     internal fun deliver(screen: FeedbackScreen) { sink?.invoke(screen) }

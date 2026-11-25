@@ -1,0 +1,5 @@
+{
+  "compile_exit": 0,
+  "junit_exit": 1,
+  "stdout": "JUnit version 4.13.2\n.E\nTime: 0.242\nThere was 1 failure:\n1) failedExpirySweepMustNotDeliverQueuedExpiredDetail(com.littlebuddy.v2.feedback.Review40RepairProbe)\njava.lang.AssertionError: R87-03: failed expiry sweep allows queued expired detail to render before the error notice\n\tat org.junit.Assert.fail(Assert.java:89)\n\tat org.junit.Assert.assertTrue(Assert.java:42)\n\tat org.junit.Assert.assertFalse(Assert.java:65)\n\tat com.littlebuddy.v2.feedback.Review40RepairProbe.failedExpirySweepMustNotDeliverQueuedExpiredDetail(qa40-repair-probe.kt:66)\n\nFAILURES!!!\nTests run: 1,  Failures: 1\n\n"
+}

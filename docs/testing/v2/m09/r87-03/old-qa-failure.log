@@ -1,0 +1,16 @@
+COMPILE 0 
+JUnit version 4.13.2
+.E
+Time: 0.242
+There was 1 failure:
+1) failedExpirySweepMustNotDeliverQueuedExpiredDetail(com.littlebuddy.v2.feedback.Review40RepairProbe)
+java.lang.AssertionError: R87-03: failed expiry sweep allows queued expired detail to render before the error notice
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at org.junit.Assert.assertFalse(Assert.java:65)
+	at com.littlebuddy.v2.feedback.Review40RepairProbe.failedExpirySweepMustNotDeliverQueuedExpiredDetail(qa40-repair-probe.kt:66)
+
+FAILURES!!!
+Tests run: 1,  Failures: 1
+
+
