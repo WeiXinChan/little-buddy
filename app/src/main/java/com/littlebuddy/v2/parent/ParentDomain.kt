@@ -114,9 +114,24 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     }
     private fun permitted(page: Long, ticket: Long, extra: () -> Boolean): Boolean =
         !quarantined && page == epoch.current() && ticket == generation && extra()
-    private fun transaction(page: Long, ticket: Long, extra: () -> Boolean = { true }) = ParentCommit(
-        { synchronized(lock) { permitted(page, ticket, extra) } },
-        { synchronized(lock) { permitted(page, ticket, extra) && epoch.claim(page) } })
+    private fun transaction(page: Long, ticket: Long, expiresAt: (() -> Long)? = null,
+                            extra: () -> Boolean = { true }): ParentCommit {
+        var cutoff: Long? = null
+        return ParentCommit(
+            { synchronized(lock) { permitted(page, ticket, extra) } },
+            { synchronized(lock) {
+                // Freeze the deadline from the same state as the final authorization/CAS.
+                cutoff = expiresAt?.invoke()
+                permitted(page, ticket, extra) && epoch.claim(page)
+            } },
+            {
+                // elapsedRealtime is monotonic: postSample < cutoff proves CAS < cutoff.
+                // Reject conservatively even if expiry happened just AFTER an in-time CAS.
+                val limit = cutoff
+                if (limit == null || now() < limit) true
+                else { epoch.revokeIf(page); false }
+            })
+    }
 
     fun replacePin(pin: CharArray, proof: OwnerChallenge, page: Long): Boolean {
         try {
@@ -133,7 +148,7 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
                 val salt = ByteArray(16).also(SecureRandom()::nextBytes)
                 val hash = hasher.derive(pin, salt)
                 val next = synchronized(lock) { ParentRecord(salt, hash, volumeLimit = record?.volumeLimit ?: 60) }
-                val committed = persist(next, transaction(page, ticket) { now() < proof.expiresAt })
+                val committed = persist(next, transaction(page, ticket, { proof.expiresAt }) { now() < proof.expiresAt })
                 if (committed) synchronized(lock) {
                     cooldownUntil = 0; generation++; grant = null; challenge = null
                     epoch.revokeIf(page)
@@ -190,7 +205,7 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
                 if (limit !in 0..100 || !valid(candidate)) return false
                 record!!.updated(volumeLimit = limit)
             }
-            val committed = persist(next, transaction(candidate.pageEpoch, candidate.generation) { valid(candidate) })
+            val committed = persist(next, transaction(candidate.pageEpoch, candidate.generation, { deadline }) { valid(candidate) })
             if (committed) synchronized(lock) {
                 if (valid(candidate)) deadline = now() + IDLE_MS
             }

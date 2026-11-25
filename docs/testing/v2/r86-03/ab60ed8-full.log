@@ -1,0 +1,12 @@
+app/src/test/java/com/littlebuddy/v2/parent/RevocationBoundaryTest.kt:23:74: warning: the corresponding parameter in the supertype 'OwnerProof' is named 'challenge'. This may cause problems when calling this function with named arguments.
+  val d=ParentDomain(s,{100L},{},object:OwnerProof {override fun consume(c:OwnerChallenge)=true},"qa-only")
+                                                                         ^
+JUnit version 4.13.2
+......PBKDF2 host-only iterations=600000 samples_ms=724,588,605,693
+................................controlled_precommit: revoke_returned_within_300ms=true write_committed=false stored_volume=60
+...............
+Time: 74.884
+
+OK (53 tests)
+
+Android adapter: SDK compile only

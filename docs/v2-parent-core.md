@@ -27,7 +27,8 @@
   都隔离，不当成首次安装。解密缓冲与派生缓冲尽力清零，不承诺 JVM 绝对擦除。
 - 存储与慢哈希必须离主线程。生产单例工厂保证单进程一个授权域；域内 tryLock
   串行 worker 事务，并发调用直接拒绝。撤销使用独立原子代际，最终提交在准备 IO
-  后与撤销竞争同一原子单元，具体发布顺序见 R86-02。无隐式排队重试或秘密日志。
+   后与撤销竞争同一原子单元；有期限的claim还须CAS后确认，详见R86-03。
+   无隐式排队重试或秘密日志。
 
 ## 接口与剩余交付（OPEN）
 
@@ -141,7 +142,7 @@ root既有实跑报告，不是本轮作者真机/模拟器实测。最终head�
 Android instrumentation 两处屏障未在本轮设备执行，原 server transport 2/2 门槛
 在 `scripts/android-ci-instrument` 保持原样。
 
-## R86-02：原子撤销与最终提交协议
+## R86-02：原子撤销与最终提交协议（后续期限修正见R86-03）
 
 旧 head `2343130679481f7db17be343db69b57137591589` 的 QA 正常 JVM 分母为
 **39项：38通过、1失败、0跳过**，不是35项全绿。失败是实际线程撤销反例，不能用
@@ -213,3 +214,58 @@ scripts/with-build-lock env PARENT_ANDROID_JAR=/home/ubuntu/.gradle/caches/8.13/
 本轮未重跑未变化的TLS/设备/旧CI；上节TLS13/13为前一轮证据，非本轮新增分母。
 UI/完整生命周期接线、真实归属/系统恢复/端点、M06音频与A27/A28/A34、D04继续OPEN，
 不以纯core线程测试声称手机/音频实测。PR仍需原QA定向复核和root审合。
+
+## R86-03：到期采样与claim CAS窗口
+
+QA 对旧 head `ab60ed8f7a31507a02075b3813ce5aaedb479981` 的正常 JVM 总数为
+**55项：54通过、1真实失败、0跳过**；53/53只是其中基础集合。原件保留于
+`docs/testing/v2/r86-03/ab60ed8-full.log`（基础53项）和
+`docs/testing/v2/r86-03/ab60ed8-expiry-cas.log`（新增2项，1失败）。后者 SHA256 为
+`3be923a9bb74ba5760c8d5f7153ad8f61de168e5aafb805777b1d8495f63f657`。
+旧失败记录 `deadline_before_CAS: expired_at=120100 committed=true volume=80`。
+原 `ExpiryCasTest.kt` 两例源码/断言逐字节保留，SHA256为
+`1aa99ed362dc6c8975efd23834be56265bf7a206a027f6ffeab0e138c4ce820f`。
+
+最小修复只涉及 ParentCommit 与 ParentDomain 的期限确认：
+
+- 在决定的同一短状态临界区冻结期限D（Grant本次闲置deadline或OwnerProof.expiresAt），
+  保留CAS前的原权限与期限检查，但不把它当成最终到期证明。
+- `ParentCommit.claim` 成功CAS后、设置committed以及任何不可逆文件发布之前，
+  再调用单调时钟得到样本P，仅当 **P < D** 才确认成功；P等于或超过D保守拒绝。
+  生产时钟是elapsedRealtime，跨重启不保留Grant；不以可调墙钟做此证明。
+- 证明采用单调性：CAS发生在后采样之前，故时间C≤P；P<D蕴含C<D。对被确认的
+  成功事务，线性化点仍为此前CAS，**不是后采样或committed标志赋值**。若采样后
+  又被抢占至D之后，但样本P仍小于D，证明的CAS仍然及时，可以完成已确认事务。
+  若CAS其实及时、但P已到期，也保守拒绝；允许此类安全的误拒绝，不挪动提交点。
+- 未通过后确认的CAS只是暂定stamp轮换，不代表已提交：committed始终false，
+  claim终止且不可重试，没有文件/记录/计数发布。到期中止仅对仍为该旧页的epoch
+  执行revokeIf；若已有更晚页面则不撤销新页。旧grant/nonce失效，现存配置/PIN及
+  已落盘的失败预留保持；不会清计数或恢复授权。
+- CAS前显式revoke赢则仍拒绝，沿用已变化的epoch；CAS前OwnerProof已到期则不
+  消耗CAS，nonce已消费、旧记录不变。CAS成功且后确认有效时，其后显式revoke仍
+  立即失效旧授权，不能倒销较早的合法决定。不会重复检查page而破坏该既有顺序。
+- 正常到期取消不记作磁盘损坏。Grant到期或CAS后期限确认失败时，旧页被锁定；
+  CAS前OwnerProof到期只消费nonce、保留原页的授权状态，不新增权限。首次初始化若准备时已创建
+  alias但最终取消，仍按R86-01隔离且不再生成；真正磁盘/密钥故障仍隔离。存储完成、
+  readback、witness和内存record发布顺序以及失败不报成功规则不变。
+
+作者本轮正常检查 **63/63通过、失败0、跳过0，88.245s，退出0**，含Android适配
+编译。组成：原53、原QA expiry两例、8项期限确认反例。原QA输出现在为
+`deadline_before_CAS: expired_at=120100 committed=false volume=60`；显式revoke
+对照同样通过。新增覆盖Grant/OwnerProof等值、OwnerProof初始化/恢复采样后抢占、
+失败预留/旧配置保持、创建alias后中止隔离、确认失败不可重试，以及后采样已证明
+及时后再到期/撤销仍保留较早决定。原撤销、IO延迟/故障、并发、失败预留和R86-01
+集合本次重跑均通过。主机KDF样本580/595/593/584ms，OPPO未测。
+
+实际命令为上节同一管理员heavy.lock下的主命令；本轮另增加
+`--r86-expiry-negative-control`：仅在临时源码副本删除CAS后确认，运行原QA两例，
+应恢复到期那一项失败，显式revoke那一项仍通过。原两类突变负控仍分别使用
+`--r86-revoke-negative-control`、`--r86-key-loss-negative-control`，与正常63项分开计数。
+本轮实际负控：expiry两项中1项预期失败（2.706s）；revoke两项中1项预期失败
+（3.036s）；key十一项中2项预期失败（4.337s）。三次JUnit退出1，脚本确认预期后
+退出0，均含Android适配编译；不是正常集合中的失败，也不覆盖ab60的真实失败。
+初次正常命令因共享锁占用返回75，未启动JVM，未计入用例失败/跳过；锁释放后串行完成。
+
+本轮不重跑旧CI/TLS/设备，不占手机、新模拟器/HDA或部署。软件时钟/存储端口反例
+不等同Android真实fsync/Keystore/掉电实测。UI/完整生命周期、真实归属/恢复/端点、
+M06音频与A27/A28/A34、D04仍OPEN，待原QA针对新冻结版本复核和root审合。
