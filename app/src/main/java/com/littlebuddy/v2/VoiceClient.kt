@@ -20,7 +20,11 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val failed: () -> Unit = {}, waits: Waits = Waits(),
                            private val observed: (PlaybackAck) -> Unit = {},
                            private val completed: (Long, Int) -> Unit = { _, _ -> },
-                           private val allowAck: (PlaybackAck) -> Boolean = { true }) {
+                           private val allowAck: (PlaybackAck) -> Boolean = { true },
+                           private val playbackSettings: com.littlebuddy.v2.parent.ParentPlaybackSettings = com.littlebuddy.v2.parent.ParentPlaybackSettings(),
+                           private val localHelp: (LocalHelpReason) -> Unit = {},
+                           private val management: () -> Unit = {},
+                           private val permitted: () -> Boolean = { true }) {
     fun nativeProof() = player.nativeProof()
     val quarantined get() = player.quarantined
     private var socket: WebSocket? = null
@@ -41,12 +45,13 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         { isAwake = false; idleSerial++; interrupt(); status("wake") })
     private fun gateDeadline(): Long = gate.responseDeadline
     private fun gateVersion(): Long = gate.revision
+    private val helpScope = LocalHelpScope()
     private var ackIdentity: JSONObject? = null
     private var ackSequence = 0L
     private var playerName: String? = null
     private val http = OkHttpClient.Builder().retryOnConnectionFailure(false)
         .followRedirects(false).connectTimeout(4, TimeUnit.SECONDS).build()
-    private val player = Playback({ AndroidTrack(handler) { fail("route") } },
+    private val player = Playback({ AndroidTrack(handler, playbackSettings) { fail("route") } },
         SystemClock::elapsedRealtime) { ack ->
         observed(ack)
         if (ack.completed && responseRevision == gate.revision && ack.binding.epoch == epoch) gate.effectivePlayed()
@@ -59,6 +64,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private val pump = object : Runnable {
         override fun run() {
             if (!active) return
+            if (!permitted()) { fail("lifecycle"); return }
             try { gate.checkResponseDeadline(); player.tick(); gate.tick(outputBusy) } catch (_: Exception) { fail("playback"); return }
             handler.postDelayed(this, 10)
         }
@@ -72,12 +78,12 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
 
     fun connect(address: String, token: String) {
-        check(!active && !player.quarantined)
+        check(!active && !player.quarantined && permitted())
         require(address.startsWith("wss://") && address.endsWith("/v2/voice") &&
                 !address.contains('@') && !address.contains('?') && !address.contains('#'))
         require(token.matches(Regex("[a-zA-Z0-9]{32,256}")))
         active = true
-        epoch = 0; sequence = 0
+        epoch = 0; sequence = 0; helpScope.clear()
         val request = Request.Builder().url(address).header("Authorization", "Bearer $token").build()
         socket = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) { handler.post {
@@ -97,13 +103,14 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         })
     }
     private fun send(kind: String, vararg values: Pair<String, Any>) {
-        if (!active) return
+        if (!active || !permitted()) return
         val message = JSONObject().put("v", 2).put("type", kind).put("epoch", epoch).put("seq", sequence++)
         values.forEach { message.put(it.first, it.second) }
         val current = socket ?: return
         if (current.queueSize() > 64000 || !current.send(message.toString())) fail("backpressure")
     }
     private fun receive(text: String) {
+        if (!permitted()) { close(); return }
         require(text.length <= 16000)
         val event = JSONObject(text)
         require(event.getInt("v") == 2)
@@ -114,6 +121,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             }
             "open" -> {
                 if (event.getLong("revision") != gate.revision) return
+                if (event.has("session") && event.has("turn"))
+                    helpScope.bind(event.getString("session"), event.getLong("turn"), epoch, gate.revision)
                 outputBusy = true
                 responseRevision = gate.revision
                 check(player.binding == null)
@@ -123,6 +132,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             "bound" -> {
                 require(event.getString("player") == playerName)
                 ackIdentity = event.getJSONObject("identity"); ackSequence = 0
+                helpScope.bind(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision)
                 player.bind(Binding(epoch, checkNotNull(playerName), event.getInt("stream")))
             }
             "audio" -> {
@@ -154,11 +164,29 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 reveal(event.getString("effect"), event.getInt("topic"))
             "thinking_wait" -> status("thinking")
             "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status("listening") }
-            "failure" -> { interrupt(); status("failure") }
+            "management" -> {
+                if (event.getLong("revision") != gate.revision || !helpScope.matches(event.getString("session"),
+                    event.getLong("turn"), epoch, gate.revision)) return
+                interrupt(); management()
+            }
+            "failure" -> {
+                if (event.has("local_help")) {
+                    if (event.optString("code") != "safety") return
+                    val help = runCatching {
+                        val value = event.getJSONObject("local_help")
+                        if (value.keys().asSequence().toSet() != setOf("v", "prompt_id", "reason") ||
+                            event.getLong("revision") != gate.revision) null
+                        else helpScope.accept(event.getString("session"), event.getLong("turn"), epoch, gate.revision,
+                            value.getInt("v"), value.getString("prompt_id"), value.getString("reason"))
+                    }.getOrNull() ?: return // stale/malformed help must not close or lend authority to a newer turn
+                    interrupt(); status("failure"); localHelp(help)
+                } else { interrupt(); status("failure"); failed() }
+            }
             else -> error("unknown event")
         }
     }
     fun input(samples: ShortArray, count: Int, speech: Boolean = true, capturedAt: Long = SystemClock.elapsedRealtime()) {
+        if (!permitted()) { samples.fill(0); return }
         val age = SystemClock.elapsedRealtime() - capturedAt
         require(age in 0..20000) { "capture age" }
         require(count in 1..3200)
@@ -183,13 +211,13 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         val stopped = player.stop() // First: local mute, generation revoke, flush, stop/release.
         ackIdentity = null; playerName = null; outputBusy = false
         hideImage()
-        epoch++; sequence = 0
+        epoch++; sequence = 0; helpScope.clear()
         if (!stopped.stopped || !stopped.released) { fail("release"); return }
         send("stop", "intent" to intent) // Only after local native calls completed.
     }
     private fun fail(code: String) { close(); status(code); failed() }
     fun close() {
-        active = false; isAwake = false; outputBusy = false
+        active = false; isAwake = false; outputBusy = false; helpScope.clear()
         player.stop(); ackIdentity = null; hideImage()
         handler.removeCallbacks(pump); handler.removeCallbacks(heartbeat)
         val old = socket; socket = null

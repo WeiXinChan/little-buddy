@@ -19,29 +19,26 @@ import android.widget.TextView
 
 /** Actual native widgets. No PIN String, saved input, autofill, suggestions or clipboard import. */
 internal class ParentPanelView(private val activity: Activity, private val model: ParentPanelModel,
-    private val feedback: ParentFeedbackRoute = PendingFeedbackRoute) {
+    private val feedback: ParentFeedbackRoute = AndroidParentFeedbackRoute) {
     private val inputs = mutableListOf<EditText>()
-    private var child: ParentRoutePage? = null
-    private var routeRevision = -1L
-    fun pause() { clearInputs(); child?.pause() }
-    fun close() { clearInputs(); child?.close(); child = null; routeRevision = -1 }
+    private val routes = ParentRouteSlot<ParentRoutePage>({ it.pause() }, { it.close() })
+    fun pause() { clearInputs(); routes.pause() }
+    fun close() { clearInputs(); routes.close() }
     private fun clearInputs() { inputs.forEach { it.text?.clear() }; inputs.clear() }
     fun render(state: PanelState) {
         clearInputs()
         val route = if (state.mode == PanelMode.FEEDBACK) model.currentRoute() else null
         if (route != null) {
-            if (routeRevision != route.revision) {
-                child?.close(); routeRevision = route.revision
-                child = feedback.create(activity, route.domain, route.grant) {
+            routes.mount(route.revision, {
+                feedback.create(activity, route.domain, route.grant) {
                     activity.runOnUiThread { model.routeExit(route.revision) }
                 }
-            }
-            val page = child
-            if (page == null) { model.routeExit(route.revision, unavailable = true); return }
-            activity.setContentView(page.view)
+            }, { page -> activity.setContentView(page.view) }, {
+                model.routeFailed(route.revision) { routes.close(route.revision) }
+            })
             return
         }
-        child?.close(); child = null; routeRevision = -1
+        routes.close()
         val token = model.viewToken
         val body = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL; setPadding(32, 24, 32, 24); isSaveEnabled = false
@@ -74,8 +71,17 @@ internal class ParentPanelView(private val activity: Activity, private val model
                     importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
                     isEnabled = !state.busy; body.addView(this)
                 }
-                label("上限将在语音功能接通后生效。")
-                button("保存上限") { model.saveVolume(volume.text.toString().toIntOrNull() ?: -1) }
+                label("语速（85–115%）与每次互动上限（60–600秒）")
+                val rate = EditText(activity).apply { inputType = InputType.TYPE_CLASS_NUMBER
+                    setText((state.settings?.rate ?: 100).toString()); isSaveEnabled = false; body.addView(this) }
+                val duration = EditText(activity).apply { inputType = InputType.TYPE_CLASS_NUMBER
+                    setText((state.settings?.durationSeconds ?: 600).toString()); isSaveEnabled = false; body.addView(this) }
+                button("保存播放设置") {
+                    runCatching { ParentPlaybackSettings(volume.text.toString().toInt(), rate.text.toString().toInt(),
+                        duration.text.toString().toInt()) }.onSuccess(model::saveExecutionSettings)
+                        .onFailure { label("请检查音量0–100、语速85–115、时长60–600。") }
+                }
+                button("系统验证并导入连接配置") { model.requestSystemOwner(OwnerOperation.PROVISION_ENDPOINT) }
                 button("修改 PIN") { model.navigate(PanelMode.CHANGE_PIN) }
                 button("帮助与反馈") { model.navigate(PanelMode.FEEDBACK) }
             }
@@ -86,7 +92,29 @@ internal class ParentPanelView(private val activity: Activity, private val model
                 button("保存新 PIN") { model.changePin(take(first), take(repeated)) }
                 button("返回管理") { model.navigate(PanelMode.SETTINGS) }
             }
-            else -> Unit // UNAVAILABLE never offers a first-owner PIN or a recovery bypass.
+            PanelMode.OWNER_PIN -> {
+                label("系统验证已完成。此步骤只设置本机 PIN，不证明远程家庭账号归属。")
+                val first = pin(body, "新6位PIN"); val second = pin(body, "再次输入")
+                button("保存 PIN") { model.setOwnerPin(take(first), take(second)) }
+            }
+            PanelMode.CONNECTION -> {
+                label("只导入管理员已发行的本设备 V2 地址和凭据，不在这里创建账号或令牌。")
+                val address = EditText(activity).apply { hint = "wss://…/v2/voice"; isSaveEnabled = false; body.addView(this) }
+                val secret = EditText(activity).apply {
+                    hint = "已发行的设备连接凭据"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    transformationMethod = PasswordTransformationMethod.getInstance(); isSaveEnabled = false
+                    importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                    isLongClickable = false; filters = arrayOf(InputFilter.LengthFilter(256)); inputs.add(this); body.addView(this)
+                }
+                button("保存已发行的连接") { model.importConnection(address.text.toString(), take(secret)) }
+            }
+            PanelMode.FEEDBACK -> label("家长授权已失效，请返回重新验证。")
+            PanelMode.UNAVAILABLE -> {
+                if (state.notice == PanelNotice.UNOWNED) {
+                    label("首次使用先重新验证本机系统凭据，再设置PIN；不会读取或修改其他应用配对。")
+                    button("系统验证并初始化 PIN") { model.requestSystemOwner(OwnerOperation.INITIALIZE_PIN) }
+                } else label("需Android 11以上、安全锁屏和可用系统认证；旧密钥/记录异常不会自动重建。")
+            }
         }
         button(if (state.mode == PanelMode.SETTINGS) "退出管理" else "取消", true) { model.exit() }
         activity.setContentView(ScrollView(activity).apply { isSaveEnabled = false; addView(body) })
@@ -117,7 +145,8 @@ internal class ParentPanelView(private val activity: Activity, private val model
     private fun notice(reason: PanelNotice) = when (reason) {
         PanelNotice.NONE -> "请输入屏幕 PIN；语音不能代替验证。"
         PanelNotice.LOADING -> "正在读取安全设置…"
-        PanelNotice.UNCONFIGURED, PanelNotice.UNOWNED -> "家长归属尚未配置，暂不能设置或恢复 PIN。"
+        PanelNotice.UNCONFIGURED -> "本机系统认证暂不可用，请检查安全锁屏和兼容能力。"
+        PanelNotice.UNOWNED -> "尚未设置本机家长PIN，请先通过系统认证再初始化。"
         PanelNotice.PIN_FORMAT -> "请输入 6 位数字。"
         PanelNotice.WRONG_PIN -> "PIN 不正确。"
         PanelNotice.COOLDOWN -> "尝试次数过多，请稍后再试。"
@@ -128,6 +157,9 @@ internal class ParentPanelView(private val activity: Activity, private val model
         PanelNotice.PIN_MISMATCH -> "两次 PIN 须一致，且都是 6 位数字。"
         PanelNotice.PIN_CHANGED -> "PIN 已更新，请用新 PIN 验证。"
         PanelNotice.RECOVERY_UNAVAILABLE -> "安全恢复尚不可用，不会清除配对或重置 PIN。"
-        PanelNotice.FEEDBACK_UNAVAILABLE -> "帮助与反馈尚未接通。"
+        PanelNotice.FEEDBACK_UNAVAILABLE -> "帮助与反馈暂不可用，请重新验证后再试。"
+        PanelNotice.OWNER_READY -> "系统验证仅本次有效，请在一分钟内完成；取消不会改配对或PIN。"
+        PanelNotice.OWNER_UNAVAILABLE -> "系统授权未完成或已过期，请重新验证。不会自动重置。"
+        PanelNotice.CONNECTION_SAVED -> "连接已保存，请用PIN重新验证；远端有效性将在连接时核验。"
     }
 }

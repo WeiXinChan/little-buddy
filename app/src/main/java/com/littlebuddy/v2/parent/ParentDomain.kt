@@ -5,7 +5,8 @@ import java.security.SecureRandom
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 
-/** Trusted issuer integration is deliberately absent. A device unlock is not owner proof.
+/** A device merely being unlocked is not owner proof. The default refuses; the local system
+ * issuer requires a fresh per-use Keystore crypto authentication and exact signed operation.
  * Implementations must validate a fresh, single-use, device-bound challenge for the exact
  * operation, against a registered issuer, and reject replay, expiry and revoked bindings.
  * Neither Intent extras nor a caller's boolean assertion are evidence of ownership. */
@@ -21,10 +22,14 @@ internal object UnconfiguredOwnerProof : OwnerProof {
 
 internal class ParentRecord(val salt: ByteArray, val hash: ByteArray,
                           val failures: Int = 0, val cooldownMs: Long = 0,
-                          val volumeLimit: Int = 60) {
+                          val volumeLimit: Int = 60, val speechRate: Int = 100,
+                          val durationSeconds: Int = 600, val connection: ParentConnection? = null) {
     fun updated(failures: Int = this.failures, cooldownMs: Long = this.cooldownMs,
-                volumeLimit: Int = this.volumeLimit) =
-        ParentRecord(salt.copyOf(), hash.copyOf(), failures, cooldownMs, volumeLimit)
+                volumeLimit: Int = this.volumeLimit, speechRate: Int = this.speechRate,
+                durationSeconds: Int = this.durationSeconds, connection: ParentConnection? = this.connection) =
+        ParentRecord(salt.copyOf(), hash.copyOf(), failures, cooldownMs, volumeLimit, speechRate, durationSeconds, connection)
+    fun withPin(salt: ByteArray, hash: ByteArray) = ParentRecord(salt, hash, volumeLimit = volumeLimit,
+        speechRate = speechRate, durationSeconds = durationSeconds, connection = connection)
 }
 
 /** Implementations atomically commit the entire authenticated record or throw.
@@ -176,7 +181,7 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
                 if (!owner.consume(proof)) return false
                 val salt = ByteArray(16).also(SecureRandom()::nextBytes)
                 val hash = hasher.derive(pin, salt)
-                val next = synchronized(lock) { ParentRecord(salt, hash, volumeLimit = record?.volumeLimit ?: 60) }
+                val next = synchronized(lock) { record?.withPin(salt, hash) ?: ParentRecord(salt, hash) }
                 val committed = persist(next, transaction(page, ticket, { proof.expiresAt }) { now() < proof.expiresAt })
                 if (committed) synchronized(lock) {
                     cooldownUntil = 0; generation++; grant = null; challenge = null
@@ -194,10 +199,10 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
             requireWorker()
             if (!asciiPin(pin) || worker.isHeldByCurrentThread || !worker.tryLock()) return false
             try {
-                val limit = synchronized(lock) { if (!valid(candidate)) return false; record!!.volumeLimit }
+                val previous = synchronized(lock) { if (!valid(candidate)) return false; record!! }
                 val salt = ByteArray(16).also(SecureRandom()::nextBytes)
                 val hash = hasher.derive(pin, salt)
-                val committed = persist(ParentRecord(salt, hash, volumeLimit = limit),
+                val committed = persist(previous.withPin(salt, hash),
                     transaction(candidate.pageEpoch, candidate.generation, { deadline }) { valid(candidate) })
                 if (committed) synchronized(lock) {
                     cooldownUntil = 0; generation++; grant = null; challenge = null
@@ -260,6 +265,58 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
                 if (valid(candidate)) deadline = now() + IDLE_MS
             }
             return committed
+        } finally { worker.unlock() }
+    }
+    /** Worker-only execution snapshot. Recheck authenticated storage/key presence before a new child session. */
+    fun childConfiguration(): ParentChildConfiguration? {
+        requireWorker()
+        if (worker.isHeldByCurrentThread || !worker.tryLock()) return null
+        try {
+            val expected = synchronized(lock) { if (quarantined) return null; record } ?: return null
+            val durable = checkNotNull(store.read())
+            val memory = ParentCodec.encode(expected); val disk = ParentCodec.encode(durable)
+            try { check(MessageDigest.isEqual(memory, disk)) } finally { memory.fill(0); disk.fill(0) }
+            return ParentChildConfiguration(ParentPlaybackSettings(expected.volumeLimit, expected.speechRate,
+                expected.durationSeconds), expected.connection)
+        } catch (_: Exception) {
+            synchronized(lock) { quarantined = true }; revoke(); return null
+        } finally { worker.unlock() }
+    }
+    fun settings(candidate: Grant): ParentPlaybackSettings? = synchronized(lock) {
+        if (worker.isLocked || !valid(candidate)) null else record?.let {
+            ParentPlaybackSettings(it.volumeLimit, it.speechRate, it.durationSeconds)
+        }
+    }
+    fun ownerChallengeCurrent(proof: OwnerChallenge, page: Long): Boolean = synchronized(lock) {
+        !quarantined && page == epoch.current() && challenge === proof && now() < proof.expiresAt
+    }
+    fun saveSettings(candidate: Grant, settings: ParentPlaybackSettings): Boolean {
+        requireWorker()
+        if (worker.isHeldByCurrentThread || !worker.tryLock()) return false
+        try {
+            val next = synchronized(lock) {
+                if (!valid(candidate)) return false
+                record!!.updated(volumeLimit = settings.volume, speechRate = settings.rate,
+                    durationSeconds = settings.durationSeconds)
+            }
+            return persist(next, transaction(candidate.pageEpoch, candidate.generation, { deadline }) { valid(candidate) })
+        } finally { worker.unlock() }
+    }
+    /** Import an already-issued endpoint credential after a separate fresh system operation. */
+    fun provisionConnection(proof: OwnerChallenge, page: Long, value: ParentConnection): Boolean {
+        requireWorker()
+        if (worker.isHeldByCurrentThread || !worker.tryLock()) return false
+        try {
+            val ticket = synchronized(lock) {
+                if (record == null || !ownerChallengeCurrent(proof, page) || proof.deviceBinding != binding ||
+                    proof.operation != OwnerOperation.PROVISION_ENDPOINT) return false
+                challenge = null; generation
+            }
+            if (!owner.consume(proof)) return false
+            val next = synchronized(lock) { record!!.updated(connection = value) }
+            val saved = persist(next, transaction(page, ticket, { proof.expiresAt }) { now() < proof.expiresAt })
+            if (saved) synchronized(lock) { generation++; grant = null; epoch.revokeIf(page) }
+            return saved
         } finally { worker.unlock() }
     }
     private fun persist(next: ParentRecord, transaction: ParentCommit): Boolean = try {
