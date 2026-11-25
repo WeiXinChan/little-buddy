@@ -25,9 +25,9 @@
   域/schema/device binding；完整记录包含哈希参数、盐、验证值、计数和配置。
   AtomicFile 位于 noBackupFilesDir，缺文件但已有 key、损坏、解密失败和写失败
   都隔离，不当成首次安装。解密缓冲与派生缓冲尽力清零，不承诺 JVM 绝对擦除。
-- 存储与慢哈希必须离主线程。生产单例工厂保证单进程一个授权域；调用者应使用
-  一个串行 worker。最终授权检查与文件提交互斥，撤销在线性化顺序中发生在提交前
-  则拒绝，发生在提交后则该操作已提交。不隐式排队重试，不写秘密日志。
+- 存储与慢哈希必须离主线程。生产单例工厂保证单进程一个授权域；域内 tryLock
+  串行 worker 事务，并发调用直接拒绝。撤销使用独立原子代际，最终提交在准备 IO
+  后与撤销竞争同一原子单元，具体发布顺序见 R86-02。无隐式排队重试或秘密日志。
 
 ## 接口与剩余交付（OPEN）
 
@@ -91,8 +91,8 @@ QA 对旧 head `84129d6` 的静态审查指出：Android 每次写入都允许 `
 生产首写仍必须先经过 ParentDomain 的真实归属证明，当前提供者未配置故默认拒绝。
 
 同时将 verify/replacePin 的 worker 检查移入 PIN 清理的 try/finally，检查抛错也清零
-调用者输入缓冲。不扩大 UI/音频改造；主线程 revoke 与完整磁盘 IO 共用锁、可能等待
-慢 IO 的宿主接线风险继续 OPEN，需未来宿主串行策略和设备延迟实证。
+调用者输入缓冲。该版本仍存在 revoke 与完整磁盘 IO 共用锁的问题，随后由 QA
+实测确认为 R86-02 合入前阻断；旧失败及本轮协议修复见下文，不能按历史35PASS放行。
 
 本轮在同一管理员 heavy.lock 下串行执行：
 
@@ -140,3 +140,76 @@ root既有实跑报告，不是本轮作者真机/模拟器实测。最终head�
 **13/13 通过，失败0、跳过0，20.151s，退出码0**，包含新增延迟消费因果负控。
 Android instrumentation 两处屏障未在本轮设备执行，原 server transport 2/2 门槛
 在 `scripts/android-ci-instrument` 保持原样。
+
+## R86-02：原子撤销与最终提交协议
+
+旧 head `2343130679481f7db17be343db69b57137591589` 的 QA 正常 JVM 分母为
+**39项：38通过、1失败、0跳过**，不是35项全绿。失败是实际线程撤销反例，不能用
+预期突变负控覆盖。原始失败日志保留在
+`docs/testing/v2/r86-02/2343130-recheck-revoke.log`（SHA256
+`5c0d0e1c5c73f678c8f41e7b2b99fa38069471f0ab23bd4de4c2a640a439b6ea`）。
+旧日志原件记录 `revoke_returned_within_300ms=false write_committed=true stored_volume=80`。
+QA 原 `RevocationBoundaryTest.kt` 与两项独立 key 反例已逐字节保留在测试目录；
+300ms及时返回和解除提交前阻塞后旧写拒绝的原断言没有修改。
+
+协议与边界：
+
+1. `ParentEpoch` 用同一 AtomicReference 单元排序生命周期失效与最终提交决定。
+   HOME/focus/page 的 `revoke/enterPage` 只原子递增 page，不取内存 monitor 或
+   worker 锁；旧 grant、验证 epoch、owner challenge 均立即因页代际不符而失效。
+   generation 继续区分本页验证尝试；grant 校验同时要求引用同一性、generation、
+   原子 page 与闲置期限。300ms只用于受控测试观察，非手机实时性保证。
+2. 内存 monitor 仅保护短状态更新，不包含 KDF、OwnerProof、Keystore 或文件 IO。
+   独立 worker tryLock 覆盖完整事务/验证，其他 verify/replace/save 直接拒绝，不将
+   旧快照排队；revoke 不使用此锁。对外受保护读取在 worker 事务期间拒绝，避免
+   最终决定与磁盘回读之间暴露旧内存值。
+3. `ParentCommit.checkAllowed` 只是可取消的提前检查，不等于提交。Android
+   `ParentRecordFile.publish` 先写 AtomicFile 临时文件、flush、fd.sync，耗时准备
+   全部在最终决定之前。**最终逻辑提交线性化点是此后 `claim()` 对同一 epoch
+   单元成功的 CAS**，不是 worker 锁入口、KDF开始、早期检查或 startWrite。
+   最终判定同时复核 grant/验证代际/owner期限及闲置到期。撤销若先赢，claim抛
+   ParentCommitRejected，failWrite回退临时文件，既有记录不发布。
+4. CAS先赢表示有效事务已作不可撤回的最终决定；随后 AtomicFile.finishWrite
+   执行物理发布（Android仍可能再次sync/close/rename，可能阻塞/失败）。这段时间
+   HOME仍原子失效并立即返回，不等磁盘，但不能撤回已经决定的事务。存储完成并
+   readback核对后，才更新 witness 和内存 record，然后才报告成功。期间同域无
+   第二个存储事务可插入。若物理发布/回读失败则隔离、返回失败、不发布授权或自动
+   重试；磁盘可能已有新值，不能谎报已回滚，需后续受审恢复。
+5. 包括失败预留在内的所有写都使用同一页代际提交协议。撤销在预留claim前先赢，
+   则不写计数也不做KDF，不存在未计数却已验证的尝试；预留已经提交再撤销，则保留
+   计数。成功清计数和授grant各自重验页代际，迟到结果不能恢复授权。PIN更新若已
+   合法决定后发生HOME，已提交的新PIN保留，但不会复活授权或再次撤销更晚的新页面。
+6. 既有事务在最终claim前取消可安全返回LOCKED，不当成磁盘损坏。首次初始化
+   已创建alias但取消/落盘失败，仍隔离且不再次生成；R86-01的缺失/失效/替换key、
+   记录损坏和磁盘失败策略保留。无真实OwnerProof提供者仍默认拒绝。
+
+这里保证的是受测软件协议的顺序，不是CAS与Android文件系统的跨掉电原子事务。
+物理发布不是内存CAS本身；成功返回必须包含文件提交和回读，不能仅凭CAS报成功。
+真实KeyStore/AtomicFile掉电与最终宿主生命周期仍待设备验证。
+
+本轮最终源码正常检查：**53/53通过、失败0、跳过0，74.772s，退出码0**；所有
+新增Kotlin含Android适配同时编译通过。组成是原35项、原QA2项key反例、原QA2项
+撤销反例、11项并发/提交测试与3项生产SealedParentStore准备/发布测试。
+原QA反例现在实测 `revoke_returned_within_300ms=true write_committed=false stored_volume=60`。
+另覆盖已提交后撤销、CAS决定后物理发布延迟、并发verify/replace/save、KDF/归属证明
+阻塞时撤销、expiry、初始化/恢复迟到、成功验证迟到清计数及提交后磁盘故障。
+本轮KDF主机样本596/592/585/594ms；OPPO未测。早两轮49/52项通过为补充最终边界前
+的中间验证，不与最终53项累加。两类负控另计，不列入正常通过分母。
+原作者预留测试将撤销钩子放到已提交之后，
+保留已提交计数1的断言；新增独立用例验证预留提交前撤销不写计数且KDF调用为0。
+
+```sh
+scripts/with-build-lock env PARENT_ANDROID_JAR=/home/ubuntu/.gradle/caches/8.13/transforms/9ec1aa52f1567b6bf359cfb66d138a5b/transformed/android.jar python3 scripts/v2-parent-tests.py
+scripts/with-build-lock env PARENT_ANDROID_JAR=/home/ubuntu/.gradle/caches/8.13/transforms/9ec1aa52f1567b6bf359cfb66d138a5b/transformed/android.jar python3 scripts/v2-parent-tests.py --r86-revoke-negative-control
+scripts/with-build-lock env PARENT_ANDROID_JAR=/home/ubuntu/.gradle/caches/8.13/transforms/9ec1aa52f1567b6bf359cfb66d138a5b/transformed/android.jar python3 scripts/v2-parent-tests.py --r86-key-loss-negative-control
+```
+
+负控仅临时副本恢复“撤销等待worker锁”或“既有域丢key时重建”，产品源不改。
+本轮负控实际结果：撤销负控2项中1项按预期失败（2.908s），输出恢复为
+`revoke_returned_within_300ms=false write_committed=true stored_volume=80`；缺key
+负控11项中2项按预期失败（4.398s）。两次JUnit均退出1，脚本核对预期后退出0，
+均包含Android适配编译。最终负控复跑前两次wrapper因共享锁占用退出75，未启动测试，
+获同一锁后正常串行完成；未改wrapper或另建锁。它们不是正常53项中的失败，也不改变旧head39项中的真实失败。
+本轮未重跑未变化的TLS/设备/旧CI；上节TLS13/13为前一轮证据，非本轮新增分母。
+UI/完整生命周期接线、真实归属/系统恢复/端点、M06音频与A27/A28/A34、D04继续OPEN，
+不以纯core线程测试声称手机/音频实测。PR仍需原QA定向复核和root审合。

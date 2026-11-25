@@ -21,11 +21,19 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
         override fun read(): ByteArray? = try { file.readFully() }
         catch (_: java.io.FileNotFoundException) { null }
         override fun commit(bytes: ByteArray, authorized: () -> Boolean) {
-            check(authorized()) { "parent authorization expired" }
+            publish(bytes, ParentCommit(authorized))
+        }
+        override fun publish(bytes: ByteArray, transaction: ParentCommit) {
+            transaction.checkAllowed()
             val output = file.startWrite()
             try {
                 output.write(bytes)
-                check(authorized()) { "parent authorization expired" }
+                output.flush()
+                output.fd.sync()
+                // All prepared bytes are synced BEFORE the final atomic epoch/commit race.
+                // finishWrite physically publishes an already-decided transaction; it may
+                // still block/fail, but lifecycle invalidation never takes this worker's lock.
+                transaction.claim()
                 file.finishWrite(output)
             } catch (e: Exception) { file.failWrite(output); throw e }
         }
@@ -37,6 +45,10 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
     override fun write(record: ParentRecord, authorized: () -> Boolean) {
         worker()
         sealed.write(record, authorized)
+    }
+    override fun commit(record: ParentRecord, transaction: ParentCommit) {
+        worker()
+        sealed.commit(record, transaction)
     }
     companion object {
         fun worker() { check(Looper.myLooper() != Looper.getMainLooper()) { "parent worker required" } }

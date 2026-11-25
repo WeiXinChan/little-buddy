@@ -14,6 +14,10 @@ internal interface ParentRecordFile {
     /** null only for an absent record, including AtomicFile recovery semantics. */
     fun read(): ByteArray?
     fun commit(bytes: ByteArray, authorized: () -> Boolean)
+    fun publish(bytes: ByteArray, transaction: ParentCommit) {
+        commit(bytes, transaction::claim)
+        check(transaction.committed) { "parent file omitted final decision" }
+    }
 }
 
 /** Key creation is a one-shot transition after an empty record AND absent alias were observed.
@@ -43,9 +47,12 @@ internal class SealedParentStore(private val file: ParentRecordFile,
         }
     }
 
-    override fun write(record: ParentRecord, authorized: () -> Boolean) = guarded {
+    override fun write(record: ParentRecord, authorized: () -> Boolean) =
+        commit(record, ParentCommit(authorized))
+
+    override fun commit(record: ParentRecord, transaction: ParentCommit) = guarded {
         check(phase == Phase.FRESH || phase == Phase.EXISTING) { "parent store unavailable" }
-        check(authorized()) { "parent authorization expired" }
+        transaction.checkAllowed()
         val key = if (phase == Phase.FRESH) {
             // Consume creation eligibility BEFORE attempting key creation or disk IO.
             phase = Phase.EXISTING
@@ -59,12 +66,22 @@ internal class SealedParentStore(private val file: ParentRecordFile,
         }
         val plain = ParentCodec.encode(record)
         val encrypted = try { ParentEnvelope.seal(plain, key, aad) } finally { plain.fill(0) }
-        check(authorized()) { "parent authorization expired" }
-        file.commit(encrypted, authorized)
+        transaction.checkAllowed()
+        file.publish(encrypted, transaction)
+        check(transaction.committed) { "parent file omitted final decision" }
         check(file.read()?.contentEquals(encrypted) == true) { "parent commit unavailable" }
         witness = encrypted
     }
 
     private inline fun <T> guarded(action: () -> T): T = try { action() }
+    catch (e: ParentCommitRejected) {
+        // Existing prepared writes can safely abort. A newly created alias without a record
+        // cannot be treated as fresh again, even if cancellation caused the failed first commit.
+        if (phase == Phase.EXISTING && witness == null) {
+            phase = Phase.QUARANTINED
+            throw IllegalStateException("parent initialization interrupted", e)
+        }
+        throw e
+    }
     catch (e: Exception) { phase = Phase.QUARANTINED; throw e }
 }

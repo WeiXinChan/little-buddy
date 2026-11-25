@@ -9,6 +9,7 @@ class ParentDomainTest {
         var failRead = false
         var failWrite = false
         var beforeCommit: () -> Unit = {}
+        var afterCommit: () -> Unit = {}
         var writes = 0
         override fun read(): ParentRecord? {
             check(!failRead)
@@ -19,6 +20,7 @@ class ParentDomainTest {
             val prepared = ParentCodec.encode(record)
             beforeCommit(); check(authorized())
             bytes = prepared; writes++
+            afterCommit()
         }
     }
     private var time = 100L
@@ -110,7 +112,7 @@ class ParentDomainTest {
     }
     @Test fun reservationIsCommittedBeforeKdfAndRevokeRejectsResult() {
         val (d, page) = owned()
-        store.beforeCommit = { d.revoke() }
+        store.afterCommit = { d.revoke() }
         assertNull(d.verify("012345".toCharArray(), page))
         assertEquals(1, store.read()!!.failures)
         assertEquals(ParentDomain.State.LOCKED, d.state())

@@ -32,15 +32,29 @@ runtime = [compiler[1], jar("junit", "junit", "4.13.2"),
            jar("org.hamcrest", "hamcrest-core", "1.3")]
 source = ROOT / "app/src/main/java/com/littlebuddy/v2/parent"
 sources = [source / "ParentDomain.kt", source / "ParentCodec.kt", source / "ParentEnvelope.kt",
-           source / "SealedParentStore.kt",
+           source / "SealedParentStore.kt", source / "ParentCommit.kt",
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentDomainTest.kt",
-           ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentKeyStoreTest.kt"]
+           ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentKeyStoreTest.kt",
+           ROOT / "app/src/test/java/com/littlebuddy/v2/parent/RevocationBoundaryTest.kt",
+           ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ExtraKeyBoundaryTest.kt",
+           ROOT / "app/src/test/java/com/littlebuddy/v2/parent/RevocationCommitTest.kt",
+           ROOT / "app/src/test/java/com/littlebuddy/v2/parent/PreparedPublicationTest.kt"]
 android = os.environ.get("PARENT_ANDROID_JAR")
 if android:
     sources.append(source / "AndroidParentStore.kt")
     runtime.append(android)
 with tempfile.TemporaryDirectory(prefix="parent-tests-", dir=ROOT) as output:
     negative = "--r86-key-loss-negative-control" in sys.argv
+    revoke_negative = "--r86-revoke-negative-control" in sys.argv
+    if revoke_negative:
+        original = source / "ParentDomain.kt"
+        contents = original.read_text()
+        checked = "fun revoke() { epoch.revoke() }"
+        assert contents.count(checked) == 1
+        mutant = Path(output) / original.name
+        mutant.write_text(contents.replace(checked,
+            "fun revoke() { worker.lock(); try { epoch.revoke() } finally { worker.unlock() } }"))
+        sources[sources.index(original)] = mutant
     if negative:
         # Deliberately restore key regeneration in a TEMPORARY COPY, never production source.
         original = source / "SealedParentStore.kt"
@@ -56,16 +70,23 @@ with tempfile.TemporaryDirectory(prefix="parent-tests-", dir=ROOT) as output:
                     "-d", output, *map(str, sources)], check=True)
     if "--compile-only" not in sys.argv:
         tests = ["com.littlebuddy.v2.parent.ParentKeyStoreTest"]
-        if not negative and "--r86-only" not in sys.argv:
+        if revoke_negative:
+            tests = ["com.littlebuddy.v2.parent.RevocationBoundaryTest"]
+        elif not negative and "--r86-only" not in sys.argv:
             tests.insert(0, "com.littlebuddy.v2.parent.ParentDomainTest")
+            tests += ["com.littlebuddy.v2.parent.ExtraKeyBoundaryTest",
+                      "com.littlebuddy.v2.parent.RevocationBoundaryTest",
+                      "com.littlebuddy.v2.parent.RevocationCommitTest",
+                      "com.littlebuddy.v2.parent.PreparedPublicationTest"]
         command = ["java", "-Xmx256m", "-cp", os.pathsep.join([output, *runtime]),
                    "org.junit.runner.JUnitCore", *tests]
-        if negative:
+        if negative or revoke_negative:
             result = subprocess.run(command, text=True, capture_output=True)
             print(result.stdout, end="")
             print(result.stderr, end="")
-            assert result.returncode == 1 and "Tests run: 11,  Failures: 2" in result.stdout
-            print("R86 negative control: two key-loss regressions detected as expected")
+            expected = "Tests run: 2,  Failures: 1" if revoke_negative else "Tests run: 11,  Failures: 2"
+            assert result.returncode == 1 and expected in result.stdout
+            print("R86 negative control detected as expected: " + expected)
         else:
             subprocess.run(command, check=True)
 print("Android adapter: " + ("SDK compile only" if android else "NOT compiled (no PARENT_ANDROID_JAR)"))

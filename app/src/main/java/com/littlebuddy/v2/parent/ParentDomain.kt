@@ -32,10 +32,15 @@ internal class ParentRecord(val salt: ByteArray, val hash: ByteArray,
 internal interface ParentStore {
     fun read(): ParentRecord?
     fun write(record: ParentRecord, authorized: () -> Boolean)
+    /** Legacy/in-memory adapters invoke authorized only at their final assignment boundary. */
+    fun commit(record: ParentRecord, transaction: ParentCommit) {
+        write(record, transaction::claim)
+        check(transaction.committed) { "parent store omitted final decision" }
+    }
 }
 
-internal class PinHasher {
-    fun derive(pin: CharArray, salt: ByteArray): ByteArray {
+internal open class PinHasher {
+    open fun derive(pin: CharArray, salt: ByteArray): ByteArray {
         val spec = PBEKeySpec(pin, salt, ITERATIONS, 256)
         return try { SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded }
         finally { spec.clearPassword() }
@@ -43,10 +48,11 @@ internal class PinHasher {
     companion object { const val ITERATIONS = 600_000 }
 }
 
-/** One process-local domain per device. IO/KDF entry points require a serial worker.
- * Grants have reference identity, no Parcelable/Serializable or saved-state representation.
- * Lock serializes final authorization with atomic disk commit; lifecycle revocation linearizes
- * either before commit (reject) or after it (already committed). No deferred write queue. */
+/** State monitor protects memory only. Never hold it over KDF, proof, Keystore or disk IO.
+ * A tryLock serializes ALL worker mutations (including reservations and their KDF); concurrent
+ * callers reject rather than queue stale state. Lifecycle epoch invalidation uses neither lock.
+ * ParentCommit.claim after staging is the final logical mutation decision; disk commit/readback
+ * completes before record publication. Protected reads reject while a worker mutation is busy. */
 internal class ParentDomain(private val store: ParentStore, private val now: () -> Long,
                             private val requireWorker: () -> Unit,
                             private val owner: OwnerProof = UnconfiguredOwnerProof,
@@ -55,32 +61,27 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     internal class Grant internal constructor(internal val generation: Long, internal val pageEpoch: Long)
     enum class State { UNOWNED, LOCKED, AUTHORIZED, COOLDOWN, QUARANTINED }
     private val lock = Any()
+    private val worker = java.util.concurrent.locks.ReentrantLock()
+    private val epoch = ParentEpoch()
     private var record: ParentRecord? = null
     private var quarantined = false
     private var generation = 0L
-    private var pageEpoch = 0L
     private var grant: Grant? = null
     private var deadline = 0L
     private var cooldownUntil = 0L
-    private var verifying = false
     private var challenge: OwnerChallenge? = null
 
     init {
         requireWorker()
         try {
             record = store.read()
-            // Conservatively restart the full recorded penalty on every process restart.
-            // No wall clock is consulted. Killing/rebooting can only extend a penalty.
             cooldownUntil = now() + (record?.cooldownMs ?: 0)
         } catch (_: Exception) { quarantined = true }
     }
 
-    fun enterPage(): Long = synchronized(lock) { revokeLocked(); pageEpoch }
-    /** Call on HOME/onPause, focus loss, lock screen, page rebuild, cancel and exit. */
-    fun revoke() = synchronized(lock) { revokeLocked() }
-    private fun revokeLocked() {
-        generation++; pageEpoch++; grant = null; deadline = 0; challenge = null
-    }
+    fun enterPage(): Long = epoch.revoke()
+    /** HOME/onPause/focus/page invalidation performs only an atomic update, never waits for IO. */
+    fun revoke() { epoch.revoke() }
     fun state(): State = synchronized(lock) {
         when {
             quarantined -> State.QUARANTINED
@@ -91,97 +92,121 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
         }
     }
     private fun valid(candidate: Grant?): Boolean {
-        if (now() >= deadline && grant != null) revokeLocked()
+        if (now() >= deadline && grant != null) {
+            val page = grant!!.pageEpoch
+            if (page == epoch.current()) { epoch.revokeIf(page); challenge = null }
+            grant = null
+        }
         return !quarantined && candidate != null && candidate === grant &&
-            candidate.generation == generation && candidate.pageEpoch == pageEpoch && now() < deadline
+            candidate.generation == generation && candidate.pageEpoch == epoch.current() && now() < deadline
     }
-    /** Only a local valid parent action may call this, never network/audio/heartbeat events. */
     fun localAction(candidate: Grant): Boolean = synchronized(lock) {
         if (!valid(candidate)) false else { deadline = now() + IDLE_MS; true }
     }
-
-    fun beginOwnerOperation(operation: OwnerOperation, epoch: Long): OwnerChallenge? = synchronized(lock) {
-        if (quarantined || epoch != pageEpoch || verifying) return@synchronized null
-        OwnerChallenge(ByteArray(32).also(SecureRandom()::nextBytes), binding, operation,
-            now() + 60_000).also { challenge = it }
+    fun beginOwnerOperation(operation: OwnerOperation, page: Long): OwnerChallenge? {
+        // Random generation may block; it also stays outside the memory monitor.
+        if (worker.isLocked) return null
+        val nonce = ByteArray(32).also(SecureRandom()::nextBytes)
+        return synchronized(lock) {
+            if (quarantined || page != epoch.current() || worker.isLocked) null
+            else OwnerChallenge(nonce, binding, operation, now() + 60_000).also { challenge = it }
+        }
     }
+    private fun permitted(page: Long, ticket: Long, extra: () -> Boolean): Boolean =
+        !quarantined && page == epoch.current() && ticket == generation && extra()
+    private fun transaction(page: Long, ticket: Long, extra: () -> Boolean = { true }) = ParentCommit(
+        { synchronized(lock) { permitted(page, ticket, extra) } },
+        { synchronized(lock) { permitted(page, ticket, extra) && epoch.claim(page) } })
 
-    /** Synthetic OwnerProof implementations are test evidence only. Production always denies
-     * until a reviewed issuer/provider is wired. Recovery never clears configuration/pairing. */
-    fun replacePin(pin: CharArray, proof: OwnerChallenge, epoch: Long): Boolean {
+    fun replacePin(pin: CharArray, proof: OwnerChallenge, page: Long): Boolean {
         try {
             requireWorker()
-            if (!asciiPin(pin)) return false
-            val ticket = synchronized(lock) {
-                if (quarantined || verifying || epoch != pageEpoch || challenge !== proof ||
-                    now() >= proof.expiresAt || proof.deviceBinding != binding ||
-                    proof.operation != (if (record == null) OwnerOperation.INITIALIZE_PIN else OwnerOperation.RESET_PIN)) return false
-                challenge = null; verifying = true; generation
-            }
+            if (!asciiPin(pin) || worker.isHeldByCurrentThread || !worker.tryLock()) return false
             try {
+                val ticket = synchronized(lock) {
+                    if (quarantined || page != epoch.current() || challenge !== proof ||
+                        now() >= proof.expiresAt || proof.deviceBinding != binding ||
+                        proof.operation != (if (record == null) OwnerOperation.INITIALIZE_PIN else OwnerOperation.RESET_PIN)) return false
+                    challenge = null; generation
+                }
                 if (!owner.consume(proof)) return false
                 val salt = ByteArray(16).also(SecureRandom()::nextBytes)
                 val hash = hasher.derive(pin, salt)
-                return synchronized(lock) {
-                    if (quarantined || ticket != generation || epoch != pageEpoch || now() >= proof.expiresAt) false
-                    else persist(ParentRecord(salt, hash, volumeLimit = record?.volumeLimit ?: 60)) {
-                        ticket == generation && epoch == pageEpoch && now() < proof.expiresAt
-                    }.also {
-                        if (it) { cooldownUntil = 0; revokeLocked() }
-                    }
+                val next = synchronized(lock) { ParentRecord(salt, hash, volumeLimit = record?.volumeLimit ?: 60) }
+                val committed = persist(next, transaction(page, ticket) { now() < proof.expiresAt })
+                if (committed) synchronized(lock) {
+                    cooldownUntil = 0; generation++; grant = null; challenge = null
+                    epoch.revokeIf(page)
                 }
-            } finally { synchronized(lock) { verifying = false } }
+                return committed
+            } finally { worker.unlock() }
         } finally { pin.fill('\u0000') }
     }
 
-    fun verify(pin: CharArray, epoch: Long): Grant? {
+    fun verify(pin: CharArray, page: Long): Grant? {
         try {
             requireWorker()
-            if (!asciiPin(pin)) return null
-            val reservation = synchronized(lock) {
-                val current = record ?: return null
-                if (quarantined || verifying || epoch != pageEpoch || now() < cooldownUntil) return null
-                revokeGrantOnly()
-                val failures = (current.failures + 1).coerceAtMost(1_000_000)
-                val penalty = if (failures % 5 == 0) penalty(failures) else 0L
-                // Reserve before expensive verification so crashes count as failures.
-                if (!persist(current.updated(failures, penalty))) return null
-                cooldownUntil = now() + penalty
-                verifying = true
-                Pair(generation, current)
-            }
-            var derived: ByteArray? = null
+            if (!asciiPin(pin) || worker.isHeldByCurrentThread || !worker.tryLock()) return null
             try {
-                derived = hasher.derive(pin, reservation.second.salt)
-                val matches = MessageDigest.isEqual(derived, reservation.second.hash)
+                val initial = synchronized(lock) {
+                    val current = record ?: return null
+                    if (quarantined || page != epoch.current() || now() < cooldownUntil) return null
+                    generation++; grant = null; deadline = 0; challenge = null
+                    Pair(generation, current)
+                }
+                val failures = (initial.second.failures + 1).coerceAtMost(1_000_000)
+                val penalty = if (failures % 5 == 0) penalty(failures) else 0L
+                // No KDF until the failure reservation is durably committed. A reservation
+                // already committed survives HOME; cancellation before claim does not hash.
+                if (!persist(initial.second.updated(failures, penalty), transaction(page, initial.first))) return null
+                synchronized(lock) { cooldownUntil = now() + penalty }
+                if (page != epoch.current()) return null
+                val derived = hasher.derive(pin, initial.second.salt)
+                val matches = try { MessageDigest.isEqual(derived, initial.second.hash) } finally { derived.fill(0) }
+                if (!matches) return null
+                val next = synchronized(lock) { record!!.updated(0, 0) }
+                if (!persist(next, transaction(page, initial.first))) return null
                 return synchronized(lock) {
-                    if (!matches || quarantined || generation != reservation.first || pageEpoch != epoch) null
-                    else if (!persist(record!!.updated(0, 0)) { generation == reservation.first && pageEpoch == epoch }) null
+                    // A committed counter reset does not resurrect permission after HOME.
+                    cooldownUntil = 0
+                    if (!permitted(page, initial.first) { true }) null
                     else {
-                        cooldownUntil = 0; deadline = now() + IDLE_MS
-                        Grant(generation, pageEpoch).also { grant = it }
+                        deadline = now() + IDLE_MS
+                        Grant(generation, page).also { grant = it }
                     }
                 }
-            } finally { derived?.fill(0); synchronized(lock) { verifying = false } }
+            } finally { worker.unlock() }
         } finally { pin.fill('\u0000') }
     }
-    private fun revokeGrantOnly() { generation++; grant = null; deadline = 0; challenge = null }
     fun volumeLimit(candidate: Grant): Int? = synchronized(lock) {
-        if (valid(candidate)) record?.volumeLimit else null
+        // Avoid exposing a stale memory record between decision and physical readback.
+        if (!worker.isLocked && valid(candidate)) record?.volumeLimit else null
     }
-    /** Invoke from the worker at completion time, including after asynchronous preparation. */
     fun saveVolumeLimit(candidate: Grant, limit: Int): Boolean {
         requireWorker()
-        return synchronized(lock) {
-            if (limit !in 0..100 || !valid(candidate)) false
-            else persist(record!!.updated(volumeLimit = limit)) { valid(candidate) }.also {
-                if (it) deadline = now() + IDLE_MS
+        if (worker.isHeldByCurrentThread || !worker.tryLock()) return false
+        try {
+            val next = synchronized(lock) {
+                if (limit !in 0..100 || !valid(candidate)) return false
+                record!!.updated(volumeLimit = limit)
             }
-        }
+            val committed = persist(next, transaction(candidate.pageEpoch, candidate.generation) { valid(candidate) })
+            if (committed) synchronized(lock) {
+                if (valid(candidate)) deadline = now() + IDLE_MS
+            }
+            return committed
+        } finally { worker.unlock() }
     }
-    private fun persist(next: ParentRecord, authorized: () -> Boolean = { true }): Boolean = try {
-        store.write(next, authorized); record = next; true
-    } catch (_: Exception) { quarantined = true; revokeLocked(); false }
+    private fun persist(next: ParentRecord, transaction: ParentCommit): Boolean = try {
+        store.commit(next, transaction)
+        check(transaction.committed) { "parent store omitted final decision" }
+        synchronized(lock) { record = next }
+        true
+    } catch (_: ParentCommitRejected) { false }
+    catch (_: Exception) {
+        synchronized(lock) { quarantined = true }
+        revoke(); false
+    }
     companion object {
         const val IDLE_MS = 120_000L
         private fun asciiPin(pin: CharArray) = pin.size == 6 && pin.all { it in '0'..'9' }
