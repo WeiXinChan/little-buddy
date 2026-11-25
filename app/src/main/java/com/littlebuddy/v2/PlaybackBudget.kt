@@ -1,10 +1,11 @@
 package com.littlebuddy.v2
 
 /** One budget per child connection; duplicate listening/wake events cannot extend an active turn. */
-internal class PlaybackBudget(private val now: () -> Long, private val limitSeconds: Int) {
+internal class PlaybackBudget(private val now: () -> Long, private var limitSeconds: Int) {
     private var start: Long? = null
     init { require(limitSeconds in 60..600) }
     fun begin() { if (start == null) start = now() }
+    fun tighten(seconds: Int) { require(seconds in 60..600); limitSeconds = minOf(limitSeconds,seconds) }
     fun expired(): Boolean {
         val first = start ?: return false
         val current = now()

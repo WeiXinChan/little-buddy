@@ -25,17 +25,21 @@ class V2VoiceActivity : Activity() {
     private var imageRoute: AndroidImageRoute? = null
     private var eyesAttached = false
     private var capture: Capture? = null
+    private var exitCapture: ManagementCapture? = null
+    @Volatile private var transportRevision=0L
+    @Volatile private var managementRevision=0L
     private var releasedRecorder = RecorderProof()
+    private var releasedExitRecorder = RecorderProof()
     private var releasedPlayer = PlayerProof()
     private var execution = ParentPlaybackSettings()
     private var budget: PlaybackBudget? = null
     private var panel: AndroidParentPanel? = null
     private var help: LocalHelpOutput? = null
-    private var managementRequested = false
-    private var managementVisible = false
+    @Volatile private var managementRequested = false
+    @Volatile private var managementVisible = false
     private var helpVisible = false
+    private var managementReturning=false
     @Volatile private var foreground = false
-    @Volatile private var managementRevision = 0L
     private var permissionRequested = false
     private fun eyes() {
         if (eyesAttached) return
@@ -59,25 +63,99 @@ class V2VoiceActivity : Activity() {
         result(NativeEvidence(capture?.nativeProof ?: releasedRecorder, voice?.nativeProof() ?: releasedPlayer))
     } }
     internal fun withVoice(action: (VoiceClient) -> Unit) { owner.post { voice?.let(action) } }
+    internal fun observeManagementRecorder(result: (RecorderProof) -> Unit) { owner.post {
+        result(exitCapture?.nativeProof ?: releasedExitRecorder)
+    } }
     private fun leaveManagement() {
-        managementRevision++; managementRequested = false; managementVisible = false
-        panel?.close(); panel = null; eyes(); resumeConfigured()
+        val ticket=++managementRevision
+        managementVisible=false; managementRequested=true; managementReturning=true
+        panel?.close(); panel=null; eyes()
+        val resumedImages=imageRoute
+        // Exit needs no PIN. It is a current page action, not a restoration of its revoked Grant.
+        configurationWorker.execute {
+            val configuration=runCatching { AndroidParentRuntime.load(this).childConfiguration() }.getOrNull()
+            owner.post {
+                val released=closeExitCapture()
+                if (ticket!=managementRevision || !foreground) return@post
+                val client=voice
+                if (!released) { client?.close(); releaseState="quarantined"
+                    runOnUiThread { if (ticket==managementRevision) { managementRequested=false; managementReturning=false; showLocalHelp() } }; return@post }
+                if (configuration!=null && client!=null) {
+                    budget?.tighten(configuration.playback.durationSeconds)
+                    if (client.resumeManagement(configuration.playback,resumedImages)) return@post
+                }
+                // Lost/expired connection never borrows the receipt for a replacement session.
+                runOnUiThread { if (ticket==managementRevision) {
+                    managementRequested=false; managementReturning=false; releaseAudio { quiet -> if (quiet && ticket==managementRevision) resumeConfigured() }
+                } }
+            }
+        }
     }
-    /** Voice or hidden corner can request the page; neither grants configuration rights.
-     * This batch ends the child transport before management, rather than claiming a retained audio session.
-     */
+    private fun openManagementPage(ticket: Long) {
+        if (ticket!=managementRevision || !foreground || !hasWindowFocus() || !managementRequested) return
+        managementRequested=false; managementVisible=true; eyesAttached=false
+        panel=AndroidParentPanel(this, { leaveManagement() }, { stopVoice() }).also { it.open() }
+        startExitCapture(ticket)
+    }
+    private fun startExitCapture(ticket: Long) { owner.post {
+        if (ticket!=managementRevision || !foreground || !managementVisible || exitCapture!=null ||
+            releaseState=="quarantined" || voice?.quarantined==true || checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED) return@post
+        exitCapture=ManagementCapture(assets,owner,
+            { foreground && managementVisible && ticket==managementRevision },
+            { runOnUiThread { if (ticket==managementRevision && managementVisible && foreground && hasWindowFocus()) panel?.exit() } },
+            { runOnUiThread { if (ticket==managementRevision) stopVoice() } }).also { it.start() }
+    } }
+    private fun closeExitCapture(): Boolean {
+        val old=exitCapture ?: return true
+        old.close(); releasedExitRecorder=old.nativeProof
+        if (old.quarantined) return false
+        exitCapture=null; return true
+    }
+    private fun managementChanged(phase: ManagementState.Phase) {
+        when (phase) {
+            ManagementState.Phase.PAUSED -> openManagementPage(managementRevision)
+            ManagementState.Phase.WAITING_WAKE -> {
+                if (!managementRequested || managementVisible || !foreground || !hasWindowFocus()) return
+                managementRequested=false; managementReturning=false; eyes()
+                val ticket=transportRevision
+                owner.post { if (foreground && ticket==transportRevision && !managementRequested && !managementVisible) {
+                    voice?.let { startChildCapture(it,ticket) }
+                } }
+            }
+            ManagementState.Phase.DEAD -> {
+                if (managementReturning) {
+                    managementRequested=false; managementReturning=false
+                    val ticket=managementRevision
+                    releaseAudio { quiet -> if (quiet && ticket==managementRevision) { eyes(); resumeConfigured() } }
+                    return
+                }
+                if (managementRequested && !managementVisible) {
+                    // Local settings remain available after a failed control handshake; no receipt is synthesized.
+                    openManagementPage(managementRevision)
+                }
+            }
+            else -> Unit
+        }
+    }
+    /** Stop child hardware first, retain only the authenticated transport while requesting pause. */
     internal fun requestParentManagement() {
         if (!foreground || !hasWindowFocus() || managementRequested || managementVisible) return
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return
-        helpVisible = false; help?.stop(); managementRequested = true
-        val ticket = ++managementRevision
-        releaseAudio { quiet ->
-            if (ticket != managementRevision || !foreground || !hasWindowFocus()) return@releaseAudio
-            managementRequested = false
-            if (!quiet) { showLocalHelp(); return@releaseAudio }
-            managementVisible = true
-            eyesAttached = false
-            panel = AndroidParentPanel(this) { leaveManagement() }.also { it.open() }
+        helpVisible=false; help?.stop(); managementRequested=true; managementReturning=false; imageRoute?.clear()
+        val ticket=++managementRevision
+        owner.post {
+            if (ticket!=managementRevision || !foreground) return@post
+            val client=voice
+            val playerQuiet=client?.stopForManagement() ?: true
+            capture?.close(); capture?.let { releasedRecorder=it.nativeProof }
+            val recorderQuiet=capture?.quarantined!=true
+            if (recorderQuiet) capture=null
+            if (!playerQuiet || !recorderQuiet) {
+                client?.close(); releaseState="quarantined"
+                runOnUiThread { if (ticket==managementRevision) { managementRequested=false; showLocalHelp() } }; return@post
+            }
+            releaseState="management"
+            if (client==null || !client.pauseManagement()) runOnUiThread { openManagementPage(ticket) }
         }
     }
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,23 +189,36 @@ class V2VoiceActivity : Activity() {
         check(!managementRequested && !managementVisible && !helpVisible)
         check(hasWindowFocus() && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
         check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked)
-        val ticket = managementRevision; val settings = execution; val images = imageRoute
+        val ticket = transportRevision; val settings = execution; val images = imageRoute
         owner.post {
-            if (ticket != managementRevision || !foreground || voice != null || capture != null || releaseState == "quarantined") return@post
+            if (ticket != transportRevision || !foreground || voice != null || capture != null || releaseState == "quarantined") return@post
             releaseState = "active"; budget = PlaybackBudget(android.os.SystemClock::elapsedRealtime, settings.durationSeconds)
             val client = VoiceClient(owner, { status ->
                 if (status == "listening" && voice?.isAwake == true) budget?.begin()
-            }, {}, { _, _ -> }, { runOnUiThread { if (ticket == managementRevision) showLocalHelp() } },
+            }, {}, { _, _ -> }, { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 playbackSettings = settings,
-                localHelp = { runOnUiThread { if (ticket == managementRevision) showLocalHelp() } },
-                management = { runOnUiThread { if (ticket == managementRevision) requestParentManagement() } },
-                permitted = { foreground && ticket == managementRevision }, images = images)
+                localHelp = { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
+                management = { runOnUiThread { if (ticket == transportRevision) requestParentManagement() } },
+                permitted = { foreground && ticket == transportRevision }, images = images,
+                managed = { phase -> runOnUiThread { if (ticket==transportRevision) managementChanged(phase) } },
+                sessionEnded = { runOnUiThread { if (ticket==transportRevision) {
+                    managementRevision++; releaseAudio { quiet -> if (quiet && foreground) { eyes(); resumeConfigured() } }
+                } } })
             voice = client
             try { client.connect(address, credential)
-                capture = Capture(assets, owner, client, allowed = { foreground && ticket == managementRevision }) { runOnUiThread { if (ticket == managementRevision) showLocalHelp() } }.also { it.start() }
+                startChildCapture(client,ticket)
                 owner.postDelayed(durationLimit, 250)
-            } catch (_: Exception) { runOnUiThread { if (ticket == managementRevision) showLocalHelp() } }
+            } catch (_: Exception) { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } }
         }
+    }
+    private fun startChildCapture(client: VoiceClient, ticket: Long) {
+        if (capture!=null || exitCapture!=null || releaseState=="quarantined") return
+        capture=Capture(assets,owner,client,
+            allowed={ foreground && ticket==transportRevision && !managementRequested && !managementVisible }) {
+            runOnUiThread { if (ticket==transportRevision) showLocalHelp() }
+        }.also { it.start() }
+        owner.removeCallbacks(durationLimit); owner.postDelayed(durationLimit,250)
+        releaseState="active"
     }
     private val durationLimit = object : Runnable {
         override fun run() {
@@ -135,6 +226,10 @@ class V2VoiceActivity : Activity() {
             if (budget?.expired() == true) {
                 runOnUiThread {
                     val ticket = ++managementRevision
+                    if (managementVisible || managementRequested) {
+                        releaseAudio { if (ticket==managementRevision && managementRequested && !managementVisible) openManagementPage(ticket) }
+                        return@runOnUiThread
+                    }
                     releaseAudio { quiet -> if (quiet && ticket == managementRevision && foreground && hasWindowFocus()) {
                         Toast.makeText(this@V2VoiceActivity, "这一轮先休息一下，再玩时重新唤醒。", Toast.LENGTH_LONG).show()
                         eyes(); resumeConfigured()
@@ -144,7 +239,7 @@ class V2VoiceActivity : Activity() {
         }
     }
     private fun releaseAudio(done: (Boolean) -> Unit = {}) {
-        imageRoute?.clear()
+        transportRevision++; imageRoute?.clear()
         owner.post {
         owner.removeCallbacks(durationLimit)
         voice?.close(); voice?.let { releasedPlayer = it.nativeProof() }
@@ -152,7 +247,8 @@ class V2VoiceActivity : Activity() {
         capture?.close(); capture?.let { releasedRecorder = it.nativeProof }
         if (capture?.quarantined != true) capture = null
         budget = null
-        val quiet = voice == null && capture == null
+        val exitQuiet=closeExitCapture()
+        val quiet = voice == null && capture == null && exitQuiet
         releaseState = if (quiet) "released" else "quarantined"
         runOnUiThread { done(quiet) }
     } }
@@ -174,7 +270,7 @@ class V2VoiceActivity : Activity() {
     }
     override fun onResume() {
         super.onResume(); foreground = true
-        if (managementVisible && hasWindowFocus()) panel?.open()
+        if (managementVisible && hasWindowFocus()) { panel?.open(); startExitCapture(managementRevision) }
         else if (!managementVisible && !helpVisible) { eyes(); resumeConfigured() }
     }
     override fun onPause() {
@@ -197,7 +293,7 @@ class V2VoiceActivity : Activity() {
             managementRevision++; managementRequested = false
             panel?.focusLost(); helpVisible = false; help?.stop(); stopVoice()
         } else if (foreground) {
-            if (managementVisible) panel?.open()
+            if (managementVisible) { panel?.open(); startExitCapture(managementRevision) }
             else if (!helpVisible) { eyes(); resumeConfigured() }
         }
     }

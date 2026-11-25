@@ -28,6 +28,11 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
     fun effectivePlayed() { responsePending = false }
     var revision = 0L; private set
     var awake = false; private set
+    fun managementWaiting(version: Long) {
+        require(version >= revision)
+        revision = version; awake = false; hasInput = false; speaking = false; probing = false
+        completion = null; responsePending = false; thinkingAt = null; prompted = false; soloSent = false
+    }
     private var lastSpeech = 0L
     private var lastInteraction = 0L
     private var wakeAt = 0L
