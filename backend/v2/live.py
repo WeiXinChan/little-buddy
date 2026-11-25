@@ -1,34 +1,76 @@
-"""Explicit isolated V2 listener. No V1 defaults, deployment, credential writes."""
+"""Checked V2-only loopback listener. No V1 defaults, deployment or secret output."""
 import argparse
 import asyncio
-from pathlib import Path
-import ssl
-from backend.dashscope import http_client
-from backend.v2.companion import CompanionPolicy
-from backend.v2.runtime import providers as configured_providers
-from backend.v2.server import voice_server
+import json
+import signal
+import socket
+import os
+import time
+import sys
+from backend.v2.preflight import prepare
+from backend.v2.files import ConfigurationError
 
 
-async def main(args):
-    from backend.animal.cloud import disable_core_dumps
+def event(code):
+    print(json.dumps(dict(service='little-buddy-v2',event=code)),file=sys.stderr,flush=True)
+
+
+def notify_ready():
+    address=os.environ.get('NOTIFY_SOCKET')
+    if not address:return
+    if address.startswith('@'):address='\0'+address[1:]
+    try:
+        with socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM) as notifier:
+            notifier.connect(address);notifier.sendall(b'READY=1')
+    except OSError:raise ConfigurationError('readiness_notify_failed') from None
+
+
+async def serve_checked(args,prepared,*,stop=None,ready=None):
+    from backend.dashscope import DashScope,http_client
+    from backend.v2.companion import CompanionPolicy,DashScopeModel,UnifiedProviders
+    from backend.v2.server import voice_server
+    from backend.v2.files import disable_core_dumps
     disable_core_dumps()
-    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    tls.minimum_version = ssl.TLSVersion.TLSv1_2
-    tls.load_cert_chain(args.cert, args.key)
-    token = Path(args.token_file).read_text().strip()
-    async with http_client() as http:
-        providers = configured_providers(http, service_env=getattr(args, 'service_env', None),
-                                         credential_directory=getattr(args, 'credential_directory', None))
-        async with voice_server('127.0.0.1', args.port, tls, token, providers, CompanionPolicy()):
-            await asyncio.Event().wait()
+    stop=stop or asyncio.Event()
+    loop=asyncio.get_running_loop();installed=[]
+    try:
+        for sig in (signal.SIGTERM,signal.SIGINT):
+            loop.add_signal_handler(sig,stop.set);installed.append(sig)
+        async with http_client() as http:
+            if time.time()>=prepared.expires_at:raise ConfigurationError('v2_device_scope_expired')
+            speech=DashScope(http,key=prepared.provider_key,**prepared.config)
+            bundle=UnifiedProviders(speech,DashScopeModel(speech))
+            async with voice_server('127.0.0.1',args.port,prepared.tls,prepared.token,bundle,
+                                    CompanionPolicy(),expires_at=prepared.expires_at) as server:
+                notify_ready()
+                event('ready_loopback')
+                if ready is not None:ready.set_result(server.sockets[0].getsockname()[1])
+                await stop.wait()
+    finally:
+        for sig in installed:loop.remove_signal_handler(sig)
+        event('stopped')
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--cert', required=True)
-    parser.add_argument('--key', required=True)
-    parser.add_argument('--token-file', required=True)
-    parser.add_argument('--port', type=int, default=19483)
-    parser.add_argument('--service-env', help='Read only reviewed model fields; never shell-source the file')
-    parser.add_argument('--credential-directory', help='Existing systemd credential directory; no copying or generation')
-    asyncio.run(main(parser.parse_args()))
+def parser():
+    result=argparse.ArgumentParser()
+    for name in ('cert','key','token-file','device-scope','ca-file','tls-name','service-env',
+                 'credential-directory','apk-contract'):
+        result.add_argument('--'+name,required=True)
+    result.add_argument('--port',type=int,default=19483)
+    result.add_argument('--check',action='store_true',help='Offline only; never listens or calls providers')
+    return result
+
+
+def cli(argv=None):
+    try:
+        args=parser().parse_args(argv);checked=prepare(args)
+        if args.check:
+            print(json.dumps(checked.report,ensure_ascii=False));return 0
+        asyncio.run(serve_checked(args,checked));return 0
+    except ConfigurationError as failure:
+        event(str(failure));return 2
+    except (Exception,KeyboardInterrupt):
+        event('startup_or_shutdown_failed');return 2
+
+
+if __name__=='__main__':raise SystemExit(cli())
