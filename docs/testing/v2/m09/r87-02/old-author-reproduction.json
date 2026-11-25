@@ -1,0 +1,28 @@
+{
+  "source_sha256": {
+    "app/src/main/java/com/littlebuddy/v2/feedback/Contracts.kt": "476df47cb55087735c1327190c84ab352930e9dc1809cd0a1a96ed0d347b6d0b",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackAuthority.kt": "462cf2365a844cc7390d839e997ec7f3d062671670efe53929d2bcfa4f120ddf",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackCore.kt": "4fa1f2f5fcaffb15d7f111b8e48963fc95cb3eca7fdcaa761e6456088fff501d",
+    "app/src/main/java/com/littlebuddy/v2/feedback/FeedbackEngine.kt": "1a57b7e2d43271dcde557235a6085534eac194e9b9386eb2df680741e40c4dbe",
+    "app/src/main/java/com/littlebuddy/v2/feedback/Vault.kt": "06dab1077496ac401674c7dfc30628fbf297c59e381d3d5f3888e964e98cf25f",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentCodec.kt": "abce2a868140471dd6204d6aed69d7caa40109e6f8049f6ae0e1a320f045d62a",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentCommit.kt": "a85297073277c9c522f2a8ff5ecaae5be9ce157837751f2e0781d89dc23bd78c",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentDomain.kt": "70a910d079c101106b33f9d1e3d99a999c795d2405bb9d64dedf5dc56473fd1e",
+    "app/src/main/java/com/littlebuddy/v2/parent/ParentEnvelope.kt": "e7ca9b4b90c0a37cca886c5c1c0729bf3a438ea3b7b977d2266cae95608bdc5b",
+    "app/src/main/java/com/littlebuddy/v2/parent/SealedParentStore.kt": "f1cf79acf300c97977bae91ea7187017acf479cff17cf2ea07513d29d4f1d77b",
+    "app/src/test/java/com/littlebuddy/v2/feedback/Review40Probe.kt": "2d136d1240ca288896aa69b2a8c1ffcc3f37010752e7e8d2132a4dec569cb413"
+  },
+  "results": [
+    {
+      "name": "baseline",
+      "tests": 1,
+      "failures": 1,
+      "skipped": 0,
+      "expected_failure": false,
+      "detected": false
+    }
+  ],
+  "source_ref": "c0f3e38b853e3090c8c98e9d76cdcbc916a80101",
+  "android_jar_sha256": null,
+  "scope": "actual Kotlin core, synthetic clock/auth/provider, real files; no Android Keystore/device/platform"
+}

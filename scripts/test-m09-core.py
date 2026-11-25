@@ -42,8 +42,18 @@ def main():
     runtime = [jar('org.jetbrains.kotlin', 'kotlin-stdlib', '2.2.21'),
                jar('junit', 'junit', '4.13.2'), jar('org.hamcrest', 'hamcrest-core', '1.3')]
     source_dir = ROOT / 'app/src/main/java/com/littlebuddy/v2/feedback'
-    sources = [p for p in sorted(source_dir.glob('*.kt')) if args.android_jar or p.name != 'AndroidFeedbackVault.kt']
+    parent_dir = ROOT / 'app/src/main/java/com/littlebuddy/v2/parent'
+    candidates = sorted(source_dir.glob('*.kt')) + sorted(parent_dir.glob('*.kt'))
+    if args.source_ref:
+        existing = set(subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', args.source_ref], cwd=ROOT, text=True).splitlines())
+        candidates = [p for p in candidates if str(p.relative_to(ROOT)) in existing]
+    android_sources = {'AndroidFeedbackVault.kt', 'AndroidFeedbackRuntime.kt', 'FeedbackPageFactory.kt', 'AndroidParentStore.kt'}
+    sources = [p for p in candidates if args.android_jar or p.name not in android_sources]
     tests = sorted((ROOT / 'app/src/test/java/com/littlebuddy/v2/feedback').glob('*.kt'))
+    if args.source_ref:
+        if not args.case or '#' not in args.case:
+            parser.error('--source-ref requires an explicit Class#method to avoid compiling newer dependent tests')
+        tests = [p for p in tests if p.stem == args.case.split('#')[0]]
     source_bytes = {p: subprocess.check_output(['git', 'show', f'{args.source_ref}:{p.relative_to(ROOT)}'], cwd=ROOT)
                     if args.source_ref else p.read_bytes() for p in sources}
     if args.android_jar:
@@ -57,6 +67,12 @@ def main():
             ('early-grant-clear', 'early-grant', 'blockedClearRevocationPreservesDurableSourceLogs'),
             ('incomplete-deletion', 'delete', 'deleteFailureAndPartialReceiptNeverClaimAllCopiesDeleted'),
             ('expired-draft-copy', 'draft-expiry', 'Review39Probe#expiredSelectedDraftCopyMustBeReleasedBySweep'),
+            ('route-borrows-new-grant', 'borrow-route', 'FeedbackFlowTest#routerDoesNotBorrowNewPageAuthorityForAlreadyRunningOldWork'),
+            ('late-ui-restores-data', 'late-ui', 'FeedbackFlowTest#delayedUiCompletionAfterPauseCannotRestoreSensitiveSnapshot'),
+            ('gate-boolean-without-decision', 'gate-boolean', 'FeedbackFlowTest#adapterCannotAcceptBooleanWithoutDecision'),
+            ('expired-detail-cache', 'detail-cache', 'Review40Probe#systemSweepMustRetireDisplayedExpiredDetails'),
+            ('failed-sweep-cache', 'failed-sweep', 'Review40RepairProbe#failedExpirySweepMustNotDeliverQueuedExpiredDetail'),
+            ('late-failure-target', 'late-target', 'FeedbackSweepFailureTest#editAfterTickEnqueuedBeforeWorkerStartsIsPreserved'),
         ]
     report = {'source_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(source_bytes.get(p, p.read_bytes())).hexdigest()
                                for p in sources + tests}, 'results': [], 'source_ref': args.source_ref,
@@ -100,6 +116,22 @@ fun main(args: Array<String>) {
                     start = value.index('        // R87-01:')
                     end = value.index('        // End R87-01', start)
                     value = value[:start] + value[end:]
+                if mutant == 'borrow-route' and source.name == 'FeedbackAuthority.kt':
+                    value = value.replace('if (caller.get() !== owner) return null', '')
+                if mutant == 'late-ui' and source.name == 'FeedbackEngine.kt':
+                    value = value.replace('if (controller.matches(version)) {\n                    if (current(controller)) controller.deliverPending(version) else controller.pause()',
+                                          'if (true) {\n                    controller.deliver(screen)')
+                if mutant == 'late-target' and source.name == 'FeedbackEngine.kt':
+                    value = value.replace('        val target = page.get()\n        val requested = target?.presentationVersion()\n        queue.post {', '        queue.post {\n            val target = page.get()\n            val requested = target?.presentationVersion()')
+                if mutant == 'failed-sweep' and source.name == 'FeedbackEngine.kt':
+                    start = value.index('            if (!success && target != null')
+                    end = value.index('            done(success)', start)
+                    value = value[:start] + '            if (!success) page.get()?.let { active -> ui.post { if (page.get() === active) active.deliver(FeedbackScreen.Notice(Failure.STORAGE)) } }\n' + value[end:]
+                if mutant == 'detail-cache' and source.name == 'FeedbackEngine.kt':
+                    value = value.replace('val previous = refresh ?: return', 'if (token == null) return\n        val previous = refresh ?: return')
+                if mutant == 'gate-boolean' and source.name == 'FeedbackAuthority.kt':
+                    value = value.replace('        gate.accept(domain, grant) {', '        val result = gate.accept(domain, grant) {')
+                    value = value.replace('        return decided', '        if (result && !decided) { acceptance(); return true }\n        return decided')
                 destination = job / source.name; destination.write_text(value); copied.append(str(destination))
             output = job / 'classes'
             code, _ = run(['java', '-Xmx768m', '-cp', os.pathsep.join(compiler),
