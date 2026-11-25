@@ -8,6 +8,8 @@ import json
 import os
 from pathlib import Path
 import shlex
+import platform
+from importlib.metadata import version, PackageNotFoundError
 
 from backend.dashscope import DashScope
 from backend.v2.companion import DashScopeModel, UnifiedProviders
@@ -64,7 +66,16 @@ def providers(http, *, environment=None, service_env=None, credential_directory=
 
 def manifest(config):
     # Deliberately excludes workspace ID, credentials, TLS private paths and child content.
+    dependencies={}
+    for name in ('httpx','websockets'):
+        try:dependencies[name]=version(name)
+        except PackageNotFoundError:dependencies[name]='not_installed'
     return dict(region=config['region'], models={k: config[k] for k in ('asr', 'llm', 'tts', 'voice')},
+                model_revision='provider_alias_not_immutable_revision',
+                runtime=dict(python=platform.python_version(),dependencies=dependencies),
+                deployment=dict(bind='127.0.0.1',default_port=19483,tls_minimum='1.2',
+                    max_tokens=1400,thinking=False,speech_rate=24000,context_bytes=65536,
+                    device_token='explicit_v2_scope_required'),
                 transports=['regional_https_chat', 'regional_wss_asr_tts'],
                 device_credential='separately_required', feedback_provider='not_configured',
                 prices='not_verified', new_cloud_samples=0)
