@@ -164,6 +164,43 @@ class VoicePeer:
         operation.ensure()
         return result
 
+    async def read_request(self, operation, kind, *args):
+        """One transient retry for proposal-only reads, never media or safety.
+
+        Only the explicit endpoint/plan/facts call sites use this port. No
+        state/output is committed by those provider contracts. The original
+        expression budget owns the retry across turn/player reconstruction.
+        """
+        if kind not in {'endpoint', 'plan', 'facts'}:
+            raise ValueError('read request stage')
+        function = getattr(self.providers, kind)
+        revision = self.revision
+        try:
+            result = await self.owned(operation, function, *args)
+            if revision != self.revision:
+                raise StaleOperation()
+            return result
+        except Exception as failure:
+            operation.ensure()
+            if revision != self.revision:
+                raise StaleOperation()
+            if not isinstance(failure, VoiceFault) or failure.code not in {'network', 'timeout'}:
+                raise
+            budget = operation.budget
+            if (budget.read_retry_revision == revision or
+                    (kind != 'endpoint' and (self.session.response_confirmed or self.session.pending))):
+                raise
+            remaining = budget.remaining()
+            budget.read_retry_revision = revision  # reserve before the next await
+            async with asyncio.timeout(remaining):
+                result = await self.owned(operation, function, *args)
+            if revision != self.revision:
+                raise StaleOperation()
+            # An adapter swallowing cancellation or a changed clock cannot
+            # publish a result outside the original first-response budget.
+            budget.remaining()
+            return result
+
     @asynccontextmanager
     async def owned_resource(self, operation, factory, *args):
         operation.ensure()
@@ -527,7 +564,7 @@ class VoicePeer:
                 operation.ensure()
                 # Only this operation's authorised session may supply context.
                 context = operation.session.context()
-                result = await self.owned(operation, self.providers.endpoint, text, context)
+                result = await self.read_request(operation, 'endpoint', text, context)
                 if (not isinstance(result, dict) or set(result) != {'completion', 'meaning'}
                         or result['completion'] not in {'complete', 'incomplete', 'thinking'}
                         or result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown','management'}):
@@ -641,7 +678,7 @@ class VoicePeer:
                 if self.images_enabled and hasattr(self.providers,'image_catalogue'):
                     context['image_catalog']=self.providers.image_catalogue()
                 stage = 'plan'
-                plan = await self.owned(operation, self.providers.plan, text, context)
+                plan = await self.read_request(operation, 'plan', text, context)
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 action = plan['action']
@@ -676,13 +713,13 @@ class VoicePeer:
                     self.session.private_mode = True
                 elif action in {'change', 'leave'} and self.session.private_mode:
                     self.session.private_mode = False
-                    plan = await self.owned(operation, self.providers.plan, text, operation.session.context(shared=True,query=text or ''))
+                    plan = await self.read_request(operation, 'plan', text, operation.session.context(shared=True,query=text or ''))
                 if action == 'leave':
                     plan.update(mode='chat', rules='', roles=[], secrets={})
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 stage = 'facts'
-                facts = [] if ending else await self.owned(operation, self.providers.facts, text)
+                facts = [] if ending else await self.read_request(operation, 'facts', text)
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 stage = 'fact_commit'
