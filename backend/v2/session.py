@@ -304,7 +304,10 @@ class Session:
         if current.public or current.answer is not None or current.effect:
             self.revealed.add(segment)
         if current.effect:
-            self.commands.append(('reveal', current.effect, self.topic))
+            if current.effect.startswith('image:'):
+                self.commands.append(('reveal', current.effect, self.topic,current.name,current.end))
+            else:
+                self.commands.append(('reveal', current.effect, self.topic))
         return True
 
     def _played_facts(self, current):

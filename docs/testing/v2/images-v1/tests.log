@@ -1,0 +1,14 @@
+test_all_modes_and_hide_and_legacy_route (tests.v2.test_images.ImageRoutes.test_all_modes_and_hide_and_legacy_route) ... ok
+test_corrupt_real_file_never_claims_ready (tests.v2.test_images.ImageRoutes.test_corrupt_real_file_never_claims_ready) ... ok
+test_negative_control_removing_played_gate_is_detected (tests.v2.test_images.ImageRoutes.test_negative_control_removing_played_gate_is_detected) ... ok
+test_new_input_and_handoff_reject_late_image (tests.v2.test_images.ImageRoutes.test_new_input_and_handoff_reject_late_image) ... ok
+test_private_and_unspoken_riddle_cannot_prepare_answer (tests.v2.test_images.ImageRoutes.test_private_and_unspoken_riddle_cannot_prepare_answer) ... ok
+test_ready_is_hidden_partial_ack_cannot_reveal_and_full_ack_is_once (tests.v2.test_images.ImageRoutes.test_ready_is_hidden_partial_ack_cannot_reveal_and_full_ack_is_once) ... ok
+test_real_sixty_assets_have_verified_hash_and_finite_fallbacks (tests.v2.test_images.ImageRoutes.test_real_sixty_assets_have_verified_hash_and_finite_fallbacks) ... ok
+test_slow_image_does_not_block_speech_and_ack_waits_for_real_read (tests.v2.test_images.ImageRoutes.test_slow_image_does_not_block_speech_and_ack_waits_for_real_read) ... ok
+test_spoken_riddle_answer_only_becomes_public_after_full_ack (tests.v2.test_images.ImageRoutes.test_spoken_riddle_answer_only_becomes_public_after_full_ack) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.251s
+
+OK
