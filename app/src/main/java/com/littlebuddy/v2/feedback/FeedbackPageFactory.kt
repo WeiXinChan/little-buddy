@@ -25,7 +25,7 @@ internal object FeedbackPageFactory {
 }
 
 /** Native parent-only view. No Intent route, saved text state, sharing, external links or child speech. */
-private class AndroidFeedbackPage(private val activity: Activity, authority: FeedbackPageAuthority,
+private class AndroidFeedbackPage(private val activity: Activity, private val authority: FeedbackPageAuthority,
     private val onExit: () -> Unit) : FeedbackPageHandle {
     private val column = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 16, 24, 24) }
     override val view: View = ScrollView(activity).apply { addView(column); isSaveEnabled = false }
@@ -37,6 +37,29 @@ private class AndroidFeedbackPage(private val activity: Activity, authority: Fee
     private val format get() = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply { isLenient = false }
     private val controller: FeedbackController
     private var closed = false
+    private val visibility=FeedbackVisibility(AndroidFeedbackRuntime.presentationClock())
+    private val main=android.os.Handler(android.os.Looper.getMainLooper())
+    private var shownUntil: Long?=null
+    private val expire=object:Runnable {
+        override fun run() {
+            val end=shownUntil ?: return
+            if(closed)return
+            val time=visibility.now()
+            if(!authority.current()) { pause();return }
+            if(time==null || time>=end) { expireMaterial();return }
+            main.postDelayed(this,minOf(500L,end-time))
+        }
+    }
+    private fun expireMaterial() {
+        scrub();begin("材料已到期或时间不可核实")
+        label("正在清理本机过期副本；不会重新上传或取得新的家长授权。")
+        controller.showList() // local sweep only; invalidates the old projection/confirmation immediately
+    }
+    private fun watch(screen:FeedbackScreen) {
+        main.removeCallbacks(expire);shownUntil=visibility.until(screen)
+        val end=shownUntil ?: return;val time=visibility.now() ?: return
+        main.postDelayed(expire,maxOf(1L,minOf(500L,end-time)))
+    }
     init {
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         controller = AndroidFeedbackRuntime.open(activity).open(authority, ::render)
@@ -69,6 +92,9 @@ private class AndroidFeedbackPage(private val activity: Activity, authority: Fee
     }
     private fun render(screen: FeedbackScreen) {
         if (closed) return
+        if(screen!==FeedbackScreen.Locked && !authority.current()) { render(FeedbackScreen.Locked);return }
+        if(!visibility.allowed(screen)) { expireMaterial();return }
+        watch(screen)
         when (screen) {
             is FeedbackScreen.Issues -> {
                 scrub(); begin("我提交的问题 · 仅本机")
@@ -172,6 +198,7 @@ private class AndroidFeedbackPage(private val activity: Activity, authority: Fee
         button("确认执行", action = action); button("取消") { controller.showList() }
     }
     private fun scrub() {
+        shownUntil=null;main.removeCallbacks(expire)
         description = ""; selected = false; fromText = ""; throughText = ""
         clearViewText(column); column.removeAllViews()
     }

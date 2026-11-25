@@ -4,7 +4,7 @@ Android R15：私有反馈真实接线
 
 实际调用链：家长验证→FeedbackPageFactory.configure(domain)→AndroidFeedbackRuntime创建FeedbackWireProvider并注入FeedbackCoreOwner/FeedbackEngine→已确认材料的submitAdmitted→独立/v2/feedback WSS。详情页显式refresh→FeedbackCore.refresh→provider.read→原始页面的replyIntent最终提交→父区TextView。后台只可重试已有原键删除，不读回复、不上传、不创建新父授权。无配置或不是已发行私有连接则available=false；有配置但服务离线，保持未确认状态，不自动重发。
 
-每个网络操作先捕获原页面/取消代际，再准备不可变信封并完成TLS与feedback-v1 ready。最终ParentDomain.acceptProtected只执行READY→ADMITTED短内存决定；无网络、Keystore、JSON编码或文件IO持授权锁。实际Socket.send在决定后执行，HOME/取消/换页直接关闭原WSS/SSH及唤醒等待者。已经提交给socket队列的数据不能宣称物理撤回；超时单仍持久保留原id并可撤回。迟到reply不能借新页面epoch，材料等值到期或落盘stage后到期都拒绝新内容发布。
+每个网络操作先捕获原页面/取消代际，再准备不可变信封并完成TLS与feedback-v1 ready。最终ParentDomain.acceptProtected只执行READY→ADMITTED短内存决定；无网络、Keystore、JSON编码或文件IO持授权锁。实际Socket.send在决定后执行，HOME/取消/换页直接关闭原WSS/SSH及唤醒等待者。已经提交给socket队列的数据不能宣称物理撤回；超时单仍持久保留原id并可撤回。迟到reply不能借新页面epoch，材料等值到期或落盘stage后到期都拒绝新内容发布。Native页面在实际显示前独立重验同一材料时钟，排队UI过期不渲染；有材料时才启用到期清理回调，pause/close取消，离开或回到家长区不保留过期文字；到期只排本机sweep/列表，不远端读、不重传、不续Grant。
 
 新提交key为[RFC9562 §5.7 UUIDv7](https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7)：前48位保持Material.created毫秒，其余随机/version7/variant10；request仍UUIDv4。键先加密持久化，重启、读取、超时、撤回都不改时间或重铸key。不自动重发旧v4失败单。旧v4可读/撤回；无原设备凭据绑定的历史记录不能证明跨旧凭据全部副本删除，保守保持DELETING，不能借新token的未知键回执冒充完成。
 

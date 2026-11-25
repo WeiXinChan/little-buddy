@@ -11,11 +11,11 @@ runtime=[jar("com.github.mwiede","jsch","2.28.8"),jar("com.squareup.okhttp3","ok
 base=root/'app/src/main/java/com/littlebuddy/v2'
 sources=[base/'transport/V2Ssh.kt']
 sources += [base/'parent'/(n+'.kt') for n in ['ParentDomain','ParentCodec','ParentEnvelope','ParentCommit','ParentConfiguration','ParentPanelModel']]
-sources += [base/'feedback'/(n+'.kt') for n in ['Contracts','FeedbackKeys','FeedbackCore','FeedbackEngine','FeedbackAuthority','Vault','FeedbackWireProvider','FeedbackJson']]
+sources += [base/'feedback'/(n+'.kt') for n in ['Contracts','FeedbackKeys','FeedbackCore','FeedbackEngine','FeedbackAuthority','Vault','FeedbackWireProvider','FeedbackJson','FeedbackVisibility']]
 sources += [root/'scripts/testing/feedback/JsonReaderPort.kt',root/'scripts/testing/feedback/JsonObjectPort.kt']
-sources += [root/'app/src/test/java/com/littlebuddy/v2/feedback'/(n+'.kt') for n in ['FeedbackFlowTest','FeedbackTransportContractTest','FeedbackAdmissionTest']]
+sources += [root/'app/src/test/java/com/littlebuddy/v2/feedback'/(n+'.kt') for n in ['FeedbackFlowTest','FeedbackTransportContractTest','FeedbackAdmissionTest','FeedbackVisibilityTest']]
 
 with tempfile.TemporaryDirectory(dir=root,prefix='image-tests-') as out:
  subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',out,*map(str,sources)],check=True)
- command=['java','-Xmx256m','-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.v2.feedback.FeedbackFlowTest','com.littlebuddy.v2.feedback.FeedbackTransportContractTest','com.littlebuddy.v2.feedback.FeedbackAdmissionTest']
+ command=['java','-Xmx256m','-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.v2.feedback.FeedbackFlowTest','com.littlebuddy.v2.feedback.FeedbackTransportContractTest','com.littlebuddy.v2.feedback.FeedbackAdmissionTest','com.littlebuddy.v2.feedback.FeedbackVisibilityTest']
  subprocess.run(command,check=True)
