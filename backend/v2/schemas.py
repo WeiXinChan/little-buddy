@@ -12,7 +12,7 @@ def enum(*items):
 IMAGE_TOOL = obj(dict(kind=enum('show_image','hide_image','generate_image'),asset_id=string(64)),required=['kind'])
 
 PLAN = obj(dict(
-    action=enum('continue','change','leave','handoff','private'),
+    action=enum('continue','change','leave','handoff','private','end'),
     mode=enum('chat','guess','story','adventure','association'),
     rules=string(2000),
     roles=dict(type='array',items=string(80),maxItems=8),

@@ -129,12 +129,15 @@ class UnifiedProviders:
     async def plan(self, text, context):
         plan = await self.request("""
 只返回JSON，严格字段：
-{"action":"continue|change|leave|handoff|private",
+{"action":"continue|change|leave|handoff|private|end",
 "mode":"chat|guess|story|adventure|association",
 "rules":"当前完整规则","roles":["角色"],"secrets":{"answer":"未揭晓谜底，可为空对象"},
 "sentences":["1到4个简短句，每句不超过120字"],
 "anchors":{"plot.main":0,"clue.current":0}}。anchors把必须保留的剧情/线索/谜底/规则映射到sentences索引，最多16项。。
 动作必须由本轮孩子意图支持；未改规则时保留已有规则/角色/谜底。
+end仅用于明确结束本次会话（再见、我要睡觉了、我们都不玩了），只作简短告别。
+“我先退出，你们继续”保持共同会话用continue；不清楚谁退出时简短确认，不直接end。
+“不玩这个了”是leave而非end；“等我一下”安静等待不催促；明确单独换个人用handoff。
 private仅在孩子明确谈私事时使用；共享剧情不能出现私事。
 facts是逐字来源证据，history不代表当前偏好或撤回；保留主语、否定与原命题，不将分类维度当作覆盖许可。
 memory.omitted_sources表示还有未检索来源，不代表孩子没说过；无法核对时自然请孩子确认，不编造回忆。
@@ -150,7 +153,7 @@ memory.capacity_limited时坦诚记忆范围有限，围绕当前输入继续，
             plan.setdefault('anchors', {})
             plan.setdefault('tools', [])
         if (not isinstance(plan, dict) or set(plan) != {'action', 'mode', 'rules', 'roles', 'secrets', 'sentences', 'anchors', 'tools'} or
-                plan['action'] not in {'continue', 'change', 'leave', 'handoff', 'private'} or
+                plan['action'] not in {'continue', 'change', 'leave', 'handoff', 'private','end'} or
                 plan['mode'] not in {'chat', 'guess', 'story', 'adventure', 'association'} or
                 not isinstance(plan['rules'], str) or len(plan['rules']) > 2000 or
                 not isinstance(plan['roles'], list) or len(plan['roles']) > 8 or
