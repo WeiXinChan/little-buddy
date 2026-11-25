@@ -103,7 +103,7 @@ class PaOnlyMic:
         if control is None:
             from grpc_mic import GrpcMic
             control=GrpcMic(state_only_auth=True)  # authenticated loopback get/status/set only, never play/inject
-        self.control=control;self.before_restore=lambda:None;self.used=set()
+        self.control=control;self.before_restore=lambda:None;self.during_playback=lambda:None;self.playback_finished=lambda:None;self.used=set()
         try:self.proof=proof or PrivatePulse();self.specs=specs or allowlist();self.directory=directory
         except BaseException:
             control.close();raise
@@ -141,6 +141,7 @@ class PaOnlyMic:
                     if time.monotonic()>=until:raise
                     time.sleep(.01)
             save('PAPLAY_ONCE');playback=subprocess.Popen(['paplay','--device=m06_input',str(payload_path)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            self.during_playback()
             until=time.monotonic()+.8
             while True:
                 try:row['playback_binding']=binding(self.proof,playback.pid,'sink-inputs',rate);break
@@ -152,6 +153,7 @@ class PaOnlyMic:
             if not read_point('SDK_DURING_PLAYBACK'):raise PaFailure('SDK_TRUE_LOST')
             if any(b.get('corked') is not False for b in row['isolation_during']['qemu_source_outputs']):raise PaFailure('QEMU_INPUT_CORKED')
             playback.wait(timeout=max(.001,monitor.end-time.monotonic()-.15))
+            self.playback_finished()
             if playback.returncode:raise PaFailure('PAPLAY_EXIT')
             time.sleep(min(.1,max(0,monitor.end-time.monotonic())))
             if not read_point('SDK_AFTER_PLAYBACK'):raise PaFailure('SDK_TRUE_LOST')
@@ -163,6 +165,7 @@ class PaOnlyMic:
             try:
                 try:reap(playback)
                 finally:
+                    if playback is not None:self.playback_finished()
                     if monitor:cap=monitor.finish()
                 save('OWNED_STOPPED',owned_stopped=True)
             except BaseException as e:cleanup=e;save('CLEANUP_FAILED',**safe_failure(e))

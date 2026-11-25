@@ -45,12 +45,20 @@ try:
    if not re.fullmatch(r'/[A-Za-z0-9_./]+',private) or not private.endswith('/'+pkg+'/files'):raise ValueError('private root')
    if name=='enter' and calibration is not None:
     assert nonce==calibration_nonce and q['source_configuration']['nonce']==nonce and q['source_configuration']['requested']==int(calibration) and q['source_configuration']['actual']==int(calibration) and q['source_configuration']['session']==q['source_configuration']['native_session'] and q['source_configuration']['recording'] and q['source_configuration']['frames']>0
-    metadata_worker=threading.Thread(target=active,args=(Path('render/native-input'),nonce,rpc_done),kwargs=dict(transport_backend=os.environ.get('M06_AUDIO_INPUT','grpc')),name='owned-native-metadata');metadata_worker.start()
+    native_started=threading.Event() if os.environ.get('M06_NATIVE_READONLY')=='1' else None
+    playback_window=None
+    if native_started is not None:
+     from native_readonly import PlaybackWindow
+     playback_window=PlaybackWindow()
+    metadata_worker=threading.Thread(target=active,args=(Path('render/native-input'),nonce,rpc_done),kwargs=dict(transport_backend=os.environ.get('M06_AUDIO_INPUT','grpc'),native_started=native_started,source_evidence=q.get('source_configuration'),playback_window=playback_window), name='owned-native-metadata');metadata_worker.start()
     if os.environ.get('M06_AUDIO_INPUT')=='pa-only':
      def stop_metadata():
       rpc_done.set();metadata_worker.join(18)
       if metadata_worker.is_alive():raise RuntimeError('owned metadata observer alive')
      virtual_mic.before_restore=stop_metadata
+     if native_started is not None:
+      def pa_started():playback_window.begin();native_started.set()
+      virtual_mic.during_playback=pa_started;virtual_mic.playback_finished=playback_window.finish
    timing=FixtureTiming(q) if name=='enter' and virtual_mic and os.environ.get('BUDDY_SYNTHETIC_AVD_PROBE')=='1' else None
    if timing:timing.step('PWD_START')
    pwd=subprocess.check_output(['adb','shell','run-as',pkg,'pwd'],text=True,timeout=5).strip()

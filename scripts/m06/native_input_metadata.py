@@ -47,6 +47,7 @@ def bounded(args, limit=131072, seconds=3):
 
 
 def query(command, kind=None, seconds=3):
+    started_ns=time.monotonic_ns()
     try:
         data, result = bounded(ADB + ['shell', command],seconds=seconds)
         text = data.decode('utf-8', 'replace')
@@ -58,10 +59,15 @@ def query(command, kind=None, seconds=3):
                             if any(w in line.lower() for w in wanted)
                             and not any(w in line.lower() for w in ('bearer', 'token', 'credential', 'pubkey', 'header', 'permission denied', "can't", 'exception', 'failed', 'error:'))][:180]
         if kind=='alsa':result['fields']=alsa_fields(text)
+        if kind=='flinger':
+            from native_readonly import flinger_fields
+            result['input_threads']=flinger_fields(text) if result['status']=='AVAILABLE' and not result.get('capped') else []
+            result['input_threads_status']='AVAILABLE' if result['input_threads'] else 'UNAVAILABLE'
+        result.update(started_monotonic_ns=started_ns,ended_monotonic_ns=time.monotonic_ns())
         result['observed_sha256'] = hashlib.sha256(data).hexdigest()
         return result
     except Exception as error:
-        return dict(status='UNAVAILABLE', error_class=type(error).__name__)
+        return dict(status='UNAVAILABLE', error_class=type(error).__name__,started_monotonic_ns=started_ns,ended_monotonic_ns=time.monotonic_ns())
 
 
 def preflight(directory):
@@ -90,17 +96,28 @@ def preflight(directory):
     return result
 
 
-def active(directory, nonce, rpc_done, transport_backend='grpc'):
+def active(directory, nonce, rpc_done, transport_backend='grpc', native_started=None, source_evidence=None, playback_window=None):
     row = dict(nonce=nonce, scope='metadata only; not native consumption proof',
                started_monotonic_ns=time.monotonic_ns())
     path = directory/('active-'+nonce+'.json')
     for name, command in [('flinger','dumpsys media.audio_flinger'), ('policy','dumpsys media.audio_policy')]:
-        row[name] = query(command,seconds=1)
+        row[name] = query(command,kind='flinger' if name=='flinger' and native_started is not None else None,seconds=1)
         row['observed_monotonic_ns'] = time.monotonic_ns()
         path.write_text(json.dumps(row, indent=2))
 
+    if native_started is not None:
+        deadline=time.monotonic()+8
+        while not native_started.wait(.05):
+            if rpc_done.is_set() or time.monotonic()>=deadline:break
+        if native_started.is_set():
+            from native_readonly import during
+            row['native_readonly']=during(directory,nonce,source_evidence or {})
+        else:row['native_readonly']=dict(status='UNAVAILABLE',reason='NO_PA_PLAYBACK')
     row['transport_backend']=transport_backend
     row['playback_completion_observed' if transport_backend=='pa-only' else 'rpc_completion_observed']=rpc_done.wait(7)
     row['alsa_after_rpc']=query(ALSA_COMMAND,kind='alsa',seconds=1)
     row['alsa_observed_monotonic_ns']=time.monotonic_ns()
+    if playback_window is not None and row.get('native_readonly',{}).get('nonce')==nonce:
+        from native_readonly import finalise_during
+        finalise_during(directory,nonce,row['native_readonly'],playback_window,row.get('flinger',{}))
     path.write_text(json.dumps(row,indent=2))
