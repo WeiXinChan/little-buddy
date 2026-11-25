@@ -9,7 +9,7 @@ ROOT=Path(__file__).resolve().parents[1]
 CACHE=Path.home()/'.gradle/caches/modules-2/files-2.1'
 def jar(group,name,version):
     values=list((CACHE/group/name/version).glob('*/*.jar'));assert len(values)==1;return str(values[0])
-def compile_client(out,negative):
+def compile_client(out,negative,timer_negative=False):
     compiler=[jar('org.jetbrains.kotlin',a,v) for a,v in [('kotlin-compiler-embeddable','2.2.21'),('kotlin-stdlib','2.2.21'),
         ('kotlin-script-runtime','2.2.21'),('kotlin-reflect','1.6.10')]]
     compiler += [jar('org.jetbrains.kotlinx','kotlinx-coroutines-core-jvm','1.8.0'),jar('org.jetbrains','annotations','13.0')]
@@ -27,6 +27,10 @@ def compile_client(out,negative):
     if negative:
         path=out/'AndroidTrack.kt';path.write_text((base/'AndroidTrack.kt').read_text().replace('return muted || track.setVolume(percent/100f)==AudioTrack.SUCCESS','return track.setVolume(percent/100f)==AudioTrack.SUCCESS'))
         sources=[path if p.name=='AndroidTrack.kt' else p for p in sources]
+    if timer_negative:
+        path=out/'AndroidImageRoute.kt'
+        path.write_bytes(subprocess.check_output(['git','show','61b78aac44bacda0b3256acaab88fe15e4f1eed0:app/src/main/java/com/littlebuddy/v2/AndroidImageRoute.kt'],cwd=ROOT))
+        sources=[path if p.name=='AndroidImageRoute.kt' else p for p in sources]
     subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler',
         '-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',str(out/'classes'),*map(str,sources)],check=True)
     return os.pathsep.join([str(out/'classes'),*runtime])
@@ -35,9 +39,9 @@ def png():
     def chunk(k,d):return struct.pack('>I',len(d))+k+d+struct.pack('>I',zlib.crc32(k+d)&0xffffffff)
     return b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',512,512,8,6,0,0,0))+chunk(b'IDAT',zlib.compress(bytes((512*4+1)*512)))+chunk(b'IEND',b'')
 async def run():
-    negative='--negative' in os.sys.argv
+    negative='--negative' in os.sys.argv;timer_negative='--negative-timer' in os.sys.argv
     with tempfile.TemporaryDirectory(dir=ROOT,prefix='media-tls-') as directory:
-        out=Path(directory);cp=compile_client(out,negative)
+        out=Path(directory);cp=compile_client(out,negative,timer_negative)
         subprocess.run(['openssl','req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:P-256','-nodes','-days','1','-subj','/CN=localhost','-addext','subjectAltName=DNS:localhost,IP:127.0.0.1','-keyout',str(out/'key'),'-out',str(out/'cert')],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         subprocess.run(['keytool','-importcert','-noprompt','-alias','fixture','-file',str(out/'cert'),'-keystore',str(out/'trust.p12'),'-storetype','PKCS12','-storepass','fixture-only'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(out/'cert',out/'key')
@@ -84,6 +88,9 @@ async def run():
         if negative:
             assert process.returncode==1 and 'volume unmuted track' in text
             print('MUTE_NEGATIVE: 1 expected original assertion failure; actual production adapter compiled')
+        elif timer_negative:
+            assert process.returncode==1 and 'empty image route kept background timer' in text
+            print('TIMER_NEGATIVE: frozen old head61b78aa actual route compiled; 1 expected original assertion failure')
         else:
             assert process.returncode==0 and 'MEDIA_TLS volume_pipeline=1' in text
             print('MEDIA_TLS_NORMAL: 1/1 failure0 skip0; real authenticated loopback TLS; protocol fixture/native JVM ports')

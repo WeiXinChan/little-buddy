@@ -27,7 +27,8 @@ fun main(args:Array<String>) {
                 actual.mute();check(actual.setVolume(50));check(native.volume==0f && native.plays==0){"volume unmuted track"}
                 actual.pause();check(actual.setVolume(40));check(native.volume==0f && native.plays==0)
                 actual.stop();actual.release();check(image.bitmap==null)
-                println("MEDIA_TLS volume_pipeline=1 paused_no_resume=1 muted_no_unmute=1 next_track_reuse=1 png_ack_render=1 early_hidden=1 home_clear=1; native Android APIs are JVM ports")
+                Thread.sleep(120);check(Handler.instances[1].pendingCallbacks()==0){"empty image route kept background timer"}
+                println("MEDIA_TLS volume_pipeline=1 paused_no_resume=1 muted_no_unmute=1 next_track_reuse=1 png_ack_render=1 early_hidden=1 home_clear=1 empty_route_timer_stopped=1; native Android APIs are JVM ports")
                 done.countDown();return
             }
         }

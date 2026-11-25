@@ -82,6 +82,7 @@ internal class ImageGate<T>(private val now: ()->Long = { 0L }, private val disp
         if(!reuse) { publicCache=false;releaseLoaded() }
         prepared=value;changed();return serial
     }
+    @Synchronized fun hasMaterial(): Boolean { tick();return prepared!=null }
     @Synchronized fun isCurrent(ticket: Long) : Boolean { tick();return serial==ticket && prepared?.scope==scope && now()<retainEnd }
     @Synchronized fun loaded(ticket: Long, value: T) {
         if(!isCurrent(ticket)) { dispose(value);return }

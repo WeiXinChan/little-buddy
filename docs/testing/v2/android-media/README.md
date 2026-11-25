@@ -12,6 +12,6 @@ Android真实媒体路径：R14 / R09
 
 过期image_display hide(reason=expired/eyes=true)无ACK坐标，只能匹配当前材料做隐藏/释放，不可能显示或续期；正常display/extend/reshow/hide仍需新完整ACK。image_status unavailable恢复眼睛，不把缺动态图Provider当普通语音故障。生产缺动态资源仍依后端failclosed，无测试图审回执注入。
 
-定向验证入口：scripts/v2-media-tests.py（原ImageGate受影响集合+新增scope/限幅/组装/期限/晚到释放）；scripts/test-media-client.py（真实认证TLS→生产VoiceClient→Playback→AndroidTrack与AndroidImageRoute）。后者服务端为恶意/正常协议fixture，Android native对象为明确JVM端口；真实PNG签名/CRC/尺寸/inflate校验执行，原生BitmapFactory/AudioTrack实测留最终设备，不冒称已听到或见到真实设备效果。--negative只删除AndroidTrack mute保护，保留原断言，必须真实失败。
+定向验证入口：scripts/v2-media-tests.py（原ImageGate受影响集合+新增scope/限幅/组装/期限/晚到释放）；scripts/test-media-client.py（真实认证TLS→生产VoiceClient→Playback→AndroidTrack与AndroidImageRoute）。后者服务端为恶意/正常协议fixture，Android native对象为明确JVM端口；真实PNG签名/CRC/尺寸/inflate校验执行，原生BitmapFactory/AudioTrack实测留最终设备，不冒称已听到或见到真实设备效果。--negative只删除AndroidTrack mute保护，保留原断言，必须真实失败。--negative-timer直接编译旧head61b78aa的生产路由，关闭后后台计时器原断言必须失败；新路由在UI线程串行启停且空槽不调度，HOME/clear后的回调不能重启后台计时器。
 
 候选code17 / 2.0.0-rc3，独立包com.littlebuddy.sim.v2，API26+/arm64-v8a，内部Debug签名；同签名向上升级保留本地记录，换签/卸载/降级无保留保证。旧code16包保持原hash。root负责后端release/systemd新契约与真实账户/审核资源/设备最终集中验收；本PR不部署、不派设备、不跑云/旧全集/旧CI。

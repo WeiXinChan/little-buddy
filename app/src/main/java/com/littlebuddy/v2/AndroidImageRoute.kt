@@ -34,9 +34,14 @@ internal class AndroidImageRoute(private val activity: Activity, private val wor
         if(job!=null && !gate.isCurrent(pendingTicket)) { job?.cancel();job=null }
     }
     private val clock=object:Runnable {
-        override fun run() { if(!enabled.get())return;tick();if(enabled.get())main.postDelayed(this,50) }
+        override fun run() { if(!enabled.get())return;tick();if(enabled.get() && gate.hasMaterial())main.postDelayed(this,50) else enabled.set(false) }
     }
-    private fun schedule() { enabled.set(true);main.removeCallbacks(clock);main.post(clock) }
+    private fun schedule() { main.post {
+        // Serialize arm/disarm with the actual UI clock; a stale queued callback can only inspect current state.
+        main.removeCallbacks(clock)
+        enabled.set(gate.hasMaterial())
+        if(enabled.get())main.post(clock)
+    } }
     private fun render(): Unit=gate.render { bitmap ->
         image.setImageBitmap(bitmap);image.visibility=if(bitmap==null)View.GONE else View.VISIBLE
     }
