@@ -1,0 +1,36 @@
+{
+  "checked_date": "2026-11-25",
+  "region": "cn-beijing",
+  "currency": "CNY",
+  "discounts_free_tier_assumed": false,
+  "status": "published_reference_rates_not_actual_bill",
+  "sources": [
+    "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "https://help.aliyun.com/zh/model-studio/qwen-image-3-0"
+  ],
+  "rates": {
+    "fun-asr-realtime": {
+      "per_input_audio_second": 0.00033
+    },
+    "cosyvoice-v3-flash": {
+      "per_10000_billable_characters": 1.0,
+      "CJK_ideograph_weight": 2,
+      "other_character_weight": 1
+    },
+    "qwen3.8-flash": {
+      "per_million_input_tokens": 0.8,
+      "per_million_output_tokens": 2.7
+    },
+    "qwen-image-3.0": {
+      "per_generated_image_1k_or_2k": 0.18,
+      "text_to_image_input_images": 0
+    }
+  },
+  "counting_notes": [
+    "Count every recognition upload including repeated probes; elapsed child speech is not supplier-billed audio duration.",
+    "Count generated TTS characters using supplier weights, including cancelled output if billed.",
+    "Include endpoint, planning, fact extraction, safety, compaction and both image reviewers in model usage.",
+    "Image call caps bound attempts, not the total hourly voice and model bill.",
+    "Failed/cancelled request billing and actual metering must be checked in final acceptance."
+  ]
+}

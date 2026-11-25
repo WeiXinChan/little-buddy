@@ -22,7 +22,7 @@ CANCEL_SECONDS=.3
 class ImageFailure(ValueError):
     def __init__(self,reason):
         if reason not in {'disabled','configuration','unreviewed','unavailable','busy','quarantined','prompt',
-                          'prompt_review','image_review','payload','png','upstream','timeout','stale','released'}:
+                          'prompt_review','image_review','budget','payload','png','upstream','timeout','stale','released'}:
             raise ValueError('image failure code')
         self.reason=reason;super().__init__(reason)
 

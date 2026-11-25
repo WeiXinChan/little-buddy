@@ -1,4 +1,6 @@
 """Supplier constrained decoding supplements, never replaces, local trust gates."""
+from backend.v2.image_descriptions import VOCAB
+
 def obj(properties, *, required=None):
     return dict(type='object', properties=properties,
                 required=list(properties) if required is None else required, additionalProperties=False)
@@ -9,7 +11,9 @@ def string(limit):
 def enum(*items):
     return dict(type='string', enum=list(items))
 
-IMAGE_TOOL = obj(dict(kind=enum('show_image','hide_image','generate_image','extend_image','reshow_image'),asset_id=string(64)),required=['kind'])
+ART_DESCRIPTION=obj(dict(subject=string(64),**{key:enum(*choices) for key,choices in VOCAB.items()}),required=['subject'])
+
+IMAGE_TOOL = obj(dict(kind=enum('show_image','hide_image','generate_image','extend_image','reshow_image'),asset_id=string(64),description=ART_DESCRIPTION),required=['kind'])
 
 PLAN = obj(dict(
     action=enum('continue','change','leave','handoff','private','end'),

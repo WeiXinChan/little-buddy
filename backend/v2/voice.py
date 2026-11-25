@@ -17,6 +17,7 @@ from backend.v2.budget import ResponseBudget
 from backend.v2.safety import SafetyFault, local_help
 from backend.v2.images import revealable
 from backend.v2.dynamic_images import ImageScope, ImageFailure
+from backend.v2.image_descriptions import ExplicitImageRequest
 from backend.v2.image_wire import PublicImage, CHUNK_BYTES
 from backend.v2.protocol import CONTRACT
 
@@ -380,9 +381,15 @@ class VoicePeer:
         except (StaleOperation,asyncio.CancelledError):
             return
         except Exception:
+            if image is not None and prepared.get('dynamic'):image.release();image=None
+            if cache is not None:
+                cache.release()
+                if self.visual_cache is cache:self.visual_cache=None
+                prepared.pop('cache',None)
             if self.image_current(prepared):
                 try:await self.send_visual(prepared,'image_status',image_v=2,state='unavailable',reason='image_unavailable')
                 except Exception:pass
+                await self.image_failure_speech(prepared,request,operation)
             if self.prepared_visual is prepared:self.prepared_visual=None
         finally:
             if image is not None and prepared.get('dynamic'):image.release()
@@ -391,6 +398,60 @@ class VoicePeer:
                 if self.visual_cache is cache:self.visual_cache=None
             if self.prepared_visual is prepared and prepared.get('dynamic'):self.prepared_visual=None
             if self.visual_task is owner:self.visual_task=None
+
+    async def image_failure_speech(self,prepared,request,operation):
+        # Only local PLAN provenance marks an explicit request. Decoration has no
+        # audible side effect. Consume before IO; never retry this fixed message.
+        if not isinstance(request,ExplicitImageRequest) or prepared.get('failure_spoken'):return
+        deadline=operation.budget.deadline
+        if deadline is None:deadline=operation.session.deadline
+        def current():
+            return (self.image_current(prepared) and operation.valid() and not self.suspended and
+                    not self.waiting_wake and deadline and operation.session.clock()<deadline)
+        if not current():return
+        prepared['failure_spoken']=True
+        scoped=Operation(self,prepared['epoch'],prepared['revision'])
+        scoped.output=prepared['output'];scoped.budget=operation.budget
+        text='这张图暂时没生成好，我们先接着聊。'
+        def ensure():
+            scoped.ensure()
+            if not current():raise StaleOperation()
+        audio_started=False;completed=False
+        try:
+            async with asyncio.timeout(max(0.,deadline-operation.session.clock())):
+                ensure()
+                async with self.owned_resource(scoped,self.providers.synthesize,text,24000) as chunks:
+                    previous=None
+                    async for pcm in self.owned_items(scoped,chunks):
+                        ensure()
+                        if not isinstance(pcm,bytes) or not pcm or len(pcm)%2 or len(pcm)>4800:
+                            raise WireError('pcm capacity')
+                        if previous is not None:
+                            audio_started=True
+                            await self.audio(previous,'',prepared['epoch'],operation=scoped);ensure()
+                        previous=pcm
+                    ensure()
+                    if previous is None:raise WireError('empty synthesis')
+                    audio_started=True
+                    await self.audio(previous,text,prepared['epoch'],operation=scoped);ensure()
+                while self.session.pending:
+                    self.changed.clear();ensure()
+                    await self.owned(scoped,self.changed.wait);ensure()
+                ensure()
+                await self.owned(scoped,self.send,'reply_end',head=self.session.head,public_facts=len(self.session.public))
+                ensure();completed=True
+        except (StaleOperation,asyncio.CancelledError):return
+        except Exception:return # failed fixed help cannot trigger another synthesis or provider retry
+        finally:
+            # Revoke only this original playback if help was queued but never
+            # completely ACKed. A later player/turn/output is never touched.
+            if (audio_started and not completed and self.session is operation.session and
+                self.session.connection==operation.connection and self.session.turn==prepared['turn'] and
+                self.session.output==prepared['output'] and self.session.player==prepared['player'] and
+                self.session.stream==prepared['stream']):
+                if self.visual_task is asyncio.current_task():self.visual_task=None
+                self.session.interrupt()
+                await self.commands()
 
     async def reveal_visual(self, prepared):
         if (self.prepared_visual is not prepared or not self.visual_live(prepared) or
