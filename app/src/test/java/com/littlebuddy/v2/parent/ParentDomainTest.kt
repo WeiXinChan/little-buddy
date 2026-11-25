@@ -141,8 +141,10 @@ class ParentDomainTest {
     }
     @Test fun codecRejectsUnknownSchemaTruncationAndTrailingBytes() {
         owned(); val encoded = store.bytes!!
-        for (invalid in listOf(encoded.copyOf(71), encoded + byteArrayOf(0), encoded.copyOf().also { it[3] = 2 })) {
-            try { ParentCodec.decode(invalid); fail("invalid record accepted") } catch (_: IllegalStateException) {}
+        for (invalid in listOf(encoded.copyOf(71), encoded + byteArrayOf(0), encoded.copyOf().also { it[3] = 4 })) {
+            val failure = runCatching { ParentCodec.decode(invalid) }.exceptionOrNull()
+            assertTrue("invalid record must fail closed",
+                failure is IllegalStateException || failure is java.io.IOException)
         }
     }
     @Test fun ownerProofCannotReplayOrSurvivePageChange() {

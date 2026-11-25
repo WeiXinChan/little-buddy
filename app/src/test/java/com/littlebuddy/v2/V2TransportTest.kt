@@ -13,7 +13,8 @@ import java.util.Properties
 
 class V2TransportTest {
     private val token="a".repeat(32)
-    private val public=File("app/src/v2Debug/assets/v2-transport")
+    private val public=File("src/v2Debug/assets/v2-transport").takeIf { it.isDirectory }
+        ?: File("app/src/v2Debug/assets/v2-transport")
     private fun profile() : V2SshProfile {
         val p=Properties().apply { File(public,"ssh.properties").inputStream().use { load(it) } }
         return V2SshProfile(p.getProperty("host"),"v2-device-unit",p.getProperty("hostKey"),
