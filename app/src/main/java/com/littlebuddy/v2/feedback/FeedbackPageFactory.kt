@@ -39,26 +39,13 @@ private class AndroidFeedbackPage(private val activity: Activity, private val au
     private var closed = false
     private val visibility=FeedbackVisibility(AndroidFeedbackRuntime.presentationClock())
     private val main=android.os.Handler(android.os.Looper.getMainLooper())
-    private var shownUntil: Long?=null
-    private val expire=object:Runnable {
-        override fun run() {
-            val end=shownUntil ?: return
-            if(closed)return
-            val time=visibility.now()
-            if(!authority.current()) { pause();return }
-            if(time==null || time>=end) { expireMaterial();return }
-            main.postDelayed(this,minOf(500L,end-time))
-        }
-    }
+    private val projection=FeedbackProjection(visibility::now,
+        { task,delay -> main.postDelayed(task,delay) },{main.removeCallbacks(it)},
+        { !closed && authority.current() },{pause()},{expireMaterial()})
     private fun expireMaterial() {
         scrub();begin("材料已到期或时间不可核实")
         label("正在清理本机过期副本；不会重新上传或取得新的家长授权。")
         controller.showList() // local sweep only; invalidates the old projection/confirmation immediately
-    }
-    private fun watch(screen:FeedbackScreen) {
-        main.removeCallbacks(expire);shownUntil=visibility.until(screen)
-        val end=shownUntil ?: return;val time=visibility.now() ?: return
-        main.postDelayed(expire,maxOf(1L,minOf(500L,end-time)))
     }
     init {
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -94,7 +81,7 @@ private class AndroidFeedbackPage(private val activity: Activity, private val au
         if (closed) return
         if(screen!==FeedbackScreen.Locked && !authority.current()) { render(FeedbackScreen.Locked);return }
         if(!visibility.allowed(screen)) { expireMaterial();return }
-        watch(screen)
+        projection.render(visibility.until(screen)) {
         when (screen) {
             is FeedbackScreen.Issues -> {
                 scrub(); begin("我提交的问题 · 仅本机")
@@ -156,6 +143,7 @@ private class AndroidFeedbackPage(private val activity: Activity, private val au
             }
             FeedbackScreen.Locked -> { scrub(); begin("反馈页面已锁定"); label("请返回管理重新验证。旧页面不会自动恢复。"); button("返回管理") { close(); onExit() } }
         }
+        }
     }
     private fun editor(message: String) {
         begin("描述问题")
@@ -198,7 +186,7 @@ private class AndroidFeedbackPage(private val activity: Activity, private val au
         button("确认执行", action = action); button("取消") { controller.showList() }
     }
     private fun scrub() {
-        shownUntil=null;main.removeCallbacks(expire)
+        projection.clearTimer()
         description = ""; selected = false; fromText = ""; throughText = ""
         clearViewText(column); column.removeAllViews()
     }
@@ -208,8 +196,8 @@ private class AndroidFeedbackPage(private val activity: Activity, private val au
         else if (view is TextView) view.text = ""
         if (view is android.view.ViewGroup) for (index in 0 until view.childCount) clearViewText(view.getChildAt(index))
     }
-    override fun pause() { if (!closed) { scrub(); controller.pause() } }
-    override fun close() { if (!closed) { scrub(); controller.close(); closed = true; column.removeAllViews() } }
+    override fun pause() { if (!closed) { projection.cancel(); scrub(); controller.pause() } }
+    override fun close() { if (!closed) { projection.cancel(); scrub(); controller.close(); closed = true; column.removeAllViews() } }
     private fun categoryName(value: Category) = when(value) {
         Category.RECOGNITION -> "识别"; Category.CONVERSATION -> "接话"; Category.INTERRUPT -> "打断"
         Category.SOUND_NETWORK -> "声音/网络"; Category.IMAGE -> "图片"; Category.OTHER -> "其他"
