@@ -1,7 +1,7 @@
 name: V2 eyes rendering
 on:
   pull_request:
-    paths: ['app/**', 'scripts/m06/**', '.github/workflows/v2-eyes.yml']
+    paths: ['app/**', 'scripts/m06/**', 'gradle/**', 'gradlew', 'gradlew.bat', '*.gradle.kts', 'gradle.properties', '.github/workflows/v2-eyes.yml']
 permissions:
   contents: read
   actions: read
@@ -18,30 +18,28 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
           fetch-depth: 2
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: '14972612151'
-          run-id: '45504346259'
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/b2-apks
-      - name: Frozen b2 APK source7 SDK gate experiment on API 36 x86_64
+      - name: Build current tree and run V2 regressions on API 36 x86_64
         shell: bash
         run: |
           set -euo pipefail
           export ANDROID_SERIAL=emulator-5554
-          export M06_REQUIRE_HDA=1
+          # HDA experiment is closed; normal regressions do not force a backend.
+          export M06_REQUIRE_HDA=0
           export JAVA_HOME="$JAVA_HOME_17_X64"
           export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0' 'emulator' 'system-images;android-36;google_apis;x86_64'
-          git fetch --no-tags --depth=1 origin b2ccf61d3ef002aa0b43cc488627d21038f4fdfc
           mkdir -p render
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/m06/tests -v >render/host-script-tests.txt 2>&1
-          # This authorized host-only experiment does not compile Android.
-          python3 scripts/m06/reuse_b2_apks.py "$RUNNER_TEMP/b2-apks"
-          unit_result=0
-          printf '%s\n' 'NOT_RUN: frozen b2 APK experiment; prior JVM122=120PASS/2SKIP' >render/unit.txt
-          printf '%s\n' '0' >render/unit-exit.txt
+          # Keep unit failures visible while collecting independent device evidence.
+          set +e
+          ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator -Pv2SyntheticProbe :app:testV2DebugUnitTest >render/unit.txt 2>&1
+          unit_result=$?
+          set -e
+          printf '%s\n' "$unit_result" >render/unit-exit.txt
+          cat render/unit.txt
+          # Build failures stop installation; no downloaded/stale APK fallback.
+          ./gradlew --no-daemon --max-workers=1 -Pv2Test -Pv2Emulator -Pv2SyntheticProbe :app:assembleV2Debug :app:assembleV2DebugAndroidTest >render/assemble.txt 2>&1
           git rev-parse HEAD > render/source.txt
           sha256sum app/build/outputs/apk/v2Debug/*.apk app/build/outputs/apk/androidTest/v2Debug/*.apk > render/apk-sha256.txt
           sudo -n apt-get -o Acquire::http::Timeout=15 -o Acquire::Retries=0 install -y --no-install-recommends libpulse0 pulseaudio pulseaudio-utils xvfb xauth libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
@@ -102,9 +100,8 @@ jobs:
           timeout 10s bash -c 'until [[ -S /tmp/.X11-unix/X99 ]]; do sleep 0.2; done'
           export PULSE_SOURCE=m06_input.monitor PULSE_SINK=v2_playback
           export QEMU_PA_SERVER="$PULSE_SERVER" QEMU_PA_SOURCE=m06_input.monitor QEMU_PA_SINK=v2_playback
-          python3 scripts/m06/hda_guard.py
           "$ANDROID_HOME/emulator/emulator" -version >render/emulator-version.txt 2>&1
-          "$ANDROID_HOME/emulator/emulator" -avd v2eyes -feature -VirtioSndCard -port 5554 -grpc 8554 -grpc-use-token -accel on -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
+          "$ANDROID_HOME/emulator/emulator" -avd v2eyes -port 5554 -grpc 8554 -grpc-use-token -accel on -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
           emulator_pid=$!
           export M06_EMULATOR_PID="$emulator_pid"
           test -f "$ANDROID_AVD_HOME/v2eyes.ini"

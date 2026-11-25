@@ -1,0 +1,18 @@
+test_conversation_context_switch_and_silent_exit (backend.tests.test_animal_cloud.CloudGameTest.test_conversation_context_switch_and_silent_exit) ... ok
+test_conversation_input_output_gate_and_natural_exit (backend.tests.test_animal_cloud.CloudGameTest.test_conversation_input_output_gate_and_natural_exit) ... ok
+test_disconnect_after_partial_chat_reply_starts_fresh_history (backend.tests.test_animal_cloud.CloudGameTest.test_disconnect_after_partial_chat_reply_starts_fresh_history) ... ok
+test_private_fixture_faults_and_fresh_connection (backend.tests.test_animal_cloud.CloudGameTest.test_private_fixture_faults_and_fresh_connection) ... ok
+test_reject_then_hint_wrong_and_bare_yes_do_not_reveal (backend.tests.test_animal_cloud.CloudGameTest.test_reject_then_hint_wrong_and_bare_yes_do_not_reveal) ... ok
+test_reveal_ack_during_later_tts_or_asr_cleanup (backend.tests.test_animal_cloud.CloudGameTest.test_reveal_ack_during_later_tts_or_asr_cleanup) ... ok
+test_silence_consumes_permit_without_asr_and_stale_key_is_ignored (backend.tests.test_animal_cloud.CloudGameTest.test_silence_consumes_permit_without_asr_and_stale_key_is_ignored) ... ok
+test_standalone_crosses_old_usage_thresholds_unless_trial_is_explicit (backend.tests.test_animal_cloud.CloudGameTest.test_standalone_crosses_old_usage_thresholds_unless_trial_is_explicit) ... ok
+test_standalone_total_deadline_is_trial_only (backend.tests.test_animal_cloud.CloudGameTest.test_standalone_total_deadline_is_trial_only) ... ok
+test_three_reveals_then_restart (backend.tests.test_animal_cloud.CloudGameTest.test_three_reveals_then_restart) ... ok
+test_wake_fixture_counts_ready_and_only_complete_pcm_seals (backend.tests.test_animal_cloud.CloudGameTest.test_wake_fixture_counts_ready_and_only_complete_pcm_seals) ... ok
+test_wake_has_silent_permit_and_routes_first_command (backend.tests.test_animal_cloud.CloudGameTest.test_wake_has_silent_permit_and_routes_first_command) ... ok
+test_wake_positive_stop_waits_for_consumption_then_response_pcm (backend.tests.test_animal_cloud.CloudGameTest.test_wake_positive_stop_waits_for_consumption_then_response_pcm) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 20.277s
+
+OK

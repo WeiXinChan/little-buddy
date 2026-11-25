@@ -491,12 +491,30 @@ class BuddyActivityTest {
         // The 500 ms leading silence is inside the native input fixture.
         SystemClock.sleep(300)
         onMain { assertFalse(AnimalEvent.OPEN_SOCKET in events) }
-        await { events.count { it == AnimalEvent.ASR_UPLOAD_END } == 1 && button("结束录音").isEnabled }
+        // END is only queued locally. Wait for this socket's validated response PCM:
+        // the wake fixture emits no greeting PCM and replies only after exact input consumption.
+        await {
+            val connection = events.lastIndexOf(AnimalEvent.OPEN_SOCKET)
+            val uploaded = events.lastIndexOf(AnimalEvent.ASR_UPLOAD_END)
+            events.count { it == AnimalEvent.OPEN_SOCKET } == 1 &&
+                events.count { it == AnimalEvent.ASR_UPLOAD_END } == 1 &&
+                uploaded > connection && events.lastIndexOf(AnimalEvent.PCM_BUFFERED) > uploaded &&
+                button("停止").isEnabled
+        }
         onMain {
             assertFalse(AnimalEvent.WAKE_PROMPT in events)
             button("停止").performClick()
         }
-        await { events.count { it == AnimalEvent.ASR_UPLOAD_END } == 2 && button("结束录音").isEnabled }
+        // END is only queued locally. Wait for this socket's validated response PCM:
+        // the wake fixture emits no greeting PCM and replies only after exact input consumption.
+        await {
+            val connection = events.lastIndexOf(AnimalEvent.OPEN_SOCKET)
+            val uploaded = events.lastIndexOf(AnimalEvent.ASR_UPLOAD_END)
+            events.count { it == AnimalEvent.OPEN_SOCKET } == 2 &&
+                events.count { it == AnimalEvent.ASR_UPLOAD_END } == 2 &&
+                uploaded > connection && events.lastIndexOf(AnimalEvent.PCM_BUFFERED) > uploaded &&
+                button("停止").isEnabled
+        }
         onMain {
             val prompt = events.indexOf(AnimalEvent.WAKE_PROMPT)
             val promptReleased = events.indexOf(AnimalEvent.WAKE_PROMPT_RELEASED)

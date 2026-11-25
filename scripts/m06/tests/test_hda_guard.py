@@ -113,7 +113,8 @@ class HdaGuardTests(unittest.TestCase):
     self.assertEqual(main.main(),1);arm.assert_not_called()
    self.assertEqual(events,['metadata']);row=json.loads(Path('render/hda-runtime-gate.json').read_text());self.assertEqual(row['guest']['card_type'],'HDA_INTEL');self.assertEqual(row['host_reason'],'HOST_HDA_EVIDENCE_MISSING')
   finally:os.chdir(previous)
- def test_workflow_one_feature_override_no_avd_or_root_executed_here(self):
+ def test_normal_workflow_has_no_hda_experiment_override(self):
   text=Path('.github/workflows/v2-eyes.yml').read_text();launch=next(line for line in text.splitlines() if '-avd v2eyes -' in line)
-  self.assertEqual(launch.count('-feature -VirtioSndCard'),1);self.assertNotIn('setprop',launch)
-  self.assertLess(text.index('python3 scripts/m06/hda_guard.py'),text.index('-avd v2eyes'))
+  self.assertNotIn('-feature',launch);self.assertNotIn('setprop',launch)
+  self.assertIn('export M06_REQUIRE_HDA=0',text)
+  self.assertNotIn('python3 scripts/m06/hda_guard.py',text)
