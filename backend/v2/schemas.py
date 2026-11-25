@@ -9,7 +9,7 @@ def string(limit):
 def enum(*items):
     return dict(type='string', enum=list(items))
 
-IMAGE_TOOL = obj(dict(kind=enum('show_image','hide_image','generate_image'),asset_id=string(64)),required=['kind'])
+IMAGE_TOOL = obj(dict(kind=enum('show_image','hide_image','generate_image','extend_image','reshow_image'),asset_id=string(64)),required=['kind'])
 
 PLAN = obj(dict(
     action=enum('continue','change','leave','handoff','private','end'),
@@ -29,5 +29,5 @@ FACT_ITEM = obj(dict(
 FACTS = obj(dict(facts=dict(type='array',maxItems=8,items=FACT_ITEM)))
 SAFETY = obj(dict(allow=dict(type='boolean')))
 ENDPOINT = obj(dict(completion=enum('complete','incomplete','thinking'),
-                    meaning=enum('new_turn','stop','noise','backchannel','thinking','unknown','management')))
+                    meaning=enum('new_turn','stop','noise','backchannel','thinking','unknown','management','volume_up','volume_down')))
 COMPACT = obj(dict(keep=dict(type='array',maxItems=24,items=dict(type='integer',minimum=0))))

@@ -1,0 +1,19 @@
+{
+  "base": "49ea1fc0f384d9a1bba3db506d84cd28992691ab",
+  "protocol_contract": "v2-voice2-safety1-images2-volume1-management1-end1",
+  "normal_executed": 23,
+  "normal_passed": 23,
+  "normal_failed": 0,
+  "normal_errors": 0,
+  "normal_skipped": 0,
+  "negative_variants": 1,
+  "negative_executed": 1,
+  "negative_expected_failures": 1,
+  "negative_errors": 0,
+  "negative_skipped": 0,
+  "negative": "Partial ACK accepted as full: real Session.ack runtime mutation; synthetic HTTP dispatched before legal full playback, assertion fails. Raw negative.log is deliberately FAILED; not a normal-suite failure.",
+  "real_cloud_calls": 0,
+  "compile": "pass",
+  "read_request_body_unchanged": true,
+  "budget_bytes_unchanged": true
+}

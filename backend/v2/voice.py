@@ -16,6 +16,8 @@ from backend.v2.session import Identity, Session
 from backend.v2.budget import ResponseBudget
 from backend.v2.safety import SafetyFault, local_help
 from backend.v2.images import revealable
+from backend.v2.dynamic_images import ImageScope, ImageFailure
+from backend.v2.image_wire import PublicImage, CHUNK_BYTES
 from backend.v2.protocol import CONTRACT
 
 
@@ -82,7 +84,7 @@ def decode(raw):
                'management_resume':{'session','turn','revision','pause'}}
     if (not isinstance(event, dict) or event.get('v') != 2 or type(event.get('v')) is not int
             or event.get('type') not in schemas
-            or (set(event) - ({'speech', 'age_ms'} if event['type'] == 'input' else {'age_ms'} if event['type'] == 'wake_solo' else {'features'} if event['type'] == 'bind' else set())) != schemas[event['type']] | {'v', 'type', 'epoch', 'seq'}
+            or (set(event) - ({'speech', 'age_ms'} if event['type'] == 'input' else {'age_ms'} if event['type'] == 'wake_solo' else {'features','image_contract'} if event['type'] == 'bind' else set())) != schemas[event['type']] | {'v', 'type', 'epoch', 'seq'}
             or any(type(event[k]) is not int or event[k] < 0 for k in ('epoch', 'seq'))):
         raise WireError('schema')
     return event
@@ -111,6 +113,9 @@ class VoicePeer:
         self.send_sequence = 0
         self.closed = False
         self.images_enabled = False
+        self.dynamic_enabled = False
+        self.visual_cache = None
+        self.display_scope = None
         self.prepared_visual = None
         self.visual_task = None
         self.recognition_scopes = {}
@@ -120,6 +125,7 @@ class VoicePeer:
         self.management_ready=False
         self.management_scope=None
         self.waiting_wake=False
+        self.last_volume_scope=None
 
     @asynccontextmanager
     async def resource(self, manager):
@@ -269,7 +275,7 @@ class VoicePeer:
             if self.session is not session or self.epoch != epoch or session.turn != turn:
                 break
             if command[0] == 'mute_flush':
-                self.invalidate_visual()
+                self.invalidate_visual(keep_cache=True)
                 await self.send('revoke')
             elif command[0] == 'reveal':
                 if command[1].startswith('image:'):
@@ -277,54 +283,159 @@ class VoicePeer:
                     if (prepared is not None and command[1]=='image:'+prepared['token'] and
                         self.visual_live(prepared) and command[2]==prepared['topic'] and len(command)==5):
                         prepared['played']=(command[3],command[4])
-                        await self.reveal_visual(prepared)
+                        if prepared.get('dynamic') or prepared.get('control'):
+                            if prepared.get('control'):
+                                cache=prepared['cache']
+                                if (cache is not self.visual_cache or cache.topic!=prepared['topic']-1 or
+                                    cache.remaining()<=0 or cache.session!=self.session.session or
+                                    cache.connection!=self.session.connection or self.session.secrets):continue
+                                cache.topic=prepared['topic']
+                            if self.visual_task is None:
+                                self.visual_task=asyncio.create_task(self.prepare_visual(prepared,prepared['request'],prepared['operation']))
+                        else:
+                            await self.reveal_visual(prepared)
                 else:
                     await self.send('reveal', effect=command[1], topic=command[2])
         self.changed.set()
 
     def visual_live(self, value):
-        return (self.images_enabled and not self.closed and self.session._live() and value['session']==self.session.session and
+        return (self.images_enabled and not self.closed and not self.quarantined and not self.session.management_paused and
+                not self.session.private_mode and self.session._output_live() and value['session']==self.session.session and
                 value['turn']==self.session.turn and value['revision']==self.revision and
-                value['epoch']==self.epoch and value['output']==self.session.output)
+                value['epoch']==self.epoch and value['output']==self.session.output and
+                value.get('connection',self.session.connection)==self.session.connection and
+                value.get('player',self.session.player)==self.session.player and value.get('stream',self.session.stream)==self.session.stream)
 
-    def invalidate_visual(self):
-        self.prepared_visual=None
+    def cache_live(self,cache):
+        return (cache is not None and cache.remaining()>0 and self.session._live() and not self.closed and
+                not self.quarantined and not self.session.management_paused and not self.session.private_mode and
+                not self.session.secrets and cache.session==self.session.session and
+                cache.connection==self.session.connection and cache.topic==self.session.topic)
+
+    def invalidate_visual(self, *, keep_cache=False):
+        prepared,self.prepared_visual=self.prepared_visual,None
+        if prepared is not None and prepared.get('scope') is not None:
+            self.providers.cancel_generated_image(prepared['scope'])
         task,self.visual_task=self.visual_task,None
         if task is not None and not task.done():
             task.cancel();self.track_retired(task)
+        self.display_scope=None
+        if self.visual_cache is not None:
+            self.visual_cache.visible_until=0.
+            if not keep_cache or not self.cache_live(self.visual_cache):
+                self.visual_cache.release();self.visual_cache=None
+
+    def image_current(self,prepared):
+        return (self.prepared_visual is prepared and self.visual_live(prepared) and
+                prepared['topic']==self.session.topic and not self.session.secrets)
+
+    async def send_visual(self,prepared,kind,**fields):
+        if not self.image_current(prepared):raise ImageFailure('stale')
+        cache=prepared.get('cache')
+        if cache is not None and not self.cache_live(cache):raise ImageFailure('stale')
+        scope={k:prepared[k] for k in ('session','turn','revision','topic','token')}
+        if len(json.dumps(dict(v=2,type=kind,epoch=self.epoch,**scope,**fields)).encode())>16000:raise ImageFailure('payload')
+        await self.send(kind,**scope,**fields)
+        if not self.image_current(prepared):raise ImageFailure('stale')
+        if cache is not None and not self.cache_live(cache):raise ImageFailure('stale')
 
     async def prepare_visual(self, prepared, request, operation):
-        owner=asyncio.current_task()
+        owner=asyncio.current_task();image=None;cache=None;published=False
         try:
-            image=await self.owned(operation,self.providers.prepare_visual,request)
-            if self.prepared_visual is not prepared or not self.visual_live(prepared) or image is None:return
-            if prepared['answer_asset'] is not None and image.asset_id!=prepared['answer_asset']:return
-            prepared['ready']=image.payload()
-            fields={k:prepared[k] for k in ('session','turn','revision','topic','token')}
-            await self.send('image_ready',**fields,**prepared['ready'])
-            if self.prepared_visual is prepared and self.visual_live(prepared):await self.reveal_visual(prepared)
+            if prepared.get('control'):
+                cache=prepared['cache']
+                if (not self.image_current(prepared) or cache is not self.visual_cache or
+                    not self.cache_live(cache)):return
+            elif prepared.get('dynamic'):
+                if not self.image_current(prepared):return
+                scope=ImageScope(prepared['session'],prepared['turn'],prepared['epoch'],prepared['revision'],prepared['topic'])
+                prepared['scope']=scope
+                image=await self.providers.prepare_dynamic_visual(request,scope,
+                    lambda candidate: candidate==scope and self.image_current(prepared))
+                if not self.image_current(prepared):return
+                cache=PublicImage.generated(image,scope,request['asset_id'],self.session.connection)
+                image.release();image=None
+                prepared['cache']=cache
+            else:
+                image=await self.owned(operation,self.providers.prepare_visual,request)
+                if self.prepared_visual is not prepared or not self.visual_live(prepared) or image is None:return
+                if prepared['answer_asset'] is not None and image.asset_id!=prepared['answer_asset']:return
+                prepared['ready']=image.payload()
+                fields={k:prepared[k] for k in ('session','turn','revision','topic','token')}
+                if not self.dynamic_enabled:await self.send('image_ready',**fields,**prepared['ready'])
+                if self.prepared_visual is prepared and self.visual_live(prepared):await self.reveal_visual(prepared)
+                return
+            if not self.cache_live(cache):return
+            if self.visual_cache is not None and self.visual_cache is not cache:self.visual_cache.release()
+            self.visual_cache=cache
+            prepared['ready']=cache.metadata
+            async with asyncio.timeout(2):
+                if cache.png and prepared.get('control')!='hide':
+                    await self.send_visual(prepared,'image_begin',**cache.fields(),bytes=len(cache.png),
+                        chunks=(len(cache.png)+CHUNK_BYTES-1)//CHUNK_BYTES,chunk_bytes=CHUNK_BYTES,encoding='base64')
+                    for packet in cache.packets():await self.send_visual(prepared,'image_chunk',**cache.fields(),**packet)
+                if prepared.get('control')!='hide':await self.send_visual(prepared,'image_ready',**cache.fields())
+                await self.reveal_visual(prepared)
+                published=self.prepared_visual is not prepared
         except (StaleOperation,asyncio.CancelledError):
             return
         except Exception:
+            if self.image_current(prepared):
+                try:await self.send_visual(prepared,'image_status',image_v=2,state='unavailable',reason='image_unavailable')
+                except Exception:pass
             if self.prepared_visual is prepared:self.prepared_visual=None
         finally:
+            if image is not None and prepared.get('dynamic'):image.release()
+            if cache is not None and (not published or self.visual_cache is not cache):
+                cache.release()
+                if self.visual_cache is cache:self.visual_cache=None
+            if self.prepared_visual is prepared and prepared.get('dynamic'):self.prepared_visual=None
             if self.visual_task is owner:self.visual_task=None
 
     async def reveal_visual(self, prepared):
         if (self.prepared_visual is not prepared or not self.visual_live(prepared) or
             prepared['ready'] is None or prepared['played'] is None or prepared['topic']!=self.session.topic):return
-        self.prepared_visual=None # consume before transport can yield
         fields={k:prepared[k] for k in ('session','turn','revision','topic','token')}
-        await self.send('reveal',effect='image:'+prepared['token'],**fields,
-            asset_id=prepared['ready']['asset_id'],sha256=prepared['ready']['sha256'],
-            player=self.session.player,stream=self.session.stream,
-            segment=prepared['played'][0],end=prepared['played'][1])
+        if self.dynamic_enabled:
+            cache=prepared.get('cache')
+            if cache is None:
+                if self.session.secrets:return
+                cache=PublicImage(dict(prepared['ready'],image_id=prepared['token']),session=self.session.session,
+                    connection=self.session.connection,topic=self.session.topic,seconds=15.)
+                if self.visual_cache is not None:self.visual_cache.release()
+                self.visual_cache=cache;prepared['cache']=cache
+                await self.send_visual(prepared,'image_ready',**cache.fields())
+            if not self.cache_live(cache):return
+            action=prepared.get('control','display')
+            if action=='hide':cache.visible_until=0.;duration=0
+            else:duration=cache.display(action,prepared['display_seconds'])
+            await self.send_visual(prepared,'image_display',**cache.fields(),action=action,duration_ms=duration,
+                player=self.session.player,stream=self.session.stream,segment=prepared['played'][0],end=prepared['played'][1])
+            self.display_scope=None if action=='hide' else dict(fields,epoch=self.epoch)
+        else:
+            await self.send('reveal',effect='image:'+prepared['token'],**fields,
+                asset_id=prepared['ready']['asset_id'],sha256=prepared['ready']['sha256'],
+                player=self.session.player,stream=self.session.stream,
+                segment=prepared['played'][0],end=prepared['played'][1])
+        if self.prepared_visual is prepared:self.prepared_visual=None
 
     async def hide_visual(self, reason):
-        self.invalidate_visual()
+        self.invalidate_visual(keep_cache=reason in {'input_changed','requested'})
         if self.images_enabled:
             await self.send('hide', session=self.session.session,turn=self.session.turn,
                             revision=self.revision,topic=self.session.topic,reason=reason)
+
+    async def poll_visual(self):
+        cache=self.visual_cache
+        if cache is None:return
+        if not self.cache_live(cache) or (cache.visible_until and asyncio.get_running_loop().time()>=cache.visible_until):
+            display=self.display_scope;self.display_scope=None;cache.visible_until=0.
+            if not self.cache_live(cache):
+                cache.release()
+                if self.visual_cache is cache:self.visual_cache=None
+            if display is not None:
+                await self.send('image_display',**{k:v for k,v in display.items() if k!='epoch'},
+                    **cache.fields(),action='hide',duration_ms=0,reason='expired',eyes=True)
 
     async def cancel_generation(self):
         task, self.generation = self.generation, None
@@ -515,9 +626,11 @@ class VoicePeer:
             await self.decision(text, meaning, revision, self.input_budget.deadline)
         elif kind == 'bind':
             features=event.get('features',[])
-            if not isinstance(features,list) or len(features)>1 or any(x!='images_v1' for x in features):
+            if not isinstance(features,list) or len(features)>1 or any(x not in {'images_v1','images_v2'} for x in features):
                 raise WireError('features')
-            self.images_enabled='images_v1' in features
+            dynamic='images_v2' in features
+            if dynamic and event.get('image_contract')!=CONTRACT:raise WireError('image contract')
+            self.dynamic_enabled=dynamic;self.images_enabled=bool(features)
             if (not isinstance(event['player'], str) or len(event['player']) > 128
                     or not event['player'] or self.session.player is not None or self.generation is None):
                 raise WireError('player')
@@ -567,7 +680,7 @@ class VoicePeer:
                 result = await self.read_request(operation, 'endpoint', text, context)
                 if (not isinstance(result, dict) or set(result) != {'completion', 'meaning'}
                         or result['completion'] not in {'complete', 'incomplete', 'thinking'}
-                        or result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown','management'}):
+                        or result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown','management','volume_up','volume_down'}):
                     raise WireError('endpoint schema')
                 operation.ensure()
                 operation.budget.remaining()
@@ -596,6 +709,24 @@ class VoicePeer:
                     self.recognition = asyncio.create_task(self._analyze(data, following))
 
     async def decision(self, text, meaning, revision, deadline):
+        if meaning in {'volume_up','volume_down'}:
+            session,epoch,turn,connection=self.session,self.epoch,self.session.turn,self.session.connection
+            key=(session.session,connection,turn,epoch,revision)
+            def current():
+                return (self.session is session and session._live() and not session.management_paused and
+                        not self.closed and not self.quarantined and not self.waiting_wake and
+                        self.epoch==epoch and self.revision==revision and session.turn==turn and
+                        session.connection==connection and session.clock()<deadline)
+            if not current() or self.last_volume_scope==key:return
+            self.last_volume_scope=key # consume before IO; failed writes never auto-repeat an increase
+            self.awaiting_input=False;self.capture.clear();self.analysis=self.prepared=self.next_probe=None
+            self.input_budget=ResponseBudget(self.session.clock)
+            fields=dict(session=session.session,turn=turn,revision=revision)
+            await self.send('scope',management_v=1,state='active',**fields)
+            if current():
+                await self.send('volume',control_v=1,direction='up' if meaning=='volume_up' else 'down',
+                                token=uuid4().hex,**fields)
+            return
         if meaning == 'management':
             session,epoch,turn,output=self.session,self.epoch,self.session.turn,self.session.output
             def current():
@@ -677,6 +808,7 @@ class VoicePeer:
                 context = self.session.context(query=text or '')
                 if self.images_enabled and hasattr(self.providers,'image_catalogue'):
                     context['image_catalog']=self.providers.image_catalogue()
+                    context['image_controls']=self.dynamic_enabled and self.cache_live(self.visual_cache)
                 stage = 'plan'
                 plan = await self.read_request(operation, 'plan', text, context)
                 if epoch != self.epoch or not self.session._output_live():
@@ -741,6 +873,19 @@ class VoicePeer:
                     request=tools[0]
                     if request['kind']=='hide_image':
                         await self.hide_visual('requested')
+                    if request['kind'] in {'hide_image','extend_image','reshow_image'}:
+                        cache=self.visual_cache
+                        current=dict(self.session.game,secrets=dict(self.session.secrets))
+                        if (self.dynamic_enabled and self.cache_live(cache) and plan['action']=='continue' and
+                            state==current and not plan['anchors']):
+                            self.invalidate_visual(keep_cache=True)
+                            prepared=dict(session=self.session.session,turn=self.session.turn,
+                                revision=response_revision,topic=self.session.topic+1,token=uuid4().hex,
+                                epoch=self.epoch,output=self.session.output,ready=None,played=None,answer_asset=None,
+                                connection=self.session.connection,player=self.session.player,stream=self.session.stream,
+                                control={'extend_image':'extend','reshow_image':'reshow','hide_image':'hide'}[request['kind']],cache=cache,
+                                request=request,operation=operation,display_seconds=12 if plan['mode']=='story' else 6)
+                            self.prepared_visual=prepared;image_effect='image:'+prepared['token']
                     elif (not self.session.private_mode and hasattr(self.providers,'prepare_visual') and
                           hasattr(self.providers,'visual_candidate')):
                         candidate=self.providers.visual_candidate(request)
@@ -751,10 +896,14 @@ class VoicePeer:
                                 prepared=dict(session=self.session.session,turn=self.session.turn,
                                     revision=response_revision,topic=self.session.topic+1,token=uuid4().hex,
                                     epoch=self.epoch,output=self.session.output,ready=None,played=None,
-                                    answer_asset=candidate.asset_id if answer_public else None)
+                                    answer_asset=candidate.asset_id if answer_public else None,
+                                    connection=self.session.connection,player=self.session.player,stream=self.session.stream,
+                                    dynamic=self.dynamic_enabled and request['kind']=='generate_image',
+                                    request=request,operation=operation,display_seconds=12 if plan['mode']=='story' else 6)
                                 self.prepared_visual=prepared
                                 image_effect='image:'+prepared['token']
-                                self.visual_task=asyncio.create_task(self.prepare_visual(prepared,request,operation))
+                                if not prepared['dynamic']:
+                                    self.visual_task=asyncio.create_task(self.prepare_visual(prepared,request,operation))
                 if answer_public:
                     state['secrets']={} # proposal only, committed by the final played ACK
                 @asynccontextmanager
@@ -894,6 +1043,7 @@ class VoicePeer:
                     return
             self.session.poll()
             await self.commands()
+            await self.poll_visual()
             if not self.session.active or self.session.response_expired:
                 await self.cancel_generation()
                 await self.send('failure', code='timeout')

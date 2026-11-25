@@ -120,15 +120,17 @@ class UnifiedProviders:
 
     async def endpoint(self, text, context):
         result = await self.request("""
-只返回JSON {completion:complete|incomplete|thinking, meaning:new_turn|stop|noise|backchannel|thinking|unknown|management}。
+只返回JSON {completion:complete|incomplete|thinking, meaning:new_turn|stop|noise|backchannel|thinking|unknown|management|volume_up|volume_down}。
 根据上下文语义判断完整表达、思考、续说、纠正和附和。同一句嗯/对，若回答问题是new_turn，
 故事中附和是backchannel，犹豫是thinking。无法识别不当noise；停/等等是stop。
+明确调整当前声音“大点/响一点”是volume_up，“小点/轻一点/太响了”是volume_down。
+只返回固定方向，不输出音量值，不设置家长上限；故事人物的声音、引用或含糊请求用unknown。
 真实请求打开家长管理、设置或验证界面是management；只请求进入页面，不表示已验证或可修改设置。
 故事人物管理城镇、引用/练习这句话、退出游戏不是管理入口；含糊请求用unknown，不猜权限。""",
                                     dict(text=text, context=context), schemas.ENDPOINT)
         if (set(result) != {'completion', 'meaning'} or
                 result['completion'] not in {'complete', 'incomplete', 'thinking'} or
-                result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown','management'}):
+                result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown','management','volume_up','volume_down'}):
             raise ModelError('endpoint')
         return result
 
@@ -163,8 +165,9 @@ facts是逐字来源证据，history不代表当前偏好或撤回；保留主�
 memory.omitted_sources表示还有未检索来源，不代表孩子没说过；无法核对时自然请孩子确认，不编造回忆。
 memory.capacity_limited时坦诚记忆范围有限，围绕当前输入继续，不反复报故障或声称已保存新事实。
 新的状态是建议，完整播放后才生效；不能把尚未播放剧情当已发生。
-可选tools:[{kind:show_image|hide_image|generate_image,asset_id:默认图ID}]，最多1项。
+可选tools:[{kind:show_image|hide_image|generate_image|extend_image|reshow_image,asset_id:默认图ID}]，最多1项。
 只从context.image_catalog选择匹配的默认图；没有该目录就tools为空。
+只有context.image_controls可用时，孩子明确说再看一下用reshow_image、再看一会儿用extend_image（均不带asset_id）；收起来用hide_image。控制须continue并保持模式/规则/角色/秘密不变，不推进剧情。
 不要声称工具已执行或新图已生成。generate_image缺动态服务将明确用默认图回退。
 图只会在最后一句完整播放后揭晓；猜谜未公开答案时不显示答案图，只有明确说出答案后才可揭图。
 轮流猜描述要保留答案直到明确结束该题；不是每一轮都换答案。""",
@@ -191,8 +194,8 @@ memory.capacity_limited时坦诚记忆范围有限，围绕当前输入继续，
         tools=plan['tools']
         if (not isinstance(tools,list) or len(tools)>1 or any(
             not isinstance(t,dict) or set(t)-{'kind','asset_id'} or
-            t.get('kind') not in {'show_image','hide_image','generate_image'} or
-            ('asset_id' in t and (not isinstance(t['asset_id'],str) or len(t['asset_id'])>64))
+            t.get('kind') not in {'show_image','hide_image','generate_image','extend_image','reshow_image'} or
+            ('asset_id' in t and (t.get('kind') in {'extend_image','reshow_image'} or not isinstance(t['asset_id'],str) or len(t['asset_id'])>64))
             for t in tools)):
             raise ModelError('tool schema')
         # Preserve current riddle on a continuation; model cannot silently change it.
