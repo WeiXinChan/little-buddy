@@ -1,7 +1,8 @@
 # M08 家长权限域：独立核心交付
 
-固定基线 `112e456ff09f619ab5929b486ed73358110ba3d5`。此 PR 仅新增
-`v2/parent`、对应测试及离线验证脚本，不修改 V1、M06、Activity、manifest、CI
+固定基线 `112e456ff09f619ab5929b486ed73358110ba3d5`。此 PR 的功能范围为
+`v2/parent`、对应测试及离线验证脚本。root 追加授权纳入下述两文件纯测试因果屏障
+作为 CI 前置；不修改 V1/M06 生产代码、Activity 产品入口、manifest、workflow
 或生产配置。没有 APK、安装、部署或产品验收通过声明。
 
 ## 已实现边界
@@ -116,3 +117,26 @@ open 后丢key再 verify/save 均拒绝且生成/覆盖为0；失效key与替换
 测试未占手机、未开模拟器/HDA、未运行 Gradle 或等待外部 CI；真实 Android 密钥
 删除/失效、AtomicFile 故障、生命周期及全部既有集成缺口仍未测，A27/A28/A34、D04
 保持 OPEN。新 head 待非作者复核受影响范围、root 审合。
+
+## root 追加的两文件 CI 测试前置
+
+按 root 在本轮修复期间的明确指令，只取原 M06 仓库
+`b3a392a1518eefab9b17595e28a97dc25725a196..1a9f5cd9d083e2ffe27b3354465de04d2206179d`
+中以下两文件差异，原样应用，无上下文冲突：
+
+- `app/src/androidTest/java/com/littlebuddy/BuddyActivityTest.kt`：两次唤醒正控均等待
+  当前 socket 的 END 之后出现 PCM_BUFFERED 再 Stop，避免本地 END 已入队但服务端
+  尚未实际消费完成时过早 Stop。
+- `backend/tests/test_animal_cloud.py`：真实本地 TLS 测试控制写入消费/响应时序，
+  证明本地 END 和旧连接回执均不足以表示本轮完成；保留 exact2/sealed2 断言。
+
+这两文件只有测试变更，不包含 M06 生产修复、诊断树或 workflow。原 CI97 的
+API36 设备36/36和JVM TLS1通过、transport sealed1/exact1未达2的失败由root提供，
+本轮未重跑该旧CI；旧失败记录仍保留，不能改记通过。global95/96的API36证据为
+root既有实跑报告，不是本轮作者真机/模拟器实测。最终head的外部CI按正常PR触发，
+本轮不等待、不将pending算通过，也不另开模拟器或HDA取证。
+
+本轮实际执行 `scripts/with-build-lock python3 -m unittest backend.tests.test_animal_cloud -v`：
+**13/13 通过，失败0、跳过0，20.151s，退出码0**，包含新增延迟消费因果负控。
+Android instrumentation 两处屏障未在本轮设备执行，原 server transport 2/2 门槛
+在 `scripts/android-ci-instrument` 保持原样。

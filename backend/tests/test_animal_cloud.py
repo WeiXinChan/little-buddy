@@ -17,7 +17,7 @@ from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from backend.animal import cloud
 from backend.animal.cloud import game_server
-from backend.animal.private_fixture import fixture_server
+from backend.animal.private_fixture import Fixture, fixture_server
 from backend.animal.rules import CARDS, CATALOG_VERSION
 from backend.dashscope import DashScope
 from backend.demo import Demo
@@ -161,6 +161,65 @@ class CloudGameTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(sum(line.startswith(marker) for line in logs), count, marker)
         self.assertEqual([line for line in logs if line.startswith("wake_fixture_pcm ")],
                          ["wake_fixture_pcm turn=2 exact=1", "wake_fixture_pcm turn=3 exact=1"])
+
+    async def test_wake_positive_stop_waits_for_consumption_then_response_pcm(self):
+        # Real TLS, original exact-PCM validator, controlled service/ACK ordering.
+        # Neither client END enqueue nor a previous connection's receipt is completion.
+        class DelayedFixture(Fixture):
+            def arm(self):
+                self.write_entered = asyncio.Event()
+                self.consume = asyncio.Event()
+                self.exact = asyncio.Event()
+                self.respond = asyncio.Event()
+
+            async def write(self, pcm):
+                self.write_entered.set()
+                await self.consume.wait()
+                await super().write(pcm)
+
+            async def finish(self):
+                result = await super().finish()
+                self.exact.set()
+                await self.respond.wait()
+                return result
+
+        logs = []
+        fixture = DelayedFixture("wake", logs.append)
+        async with game_server(0, self.tls, self.token, fixture, seed=0, report=logs.append) as server:
+            for turn, name in enumerate(("gap-120", "command-alone"), 1):
+                fixture.arm()
+                async with self.open(server) as ws:
+                    await self.start(ws, conversation=True, wake=True)
+                    permit = await self.reply(ws)
+                    self.assertEqual(permit["count"], 0)  # Silent permit cannot satisfy PCM gate.
+                    await self.send(ws, "turn.start", permit["key"], listen_id=permit["listen_id"])
+                    await self.receive(ws, "turn.ready")
+                    pcm = Path(f"app/src/androidTest/assets/wake/{name}.pcm").read_bytes()
+                    for offset in range(0, len(pcm), 640):
+                        await ws.send(HEADER.pack(1, 1, offset // 2) + pcm[offset:offset + 640])
+                    await ws.send(json.dumps({"v": 1, "type": "turn.end", "samples": len(pcm) // 2}))
+                    reply = asyncio.create_task(self.reply(ws))
+                    try:
+                        await asyncio.wait_for(fixture.write_entered.wait(), 3)
+                        self.assertFalse(fixture.exact.is_set())
+                        self.assertFalse(reply.done())  # Locally sent END is insufficient.
+                        self.assertEqual(sum("capture_sealed" in line for line in logs), turn - 1)
+                        fixture.consume.set()
+                        await asyncio.wait_for(fixture.exact.wait(), 3)
+                        self.assertFalse(reply.done())  # Even server exact precedes response/ACK.
+                        self.assertEqual(sum(line.startswith("wake_fixture_pcm ") for line in logs), turn)
+                        fixture.respond.set()
+                        self.assertEqual((await asyncio.wait_for(reply, 3))["mode"], "game")
+                        # reply() verified binary PCM, segment.end and keyed ACK before close/Stop.
+                    finally:
+                        fixture.consume.set()
+                        fixture.respond.set()
+                        if not reply.done():
+                            reply.cancel()
+                        await asyncio.gather(reply, return_exceptions=True)
+        self.assertEqual([line for line in logs if line.startswith("wake_fixture_pcm ")],
+                         ["wake_fixture_pcm turn=1 exact=1", "wake_fixture_pcm turn=2 exact=1"])
+        self.assertEqual(sum("capture_sealed" in line for line in logs), 2)
 
     async def test_three_reveals_then_restart(self):
         demo = SpeechFixture(["告诉我答案"] * 3 + ["是"])
