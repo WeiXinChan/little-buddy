@@ -63,6 +63,21 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     fun pause(afterInvalidate: () -> Unit = {}) {
         invalidate(); afterInvalidate(); show(PanelState(PanelMode.VERIFY, PanelNotice.LOCKED))
     }
+    /** Foreground route failure only. Background pause remains inactive.
+     * Retire the exact page before cleanup, then offer a new locked UI with NO Grant.
+     * Cleanup can reenter lifecycle/new routing: never reactivate its later revision.
+     */
+    fun routeFailed(ticket: Long, release: () -> Unit) {
+        if (!live(ticket) || state.mode != PanelMode.FEEDBACK) { runCatching(release); return }
+        invalidate()
+        val retired = revision.get()
+        runCatching(release)
+        if (revision.get() != retired || active) return
+        active = true
+        val d = domain.get()
+        if (d == null) show(PanelState(PanelMode.UNAVAILABLE, PanelNotice.UNCONFIGURED))
+        else locked(d, PanelNotice.FEEDBACK_UNAVAILABLE)
+    }
     fun close() { invalidate() }
     fun exit() { invalidate(); leave() }
     private fun locked(d: ParentDomain, notice: PanelNotice? = null) {

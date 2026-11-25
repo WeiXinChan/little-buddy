@@ -14,6 +14,14 @@ internal class ParentRouteSlot<T>(private val pausePage: (T) -> Unit,
         }
         return page
     }
+    /** Actual host uses this injectable presentation boundary, including failure recovery. */
+    fun mount(ticket: Long, factory: () -> T?, present: (T) -> Unit, failed: () -> Unit) {
+        val current = show(ticket, factory)
+        if (revision != ticket) return
+        if (current == null) { failed(); return }
+        try { present(current) } catch (_: Exception) { failed() }
+    }
+    fun close(ticket: Long) { if (revision == ticket) close() }
     fun pause() { page?.let { runCatching { pausePage(it) } } }
     fun close() {
         val old = page; page = null; revision = -1L

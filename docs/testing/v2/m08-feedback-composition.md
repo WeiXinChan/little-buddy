@@ -69,3 +69,5 @@ scripts/with-build-lock env ANDROID_HOME=<existing-sdk> ANDROID_SDK_ROOT=<same-s
 | 证书 SHA-256 | `7705f543347ae9ec1de4ae4b0dc24f73b0a472fb32ecc06cca0d112a8fe75e10` |
 
 `apksigner verify --print-certs` 退出0，`aapt dump badging` 与 metadata 一致。安装说明供后续授权验收使用，本轮没有要求用户执行或占用设备：`adb install -r little-buddy-v2-integration.apk`；入口为 `com.littlebuddy.sim.v2/com.littlebuddy.V2VoiceActivity`。这是独立 V2 包和调试 APK，不替代正式发布；签名不一致不能直接覆盖已有包，不在本轮清除数据/卸载。没有声称已安装、已渲染或已验证声学。CI 由新 PR 正常触发，本轮不等待或冒称通过，不重跑旧 CI。
+
+后续 R86-04：本页 APK/197项数字为旧 head 929f291 的历史交付；前台挂载失败恢复缺陷及修复后的新 APK/当前分母见 `r86-04/repair.md`。原QA17项16通过1失败及失败源码/日志保留，不由旧绿测试覆盖。

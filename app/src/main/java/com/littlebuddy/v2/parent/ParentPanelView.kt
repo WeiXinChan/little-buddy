@@ -29,14 +29,13 @@ internal class ParentPanelView(private val activity: Activity, private val model
         clearInputs()
         val route = if (state.mode == PanelMode.FEEDBACK) model.currentRoute() else null
         if (route != null) {
-            val page = routes.show(route.revision) {
+            routes.mount(route.revision, {
                 feedback.create(activity, route.domain, route.grant) {
                     activity.runOnUiThread { model.routeExit(route.revision) }
                 }
-            }
-            if (page == null) { model.routeExit(route.revision, unavailable = true); return }
-            try { activity.setContentView(page.view) }
-            catch (_: Exception) { routes.close(); model.pause() }
+            }, { page -> activity.setContentView(page.view) }, {
+                model.routeFailed(route.revision) { routes.close(route.revision) }
+            })
             return
         }
         routes.close()
@@ -126,6 +125,6 @@ internal class ParentPanelView(private val activity: Activity, private val model
         PanelNotice.PIN_MISMATCH -> "两次 PIN 须一致，且都是 6 位数字。"
         PanelNotice.PIN_CHANGED -> "PIN 已更新，请用新 PIN 验证。"
         PanelNotice.RECOVERY_UNAVAILABLE -> "安全恢复尚不可用，不会清除配对或重置 PIN。"
-        PanelNotice.FEEDBACK_UNAVAILABLE -> "帮助与反馈尚未接通。"
+        PanelNotice.FEEDBACK_UNAVAILABLE -> "帮助与反馈暂不可用，请重新验证后再试。"
     }
 }

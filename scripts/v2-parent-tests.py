@@ -57,16 +57,19 @@ if android:
 with tempfile.TemporaryDirectory(prefix="parent-tests-", dir=ROOT) as output:
     composition = "--composition-only" in sys.argv
     combined = "--combined" in sys.argv
+    repair = "--r86-04" in sys.argv
     binding_mutant = next((arg.split("=", 1)[1] for arg in sys.argv if arg.startswith("--binding-mutant=")), None)
-    if composition or binding_mutant or combined:
+    if composition or binding_mutant or combined or repair:
         sources.append(ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentFeedbackCompositionTest.kt")
+        sources.append(ROOT / "app/src/test/java/com/littlebuddy/v2/parent/IndependentCompositionTest.kt")
         sources += [p for p in (ROOT / "app/src/main/java/com/littlebuddy/v2/feedback").glob("*.kt")
                     if p not in sources and p.name in {"Contracts.kt", "Vault.kt", "FeedbackCore.kt", "FeedbackAuthority.kt", "FeedbackEngine.kt"}]
     if combined:
         sources += list((ROOT / "app/src/test/java/com/littlebuddy/v2/feedback").glob("*.kt"))
     binding_case = {"borrow": "bindingGateRejectsForeignDomainAndNewGrantOnOldBinding",
                     "scope": "returnRotatesGrantBeforeOldCloseAndSettingsStillSaves",
-                    "expiry": "expiryDuringStagingRejectsAtFinalGateEvenWithoutHostTick"}
+                    "expiry": "expiryDuringStagingRejectsAtFinalGateEvenWithoutHostTick",
+                    "recovery": "failedMountMustKeepRenderedCancelOperable"}
     if binding_mutant:
         runner = Path(output) / "BindingMutationRunner.kt"
         runner.write_text("""import org.junit.runner.JUnitCore
@@ -79,12 +82,16 @@ fun main(args: Array<String>) {
 }
 """)
         sources.append(runner)
-        original = source / "ParentFeedbackBinding.kt"
+        original = source / ("ParentPanelModel.kt" if binding_mutant == "recovery" else "ParentFeedbackBinding.kt")
         contents = original.read_text()
         if binding_mutant == "borrow":
             contents = contents.replace("token !== grant || ", "").replace("domain.acceptProtected(grant)", "domain.acceptProtected(token)")
         elif binding_mutant == "scope":
             contents = contents.replace("domain.revokePage(grant)", "domain.revoke()")
+        elif binding_mutant == "recovery":
+            checked = "if (revision.get() != retired || active) return\n        active = true"
+            assert contents.count(checked) == 1
+            contents = contents.replace(checked, "if (revision.get() != retired || active) return\n        active = false")
         elif binding_mutant == "expiry":
             contents = contents.replace("domain.acceptProtected(grant) {", "run {")
             contents = contents.replace("if (alive.get()) { decision(); published = true }", "if (alive.get()) { decision(); published = true }; true")
@@ -138,7 +145,7 @@ fun main(args: Array<String>) {
     if "--compile-only" not in sys.argv:
         tests = ["com.littlebuddy.v2.parent.ParentKeyStoreTest"]
         if composition or binding_mutant:
-            tests = ["com.littlebuddy.v2.parent.ParentFeedbackCompositionTest"]
+            tests = ["com.littlebuddy.v2.parent.ParentFeedbackCompositionTest", "com.littlebuddy.v2.parent.IndependentCompositionTest"]
         elif ui_negative:
             tests = ["com.littlebuddy.v2.parent.ParentPanelModelTest"]
         elif expiry_negative:
@@ -155,8 +162,9 @@ fun main(args: Array<String>) {
                       "com.littlebuddy.v2.parent.ExpiryConfirmationTest",
                       "com.littlebuddy.v2.parent.ParentIntegrationTest",
                       "com.littlebuddy.v2.parent.ParentPanelModelTest"]
+        if combined or repair:
+            tests += ["com.littlebuddy.v2.parent.ParentFeedbackCompositionTest", "com.littlebuddy.v2.parent.IndependentCompositionTest"]
         if combined:
-            tests += ["com.littlebuddy.v2.parent.ParentFeedbackCompositionTest"]
             tests += ["com.littlebuddy.v2.feedback." + p.stem
                       for p in sorted((ROOT / "app/src/test/java/com/littlebuddy/v2/feedback").glob("*.kt"))]
         command = ["java", "-Xmx256m", "-cp", os.pathsep.join([output, *runtime]),

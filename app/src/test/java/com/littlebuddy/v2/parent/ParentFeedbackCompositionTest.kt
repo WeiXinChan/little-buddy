@@ -51,7 +51,8 @@ class ParentFeedbackCompositionTest {
         }
         val screens = mutableListOf<FeedbackScreen>()
         val engine = FeedbackEngine(work, ui, { FeedbackCore(FeedbackVault(files, key), { now }, it, provider) }, { true })
-        val model = ParentPanelModel({ domain }, parentWork::post, parentUi::post, {}, {})
+        var exits = 0
+        val model = ParentPanelModel({ domain }, parentWork::post, parentUi::post, {}, { exits++ })
         class Handle(val binding: ParentFeedbackBinding, val controller: FeedbackController,
                      val exit: () -> Unit) {
             var pauses = 0; var closes = 0
@@ -187,6 +188,78 @@ class ParentFeedbackCompositionTest {
         assertFalse(r.domain.isAuthorized(route.grant))
         r.unlock(); val next = r.mount(); binding.close {}; r.drain(); r.preview(next)
         assertTrue(r.screens.last() is FeedbackScreen.Preview)
+    }
+
+    @Test fun failedMountMustKeepRenderedCancelOperable() = Rig().use { r ->
+        val h = r.mount(); r.drain(); val route = r.model.currentRoute()!!
+        r.slot.mount(route.revision, { fail("existing handle must be reused"); h },
+            { throw IllegalStateException("synthetic Android presentation failure") }, {
+                r.model.routeFailed(route.revision) { r.slot.close(route.revision) }
+            })
+        // QA's original recovery assertions, now reached through the actual host's shared boundary.
+        assertEquals(PanelMode.VERIFY,r.model.state.mode)
+        assertEquals(ParentDomain.State.LOCKED,r.domain.state())
+        val accepted=r.model.userAction(r.model.viewToken){r.model.exit()}
+        assertTrue("visible locked-page Cancel is rejected because mount recovery left active=false",accepted)
+        assertEquals(1, r.exits); assertEquals(1, h.closes)
+        assertFalse(r.domain.isAuthorized(route.grant))
+        r.unlock(); val next = r.mount(); h.exit(); h.close(); r.drain(); r.preview(next)
+        assertTrue(r.screens.last() is FeedbackScreen.Preview)
+    }
+    @Test fun failedFactoryUsesSameOperableLockedRecovery() = Rig().use { r ->
+        val route = r.model.navigate(PanelMode.FEEDBACK)!!
+        val binding = ParentFeedbackBinding(r.domain, route.grant)
+        r.slot.mount(route.revision, { binding.build<Rig.Handle> { throw IllegalStateException() } },
+            { fail("failed factory must not mount") }, {
+                r.model.routeFailed(route.revision) { r.slot.close(route.revision) }
+            })
+        assertEquals(PanelMode.VERIFY, r.model.state.mode)
+        assertTrue(r.model.userAction(r.model.viewToken) { r.model.exit() }); assertEquals(1, r.exits)
+        assertFalse(r.domain.isAuthorized(route.grant))
+    }
+    @Test fun mountRecoveryRequiresFreshVerificationAndRejectsOldButtonsAndCallbacks() = Rig().use { r ->
+        val h = r.mount(); r.drain(); val route = r.model.currentRoute()!!; val oldButton = r.model.viewToken
+        r.model.routeFailed(route.revision) { r.slot.close(route.revision) }
+        assertFalse(r.model.userAction(oldButton) { fail("obsolete view") })
+        h.exit(); r.model.saveVolume(89); r.parentWork.drain(); r.parentUi.drain()
+        assertEquals(60, r.store.read()!!.volumeLimit); assertEquals(PanelMode.VERIFY, r.model.state.mode)
+        assertTrue(r.model.userAction(r.model.viewToken) { r.model.verify("012345".toCharArray()) })
+        r.parentWork.drain(); r.parentUi.drain(); assertEquals(PanelMode.SETTINGS, r.model.state.mode)
+        r.model.saveVolume(81); r.parentWork.drain(); r.parentUi.drain()
+        assertEquals(81, r.store.read()!!.volumeLimit); assertEquals(1, h.closes)
+    }
+    @Test fun cleanupExceptionCannotLeaveForegroundRecoveryInactive() = Rig().use { r ->
+        val h = r.mount(); val route = r.model.currentRoute()!!
+        r.model.routeFailed(route.revision) { r.slot.close(route.revision); throw IllegalStateException() }
+        assertEquals(1, h.closes)
+        assertTrue(r.model.userAction(r.model.viewToken) { r.model.exit() }); assertEquals(1, r.exits)
+        assertFalse(r.domain.isAuthorized(route.grant))
+    }
+    @Test fun homeDuringRecoveryCleanupNeverReactivatesBackground() = Rig().use { r ->
+        r.mount(); val route = r.model.currentRoute()!!
+        r.model.routeFailed(route.revision) { r.slot.close(route.revision); r.model.pause() }
+        assertFalse(r.model.userAction(r.model.viewToken) { fail("background reactivated") })
+        val pin = "012345".toCharArray(); r.model.verify(pin)
+        assertTrue(pin.all { it == '\u0000' }); assertEquals(0, r.exits)
+    }
+    @Test fun lateMountFailureCannotCloseOrLockReplacementRoute() = Rig().use { r ->
+        val old = r.mount(); val ticket = r.model.currentRoute()!!.revision; old.exit(); r.slot.close()
+        val next = r.mount()
+        r.model.routeFailed(ticket) { r.slot.close(ticket) }; r.drain(); r.preview(next)
+        assertEquals(0, next.closes); assertEquals(PanelMode.FEEDBACK, r.model.state.mode)
+        assertTrue(r.screens.last() is FeedbackScreen.Preview)
+    }
+    @Test fun cleanupAfterMountFailureCannotRevokeDifferentHostsNewGrant() = Rig().use { r ->
+        r.mount(); val route = r.model.currentRoute()!!
+        var next: ParentDomain.Grant? = null
+        r.model.routeFailed(route.revision) {
+            val page = r.domain.enterPage(); next = r.domain.verify("012345".toCharArray(), page)!!
+            r.slot.close(route.revision)
+        }
+        assertTrue(r.domain.isAuthorized(next!!))
+        assertFalse(r.domain.isAuthorized(route.grant))
+        assertTrue(r.model.userAction(r.model.viewToken) { r.model.exit() })
+        assertTrue(r.domain.isAuthorized(next!!))
     }
 
 }
