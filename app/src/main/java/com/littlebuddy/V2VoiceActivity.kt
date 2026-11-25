@@ -193,13 +193,16 @@ class V2VoiceActivity : Activity() {
                     if (!permissionRequested) { permissionRequested = true; requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 804) }
                     return@runOnUiThread
                 }
+                if (runCatching { connection.requireRunnable() }.isFailure) {
+                    connectionNotice="旧直连回环配置不可运行，请家长重新导入V2私有SSH配置。"; return@runOnUiThread
+                }
                 execution = configuration.playback
-                startVoice(connection.address, connection.credential)
+                startVoice(connection.address, connection.credential, connection.sshUser)
             }
         }
     }
     /** Internal native regression seam; production calls this only after encrypted provisioning. */
-    internal fun startVoice(address: String, credential: String) {
+    internal fun startVoice(address: String, credential: String, sshUser: String? = null) {
         check(!managementRequested && !managementVisible && !helpVisible)
         check(hasWindowFocus() && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
         check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked)
@@ -207,6 +210,13 @@ class V2VoiceActivity : Activity() {
         owner.post {
             if (ticket != transportRevision || !foreground || voice != null || capture != null || releaseState == "quarantined") return@post
             releaseState = "active"; budget = PlaybackBudget(android.os.SystemClock::elapsedRealtime, settings.durationSeconds)
+            val ssh=try { sshUser?.let { com.littlebuddy.v2.transport.V2Ssh(
+                com.littlebuddy.v2.transport.V2SshProfile.load(this@V2VoiceActivity,it)) } }
+                catch (_: Exception) { connectionNotice="V2私有传输配置不可用"; releaseState="released"; return@post }
+            val http=try { val base=okhttp3.OkHttpClient.Builder().proxy(java.net.Proxy.NO_PROXY)
+                .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build()
+                ssh?.client(base) ?: base }
+                catch (_: Exception) { ssh?.close(); releaseState="released"; return@post }
             val client = VoiceClient(owner, { status ->
                 connectionNotice=when(status) {
                     "incompatible" -> "服务协议不兼容，儿童收音未启用；请管理员核对候选包与服务契约。"
@@ -224,7 +234,7 @@ class V2VoiceActivity : Activity() {
                 sessionEnded = { runOnUiThread { if (ticket==transportRevision) {
                     managementRevision++; releaseAudio { quiet -> if (quiet && foreground) { eyes(); resumeConfigured() } }
                 } } }, requiredContract=ReleaseCompatibility.CONTRACT,
-                ready={ if (ticket==transportRevision && foreground && !managementRequested && !managementVisible) startChildCapture(checkNotNull(voice),ticket) })
+                http=http, closeTransport={ ssh?.close() }, ready={ if (ticket==transportRevision && foreground && !managementRequested && !managementVisible) startChildCapture(checkNotNull(voice),ticket) })
             voice = client
             try { client.connect(address, credential)
                 // Capture starts only from the authenticated, compatible scope callback.
