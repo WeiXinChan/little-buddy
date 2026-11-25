@@ -11,24 +11,36 @@ internal object ParentCodec {
         validate(record)
         val bytes = ByteArrayOutputStream()
         DataOutputStream(bytes).use {
-            it.writeInt(1); it.writeInt(PinHasher.ITERATIONS)
+            val extended = record.speechRate != 100 || record.durationSeconds != 600 || record.connection != null
+            it.writeInt(if (extended) 2 else 1); it.writeInt(PinHasher.ITERATIONS)
             it.write(record.salt); it.write(record.hash)
             it.writeInt(record.failures); it.writeLong(record.cooldownMs); it.writeInt(record.volumeLimit)
+            if (extended) {
+                it.writeInt(record.speechRate); it.writeInt(record.durationSeconds)
+                it.writeBoolean(record.connection != null)
+                record.connection?.let { value -> it.writeUTF(value.address); it.writeUTF(value.credential) }
+            }
         }
         return bytes.toByteArray()
     }
     fun decode(bytes: ByteArray): ParentRecord {
-        check(bytes.size == 72)
+        check(bytes.size in 72..1024)
         return DataInputStream(ByteArrayInputStream(bytes)).use {
-            check(it.readInt() == 1 && it.readInt() == PinHasher.ITERATIONS)
+            val version = it.readInt()
+            check(version in 1..2 && it.readInt() == PinHasher.ITERATIONS)
             val salt = ByteArray(16).also(it::readFully)
             val hash = ByteArray(32).also(it::readFully)
-            ParentRecord(salt, hash, it.readInt(), it.readLong(), it.readInt()).also(::validate)
+            val failures = it.readInt(); val cooldown = it.readLong(); val volume = it.readInt()
+            val rate = if (version == 2) it.readInt() else 100
+            val duration = if (version == 2) it.readInt() else 600
+            val connection = if (version == 2 && it.readBoolean()) ParentConnection(it.readUTF(), it.readUTF()) else null
+            check(it.available() == 0)
+            ParentRecord(salt, hash, failures, cooldown, volume, rate, duration, connection).also(::validate)
         }
     }
     private fun validate(record: ParentRecord) {
         check(record.salt.size == 16 && record.hash.size == 32)
         check(record.failures in 0..1_000_000 && record.cooldownMs in 0..3_600_000)
-        check(record.volumeLimit in 0..100)
+        ParentPlaybackSettings(record.volumeLimit, record.speechRate, record.durationSeconds)
     }
 }
