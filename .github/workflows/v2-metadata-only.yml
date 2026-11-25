@@ -1,0 +1,113 @@
+# Frozen proposal only: do not publish until root approves the exact tree.
+name: Owned HDA metadata only (not product CI)
+on:
+  pull_request:
+    types: [synchronize]
+    paths: ['.github/workflows/v2-metadata-only.yml', 'scripts/m06/metadata_only_observation.py']
+permissions:
+  contents: read
+concurrency:
+  group: v2-eyes-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  observe:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.repository == 'WeiXinChan/little-buddy' &&
+      github.event.pull_request.number == 36 &&
+      github.event.pull_request.head.ref == 'agent/agent/70f7ce4d7235' &&
+      github.event.before == 'f6f63ac69909bdc4416ad5ea5def8d816d461b89' &&
+      github.event.after == github.event.pull_request.head.sha &&
+      github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 2
+      - name: One approved publication only (before any setup or AVD)
+        run: python3 scripts/m06/metadata_only_observation.py --publication-gate
+      - name: Host parsing regressions only
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/m06/tests -v
+      - name: Prepare identical private owned SDK image and collect metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p render/metadata-only
+          export ANDROID_SERIAL=emulator-5554
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          export M06_REQUIRE_HDA=1 M06_NATIVE_READONLY=1 M06_METADATA_ONLY=1
+          export BUDDY_SYNTHETIC_AVD_PROBE=1 M06_SDK_INPUT_GATE=1
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-36;google_apis;x86_64'
+          PYTHONPATH=scripts/m06 python3 - <<'PYCODE'
+          import json,os
+          from pathlib import Path
+          from hda_guard import sdk_support
+          row=sdk_support(Path(os.environ['ANDROID_HOME']))
+          Path('render/metadata-only/sdk-files.json').write_text(json.dumps(row,indent=2))
+          assert row['status']=='AVAILABLE'
+          PYCODE
+          sudo -n apt-get -o Acquire::http::Timeout=15 -o Acquire::Retries=0 install -y --no-install-recommends libpulse0 pulseaudio pulseaudio-utils xvfb xauth libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/v2-avd" XDG_RUNTIME_DIR="$RUNNER_TEMP/v2-runtime"
+          export ANDROID_EMULATOR_HOME="$XDG_RUNTIME_DIR" DISPLAY=:99
+          mkdir -m 700 -p "$ANDROID_AVD_HOME" "$XDG_RUNTIME_DIR"
+          export PULSE_SERVER="unix:$ANDROID_AVD_HOME/pulse.sock"
+          cat > "$ANDROID_AVD_HOME/pulse.pa" <<PULSE
+          load-module module-native-protocol-unix socket=$ANDROID_AVD_HOME/pulse.sock auth-anonymous=1
+          load-module module-null-sink sink_name=v2_playback
+          set-default-sink v2_playback
+          load-module module-null-sink sink_name=m06_input
+          set-default-source m06_input.monitor
+          PULSE
+          export PULSE_SOURCE=m06_input.monitor PULSE_SINK=v2_playback
+          export QEMU_PA_SERVER="$PULSE_SERVER" QEMU_PA_SOURCE=m06_input.monitor QEMU_PA_SINK=v2_playback
+          pulse_pid= display_pid= emulator_pid=
+          cleanup() {
+            result=$?
+            trap - EXIT
+            for pid in "$emulator_pid" "$display_pid" "$pulse_pid"; do
+              [[ "$pid" =~ ^[0-9]+$ ]] || continue
+              kill -TERM "$pid" 2>/dev/null || true
+              if ! timeout 5s bash -c 'while kill -0 "$1" 2>/dev/null; do sleep .1; done' _ "$pid"; then
+                kill -KILL "$pid" 2>/dev/null || true
+                result=1
+                if ! timeout 3s bash -c 'while kill -0 "$1" 2>/dev/null; do sleep .1; done' _ "$pid"; then
+                  printf '%s\n' 'OWNED_CHILD_STOP_UNAVAILABLE' >>render/metadata-only/cleanup.txt
+                  continue
+                fi
+              fi
+              wait "$pid" || true
+            done
+            printf '%s\n' "$result" > render/metadata-only/job-exit.txt
+            exit "$result"
+          }
+          trap cleanup EXIT
+          pulseaudio -n -F "$ANDROID_AVD_HOME/pulse.pa" --daemonize=no --exit-idle-time=-1 --use-pid-file=no >/dev/null 2>&1 &
+          pulse_pid=$!; export M06_PULSE_PID="$pulse_pid"
+          Xvfb "$DISPLAY" -screen 0 1920x1080x24 -nolisten tcp >/dev/null 2>&1 &
+          display_pid=$!
+          timeout 15s bash -c 'until pactl get-default-sink 2>/dev/null | grep -Fx v2_playback; do sleep 1; done'
+          timeout 10s bash -c 'until [[ -S /tmp/.X11-unix/X99 ]]; do sleep .2; done'
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n v2eyes -k 'system-images;android-36;google_apis;x86_64' --force
+          "$ANDROID_HOME/emulator/emulator" -avd v2eyes -feature -VirtioSndCard -port 5554 -grpc 8554 -grpc-use-token -accel on -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics >/dev/null 2>&1 &
+          emulator_pid=$!; export M06_EMULATOR_PID="$emulator_pid"
+          timeout 180s adb wait-for-device
+          timeout 180s bash -c 'until [[ $(adb shell getprop sys.boot_completed | tr -d "\r") == 1 ]]; do sleep 2; done'
+          python3 -m pip install --disable-pip-version-check --index-url https://pypi.org/simple --target "$RUNNER_TEMP/grpc-deps" grpcio-tools==1.78.0
+          mkdir -p "$RUNNER_TEMP/grpc-generated"
+          PYTHONPATH="$RUNNER_TEMP/grpc-deps" python3 -m grpc_tools.protoc -I "$ANDROID_HOME/emulator/lib" --python_out="$RUNNER_TEMP/grpc-generated" --grpc_python_out="$RUNNER_TEMP/grpc-generated" "$ANDROID_HOME/emulator/lib/emulator_controller.proto"
+          export PYTHONPATH="$RUNNER_TEMP/grpc-deps:$RUNNER_TEMP/grpc-generated"
+          # Signal handling gives owned bounded commands + SDK false finally time to finish.
+          timeout --signal=TERM --kill-after=5s 90s python3 scripts/m06/metadata_only_observation.py
+          # No APK install, activity, AudioRecord, paplay, parec, injectAudio or fixture.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: hda-metadata-only-not-product-ci
+          path: |
+            render/metadata-only/
+            render/grpc-mic-init-journal.json
+            render/grpc-mic-ready.json

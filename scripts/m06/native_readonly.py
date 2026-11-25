@@ -3,7 +3,7 @@ import json,os,re,time,threading
 from pathlib import Path
 from native_input_metadata import bounded,ALSA_COMMAND,alsa_fields
 from sdk_gate_calibration import FINGERPRINT
-from sdk_input_gate import PrivatePulse
+from sdk_input_gate import PrivatePulse,MetadataPulseView
 ADB=['adb','-s','emulator-5554']
 HAL='android.hardware.audio.service'
 PS_COMMAND='set -o pipefail; ps -A -o PID,UID,NAME | awk \'$3 == "android.hardware.audio.service" {print $1, $2, $3}\''
@@ -196,6 +196,29 @@ class NativeReadOnly:
    return row
   except Unavailable as e:return dict(phase=phase,host_monotonic_ns=started_ns,ended_monotonic_ns=time.monotonic_ns(),**unavailable(e.reason))
   finally:self.deadline=previous
+
+ def enumeration_metadata(self,*,metadata_proof=None):
+  # Explicit B-only API; no prepare/root retry, sound source or fixture caller.
+  from enumeration_metadata import collect
+  previous=self.deadline;self.deadline=time.monotonic()+8
+  started=time.monotonic_ns();row=dict(mode='METADATA_ONLY',fixture_authorization=False,identity_rechecked=False)
+  try:
+   if not self.rooted or not self.hal:raise Unavailable('ROOT_OR_HAL_UNAVAILABLE')
+   base=(metadata_proof or MetadataPulseView(self.proof or PrivatePulse())).verify()
+   if not isinstance(base,dict) or base.get('proof_scope')!='BASE_METADATA_ONLY':raise Unavailable('METADATA_PROOF_SCOPE')
+   row['private_proof_scope']=base['proof_scope']
+   self.guard()
+   objects=self.get_objects()
+   if self.objects is None or objects!=self.objects:raise Unavailable('OBJECT_SET_CHANGED')
+   row.update(collect(self.run,self.deadline))
+   self.guard()
+   if self.get_objects()!=objects:raise Unavailable('OBJECT_SET_CHANGED')
+   row['identity_rechecked']=True
+  except Exception as e:
+   row.update(unavailable(e.reason if isinstance(e,Unavailable) else 'ISOLATION_OR_IDENTITY_UNAVAILABLE'));row['identity_rechecked']=False
+  finally:self.deadline=previous
+  row.update(started_monotonic_ns=started,ended_monotonic_ns=time.monotonic_ns())
+  return self.save('enumeration-metadata.json',row)
 
  def resume(self):
   try:
