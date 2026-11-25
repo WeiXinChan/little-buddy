@@ -17,7 +17,7 @@ def generate(output):
     config=json.loads((ROOT/'app/v2-release.json').read_text())
     assert set(config)=={'format','version_code','version_name','application_id','protocol_contract','source_base'}
     assert len(config['source_base'])==40 and all(c in '0123456789abcdef' for c in config['source_base'])
-    assert config['format']==1 and config['version_code']==15 and config['version_name']=='2.0.0-rc1'
+    assert config['format']==1 and config['version_code']==16 and config['version_name']=='2.0.0-rc2'
     assert config['application_id']=='com.littlebuddy.sim.v2' and config['protocol_contract']==CONTRACT
     paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).decode().split('\0')
     paths=sorted(p for p in paths if p and selected(p))
@@ -25,8 +25,10 @@ def generate(output):
     for path in paths:
         file=ROOT/path
         assert not file.is_symlink() and file.is_file()
-        assert file.suffix not in {'.pem','.key','.jks','.keystore'}
-        assert file.suffix!='.properties' or path in {'gradle.properties','gradle/wrapper/gradle-wrapper.properties'}
+        public_transport = {'app/src/v2Debug/assets/v2-transport/ca.pem': 'ef47caf47e3d66b428d51a8d15c0c5960646af540c294caed37f7fcde3febe98', 'app/src/v2Debug/assets/v2-transport/ssh.properties': 'df09fed1f81baf30cb6abfa6a5edc32461d692b53f852e065f78ec35107aa1b2'}
+        if path in public_transport: assert hashlib.sha256(file.read_bytes()).hexdigest()==public_transport[path]
+        else: assert file.suffix not in {'.pem','.key','.jks','.keystore'}
+        assert file.suffix!='.properties' or path in {'gradle.properties','gradle/wrapper/gradle-wrapper.properties'} or path in public_transport
         raw=file.read_bytes(); inventory[path]={'sha256':hashlib.sha256(raw).hexdigest(),'size':len(raw)}
     # Unexpected local assets must not enter an APK without being inventoried/reviewed.
     for directory in ['app/src/main','app/src/debug','app/src/v2Debug','app/libs','assets/v2-default']:

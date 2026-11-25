@@ -251,14 +251,28 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
                 locked(d, if (saved) PanelNotice.PIN_CHANGED else PanelNotice.OWNER_UNAVAILABLE) } }
         }
     }
-    fun importConnection(address: String, token: CharArray) {
+    /** Public registration material only; publish after a fresh final Grant decision. */
+    fun exportTransportKey(create: () -> String, publish: (String) -> Unit) {
+        val d=domain.get() ?: return; val current=grant ?: return
+        if (!active || state.busy || state.mode!=PanelMode.SETTINGS || !d.localAction(current)) return
+        val ticket=revision.get()
+        work {
+            val key=runCatching { create() }.getOrNull() ?: return@work
+            var released: String? = null
+            // Final decision publishes public material in memory on the worker, never a UI/IO callback.
+            if (live(ticket)) d.acceptProtected(current) { released=key }
+            val material=released ?: return@work
+            ui { if (live(ticket) && state.mode==PanelMode.SETTINGS && d.isAuthorized(current)) publish(material) }
+        }
+    }
+    fun importConnection(address: String, token: CharArray, sshUser: String? = null) {
         val d = domain.get(); val proof = ownerChallenge
         if (!active || state.busy || state.mode != PanelMode.CONNECTION || d == null || proof == null) {
             token.fill('\u0000'); return
         }
         val epoch = page; val ticket = revision.get(); pending.add(token); show(state.copy(busy = true))
         work {
-            val saved = try { live(ticket) && d.provisionConnection(proof, epoch, ParentConnection(address, String(token))) }
+            val saved = try { live(ticket) && d.provisionConnection(proof, epoch, ParentConnection(address, String(token), sshUser).also { it.requireRunnable() }) }
                 catch (_: Exception) { false } finally { token.fill('\u0000'); pending.remove(token) }
             ui { if (live(ticket)) { ownerChallenge = null; page = -1L
                 locked(d, if (saved) PanelNotice.CONNECTION_SAVED else PanelNotice.OWNER_UNAVAILABLE) } }

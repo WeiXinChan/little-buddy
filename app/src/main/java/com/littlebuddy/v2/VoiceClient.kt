@@ -29,7 +29,11 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val managed: (ManagementState.Phase) -> Unit = {},
                            private val sessionEnded: () -> Unit = {},
                            private val requiredContract: String? = null,
-                           private val ready: () -> Unit = {}) {
+                           private val ready: () -> Unit = {},
+                           private val http: OkHttpClient = OkHttpClient.Builder().retryOnConnectionFailure(false)
+                               .followRedirects(false).followSslRedirects(false).proxy(java.net.Proxy.NO_PROXY)
+                               .connectTimeout(4, TimeUnit.SECONDS).build(),
+                           private val closeTransport: () -> Unit = {}) {
     fun nativeProof() = player.nativeProof()
     private var controlQuarantined=false
     val quarantined get() = player.quarantined || controlQuarantined
@@ -61,8 +65,6 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var ackIdentity: JSONObject? = null
     private var ackSequence = 0L
     private var playerName: String? = null
-    private val http = OkHttpClient.Builder().retryOnConnectionFailure(false)
-        .followRedirects(false).connectTimeout(4, TimeUnit.SECONDS).build()
     private val player = Playback({ AndroidTrack(handler, playbackSettings) { fail("route") } },
         SystemClock::elapsedRealtime) { ack ->
         observed(ack)
@@ -367,5 +369,6 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         handler.removeCallbacks(pump); handler.removeCallbacks(heartbeat)
         val old = socket; socket = null
         old?.cancel()
+        closeTransport(); http.connectionPool.evictAll(); http.dispatcher.cancelAll()
     }
 }
