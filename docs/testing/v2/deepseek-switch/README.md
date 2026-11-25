@@ -1,0 +1,9 @@
+# V2 model switch requested by the owner
+
+V2 text and generated-image review now pin `deepseek-v4.1-flash-1017` through one `backend.v2.models.TEXT_MODEL` constant. Preflight, image runtime validation, concrete reviewer defaults, schema selection and the service environment example use that same selection. No fallback to qwen3.8-flash is introduced. ASR/TTS and the image generator remain unchanged. V1 configuration is outside this change.
+
+The [official Model Studio DeepSeek API](https://help.aliyun.com/en/model-studio/deepseek-api) documents text/image input and structured output for this snapshot through the existing workspace-specific interface. This implementation continues non-thinking mode and bounded output; it does not enable search, code execution or other tools.
+
+Validation: 7 reviewer + 4 runtime assembly + 10 release/real-loopback lifecycle methods pass. Two necessary synthetic live compatibility requests through the existing Beijing provider entry also passed: public catalogue PNG review HTTP200/966ms, and actual DashScopeModel endpoint JSON-schema request HTTP200/716ms (41 prompt + 16 output tokens). These use no child/audio data. Old-model calls: zero. Exact sanitized receipts are retained in the local delivery directory, not copied credentials. This proves request compatibility/availability at that moment, not complete conversation quality, safety effectiveness, future quota or hourly cost.
+
+Root updated only protected V2 service/image configuration and ran actual offline preflight successfully. The service is not activated; a newly packaged backend containing this change is required before deployment. Older preliminary archives still pin the old model and must not be used as the final release. Current price estimates must be revalidated for the selected model; the old Qwen rate card is historical reference only.
