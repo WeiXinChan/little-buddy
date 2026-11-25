@@ -217,7 +217,11 @@ class V2VoiceActivity : Activity() {
                 .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build()
                 ssh?.client(base) ?: base }
                 catch (_: Exception) { ssh?.close(); releaseState="released"; return@post }
+            var lastLog: com.littlebuddy.v2.feedback.LogStage?=null
             val client = VoiceClient(owner, { status ->
+                val stage=when(status) { "compatibility","wake"->com.littlebuddy.v2.feedback.LogStage.CONNECT
+                    "listening"->com.littlebuddy.v2.feedback.LogStage.RECOGNIZE;"speaking"->com.littlebuddy.v2.feedback.LogStage.PLAY;else->null }
+                if(stage!=null && stage!=lastLog) { lastLog=stage;com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this@V2VoiceActivity,stage) }
                 connectionNotice=when(status) {
                     "incompatible" -> "服务协议不兼容，儿童收音未启用；请管理员核对候选包与服务契约。"
                     "compatibility" -> "正在核对已配置服务协议；核对前不启动儿童收音。"
@@ -305,6 +309,7 @@ class V2VoiceActivity : Activity() {
     }
     override fun onPause() {
         foreground = false; managementRevision++; managementRequested = false
+        com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this,com.littlebuddy.v2.feedback.LogStage.CANCEL)
         panel?.pause(); helpVisible = false; help?.stop(); stopVoice(); super.onPause()
     }
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {

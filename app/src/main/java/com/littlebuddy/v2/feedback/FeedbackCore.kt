@@ -17,8 +17,8 @@ class FeedbackView(val id: String, val category: Category, val description: Stri
     val localCleared: Boolean = false, val logs: LogPreview = LogPreview(null, null, 0, 0))
 internal class Material(val id: String, val category: Category, var description: String, var logs: ByteArray,
     val created: Long, val logsUntil: Long, var submitted: Long? = null, var withdrawn: Long? = null,
-    var state: FeedbackState = FeedbackState.PENDING, var reply: String = "", var localCleared: Boolean = false) {
-    fun expires() = deadline(submitted, withdrawn, created)
+    var state: FeedbackState = FeedbackState.PENDING, var reply: String = "", var localCleared: Boolean = false, val providerBinding: String? = null, var remoteDeadline: Long? = null) {
+    fun expires() = minOf(deadline(submitted, withdrawn, created),remoteDeadline ?: Long.MAX_VALUE)
     fun redact() { description = ""; logs.fill(0); logs = byteArrayOf(); reply = "" }
 }
 private class AdmissionDecision(val key: String)
@@ -69,8 +69,8 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
      * After publication, persistence is fulfilment of THIS transaction, never a reusable grant.
      * A crash/write failure at that point quarantines; no success is returned or upload replayed.
      */
-    private fun protectedChange(op: Operation, scope: String, mutation: () -> Unit, publish: () -> Unit = {}) {
-        val intent = authorizer.prepare(op, scope) ?: throw FeedbackFailure(Failure.DENIED)
+    private fun protectedChange(op: Operation, scope: String, mutation: () -> Unit, publish: () -> Unit = {}, intentOverride: ParentIntent? = null, guard: ()->Boolean = { true }) {
+        val intent = intentOverride ?: authorizer.prepare(op, scope) ?: throw FeedbackFailure(Failure.DENIED)
         val oldEvents = events; val oldMaterials = materials
         val before = encode()
         val candidate: ByteArray
@@ -84,6 +84,7 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
         var committed: FeedbackVault.Committed? = null
         try {
             authorizer.accept(intent, op, scope) {
+                if(!guard())return@accept
                 // Irreversible process-local commit point: a specific state/transaction is published.
                 // No disk, network, crypto, decoding or callbacks under the authorization lock.
                 committed = staged.decide()
@@ -159,6 +160,7 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
         val id: String
         val payload: FeedbackPayload
         val transportIntent: ParentIntent
+        val providerBinding: String?
         synchronized(this) {
             val time = now()
             val current = draft ?: throw FeedbackFailure(Failure.STALE)
@@ -167,22 +169,23 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
             transportIntent = authorizer.prepare(Operation.SUBMIT, token.digest) ?: throw FeedbackFailure(Failure.DENIED)
             if (!provider.available()) throw FeedbackFailure(Failure.UNAVAILABLE)
             if (materials.size >= 64) throw FeedbackFailure(Failure.INVALID)
-            id = UUID.randomUUID().toString()
+            id = FeedbackKeys.create(time)
+            providerBinding=provider.binding()
             payload = FeedbackPayload(current.category, current.description, current.logs.copyOf())
             protectedChange(Operation.SUBMIT, token.digest, {
-                materials[id] = Material(id, current.category, current.description, current.logs.copyOf(), time, current.preview.from?.plus(WEEK) ?: time)
-            }, { cancelDraft() })
+                materials[id] = Material(id, current.category, current.description, current.logs.copyOf(), time, current.preview.from?.plus(WEEK) ?: time, providerBinding=providerBinding)
+            }, { cancelDraft() }, guard={ val currentTime=now();currentTime<time+HOUR && current.preview.from?.let{currentTime<it+WEEK}!=false })
         }
         try {
-            val receipt = provider.submit(id, payload) {
+            val receipt = provider.submitAdmitted(id, payload, providerBinding) { admission ->
                 synchronized(this) {
                     val time = now()
                     val entry = materials[id]
-                    if (entry == null || entry.withdrawn != null || time >= entry.expires()) false
+                    if (entry == null || entry.withdrawn != null || time >= entry.expires() || (payload.logs.isNotEmpty() && time>=entry.logsUntil)) false
                     else {
                         var decision: AdmissionDecision? = null
                         authorizer.accept(transportIntent, Operation.SUBMIT, token.digest) {
-                            decision = AdmissionDecision(id)
+                            admission(); decision = AdmissionDecision(id)
                         }
                         decision?.key == id
                     }
@@ -199,6 +202,10 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
                         entry.withdrawn = minOf(time, entry.expires()); entry.redact()
                     }
                     if (entry.submitted == null) entry.submitted = receipt.submittedAt
+                    receipt.deleteBy?.let { until ->
+                        if(until<=receipt.submittedAt || until>receipt.submittedAt+WEEK)throw FeedbackFailure(Failure.INVALID)
+                        entry.remoteDeadline=minOf(entry.remoteDeadline ?: until,until)
+                    }
                     if (entry.withdrawn == null && time < entry.expires()) entry.state = FeedbackState.SUBMITTED
                     else { entry.redact(); entry.state = FeedbackState.DELETE_PENDING }
                     persist()
@@ -230,7 +237,8 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
         for (id in keys) {
             try {
                 if (!provider.available()) throw FeedbackFailure(Failure.UNAVAILABLE)
-                val receipt = provider.withdraw(id)
+                val binding=synchronized(this) { materials[id]?.providerBinding }
+                val receipt = provider.withdrawBound(id,binding)
                 synchronized(this) {
                     val time = now()
                     materials[id]?.let {
@@ -258,12 +266,45 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
                 if (visible) logRange(it.logs) else LogPreview(null, null, 0, 0))
         }
     }
-    /** Reply/supplement protocol never changes original timestamps. Not wired to an unreviewed server. */
+    /** Explicit parent action only. No automatic read, no refresh of original submission/deadline. */
+    fun refresh(id: String) {
+        val intent: ParentIntent;val replyIntent: ParentIntent;val binding: String?
+        synchronized(this) {
+            val time=now();val entry=materials[id] ?: throw FeedbackFailure(Failure.STALE)
+            if(entry.localCleared || entry.withdrawn!=null || time>=entry.expires())throw FeedbackFailure(Failure.STALE)
+            intent=authorizer.prepare(Operation.READ,"remote:$id") ?: throw FeedbackFailure(Failure.DENIED)
+            replyIntent=authorizer.prepare(Operation.READ,"reply:$id") ?: throw FeedbackFailure(Failure.DENIED)
+            binding=entry.providerBinding
+        }
+        val remote=provider.read(id,binding) { admission ->
+            synchronized(this) {
+                val entry=materials[id];val time=now()
+                if(entry==null || entry.localCleared || entry.withdrawn!=null || time>=entry.expires())false
+                else authorizer.accept(intent,Operation.READ,"remote:$id",admission)
+            }
+        }
+        synchronized(this) {
+            val time=now();val entry=materials[id] ?: return
+            if(entry.localCleared || entry.withdrawn!=null || time>=entry.expires())return
+            val submitted=remote.submittedAt ?: entry.submitted ?: throw FeedbackFailure(Failure.INVALID)
+            if(submitted<entry.created || submitted>time || (entry.submitted!=null && entry.submitted!=submitted) ||
+                remote.deleteBy>submitted+WEEK || remote.deleteBy<=submitted)throw FeedbackFailure(Failure.CLOCK)
+            if(remote.reply.isNotEmpty())validateText(remote.reply)
+            protectedChange(Operation.READ,"reply:$id",{
+                val current=materials.getValue(id)
+                current.submitted=submitted
+                current.remoteDeadline=minOf(current.remoteDeadline ?: remote.deleteBy,remote.deleteBy)
+                if(time>=current.expires()) { current.redact();current.withdrawn=time;current.state=FeedbackState.DELETE_PENDING }
+                else if(remote.state==FeedbackState.DELETED) { current.redact();current.withdrawn=time;current.state=FeedbackState.DELETE_PENDING }
+                else { current.state=remote.state;current.reply=remote.reply }
+            },intentOverride=replyIntent,guard={ val current=materials[id];current!=null && !current.localCleared && current.withdrawn==null && now()<current.expires() })
+        }
+    }
+    /** Local supplement also needs the current parent; no unprotected reply ingress. */
     @Synchronized internal fun receiveReply(id: String, text: String) {
-        val time = now(); validateText(text)
-        val entry = materials[id] ?: return
-        if (entry.localCleared || entry.withdrawn != null || time >= entry.expires()) return
-        entry.reply = text; entry.state = FeedbackState.REPLIED; persist()
+        val time=now();validateText(text);val entry=materials[id] ?: return
+        if(entry.localCleared || entry.withdrawn!=null || time>=entry.expires())return
+        protectedChange(Operation.READ,"reply:$id",{ materials.getValue(id).let { it.reply=text;it.state=FeedbackState.REPLIED } })
     }
     @Synchronized internal fun confirmationCurrent(token: Confirmation): Boolean {
         val time = now()
@@ -315,19 +356,19 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
     }
     private fun encode(): ByteArray = ByteArrayOutputStream().also { buffer ->
         DataOutputStream(buffer).use { out ->
-            out.writeInt(2); out.writeLong(lastTime); out.writeInt(events.size)
+            out.writeInt(3); out.writeLong(lastTime); out.writeInt(events.size)
             events.forEach { out.writeLong(it.at); out.writeUTF(it.stage.name); out.writeUTF(it.error.name)
                 out.writeInt(it.version); out.writeLong(it.elapsed); out.writeLong(it.usage) }
             out.writeInt(materials.size)
             materials.values.forEach { out.writeUTF(it.id); out.writeUTF(it.category.name); out.writeUTF(it.description)
                 out.writeInt(it.logs.size); out.write(it.logs); out.writeLong(it.created); out.writeLong(it.logsUntil)
                 out.writeLong(it.submitted ?: -1); out.writeLong(it.withdrawn ?: -1)
-                out.writeUTF(it.state.name); out.writeUTF(it.reply); out.writeBoolean(it.localCleared) }
+                out.writeUTF(it.state.name); out.writeUTF(it.reply); out.writeBoolean(it.localCleared);out.writeUTF(it.providerBinding ?: "");out.writeLong(it.remoteDeadline ?: -1) }
         }
     }.toByteArray()
     private fun decode(bytes: ByteArray) {
         DataInputStream(ByteArrayInputStream(bytes)).use { input ->
-            val schema = input.readInt(); require(schema in 1..2); lastTime = input.readLong(); require(lastTime >= 0)
+            val schema = input.readInt(); require(schema in 1..3); lastTime = input.readLong(); require(lastTime >= 0)
             val count = input.readInt(); require(count in 0..1000)
             repeat(count) { events.add(Event(input.readLong(), LogStage.valueOf(input.readUTF()),
                 LogError.valueOf(input.readUTF()), input.readInt(), input.readLong(), input.readLong())) }
@@ -343,8 +384,12 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
                 require(withdrawn == null || withdrawn in created..lastTime)
                 val state = FeedbackState.valueOf(input.readUTF()); val reply = input.readUTF()
                 val localCleared = schema >= 2 && input.readBoolean()
+                val binding=if(schema>=3)input.readUTF().takeIf{it.isNotEmpty()} else null
+                require(binding==null || binding.matches(Regex("[a-f0-9]{64}")))
+                val remoteDeadline=if(schema>=3)input.readLong().takeIf{it>=0} else null
+                require(remoteDeadline==null || (submitted!=null && remoteDeadline in (submitted+1)..(submitted+WEEK)))
                 require(description.codePointCount(0, description.length) <= 2000 && reply.codePointCount(0, reply.length) <= 2000)
-                materials[id] = Material(id, category, description, logs, created, logsUntil, submitted, withdrawn, state, reply, localCleared)
+                materials[id] = Material(id, category, description, logs, created, logsUntil, submitted, withdrawn, state, reply, localCleared, binding, remoteDeadline)
             }
             require(input.available() == 0)
         }

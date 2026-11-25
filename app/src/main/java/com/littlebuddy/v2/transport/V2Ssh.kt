@@ -141,13 +141,23 @@ internal class V2SshProfile(
 }
 
 /** Owned by one WSS attempt. Closing the raw socket also interrupts SSH authentication. */
+internal enum class Target(val path: String) { VOICE("/v2/voice"), FEEDBACK("/v2/feedback") }
+internal object V2Forwarding {
+    fun mapped(address: SocketAddress, port: Int): InetSocketAddress {
+        val requested=address as? InetSocketAddress
+        if(requested?.address?.hostAddress!=V2SshProfile.LOOPBACK || requested.port!=V2SshProfile.PORT || port !in 1..65535)
+            throw IOException("Unexpected device transport target")
+        return InetSocketAddress(V2SshProfile.LOOPBACK,port)
+    }
+}
 internal class V2Ssh(private val profile: V2SshProfile) : AutoCloseable {
     private val lock = Any()
     private val raw = Socket(Proxy.NO_PROXY)
     private var closed = false
     private var session: Session? = null
+    private var localPort=0
 
-    fun client(base: OkHttpClient): OkHttpClient {
+    fun client(base: OkHttpClient, target: Target = Target.VOICE): OkHttpClient {
         val tls = SSLContext.getInstance("TLS").apply { init(null, arrayOf(profile.trust), null) }
         return base.newBuilder()
             .proxy(Proxy.NO_PROXY)
@@ -155,7 +165,7 @@ internal class V2Ssh(private val profile: V2SshProfile) : AutoCloseable {
             .addInterceptor { chain ->
                 val url=chain.request().url
                 if (url.scheme!="https" || url.host!=V2SshProfile.LOOPBACK || url.port!=V2SshProfile.PORT ||
-                    url.encodedPath!="/v2/voice" || url.query!=null || url.fragment!=null ||
+                    url.encodedPath!=target.path || url.query!=null || url.fragment!=null ||
                     url.username.isNotEmpty() || url.password.isNotEmpty()) throw IOException("Unexpected V2 WSS target")
                 chain.proceed(chain.request())
             }
@@ -169,12 +179,8 @@ internal class V2Ssh(private val profile: V2SshProfile) : AutoCloseable {
                         open()
                         return object : Socket(Proxy.NO_PROXY) {
                             override fun connect(endpoint: SocketAddress, timeout: Int) {
-                                val address = endpoint as? InetSocketAddress
-                                if (address?.address?.hostAddress != V2SshProfile.LOOPBACK ||
-                                    address.port != V2SshProfile.PORT) {
-                                    throw IOException("Unexpected device transport target")
-                                }
-                                super.connect(endpoint, timeout)
+                                val mapped=synchronized(lock) { check(!closed);V2Forwarding.mapped(endpoint,localPort) }
+                                super.connect(mapped,timeout)
                             }
                         }
                     } catch (failure: Exception) {
@@ -218,8 +224,9 @@ internal class V2Ssh(private val profile: V2SshProfile) : AutoCloseable {
             ssh.connect(5_000)
             synchronized(lock) {
                 check(!closed)
-                ssh.setPortForwardingL(V2SshProfile.LOOPBACK, V2SshProfile.PORT,
+                localPort=ssh.setPortForwardingL(V2SshProfile.LOOPBACK, 0,
                     V2SshProfile.LOOPBACK, V2SshProfile.PORT)
+                check(localPort in 1..65535)
                 session = ssh
             }
         } catch (failure: Exception) {
@@ -231,7 +238,7 @@ internal class V2Ssh(private val profile: V2SshProfile) : AutoCloseable {
     override fun close() {
         val previous = synchronized(lock) {
             closed = true
-            session.also { session = null }
+            session.also { session = null;localPort=0 }
         }
         runCatching { raw.close() }
         previous?.disconnect()

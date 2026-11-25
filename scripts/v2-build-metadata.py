@@ -17,7 +17,7 @@ def generate(output):
     config=json.loads((ROOT/'app/v2-release.json').read_text())
     assert set(config)=={'format','version_code','version_name','application_id','protocol_contract','source_base'}
     assert len(config['source_base'])==40 and all(c in '0123456789abcdef' for c in config['source_base'])
-    assert config['format']==1 and config['version_code']==17 and config['version_name']=='2.0.0-rc3'
+    assert config['format']==1 and config['version_code']==18 and config['version_name']=='2.0.0-rc4'
     assert config['application_id']=='com.littlebuddy.sim.v2' and config['protocol_contract']==CONTRACT
     paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).decode().split('\0')
     paths=sorted(p for p in paths if p and selected(p))
@@ -39,7 +39,7 @@ def generate(output):
     manifest=hashlib.sha256((ROOT/'assets/v2-default/manifest.json').read_bytes()).hexdigest()
     result=dict(config,build_id=f'v2-{config["version_code"]}-{digest[:16]}',source_content_sha256=digest,
                 resources_manifest_sha256=manifest,wire=2,images_v=2,volume_v=1,management_v=1,local_help_v=1,session_end_v=1,
-                min_sdk=26,target_sdk=36,abi=['arm64-v8a'],distribution='internal_debug_candidate')
+                feedback_protocol="feedback-v1",min_sdk=26,target_sdk=36,abi=['arm64-v8a'],distribution='internal_debug_candidate')
     output=Path(output); output.mkdir(parents=True,exist_ok=True)
     (output/'v2-build.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
     (output/'v2-source-inventory.json').write_bytes(canonical+b'\n')

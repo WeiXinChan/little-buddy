@@ -29,20 +29,29 @@ class FeedbackFlowTest {
         override fun invalidate() { epoch++ }
     }
     private class Provider(val clock: Clock) : FeedbackProvider {
+        var beforeReadReturn: (() -> Unit)?=null
+        var reply="";private val submitted=mutableMapOf<String,Long>()
         var enabled = true; var submitCount = 0; var withdrawCount = 0
         var beforeAdmit: (() -> Unit)? = null
         override fun available() = enabled
         override fun submit(idempotencyKey: String, payload: FeedbackPayload, admit: () -> Boolean): SubmitReceipt {
             beforeAdmit?.invoke()
             if (!admit()) throw FeedbackFailure(Failure.DENIED)
-            submitCount++; return SubmitReceipt(clock.time)
+            submitCount++;submitted[idempotencyKey]=clock.time; return SubmitReceipt(clock.time)
+        }
+        override fun read(key: String,binding:String?,admit:(()->Unit)->Boolean):FeedbackRemote {
+            if(!admit {})throw FeedbackFailure(Failure.DENIED)
+            val original=submitted.getValue(key);beforeReadReturn?.invoke()
+            return FeedbackRemote(original,original+WEEK,if(reply.isEmpty())FeedbackState.SUBMITTED else FeedbackState.REPLIED,reply)
         }
         override fun withdraw(idempotencyKey: String): DeleteReceipt { withdrawCount++; return DeleteReceipt(clock.time, true) }
     }
     private class Rig : AutoCloseable {
         val dir = Files.createTempDirectory("m09-flow-").toFile()
         val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
-        val files = PrivateVaultFiles(dir); val clock = Clock(); val auth = Authority(); val provider = Provider(clock)
+        val disk=PrivateVaultFiles(dir);var onStage:(()->Unit)?=null
+        val files=object:VaultFiles by disk {override fun replace(name:String,bytes:ByteArray){disk.replace(name,bytes);if(name=="staging")onStage?.invoke()} }
+        val clock = Clock(); val auth = Authority(); val provider = Provider(clock)
         val work = Queue(); val ui = Queue(); val screens = mutableListOf<FeedbackScreen>()
         lateinit var core: FeedbackCore
         val engine = FeedbackEngine(work, ui, { router -> FeedbackCore(FeedbackVault(files, key), clock, router, provider).also { core = it } }, { provider.enabled })
@@ -64,7 +73,7 @@ class FeedbackFlowTest {
         assertEquals(0, r.provider.submitCount)
     }
     @Test fun nativePageControllerDrivesSubmitListDetailsAndReplyView() = Rig().use { r ->
-        r.drain(); val id = r.send(); r.core.receiveReply(id, "synthetic reply")
+        r.drain(); val id = r.send(); r.provider.reply="synthetic reply";r.controller.refresh(id);r.drain()
         r.controller.detail(id); r.drain()
         val detail = (r.screens.last() as FeedbackScreen.Detail).item
         assertEquals("synthetic parent description", detail.description); assertEquals("synthetic reply", detail.reply)
@@ -206,5 +215,35 @@ class FeedbackFlowTest {
         val newer = ParentFeedbackAuthorizer(domain, fresh, DenyFeedbackGrantGate)
         authority.close(); assertTrue(newer.current()) // closing old handle does not revoke newer grant
         now += ParentDomain.IDLE_MS; assertFalse(newer.current())
+    }    @Test fun unscopedReplyCannotBorrowAnOtherwiseVerifiedPage() = Rig().use { r ->
+        r.drain();val id=r.send()
+        try { r.core.receiveReply(id,"late unscoped reply");fail("borrowed page grant") }
+        catch(e:FeedbackFailure) { assertEquals(Failure.DENIED,e.reason) }
+        r.controller.detail(id);r.drain();assertTrue((r.screens.last() as FeedbackScreen.Detail).item.reply.isNullOrEmpty())
     }
+    @Test fun lateReadCannotBorrowNewPresentationEpoch() = Rig().use { r ->
+        r.drain();val id=r.send();r.provider.reply="must not publish"
+        r.provider.beforeReadReturn={ r.auth.invalidate() }
+        r.controller.refresh(id);r.drain()
+        assertEquals(Failure.DENIED,(r.screens.last() as FeedbackScreen.Notice).failure)
+        r.controller.detail(id);r.drain();assertTrue((r.screens.last() as FeedbackScreen.Detail).item.reply.isNullOrEmpty())
+    }
+    @Test fun replyStagingCrossingMaterialDeadlineCannotPublishReply() = Rig().use { r ->
+        r.drain();val id=r.send();r.provider.reply="must expire"
+        r.onStage={r.onStage=null;r.clock.time+=WEEK}
+        r.controller.refresh(id);r.drain()
+        assertEquals(Failure.DENIED,(r.screens.last() as FeedbackScreen.Notice).failure)
+        r.controller.showList();r.drain();assertTrue((r.screens.last() as FeedbackScreen.Issues).items.isEmpty())
+    }
+    @Test fun selectedLogExpiryDuringHandshakeRejectsUploadWithoutReplaying() = Rig().use { r ->
+        r.drain();r.core.record(mapOf("stage" to LogStage.CONNECT,"error" to LogError.NONE,"version" to 18,"elapsedMs" to 0L,"usage" to 0L))
+        r.clock.time+=WEEK-10
+        r.controller.preview(Category.OTHER,"synthetic",1000,r.clock.time);r.drain()
+        r.provider.beforeAdmit={r.clock.time+=10}
+        r.controller.submit();r.drain()
+        assertEquals(0,r.provider.submitCount)
+        val item=(r.screens.last() as FeedbackScreen.Issues).items.single()
+        assertEquals(FeedbackState.SEND_FAILED,item.state);assertEquals(0,item.logs.count)
+    }
+
 }
