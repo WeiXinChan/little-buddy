@@ -22,6 +22,8 @@ class V2VoiceActivity : Activity() {
     private val configurationWorker = Executors.newSingleThreadExecutor()
     @Volatile internal var releaseState: String = "idle"; private set
     private var voice: VoiceClient? = null
+    private var imageRoute: AndroidImageRoute? = null
+    private var eyesAttached = false
     private var capture: Capture? = null
     private var releasedRecorder = RecorderProof()
     private var releasedPlayer = PlayerProof()
@@ -35,9 +37,24 @@ class V2VoiceActivity : Activity() {
     @Volatile private var foreground = false
     @Volatile private var managementRevision = 0L
     private var permissionRequested = false
-    private fun eyes() { setContentView(V2EyesView(this) { requestParentManagement() }.also {
-        it.onLocalHelp = { showLocalHelp() }
-    }) }
+    private fun eyes() {
+        if (eyesAttached) return
+        imageRoute?.clear()
+        val frame = android.widget.FrameLayout(this)
+        val eyes = V2EyesView(this) { requestParentManagement() }.also { it.onLocalHelp = { showLocalHelp() } }
+        frame.addView(eyes)
+        val picture = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(android.graphics.Color.BLACK); visibility = android.view.View.GONE
+            importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            // Same hidden management gesture remains available over a revealed picture.
+            setOnTouchListener { _, event -> eyes.onTouchEvent(event) }
+        }
+        frame.addView(picture, android.widget.FrameLayout.LayoutParams(-1, -1))
+        imageRoute = AndroidImageRoute(this, configurationWorker, picture)
+        setContentView(frame)
+        eyesAttached = true
+    }
     internal fun observeNative(result: (NativeEvidence) -> Unit) { owner.post {
         result(NativeEvidence(capture?.nativeProof ?: releasedRecorder, voice?.nativeProof() ?: releasedPlayer))
     } }
@@ -59,6 +76,7 @@ class V2VoiceActivity : Activity() {
             managementRequested = false
             if (!quiet) { showLocalHelp(); return@releaseAudio }
             managementVisible = true
+            eyesAttached = false
             panel = AndroidParentPanel(this) { leaveManagement() }.also { it.open() }
         }
     }
@@ -93,7 +111,7 @@ class V2VoiceActivity : Activity() {
         check(!managementRequested && !managementVisible && !helpVisible)
         check(hasWindowFocus() && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
         check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked)
-        val ticket = managementRevision; val settings = execution
+        val ticket = managementRevision; val settings = execution; val images = imageRoute
         owner.post {
             if (ticket != managementRevision || !foreground || voice != null || capture != null || releaseState == "quarantined") return@post
             releaseState = "active"; budget = PlaybackBudget(android.os.SystemClock::elapsedRealtime, settings.durationSeconds)
@@ -103,7 +121,7 @@ class V2VoiceActivity : Activity() {
                 playbackSettings = settings,
                 localHelp = { runOnUiThread { if (ticket == managementRevision) showLocalHelp() } },
                 management = { runOnUiThread { if (ticket == managementRevision) requestParentManagement() } },
-                permitted = { foreground && ticket == managementRevision })
+                permitted = { foreground && ticket == managementRevision }, images = images)
             voice = client
             try { client.connect(address, credential)
                 capture = Capture(assets, owner, client, allowed = { foreground && ticket == managementRevision }) { runOnUiThread { if (ticket == managementRevision) showLocalHelp() } }.also { it.start() }
@@ -125,7 +143,9 @@ class V2VoiceActivity : Activity() {
             } else owner.postDelayed(this, 250)
         }
     }
-    private fun releaseAudio(done: (Boolean) -> Unit = {}) { owner.post {
+    private fun releaseAudio(done: (Boolean) -> Unit = {}) {
+        imageRoute?.clear()
+        owner.post {
         owner.removeCallbacks(durationLimit)
         voice?.close(); voice?.let { releasedPlayer = it.nativeProof() }
         if (voice?.quarantined != true) voice = null
@@ -140,6 +160,7 @@ class V2VoiceActivity : Activity() {
     private fun showLocalHelp() {
         if (!foreground || !hasWindowFocus() || managementVisible || managementRequested || helpVisible) return
         helpVisible = true; val ticket = ++managementRevision
+        eyesAttached = false
         help?.show(ParentPlaybackSettings(volume = 0), audible = false, released = false)
         releaseAudio { quiet ->
             configurationWorker.execute {

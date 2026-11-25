@@ -24,7 +24,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val playbackSettings: com.littlebuddy.v2.parent.ParentPlaybackSettings = com.littlebuddy.v2.parent.ParentPlaybackSettings(),
                            private val localHelp: (LocalHelpReason) -> Unit = {},
                            private val management: () -> Unit = {},
-                           private val permitted: () -> Boolean = { true }) {
+                           private val permitted: () -> Boolean = { true },
+                           private val images: ImagePort? = null) {
     fun nativeProof() = player.nativeProof()
     val quarantined get() = player.quarantined
     private var socket: WebSocket? = null
@@ -37,7 +38,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var outputBusy = false
     private var responseRevision = -1L
     private val gate: InputGate = InputGate(waits, SystemClock::elapsedRealtime,
-        { version -> send("advance", "revision" to version); candidate() },
+        { version -> images?.clear(); send("advance", "revision" to version); candidate() },
         { version -> send("probe", "revision" to version) },
         { version -> send("seal", "revision" to version); inputSerial++ ; outputBusy = true },
         { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true },
@@ -58,8 +59,9 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         if (!allowAck(ack)) return@Playback
         val identity = ackIdentity ?: return@Playback
         val copy = JSONObject(identity.toString()).put("sequence", ackSequence++)
-        send("ack", "identity" to copy, "player" to ack.binding.player,
+        val sent = send("ack", "identity" to copy, "player" to ack.binding.player,
              "stream" to ack.binding.stream, "segment" to ack.segment, "head" to ack.head)
+        if (sent) recordImageAck(ack)
     }
     private val pump = object : Runnable {
         override fun run() {
@@ -102,12 +104,13 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             }
         })
     }
-    private fun send(kind: String, vararg values: Pair<String, Any>) {
-        if (!active || !permitted()) return
+    private fun send(kind: String, vararg values: Pair<String, Any>): Boolean {
+        if (!active || !permitted()) return false
         val message = JSONObject().put("v", 2).put("type", kind).put("epoch", epoch).put("seq", sequence++)
         values.forEach { message.put(it.first, it.second) }
-        val current = socket ?: return
-        if (current.queueSize() > 64000 || !current.send(message.toString())) fail("backpressure")
+        val current = socket ?: return false
+        if (current.queueSize() > 64000 || !current.send(message.toString())) { fail("backpressure"); return false }
+        return true
     }
     private fun receive(text: String) {
         if (!permitted()) { close(); return }
@@ -127,13 +130,16 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 responseRevision = gate.revision
                 check(player.binding == null)
                 playerName = UUID.randomUUID().toString()
-                send("bind", "player" to checkNotNull(playerName))
+                if (images != null) send("bind", "player" to checkNotNull(playerName), "features" to org.json.JSONArray().put("images_v1"))
+                else send("bind", "player" to checkNotNull(playerName))
             }
             "bound" -> {
                 require(event.getString("player") == playerName)
+                if (event.has("revision") && event.getLong("revision") != gate.revision) return
                 ackIdentity = event.getJSONObject("identity"); ackSequence = 0
                 helpScope.bind(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision)
                 player.bind(Binding(epoch, checkNotNull(playerName), event.getInt("stream")))
+                images?.bind(ImageScope(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision))
             }
             "audio" -> {
                 val data = Base64.decode(event.getString("pcm"), Base64.NO_WRAP)
@@ -159,9 +165,26 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 else -> status("clarify") // Unknown recognition never resumes audio.
             }
             }
-            "revoke" -> { player.stop(); ackIdentity = null; hideImage() }
-            "reveal" -> if (player.binding != null && !player.suspended)
-                reveal(event.getString("effect"), event.getInt("topic"))
+            "revoke" -> { images?.clear(); player.stop(); ackIdentity = null; hideImage() }
+            "image_ready" -> {
+                val ready = imageReady(event) ?: return
+                if (event.getString("source") != "default" || (!event.isNull("fallback_reason") &&
+                    event.getString("fallback_reason") !in setOf("dynamic_unavailable", "unknown_asset", "asset_invalid"))) return
+                images?.ready(ready)
+            }
+            "hide" -> {
+                if (!imageScopeCurrent(event) || event.getString("reason") !in setOf("requested", "input_changed")) return
+                images?.clear(); hideImage()
+            }
+            "reveal" -> if (player.binding != null && !player.suspended) {
+                if (event.getString("effect").startsWith("image:")) {
+                    val ready = imageReady(event) ?: return
+                    if (event.getString("effect") != "image:" + ready.token) return
+                    val binding = player.binding ?: return
+                    if (event.getString("player") != binding.player || event.getInt("stream") != binding.stream) return
+                    images?.reveal(ImageReveal(ready, binding.player, binding.stream, event.getString("segment"), event.getLong("end")))
+                } else if (images == null) reveal(event.getString("effect"), event.getInt("topic"))
+            }
             "thinking_wait" -> status("thinking")
             "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status("listening") }
             "management" -> {
@@ -185,6 +208,21 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             else -> error("unknown event")
         }
     }
+    private fun recordImageAck(ack: PlaybackAck) {
+        if (ack.completed && !player.suspended && ack.binding == player.binding && responseRevision == gate.revision)
+            images?.acknowledged(ack.binding.player, ack.binding.stream, ack.segment, ack.head)
+    }
+    private fun imageScopeCurrent(event: JSONObject): Boolean =
+        event.getLong("revision") == gate.revision && helpScope.matches(event.getString("session"),
+            event.getLong("turn"), epoch, gate.revision)
+    private fun imageReady(event: JSONObject): ImageReady? {
+        if (!imageScopeCurrent(event)) return null
+        val id = event.getString("asset_id"); val sha = event.getString("sha256")
+        if (!id.matches(Regex("[a-z0-9-]{1,64}")) || !sha.matches(Regex("[a-f0-9]{64}"))) return null
+        if (event.getString("type") == "image_ready" && (event.getInt("width") != 512 || event.getInt("height") != 512)) return null
+        return ImageReady(ImageScope(event.getString("session"), event.getLong("turn"), epoch, gate.revision),
+            event.getInt("topic"), event.getString("token"), ImageAsset(id, sha, 512, 512))
+    }
     fun input(samples: ShortArray, count: Int, speech: Boolean = true, capturedAt: Long = SystemClock.elapsedRealtime()) {
         if (!permitted()) { samples.fill(0); return }
         val age = SystemClock.elapsedRealtime() - capturedAt
@@ -204,10 +242,11 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     fun quiet() { gate.quiet() }
     fun candidate() {
         if (player.binding != null && !player.suspended) {
-            player.suspendOutput(); send("suspend")
+            images?.clear(); player.suspendOutput(); send("suspend")
         }
     }
     fun interrupt(intent: String = "") {
+        images?.clear()
         val stopped = player.stop() // First: local mute, generation revoke, flush, stop/release.
         ackIdentity = null; playerName = null; outputBusy = false
         hideImage()
@@ -217,6 +256,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
     private fun fail(code: String) { close(); status(code); failed() }
     fun close() {
+        images?.clear()
         active = false; isAwake = false; outputBusy = false; helpScope.clear()
         player.stop(); ackIdentity = null; hideImage()
         handler.removeCallbacks(pump); handler.removeCallbacks(heartbeat)

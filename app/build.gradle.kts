@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
@@ -32,6 +34,32 @@ androidComponents {
         }
     }
 }
+
+val imageAssets = layout.buildDirectory.dir("generated/v2-images")
+val prepareV2Images by tasks.registering(Sync::class) {
+    from(rootProject.file("assets")) { include("v2-default/manifest.json", "v2-default/png/*.png") }
+    into(imageAssets)
+    doFirst {
+        val directory = rootProject.file("assets/v2-default")
+        val rows = JsonSlurper().parse(directory.resolve("manifest.json")) as List<*>
+        require(rows.size == 60)
+        val ids = mutableSetOf<String>()
+        for (row in rows) {
+            val item = row as Map<*, *>
+            val id = item["id"] as String
+            require(id.matches(Regex("[a-z0-9-]{1,64}")) && ids.add(id))
+            require(item["png"] == "png/$id.png" && item["width"] == 512 && item["height"] == 512)
+            val bytes = directory.resolve("png/$id.png").readBytes()
+            require(bytes.size in 24..1_048_576)
+            val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+            require(sha == item["png_sha256"]) { "Bundled image hash mismatch: $id" }
+            require(bytes.take(8) == listOf(137,80,78,71,13,10,26,10).map { it.toByte() })
+            val dimensions = ByteBuffer.wrap(bytes, 16, 8)
+            require(dimensions.int == 512 && dimensions.int == 512)
+        }
+    }
+}
+tasks.matching { it.name == "preV2DebugBuild" }.configureEach { dependsOn(prepareV2Images) }
 
 val wakeProbe = providers.gradleProperty("wakeProbe").map(String::toBoolean).orElse(false)
 val familyPrompt = providers.environmentVariable("LITTLE_BUDDY_FAMILY_PROMPT")
@@ -177,6 +205,7 @@ android {
             java.srcDir("src/debug/java")
             res.srcDir("src/debug/res")
             assets.srcDir("src/debug/assets")
+            assets.srcDir(imageAssets)
         }
         getByName("ciRelease") {
             java.srcDir("src/release/java")
