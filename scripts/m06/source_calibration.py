@@ -30,14 +30,14 @@ def transport_complete(row,nonce):
                   mode='MODE_UNSPECIFIED',drain_ms=300,packet_ms=20,initial_sdk_real_audio_enabled=False,private_null_only=False)
     return all(k in row and type(row[k]) is type(v) and row[k]==v for k,v in expected.items()) and not row.get('generator_failure')
 
-def run_arm(source,transport_validator=transport_complete):
+def run_arm(source,transport_validator=transport_complete,*,input_backend='grpc',receipt_prefix='mic-grpc-'):
     nonce=str(uuid.uuid4()); directory=Path('render')/('source'+str(source)); directory.mkdir(parents=True,exist_ok=True)
     env=dict(os.environ, M06_CALIBRATION_SOURCE=str(source), M06_CALIBRATION_NONCE=nonce,
-             M06_AUDIO_INPUT='grpc', BUDDY_SYNTHETIC_AVD_PROBE='1', ANDROID_SERIAL='emulator-5554')
+             M06_AUDIO_INPUT=input_backend, BUDDY_SYNTHETIC_AVD_PROBE='1', ANDROID_SERIAL='emulator-5554')
     with (directory/'microphone.txt').open('wb') as out, (directory/'stderr.txt').open('wb') as error:
         code=subprocess.run([sys.executable,'scripts/m06/mic_controller.py'],env=env,stdout=out,stderr=error,timeout=300).returncode
     row=dict(source=source,nonce=nonce,test_exit=code,gates_accepted=False,transport_complete=False)
-    transport_file=Path('render')/('mic-grpc-'+nonce+'.json')
+    transport_file=Path('render')/(receipt_prefix+nonce+'.json')
     if transport_file.is_file():
         receipt=json.loads(transport_file.read_text());row['transport_complete']=transport_validator(receipt,nonce)
         row['transport_stage']=receipt.get('stage');row['transport_rpc_code']=receipt.get('rpc_code')

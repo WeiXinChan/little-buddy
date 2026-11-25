@@ -49,7 +49,7 @@ def descendant(pid,root,uid):
 
 
 def safe_failure(error):
-    return dict(error_class=type(error).__name__,isolation_reason=getattr(error,'reason',None),source=[dict(file=Path(f.filename).name,line=f.lineno) for f in traceback.extract_tb(error.__traceback__) if Path(f.filename).name in ('sdk_input_gate.py','grpc_mic.py')][-6:])
+    return dict(error_class=type(error).__name__,isolation_reason=getattr(error,'reason',None),source=[dict(file=Path(f.filename).name,line=f.lineno) for f in traceback.extract_tb(error.__traceback__) if Path(f.filename).name in ('sdk_input_gate.py','grpc_mic.py','pa_only.py','pa_only_calibration.py')][-6:])
 
 
 def module_ids(modules,short_text):

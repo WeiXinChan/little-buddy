@@ -90,7 +90,7 @@ def preflight(directory):
     return result
 
 
-def active(directory, nonce, rpc_done):
+def active(directory, nonce, rpc_done, transport_backend='grpc'):
     row = dict(nonce=nonce, scope='metadata only; not native consumption proof',
                started_monotonic_ns=time.monotonic_ns())
     path = directory/('active-'+nonce+'.json')
@@ -99,7 +99,8 @@ def active(directory, nonce, rpc_done):
         row['observed_monotonic_ns'] = time.monotonic_ns()
         path.write_text(json.dumps(row, indent=2))
 
-    row['rpc_completion_observed']=rpc_done.wait(7)
+    row['transport_backend']=transport_backend
+    row['playback_completion_observed' if transport_backend=='pa-only' else 'rpc_completion_observed']=rpc_done.wait(7)
     row['alsa_after_rpc']=query(ALSA_COMMAND,kind='alsa',seconds=1)
     row['alsa_observed_monotonic_ns']=time.monotonic_ns()
     path.write_text(json.dumps(row,indent=2))

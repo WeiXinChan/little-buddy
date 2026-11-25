@@ -22,6 +22,9 @@ if os.environ.get('M06_AUDIO_INPUT')=='grpc':
  except Exception as e:
   Path('render/grpc-mic-init-failure.json').write_text(json.dumps(dict(stage='authenticated_loopback_setup',error=type(e).__name__)))
   raise RuntimeError('virtual mic setup '+type(e).__name__) from None
+if os.environ.get('M06_AUDIO_INPUT')=='pa-only':
+ from pa_only import PaOnlyMic
+ virtual_mic=PaOnlyMic()
 calibration=os.environ.get('M06_CALIBRATION_SOURCE');calibration_nonce=os.environ.get('M06_CALIBRATION_NONCE')
 extra=[]
 if calibration is not None:
@@ -42,7 +45,12 @@ try:
    if not re.fullmatch(r'/[A-Za-z0-9_./]+',private) or not private.endswith('/'+pkg+'/files'):raise ValueError('private root')
    if name=='enter' and calibration is not None:
     assert nonce==calibration_nonce and q['source_configuration']['nonce']==nonce and q['source_configuration']['requested']==int(calibration) and q['source_configuration']['actual']==int(calibration) and q['source_configuration']['session']==q['source_configuration']['native_session'] and q['source_configuration']['recording'] and q['source_configuration']['frames']>0
-    metadata_worker=threading.Thread(target=active,args=(Path('render/native-input'),nonce,rpc_done),name='owned-native-metadata');metadata_worker.start()
+    metadata_worker=threading.Thread(target=active,args=(Path('render/native-input'),nonce,rpc_done),kwargs=dict(transport_backend=os.environ.get('M06_AUDIO_INPUT','grpc')),name='owned-native-metadata');metadata_worker.start()
+    if os.environ.get('M06_AUDIO_INPUT')=='pa-only':
+     def stop_metadata():
+      rpc_done.set();metadata_worker.join(18)
+      if metadata_worker.is_alive():raise RuntimeError('owned metadata observer alive')
+     virtual_mic.before_restore=stop_metadata
    timing=FixtureTiming(q) if name=='enter' and virtual_mic and os.environ.get('BUDDY_SYNTHETIC_AVD_PROBE')=='1' else None
    if timing:timing.step('PWD_START')
    pwd=subprocess.check_output(['adb','shell','run-as',pkg,'pwd'],text=True,timeout=5).strip()

@@ -91,7 +91,8 @@ def packet_plan(raw,rate,packet,fmt,clock=time.monotonic,sleep=time.sleep,deadli
         yield result
 
 class GrpcMic:
-    def __init__(self,journal=None):
+    def __init__(self,journal=None,*,state_only_auth=False):
+        self.state_only_auth=state_only_auth
         self.init=journal or InitJournal()
         try:self._setup()
         except BaseException as error:
@@ -141,7 +142,9 @@ class GrpcMic:
         self.stub=services.EmulatorControllerStub(self.channel);self.auth=(('authorization','Bearer '+token),)
         self.init.step('ANONYMOUS_REQUEST')
         code='OK'
-        try:self.stub.injectAudio(iter(()),timeout=3)
+        try:
+            if self.state_only_auth:self.stub.getMicrophoneState(Empty(),timeout=3)
+            else:self.stub.injectAudio(iter(()),timeout=3)
         except grpc.RpcError as error:code=error.code().name
         self.init.step('ANONYMOUS_CHECK',rpc_code=code)
         assert code=='UNAUTHENTICATED'
