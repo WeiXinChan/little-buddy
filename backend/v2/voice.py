@@ -47,7 +47,7 @@ class Operation:
 
     def valid(self):
         p, s = self.peer, self.session
-        return (not self.cancelled and not p.closed and not p.quarantined
+        return (not self.cancelled and not p.closed and not p.quarantined and not s.management_paused
                 and p.session is s and s.session == self.session_id
                 and p.epoch == self.epoch and s.connection == self.connection
                 and s.turn == self.turn
@@ -76,7 +76,9 @@ def decode(raw):
     schemas = {'heartbeat': set(), 'stop': {'intent'}, 'suspend': set(), 'resume_noise': set(),
                'input': {'pcm'}, 'seal': {'revision'}, 'probe': {'revision'}, 'advance': {'revision'},
                'wake': set(), 'wake_solo': set(), 'thinking_prompt': {'revision'}, 'bind': {'player'},
-               'ack': {'identity', 'player', 'stream', 'segment', 'head'}, 'end': set()}
+               'ack': {'identity', 'player', 'stream', 'segment', 'head'}, 'end': set(), 'scope':set(),
+               'management_pause':{'session','turn','revision'},
+               'management_resume':{'session','turn','revision','pause'}}
     if (not isinstance(event, dict) or event.get('v') != 2 or type(event.get('v')) is not int
             or event.get('type') not in schemas
             or (set(event) - ({'speech', 'age_ms'} if event['type'] == 'input' else {'age_ms'} if event['type'] == 'wake_solo' else {'features'} if event['type'] == 'bind' else set())) != schemas[event['type']] | {'v', 'type', 'epoch', 'seq'}
@@ -113,6 +115,10 @@ class VoicePeer:
         self.recognition_scopes = {}
         self.generation_scopes = {}
         self.retired_tasks = set()
+        self.management_receipt=None
+        self.management_ready=False
+        self.management_scope=None
+        self.waiting_wake=False
 
     @asynccontextmanager
     async def resource(self, manager):
@@ -123,14 +129,25 @@ class VoicePeer:
         try:
             yield value
         finally:
+            close_started=asyncio.get_running_loop().time()
             exit_task = asyncio.create_task(manager.__aexit__(*sys.exc_info()))
             self.track_retired(exit_task)
             try:
                 done, _ = await asyncio.wait({exit_task}, timeout=.5)
             except asyncio.CancelledError:
-                # The caller stopping must not orphan an unconfirmed close.
-                self.quarantined = True
-                exit_task.cancel()
+                # Cancellation can race a successful close. Confirm the same
+                # close task within the existing bound before classifying the
+                # connection unhealthy; never turn cancellation into reuse of
+                # an unconfirmed resource.
+                try:
+                    remaining=max(0.,.5-(asyncio.get_running_loop().time()-close_started))
+                    done,_=await asyncio.wait({exit_task},timeout=remaining)
+                    confirmed=bool(done) and not exit_task.cancelled() and exit_task.exception() is None
+                except asyncio.CancelledError:
+                    confirmed=False
+                if not confirmed:
+                    self.quarantined=True
+                    exit_task.cancel()
                 raise
             if not done:
                 self.quarantined = True
@@ -199,7 +216,7 @@ class VoicePeer:
             task.exception()
 
     async def send(self, kind, **fields):
-        if kind in {'bound', 'open'}:
+        if kind in {'bound', 'open','scope','management_state'}:
             # Establish scope on normal authenticated control frames, never learn it from a fault.
             fields.setdefault('session', self.session.session)
             fields.setdefault('turn', self.session.turn)
@@ -290,19 +307,78 @@ class VoicePeer:
 
     async def handle(self, raw):
         event = decode(raw)
+        if self.closed:return
         if self.quarantined and event['type'] != 'end':
             raise WireError('quarantined')
         kind, epoch, seq = event['type'], event['epoch'], event['seq']
         if epoch < self.epoch:
             return  # Revoked audio, ASR and playback callbacks have no effects.
+        if kind in {'management_pause','management_resume'}:
+            if (not isinstance(event['session'],str) or type(event['turn']) is not int or
+                type(event['revision']) is not int):raise WireError('management scope')
+            if (event['session']!=self.session.session or event['turn']!=self.session.turn or
+                event['revision']!=self.revision+1):return
+            if not self.session._live():
+                self.management_receipt=None;self.management_ready=False;self.management_scope=None
+                await self.send('management_state',management_v=1,state='expired',pause=None)
+                return
+            if kind=='management_pause' and self.session.management_paused:return
+            if kind=='management_resume' and (not self.session.management_paused or not self.management_ready or
+                not isinstance(event['pause'],str) or event['pause']!=self.management_receipt or
+                self.management_scope!=(self.session,self.session.connection,self.session.session,self.session.turn,
+                    self.session.output,self.epoch,self.revision)):return
+            if epoch!=self.epoch+1 or seq!=0:raise WireError('management epoch')
+        # Management/wake-only barriers run before media decoding. Same-epoch
+        # discarded frames still consume their strict sequence number.
+        # Queued old microphone data cannot be retained or dispatched upstream.
+        allowed={'heartbeat','scope','end','management_pause','management_resume'}
+        blocked=(self.session.management_paused and kind not in allowed or
+                 self.waiting_wake and kind not in allowed|{'wake','wake_solo'})
+        if blocked and epoch>self.epoch:return
         if epoch > self.epoch:
-            if epoch != self.epoch + 1 or kind != 'stop' or seq != 0:
+            if epoch != self.epoch + 1 or kind not in {'stop','management_pause','management_resume'} or seq != 0:
                 raise WireError('epoch')
             self.epoch, self.sequence = epoch, -1
         if seq != self.sequence + 1:
             raise WireError('sequence')
         self.sequence = seq
-        if kind == 'heartbeat':
+        if blocked:return
+        if kind=='scope':
+            live=self.session._live()
+            state='expired' if not live else 'paused' if self.session.management_paused else 'waiting_wake' if self.waiting_wake else 'active'
+            await self.send('scope',management_v=1,state=state)
+        elif kind=='management_pause':
+            self.revision=event['revision']
+            self.session.pause_management()
+            self.management_receipt=uuid4().hex;self.management_ready=False
+            self.management_scope=(self.session,self.session.connection,self.session.session,self.session.turn,
+                                   self.session.output,self.epoch,self.revision)
+            self.waiting_wake=False;self.suspended=True
+            self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+            self.awaiting_input=False;self.prompted_revision=None
+            self.input_budget=ResponseBudget(self.session.clock)
+            self.ack_identity=None
+            self.invalidate_visual()
+            await self.cancel_recognition()
+            await self.cancel_generation()
+            await self.commands()
+            if self.quarantined:raise WireError('management resource unavailable')
+            if not self.session._live():
+                self.management_receipt=None
+                await self.send('management_state',management_v=1,state='expired',pause=None)
+                return
+            self.management_ready=True
+            await self.send('management_state',management_v=1,state='paused',pause=self.management_receipt)
+        elif kind=='management_resume':
+            self.management_receipt=None;self.management_ready=False;self.management_scope=None
+            self.revision=event['revision']
+            if not self.session.resume_management():return
+            self.waiting_wake=True;self.suspended=False
+            self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+            self.awaiting_input=False;self.ack_identity=None
+            self.input_budget=ResponseBudget(self.session.clock)
+            await self.send('management_state',management_v=1,state='waiting_wake',pause=None)
+        elif kind == 'heartbeat':
             self.session.heartbeat()
         elif kind == 'stop':
             self.session.interrupt()
@@ -324,6 +400,7 @@ class VoicePeer:
                 await self.send('open', revision=self.revision)
                 self.generation = asyncio.create_task(self.respond(text, self.epoch))
         elif kind == 'end':
+            self.management_receipt=None;self.management_ready=False;self.management_scope=None;self.waiting_wake=False
             self.prepared = None
             self.session.clear()
             self.capture.clear()
@@ -351,8 +428,10 @@ class VoicePeer:
                 self.awaiting_input = True
             self.capture.extend(data)
         elif kind == 'wake':
+            self.waiting_wake=False
             self.session.valid_interaction()
         elif kind == 'wake_solo':
+            self.waiting_wake=False
             if (not self.awaiting_input and self.prepared is None and not self.capture
                     and (self.generation is None or self.generation.done())):
                 self.input_budget = ResponseBudget(self.session.clock)
@@ -533,6 +612,7 @@ class VoicePeer:
             # adaptation belongs to M05; no unrestricted model-proposed facts enter it.
             await self.compact_memory(epoch, operation)
             state = None
+            ending=False
             image_effect=None; answer_public=False
             stage = 'input_policy'
             if getattr(self.policy, 'needs_local_help', lambda _: False)(text) is True:
@@ -546,6 +626,7 @@ class VoicePeer:
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 action = plan['action']
+                ending=action=='end'
                 if action == 'handoff' and any((self.session.recent, self.session.facts,
                                                          self.session.public, self.session.private,
                                                          self.session.game, self.session.secrets)):
@@ -582,11 +663,11 @@ class VoicePeer:
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 stage = 'facts'
-                facts = await self.owned(operation, self.providers.facts, text)
+                facts = [] if ending else await self.owned(operation, self.providers.facts, text)
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 stage = 'fact_commit'
-                accepted=self.session.record_input(text, facts)
+                accepted=True if ending else self.session.record_input(text, facts)
                 if accepted is False:
                     # A real storage bound is a normal conversational branch,
                     # not a provider failure or a license to invent recollection.
@@ -594,6 +675,7 @@ class VoicePeer:
                     plan.update(mode=self.session.game.get('mode','chat'),
                                 rules=self.session.game.get('rules',''),roles=self.session.game.get('roles',[]),
                                 secrets=dict(self.session.secrets))
+                if ending:plan.update(tools=[],anchors={})
                 stage = 'safety'
                 await self.review(operation, ''.join(plan['sentences']))
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
@@ -665,6 +747,15 @@ class VoicePeer:
                     raise WireError('revoked')
                 await self.owned(operation, self.changed.wait)
             operation.ensure()
+            if ending:
+                ended=dict(session=self.session.session,turn=self.session.turn,revision=self.revision)
+                self.session.clear()
+                self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+                self.awaiting_input=False
+                self.management_receipt=None;self.management_scope=None;self.management_ready=False
+                await self.commands()
+                await self.send('session_end',reason='conversation_ended',**ended)
+                return
             self.session.deadline = 0
             await self.send('reply_end', head=self.session.head, public_facts=len(self.session.public))
         except StaleOperation:
@@ -765,6 +856,7 @@ class VoicePeer:
                 await self.handle(receiver.result())
         finally:
             self.closed = True
+            self.management_receipt=None;self.management_scope=None;self.management_ready=False;self.waiting_wake=False
             self.invalidate_visual()
             for task in (monitor, receiver, self.recognition):
                 if task is not None:
