@@ -1,0 +1,25 @@
+{
+  "label": "fixed_head",
+  "exit": 0,
+  "metadata": {
+    "euid": 64733,
+    "egid": 64733,
+    "parent_uid": 0,
+    "parent_gid": 0,
+    "parent_mode": "0o550",
+    "file_uid": 0,
+    "file_gid": 0,
+    "file_mode": "0o440",
+    "nlink": 1,
+    "parent_symlink": false,
+    "file_symlink": false,
+    "mountpoint": true,
+    "readonly": true,
+    "result": "accepted",
+    "credential_content_printed": false
+  },
+  "transient_unit": "wali-credential-23c9baa96f724988b589707ab3d7cc44.service",
+  "systemd_output": "Running as unit: wali-credential-23c9baa96f724988b589707ab3d7cc44.service\nFinished with result: success\nMain processes terminated with: code=exited/status=0\nService runtime: 64ms\nCPU time consumed: 62ms\nMemory peak: 1.1M\nMemory swap peak: 0B",
+  "production_unit_touched": false,
+  "production_inputs_read": false
+}
