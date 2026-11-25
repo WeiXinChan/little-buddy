@@ -272,6 +272,16 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
     }
     @Synchronized fun sweep() {
         val time = now()
+        // R87-01: system expiry owns every active draft copy, independently of parent grants.
+        draft?.let {
+            if (it.preview.from?.let { first -> time >= first + WEEK } == true) {
+                it.logs.fill(0)
+                it.logs = byteArrayOf()
+                it.preview = LogPreview(null, null, 0, 0)
+                changed()
+            }
+        }
+        // End R87-01: clearing the entire selected range at its earliest deadline is conservative.
         events.removeAll { time >= it.at + WEEK }
         materials.values.forEach {
             if (time >= it.logsUntil) { it.logs.fill(0); it.logs = byteArrayOf() }

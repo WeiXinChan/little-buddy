@@ -29,6 +29,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--negative-controls', action='store_true')
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--source-ref', help='Read production sources from this immutable git revision')
+    parser.add_argument('--case', help='Run exactly ClassName#method (preserves QA original assertion)')
+    parser.add_argument('--android-jar', type=Path, help='Also compile Android factory using this existing jar')
     args = parser.parse_args()
     compiler = [jar('org.jetbrains.kotlin', name, version) for name, version in [
         ('kotlin-compiler-embeddable', '2.2.21'), ('kotlin-stdlib', '2.2.21'),
@@ -39,8 +42,12 @@ def main():
     runtime = [jar('org.jetbrains.kotlin', 'kotlin-stdlib', '2.2.21'),
                jar('junit', 'junit', '4.13.2'), jar('org.hamcrest', 'hamcrest-core', '1.3')]
     source_dir = ROOT / 'app/src/main/java/com/littlebuddy/v2/feedback'
-    sources = [p for p in sorted(source_dir.glob('*.kt')) if p.name != 'AndroidFeedbackVault.kt']
-    test = ROOT / 'app/src/test/java/com/littlebuddy/v2/feedback/FeedbackCoreTest.kt'
+    sources = [p for p in sorted(source_dir.glob('*.kt')) if args.android_jar or p.name != 'AndroidFeedbackVault.kt']
+    tests = sorted((ROOT / 'app/src/test/java/com/littlebuddy/v2/feedback').glob('*.kt'))
+    source_bytes = {p: subprocess.check_output(['git', 'show', f'{args.source_ref}:{p.relative_to(ROOT)}'], cwd=ROOT)
+                    if args.source_ref else p.read_bytes() for p in sources}
+    if args.android_jar:
+        runtime.append(str(args.android_jar.resolve()))
     jobs = [('baseline', None, None)]
     if args.negative_controls:
         jobs = [
@@ -49,9 +56,11 @@ def main():
             ('early-grant-submit', 'early-grant', 'staleGrantAfterBlockedDiskCannotAdmit'),
             ('early-grant-clear', 'early-grant', 'blockedClearRevocationPreservesDurableSourceLogs'),
             ('incomplete-deletion', 'delete', 'deleteFailureAndPartialReceiptNeverClaimAllCopiesDeleted'),
+            ('expired-draft-copy', 'draft-expiry', 'Review39Probe#expiredSelectedDraftCopyMustBeReleasedBySweep'),
         ]
-    report = {'source_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-                               for p in sources + [test]}, 'results': [],
+    report = {'source_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(source_bytes.get(p, p.read_bytes())).hexdigest()
+                               for p in sources + tests}, 'results': [], 'source_ref': args.source_ref,
+              'android_jar_sha256': hashlib.sha256(args.android_jar.read_bytes()).hexdigest() if args.android_jar else None,
               'scope': 'actual Kotlin core, synthetic clock/auth/provider, real files; no Android Keystore/device/platform'}
     build = ROOT / 'build/m09-core'; build.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='run-', dir=build) as temporary:
@@ -59,10 +68,9 @@ def main():
         runner = directory / 'Runner.kt'
         runner.write_text('''import org.junit.runner.JUnitCore
 import org.junit.runner.Request
-import com.littlebuddy.v2.feedback.FeedbackCoreTest
 fun main(args: Array<String>) {
-    val request = if (args.isEmpty()) Request.aClass(FeedbackCoreTest::class.java)
-        else Request.method(FeedbackCoreTest::class.java, args[0])
+    val request = if (args[0] == "--method") Request.method(Class.forName(args[1]), args[2])
+        else Request.classes(*args.map { Class.forName(it) }.toTypedArray())
     val result = JUnitCore().run(request)
     for (failure in result.failures) println(failure.toString() + "\\n" + failure.trace)
     println("RESULT ${result.runCount} ${result.failureCount} ${result.ignoreCount}")
@@ -73,7 +81,7 @@ fun main(args: Array<String>) {
             job = directory / name; job.mkdir()
             copied = []
             for source in sources:
-                value = source.read_text()
+                value = source_bytes[source].decode()
                 if mutant == 'deadline' and source.name == 'Contracts.kt':
                     value = value.replace('minOf(submitted?.plus(WEEK)', 'maxOf(submitted?.plus(WEEK)')
                 if mutant == 'ledger' and source.name == 'Vault.kt':
@@ -88,16 +96,26 @@ fun main(args: Array<String>) {
                 if mutant == 'delete' and source.name == 'FeedbackCore.kt':
                     value = value.replace('if (receipt.allCopiesDeleted) FeedbackState.DELETED else FeedbackState.DELETING',
                                           'FeedbackState.DELETED')
+                if mutant == 'draft-expiry' and source.name == 'FeedbackCore.kt':
+                    start = value.index('        // R87-01:')
+                    end = value.index('        // End R87-01', start)
+                    value = value[:start] + value[end:]
                 destination = job / source.name; destination.write_text(value); copied.append(str(destination))
             output = job / 'classes'
             code, _ = run(['java', '-Xmx768m', '-cp', os.pathsep.join(compiler),
                            'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler', '-no-stdlib', '-no-reflect',
                            '-jvm-target', '17', '-classpath', os.pathsep.join(runtime), '-d', str(output)]
-                          + copied + [str(test), str(runner)])
+                          + copied + [str(test) for test in tests] + [str(runner)])
             if code:
                 raise RuntimeError(f'{name}: compilation failed; NOT a valid negative-control detection')
+            selected = args.case or method
+            if selected:
+                class_name, method_name = selected.split('#') if '#' in selected else ('FeedbackCoreTest', selected)
+                cases = ['--method', 'com.littlebuddy.v2.feedback.' + class_name, method_name]
+            else:
+                cases = ['com.littlebuddy.v2.feedback.' + test.stem for test in tests]
             code, stdout = run(['java', '-Xmx256m', '-cp', os.pathsep.join([str(output)] + runtime),
-                                'RunnerKt'] + ([method] if method else []))
+                                'RunnerKt'] + cases)
             result_line = next(line for line in stdout.splitlines() if line.startswith('RESULT '))
             count, failures, skipped = map(int, result_line.split()[1:])
             success = (code != 0 and failures > 0 and count == 1) if mutant else code == 0 and failures == 0
