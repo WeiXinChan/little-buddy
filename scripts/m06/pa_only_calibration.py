@@ -22,7 +22,7 @@ def main():
             from hda_guard import runtime_gate
             from sdk_input_gate import PrivatePulse
             gate=runtime_gate(metadata,Path(os.environ['ANDROID_HOME']),NativeReadOnly().prepare,PrivatePulse())
-            if gate['status']!='AVAILABLE':
+            if gate['status']!='AVAILABLE' or gate.get('fixture_authorization')!='HOST_AND_GUEST_HDA':
                 path.write_text(json.dumps(dict(status='HDA_HARD_STOP',source6='NOT_RUN',fixture='NOT_RUN')));return 1
         else:NativeReadOnly().prepare(metadata)
     result=run_arm(7,pa_transport_complete,input_backend='pa-only',receipt_prefix='mic-pa-')

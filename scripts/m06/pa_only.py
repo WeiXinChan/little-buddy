@@ -5,7 +5,7 @@ from pathlib import Path
 from sdk_input_gate import PrivatePulse,safe_failure
 
 class PaFailure(RuntimeError):
-    CODES={'FIXTURE_HASH','FIXTURE_FORMAT','FIXTURE_BOUND','MONITOR_INCOMPLETE','MONITOR_CORRELATION','MONITOR_EOF','MONITOR_WORKER_ALIVE','MONITOR_ERROR_OR_BOUND','MONITOR_PROCESS_EXIT','STREAM_NOT_BOUND','STREAM_ROUTE_OR_FORMAT','NONCE','NONCE_REPLAY','QEMU_INPUT_MISSING','QEMU_INPUT_CORKED','SDK_TRUE_NOT_OBSERVED','SDK_TRUE_LOST','PAPLAY_EXIT','SDK_FALSE_NOT_OBSERVED'}
+    CODES={'FIXTURE_HASH','FIXTURE_FORMAT','FIXTURE_BOUND','MONITOR_INCOMPLETE','MONITOR_CORRELATION','MONITOR_EOF','MONITOR_WORKER_ALIVE','MONITOR_ERROR_OR_BOUND','MONITOR_PROCESS_EXIT','STREAM_NOT_BOUND','STREAM_ROUTE_OR_FORMAT','METADATA_ONLY_PROOF','NONCE','NONCE_REPLAY','QEMU_INPUT_MISSING','QEMU_INPUT_CORKED','SDK_TRUE_NOT_OBSERVED','SDK_TRUE_LOST','PAPLAY_EXIT','SDK_FALSE_NOT_OBSERVED'}
     def __init__(self,code):
         self.reason=code if code in self.CODES else 'UNKNOWN';super().__init__(self.reason)
 
@@ -126,6 +126,7 @@ class PaOnlyMic:
             rate,raw,payload=fixture(path,metadata,self.specs)
             save('ISOLATION',rate=rate,channels=1,sample_format='s16le',source_samples=len(raw)//2,prefix_ms=600,prefix_samples=rate*600//1000,tail_ms=300,payload_samples=len(payload)//2,payload_sha256=hashlib.sha256(payload).hexdigest())
             row['isolation_before']=self.proof.verify()
+            if row['isolation_before'].get('proof_scope')=='BASE_METADATA_ONLY':raise PaFailure('METADATA_ONLY_PROOF')
             if not row['isolation_before']['source_output_present']:raise PaFailure('QEMU_INPUT_MISSING')
             read_point('SDK_BEFORE_ENABLE')
             save('SDK_TRUE');self.set(True)

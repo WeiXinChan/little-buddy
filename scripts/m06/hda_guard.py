@@ -41,20 +41,40 @@ def sdk_support(root):
  return dict(status='AVAILABLE' if supported else 'STOP',fixture='NOT_RUN',files=records,
              scope='actual installed file declarations only; actual soundhw and guest HDA are separate mandatory gates')
 
-def require_qemu_hda(args):
- values=[];virtio_device=False
+def audio_hda_projection(args):
+ values=[];off=0;on=0;unknown=0;virtio=False
  args=iter(args)
  for value in args:
+  feature=None
   if value=='-soundhw':values.append(next(args,''))
   elif value.startswith('-soundhw='):values.append(value.split('=',1)[1])
-  elif value=='-device':
-   device=next(args,'')
-   if device.split(',',1)[0].startswith('virtio-snd'):virtio_device=True
-  elif value.startswith('-device='):
-   if value.split('=',1)[1].split(',',1)[0].startswith('virtio-snd'):virtio_device=True
- if len(values)!=1:raise HdaStop('SOUNDHW_MISSING_OR_DUPLICATE')
- if values[0]!='hda' or virtio_device:raise HdaStop('SOUNDHW_NOT_EXCLUSIVE_HDA')
- return 'hda'
+  elif value=='-feature':feature=next(args,'')
+  elif value.startswith('-feature='):feature=value.split('=',1)[1]
+  elif value=='-device':virtio=virtio or next(args,'').split(',',1)[0].startswith('virtio-snd')
+  elif value.startswith('-device='):virtio=virtio or value.split('=',1)[1].split(',',1)[0].startswith('virtio-snd')
+  if feature is not None:
+   for component in feature.split(','):
+    component=component.strip()
+    if component=='-VirtioSndCard':off+=1
+    elif component=='VirtioSndCard':on+=1
+    elif component.lstrip('+-').split('=',1)[0]=='VirtioSndCard':unknown+=1
+ enum='MISSING' if not values else 'MULTIPLE' if len(values)>1 else 'HDA' if values[0]=='hda' else 'VIRTIO' if values[0].startswith('virtio-snd') else 'UNKNOWN'
+ return dict(soundhw_count=len(values),soundhw=enum,force_off_count=off,force_on_count=on,feature_unknown_count=unknown,virtio_device_conflict=virtio)
+
+def host_hda_evidence(projection):
+ count=projection['soundhw_count'];off=projection['force_off_count'];on=projection['force_on_count']
+ if count>1:raise HdaStop('SOUNDHW_DUPLICATE')
+ if projection['virtio_device_conflict']:raise HdaStop('VIRTIO_DEVICE_CONFLICT')
+ if on or off>1 or projection['feature_unknown_count']:raise HdaStop('FRONTEND_FEATURE_CONFLICT')
+ if count==1:
+  if projection['soundhw']!='HDA':raise HdaStop('SOUNDHW_NOT_HDA')
+  return 'ACTUAL_SOUNDHW_HDA'
+ if count==0 and off==1:return 'FRONTEND_FORCE_OFF'
+ raise HdaStop('HOST_HDA_EVIDENCE_MISSING')
+
+def require_qemu_hda(args):
+ projection=audio_hda_projection(args)
+ return dict(evidence=host_hda_evidence(projection),projection=projection)
 
 def guest_hda(prepared):
  if prepared.get('status')!='AVAILABLE' or prepared.get('root_uid')!=0:raise HdaStop('ROOT_OR_NATIVE_IDENTITY_UNAVAILABLE')
@@ -76,11 +96,22 @@ def runtime_gate(metadata,root,prepare,proof,directory=Path('render')):
  directory.mkdir(parents=True,exist_ok=True);row=sdk_support(root)
  try:
   if row['status']!='AVAILABLE':raise HdaStop('SDK_FEATURE_SUPPORT_UNAVAILABLE')
-  owned=proof.verify()
-  audio=owned.get('audio',{})
-  if not audio or any(r.get('soundhw')!='hda' for r in audio.values()):raise HdaStop('OWNED_QEMU_HDA_UNPROVEN')
-  native=prepare(metadata)  # existing single-root/id0 path, never an additional root
-  row.update(host_soundhw='hda',guest=guest_hda(native),status='AVAILABLE',fixture='READY_FOR_ORIGINAL_GATES')
+  from sdk_input_gate import MetadataPulseView
+  base=proof.verify_metadata_only()
+  if base.get('proof_scope')!='BASE_METADATA_ONLY':raise HdaStop('BASE_ISOLATION_UNPROVEN')
+  row['base_proof_scope']='BASE_METADATA_ONLY';row['base_audio_projection']={pid:r.get('hda_projection') for pid,r in base.get('audio',{}).items()}
+  native=prepare(metadata,metadata_proof=MetadataPulseView(proof))
+  row['native_metadata_status']=native.get('status','UNAVAILABLE');row['native_metadata_reference']='native-input/privileged-prepare.json'
+  host=[];host_error=None;guest_error=None
+  try:
+   if not row['base_audio_projection']:raise HdaStop('HOST_HDA_EVIDENCE_MISSING')
+   for projection in row['base_audio_projection'].values():host.append(host_hda_evidence(projection))
+  except (HdaStop,KeyError,TypeError) as e:host_error=e.reason if isinstance(e,HdaStop) else 'HOST_PROJECTION_SCHEMA'
+  try:row['guest']=guest_hda(native)
+  except HdaStop as e:guest_error=e.reason
+  row.update(host_evidence=host,host_reason=host_error,guest_reason=guest_error)
+  if host_error or guest_error:raise HdaStop(host_error or guest_error)
+  row.update(status='AVAILABLE',fixture='READY_FOR_ORIGINAL_GATES',fixture_authorization='HOST_AND_GUEST_HDA')
  except Exception as e:
   row.update(status='STOP',fixture='NOT_RUN',reason=e.reason if isinstance(e,HdaStop) else 'HDA_IDENTITY_UNAVAILABLE',error_class=type(e).__name__)
  (directory/'hda-runtime-gate.json').write_text(json.dumps(row,indent=2))

@@ -130,12 +130,13 @@ class NativeReadOnly:
   except Unavailable as e:result['build_id_status']='UNAVAILABLE';result['build_id_reason']=e.reason
   result['ended_monotonic_ns']=time.monotonic_ns()
   return result
- def prepare(self,metadata):
+ def prepare(self,metadata,*,metadata_proof=None):
   if self.attempted:return unavailable('ROOT_ALREADY_ATTEMPTED')
   self.attempted=True;row=dict(scope='owned synthetic AVD read-only native metadata',root_attempts=0,started_monotonic_ns=time.monotonic_ns())
   try:
    if os.environ.get('M06_NATIVE_READONLY')!='1' or not metadata.get('identity_ok') or metadata.get('known_stub') or metadata['properties']['ro.build.fingerprint'].get('value')!=FINGERPRINT:raise Unavailable('IDENTITY_NOT_ALLOWED')
-   (self.proof or PrivatePulse()).verify()
+   base=(metadata_proof or self.proof or PrivatePulse()).verify()
+   row['private_proof_scope']=base.get('proof_scope','UNSPECIFIED_TEST_PROOF')
    row['root_attempts']=1
    raw,info=self.run(ADB+['root'],limit=4096,seconds=8)
    if not complete(info):raise Unavailable('ROOT_UNAVAILABLE')

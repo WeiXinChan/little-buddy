@@ -135,7 +135,11 @@ class PrivatePulse:
         self.schema=summary
         return result
 
-    def verify(self):
+    def verify(self):return self._verify(False)
+
+    def verify_metadata_only(self):return self._verify(True)
+
+    def _verify(self,metadata_only):
         if not owner(self.pulse,self.uid) or not owner(self.root,self.uid): raise IsolationError('OWNER_CHANGED')
         if Path(f'/proc/{self.pulse}/exe').resolve().name!='pulseaudio': raise IsolationError('PULSE_EXECUTABLE')
         if Path(f'/proc/{self.root}/exe').resolve().name not in ('emulator','qemu-system-x86_64'):raise IsolationError('QEMU_EXECUTABLE')
@@ -200,14 +204,22 @@ class PrivatePulse:
                         safe[key]=v
                     flags[a]=safe  # Only whitelisted typed audio options.
                 elif a in ('-no-audio','-noaudio'): raise IsolationError('AUDIO_DISABLED')
-            soundhw=None
-            if self.env.get('M06_REQUIRE_HDA')=='1':
-                from hda_guard import require_qemu_hda
-                soundhw=require_qemu_hda(nul_fields(Path(f'/proc/{pid}/cmdline')))
+            projection=None;evidence=None
+            if metadata_only or self.env.get('M06_REQUIRE_HDA')=='1':
+                from hda_guard import audio_hda_projection,host_hda_evidence
+                projection=audio_hda_projection(nul_fields(Path(f'/proc/{pid}/cmdline')))
+                if not metadata_only:evidence=host_hda_evidence(projection)
             audio[str(pid)]=dict(environment=fields,audio_backend_arguments=flags)
-            if soundhw is not None:audio[str(pid)]['soundhw']=soundhw
-        row.update(private_pulse_n=True,private_unix=True,audio=audio)
+            if projection is not None:audio[str(pid)]['hda_projection']=projection
+            if evidence is not None:audio[str(pid)]['host_hda_evidence']=evidence
+        row.update(private_pulse_n=True,private_unix=True,audio=audio,proof_scope='BASE_METADATA_ONLY' if metadata_only else 'FULL_AUDIO_ISOLATION')
         return row
+
+
+class MetadataPulseView:
+    """Read-only native observation only; explicitly rejected by PA fixture consumer."""
+    def __init__(self,pulse):self.pulse=pulse
+    def verify(self):return self.pulse.verify_metadata_only()
 
 
 class InputGateObserver:

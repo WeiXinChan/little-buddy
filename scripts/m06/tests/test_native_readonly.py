@@ -115,6 +115,11 @@ class NativeReadOnlyTests(unittest.TestCase):
    negative=NativeReadOnly(root,fake);self.assertEqual(negative.prepare(META)['root_attempts'],0);self.assertFalse(fake.calls);verified.assert_not_called()
    os.environ['ANDROID_SERIAL']=serial
    self.assertEqual(probe.prepare(META)['root_attempts'],1);verified.assert_called_once()
+ def test_explicit_base_view_can_collect_native_but_does_not_grant_fixture(self):
+  from sdk_input_gate import MetadataPulseView
+  probe,fake=self.setup_probe();probe.proof=types.SimpleNamespace(verify=lambda:(_ for _ in ()).throw(AssertionError('strict host representation must not block metadata')))
+  pulse=types.SimpleNamespace(verify_metadata_only=lambda:dict(proof_scope='BASE_METADATA_ONLY'))
+  row=probe.prepare(META,metadata_proof=MetadataPulseView(pulse));self.assertEqual(row['status'],'AVAILABLE');self.assertEqual(row['private_proof_scope'],'BASE_METADATA_ONLY');self.assertNotIn('fixture_authorization',row);self.assertEqual(sum(c[0][-1]=='root' for c in fake.calls),1)
  def test_resume_and_during_full_path_never_root_again_and_reject_stale_pid(self):
   probe,fake=self.setup_probe();probe.prepare(META);resumed=NativeReadOnly(probe.directory,fake)
   resumed.resume();self.assertEqual(resumed.snapshot('during')['status'],'AVAILABLE')

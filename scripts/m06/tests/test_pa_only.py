@@ -46,6 +46,11 @@ class PaOnlyTests(unittest.TestCase):
    case=self.setup_case()
    with self.assertRaises(RuntimeError):self.run_case(case,**{stage:RuntimeError('PRIVATE_SENTINEL')})
    self.assertEqual(case[4][-1],'false');self.assertNotIn('PRIVATE_SENTINEL',next(case[1].parent.glob('mic-pa-*')).read_text())
+ def test_metadata_only_proof_cannot_enable_or_play(self):
+  case=self.setup_case();case[0].proof.verify=lambda:dict(proof_scope='BASE_METADATA_ONLY',source_output_present=True)
+  with self.assertRaises(PaFailure) as error,patch('pa_only.subprocess.Popen') as play:
+   case[0].play(case[1],case[2])
+  self.assertEqual(error.exception.reason,'METADATA_ONLY_PROOF');play.assert_not_called();self.assertNotIn('true',case[4])
  def test_bad_isolation_never_enables_or_plays(self):
   case=self.setup_case();case[0].proof.verify=lambda:(_ for _ in ()).throw(PaFailure('QEMU_INPUT_MISSING'))
   with self.assertRaises(PaFailure),patch('pa_only.subprocess.Popen') as play:
