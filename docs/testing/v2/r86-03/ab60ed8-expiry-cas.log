@@ -1,0 +1,36 @@
+app/src/test/java/com/littlebuddy/v2/parent/RevocationBoundaryTest.kt:23:74: warning: the corresponding parameter in the supertype 'OwnerProof' is named 'challenge'. This may cause problems when calling this function with named arguments.
+  val d=ParentDomain(s,{100L},{},object:OwnerProof {override fun consume(c:OwnerChallenge)=true},"qa-only")
+                                                                         ^
+/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-2bc89786daec/workdir/qa86-final/ExpiryCasTest.kt:24:22: warning: the corresponding parameter in the supertype 'ParentStore' is named 'record'. This may cause problems when calling this function with named arguments.
+  override fun write(r:ParentRecord,a:()->Boolean) {check(a());bytes=ParentCodec.encode(r)}
+                     ^
+/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-2bc89786daec/workdir/qa86-final/ExpiryCasTest.kt:24:37: warning: the corresponding parameter in the supertype 'ParentStore' is named 'authorized'. This may cause problems when calling this function with named arguments.
+  override fun write(r:ParentRecord,a:()->Boolean) {check(a());bytes=ParentCodec.encode(r)}
+                                    ^
+/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-2bc89786daec/workdir/qa86-final/ExpiryCasTest.kt:25:23: warning: the corresponding parameter in the supertype 'ParentStore' is named 'record'. This may cause problems when calling this function with named arguments.
+  override fun commit(r:ParentRecord,tx:ParentCommit) {
+                      ^
+/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-2bc89786daec/workdir/qa86-final/ExpiryCasTest.kt:25:38: warning: the corresponding parameter in the supertype 'ParentStore' is named 'transaction'. This may cause problems when calling this function with named arguments.
+  override fun commit(r:ParentRecord,tx:ParentCommit) {
+                                     ^^
+JUnit version 4.13.2
+.deadline_before_CAS: expired_at=120100 committed=true volume=80
+E.
+Time: 2.697
+There was 1 failure:
+1) expiresAfterFinalClockSampleBeforeClaimMustNotCommit(com.littlebuddy.v2.parent.ExpiryCasTest)
+java.lang.AssertionError: expiry won before documented claim CAS expected:<false> but was:<true>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at com.littlebuddy.v2.parent.ExpiryCasTest.expiresAfterFinalClockSampleBeforeClaimMustNotCommit(ExpiryCasTest.kt:47)
+
+FAILURES!!!
+Tests run: 2,  Failures: 1
+
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-2bc89786daec/workdir/little-buddy/../qa86-final/expiry-cas-tests.py", line 83, in <module>
+    subprocess.run(command, check=True)
+  File "/usr/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['java', '-Xmx256m', '-cp', '/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-2bc89786daec/workdir/little-buddy/parent-tests-_ap328ns:/home/ubuntu/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.2.21/fa374a986e128314c3db00a20aae55f72a258511/kotlin-stdlib-2.2.21.jar:/home/ubuntu/.gradle/caches/modules-2/files-2.1/junit/junit/4.13.2/8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12/junit-4.13.2.jar:/home/ubuntu/.gradle/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/42a25dc3219429f0e5d060061f71acb49bf010a0/hamcrest-core-1.3.jar:/home/ubuntu/.gradle/caches/8.13/transforms/9ec1aa52f1567b6bf359cfb66d138a5b/transformed/android.jar', 'org.junit.runner.JUnitCore', 'com.littlebuddy.v2.parent.ExpiryCasTest']' returned non-zero exit status 1.
