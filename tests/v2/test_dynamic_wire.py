@@ -56,7 +56,7 @@ class Wire(unittest.IsolatedAsyncioTestCase):
 
     async def start(self,peer,socket,feature='images_v2'):
         peer.session.begin_turn();peer.session.drain_commands()
-        peer.generation=asyncio.create_task(peer.respond('一起玩',peer.epoch))
+        peer.generation=asyncio.create_task(peer.respond('请画一张猫的图',peer.epoch))
         fields=dict(v=2,type='bind',epoch=peer.epoch,seq=peer.sequence+1,player='p'+str(peer.session.turn),features=[feature])
         if feature=='images_v2':fields['image_contract']=CONTRACT
         await peer.handle(json.dumps(fields))
@@ -71,6 +71,9 @@ class Wire(unittest.IsolatedAsyncioTestCase):
     async def finish(self,peer,socket):
         for event in list(socket.events):
             if event['type']=='audio' and event['stream']==peer.session.stream:await self.ack(peer,event)
+        # Initial image gate is ACKed explicitly above; acknowledge subsequent
+        # fixed failure speech so transport tests do not wait for a silent player.
+        socket.acknowledge=True
         await asyncio.wait_for(peer.generation,2)
         if peer.visual_task:await asyncio.wait_for(peer.visual_task,2)
 
@@ -143,7 +146,7 @@ class Wire(unittest.IsolatedAsyncioTestCase):
         p,s,_=await self.make(http_hook=blocked)
         for event in list(s.events):
             if event['type']=='audio':await self.ack(p,event)
-        await entered.wait();p.revision+=1;await p.hide_visual('input_changed');release.set()
+        await asyncio.wait_for(entered.wait(),2);p.revision+=1;await p.hide_visual('input_changed');release.set()
         await self.until(lambda:not p.retired_tasks)
         self.assertEqual(self.displays(s),[]);self.assertIsNone(p.visual_cache)
         self.assertFalse(any(e['type']=='image_chunk' for e in s.events))
@@ -155,7 +158,7 @@ class Wire(unittest.IsolatedAsyncioTestCase):
         p,s,_=await self.make(hook=block)
         for event in list(s.events):
             if event['type']=='audio':await self.ack(p,event)
-        await entered.wait();cache=p.visual_cache
+        await asyncio.wait_for(entered.wait(),2);cache=p.visual_cache
         p.session.pause_management();p.invalidate_visual();release.set()
         await self.until(lambda:not p.retired_tasks)
         self.assertEqual(self.displays(s),[]);self.assertTrue(cache.released);self.assertFalse(cache.png)
