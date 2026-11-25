@@ -12,6 +12,7 @@ internal class AndroidTrack(handler: Handler,
     routeLost: () -> Unit) : TrackPort {
     private val track: AudioTrack
     private var route: Int? = null
+    private var muted=false
     private val listener = AudioRouting.OnRoutingChangedListener { routing ->
         val next = routing.routedDevice?.id
         if (route != null && next != route) routeLost()
@@ -43,7 +44,11 @@ internal class AndroidTrack(handler: Handler,
         track.playbackParams = android.media.PlaybackParams().setSpeed(settings.rate / 100f).setPitch(1f)
     }
     override fun pause() = track.pause()
-    override fun mute() { check(track.setVolume(0f) == AudioTrack.SUCCESS) }
+    override fun setVolume(percent: Int): Boolean {
+        require(percent in 0..100)
+        return muted || track.setVolume(percent/100f)==AudioTrack.SUCCESS
+    }
+    override fun mute() { muted=true; check(track.setVolume(0f) == AudioTrack.SUCCESS) }
     override fun flush() = track.flush()
     override fun stop() { track.stop(); check(track.playState == AudioTrack.PLAYSTATE_STOPPED) }
     override fun release() {

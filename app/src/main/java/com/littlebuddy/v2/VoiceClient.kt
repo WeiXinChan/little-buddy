@@ -37,6 +37,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     fun nativeProof() = player.nativeProof()
     private var controlQuarantined=false
     val quarantined get() = player.quarantined || controlQuarantined
+    private val childVolume=ChildVolume(playbackSettings.volume)
     private val managementState = ManagementState(SystemClock::elapsedRealtime)
     @Volatile private var childBlocked = false
     private var managementPending = false
@@ -52,7 +53,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var outputBusy = false
     private var responseRevision = -1L
     private val gate: InputGate = InputGate(waits, SystemClock::elapsedRealtime,
-        { version -> entryGate.clear(); images?.clear(); send("advance", "revision" to version); candidate() },
+        { version -> entryGate.clear(); childVolume.clear(); images?.inputChanged(); send("advance", "revision" to version); candidate() },
         { version -> send("probe", "revision" to version) },
         { version -> send("seal", "revision" to version); inputSerial++ ; outputBusy = true },
         { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true },
@@ -65,7 +66,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var ackIdentity: JSONObject? = null
     private var ackSequence = 0L
     private var playerName: String? = null
-    private val player = Playback({ AndroidTrack(handler, playbackSettings) { fail("route") } },
+    private val player = Playback({ AndroidTrack(handler, com.littlebuddy.v2.parent.ParentPlaybackSettings(childVolume.value,playbackSettings.rate,playbackSettings.durationSeconds)) { fail("route") } },
         SystemClock::elapsedRealtime) { ack ->
         observed(ack)
         if (ack.completed && responseRevision == gate.revision && ack.binding.epoch == epoch) gate.effectivePlayed()
@@ -132,7 +133,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
     private fun receive(text: String) {
         if (!permitted()) { close(); return }
-        require(text.length <= 16000)
+        require(text.length <= 16000 && text.toByteArray(Charsets.UTF_8).size <= 16000)
         val event = JSONObject(text)
         require(event.getInt("v") == 2)
         if (event.getLong("epoch") != epoch) return
@@ -189,7 +190,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 responseRevision = gate.revision
                 check(player.binding == null)
                 playerName = UUID.randomUUID().toString()
-                if (images != null) send("bind", "player" to checkNotNull(playerName), "features" to org.json.JSONArray().put("images_v1"))
+                if (images != null) send("bind", "player" to checkNotNull(playerName), "features" to org.json.JSONArray().put("images_v2"), "image_contract" to ReleaseCompatibility.CONTRACT)
                 else send("bind", "player" to checkNotNull(playerName))
             }
             "bound" -> {
@@ -219,31 +220,60 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                     send("resume_noise"); outputBusy = player.hasPending
                 }
                 "thinking" -> status("listening")
-                "new_turn" -> interrupt(event.optString("intent", ""))
+                "new_turn" -> interrupt(event.optString("intent", ""),preservePublicImage=true)
                 "stop" -> { gate.noResponseExpected(); interrupt() }
                 else -> status("clarify") // Unknown recognition never resumes audio.
             }
             }
-            "revoke" -> { images?.clear(); player.stop(); ackIdentity = null; hideImage() }
+            "revoke" -> { images?.outputRevoked(); player.stop(); ackIdentity = null; hideImage() }
+            "volume" -> {
+                if(!imageScopeCurrent(event) || wireInt(event,"control_v")!=1 || !managementState.mediaAllowed ||
+                    SystemClock.elapsedRealtime()>=gate.responseDeadline) return
+                val level=childVolume.accept(managementScope(event),event.getString("token"),event.getString("direction")) ?: return
+                player.setVolume(level);gate.noResponseExpected()
+            }
+            "image_status" -> {
+                if(imageScopeCurrent(event) && wireInt(event,"image_v")==2 && event.getString("state")=="unavailable" &&
+                    event.getString("reason")=="image_unavailable") { images?.clear();hideImage() }
+            }
+            "image_begin" -> {
+                val ready=imageReady(event) ?: return
+                require(ready.source=="dynamic" && event.getString("encoding")=="base64")
+                images?.begin(ready,wireInt(event,"bytes"),wireInt(event,"chunks"),wireInt(event,"chunk_bytes"),event.getLong("retain_ms"))
+            }
+            "image_chunk" -> {
+                val ready=imageReady(event) ?: return
+                require(ready.source=="dynamic")
+                val encoded=event.getString("data")
+                require(encoded.length in 4..10924 && encoded.matches(Regex("[A-Za-z0-9+/]*={0,2}")))
+                val data=Base64.decode(encoded,Base64.NO_WRAP)
+                require(data.size in 1..8192 && Base64.encodeToString(data,Base64.NO_WRAP)==encoded)
+                try { images?.chunk(ready,wireInt(event,"index"),wireInt(event,"offset"),data) } finally { data.fill(0) }
+            }
             "image_ready" -> {
-                val ready = imageReady(event) ?: return
-                if (event.getString("source") != "default" || (!event.isNull("fallback_reason") &&
-                    event.getString("fallback_reason") !in setOf("dynamic_unavailable", "unknown_asset", "asset_invalid"))) return
-                images?.ready(ready)
+                val ready=imageReady(event) ?: return
+                if(ready.source=="default" && (!event.isNull("fallback_reason") &&
+                    event.getString("fallback_reason") !in setOf("dynamic_unavailable","unknown_asset","asset_invalid"))) return
+                images?.readyV2(ready,event.getLong("retain_ms"))
+            }
+            "image_display" -> {
+                val ready=imageReady(event) ?: return
+                if(event.getString("action")=="hide" && event.optString("reason")=="expired" &&
+                    event.optBoolean("eyes",false) && event.getLong("duration_ms")==0L) {
+                    images?.expired(ready,event.getLong("retain_ms"));return
+                }
+                val binding=player.binding ?: return
+                if(player.suspended || event.getString("player")!=binding.player || event.getInt("stream")!=binding.stream)return
+                images?.display(ImageReveal(ready,binding.player,binding.stream,event.getString("segment"),event.getLong("end")),
+                    event.getString("action"),event.getLong("duration_ms"),event.getLong("retain_ms"))
             }
             "hide" -> {
-                if (!imageScopeCurrent(event) || event.getString("reason") !in setOf("requested", "input_changed")) return
-                images?.clear(); hideImage()
+                if(!imageScopeCurrent(event) || event.getString("reason") !in setOf("requested","input_changed"))return
+                images?.inputChanged()
+                hideImage()
             }
-            "reveal" -> if (player.binding != null && !player.suspended) {
-                if (event.getString("effect").startsWith("image:")) {
-                    val ready = imageReady(event) ?: return
-                    if (event.getString("effect") != "image:" + ready.token) return
-                    val binding = player.binding ?: return
-                    if (event.getString("player") != binding.player || event.getInt("stream") != binding.stream) return
-                    images?.reveal(ImageReveal(ready, binding.player, binding.stream, event.getString("segment"), event.getLong("end")))
-                } else if (images == null) reveal(event.getString("effect"), event.getInt("topic"))
-                else error("unsupported visual effect")
+            "reveal" -> if(images==null && player.binding!=null && !player.suspended) {
+                reveal(event.getString("effect"),event.getInt("topic"))
             }
             "thinking_wait" -> status("thinking")
             "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status("listening") }
@@ -277,6 +307,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private fun bindNormalScope(scope: ManagementScope) {
         helpScope.bind(scope.session,scope.turn,scope.epoch,scope.revision)
         managementState.normal(scope)
+        childVolume.bind(scope)
         entryGate.bind(scope) // Both normal consumers are ready before any entry/ready callback.
     }
     fun acceptManagementEntry(entry: ManagementEntry, decision: ()->Boolean): Boolean =
@@ -285,7 +316,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         event.getLong("epoch"),event.getLong("revision"))
     private fun moveManagementEpoch(scope: ManagementScope) {
         epoch=scope.epoch; sequence=0; gate.managementWaiting(scope.revision)
-        ackIdentity=null; playerName=null; helpScope.clear(); entryGate.clear(); images?.clear()
+        ackIdentity=null; playerName=null; helpScope.clear(); entryGate.clear(); childVolume.clear(); images?.clear()
     }
     /** Caller has already stopped the children's recorder; no network action until native release confirms. */
     fun stopForManagement(): Boolean {
@@ -303,7 +334,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         if (!active) return false
         return try {
             val request=managementState.resume() ?: return false
-            images?.clear(); images=route; playbackSettings=settings; managementPending=true; moveManagementEpoch(request.scope)
+            images?.clear(); images=route; playbackSettings=settings; childVolume.tighten(settings.volume); managementPending=true; moveManagementEpoch(request.scope)
             send("management_resume", "session" to request.scope.session, "turn" to request.scope.turn,
                 "revision" to request.scope.revision, "pause" to checkNotNull(request.receipt))
         } catch (_: Exception) { fail("management"); false }
@@ -315,13 +346,19 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private fun imageScopeCurrent(event: JSONObject): Boolean =
         event.getLong("revision") == gate.revision && helpScope.matches(event.getString("session"),
             event.getLong("turn"), epoch, gate.revision)
+    private fun wireInt(event: JSONObject, name: String): Int {
+        val number=event.get(name);require(number is Int || number is Long)
+        val value=(number as Number).toLong();require(value in 0..Int.MAX_VALUE.toLong());return value.toInt()
+    }
     private fun imageReady(event: JSONObject): ImageReady? {
-        if (!imageScopeCurrent(event)) return null
-        val id = event.getString("asset_id"); val sha = event.getString("sha256")
-        if (!id.matches(Regex("[a-z0-9-]{1,64}")) || !sha.matches(Regex("[a-f0-9]{64}"))) return null
-        if (event.getString("type") == "image_ready" && (event.getInt("width") != 512 || event.getInt("height") != 512)) return null
-        return ImageReady(ImageScope(event.getString("session"), event.getLong("turn"), epoch, gate.revision),
-            event.getInt("topic"), event.getString("token"), ImageAsset(id, sha, 512, 512))
+        if(!imageScopeCurrent(event) || wireInt(event,"image_v")!=2)return null
+        val id=event.getString("asset_id");val sha=event.getString("sha256");val source=event.getString("source")
+        val width=wireInt(event,"width");val height=wireInt(event,"height")
+        if(!id.matches(Regex("[a-z0-9-]{1,64}")) || !sha.matches(Regex("[a-f0-9]{64}")) ||
+            source !in setOf("default","dynamic") || width !in 512..2048 || height !in 512..2048 ||
+            (source=="default" && (width!=512 || height!=512)))return null
+        return ImageReady(ImageScope(event.getString("session"),event.getLong("turn"),epoch,gate.revision),
+            wireInt(event,"topic"),event.getString("token"),ImageAsset(id,sha,width,height),event.getString("image_id"),source)
     }
     fun input(samples: ShortArray, count: Int, speech: Boolean = true, capturedAt: Long = SystemClock.elapsedRealtime()) {
         if (!permitted() || !compatible || childBlocked || !managementState.mediaAllowed) { samples.fill(0); return }
@@ -344,15 +381,15 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     fun candidate() {
         if (childBlocked) return
         if (player.binding != null && !player.suspended) {
-            images?.clear(); player.suspendOutput(); send("suspend")
+            images?.inputChanged(); player.suspendOutput(); send("suspend")
         }
     }
-    fun interrupt(intent: String = "") {
-        images?.clear()
+    fun interrupt(intent: String = "", preservePublicImage: Boolean = false) {
+        if(preservePublicImage)images?.inputChanged() else images?.clear()
         val stopped = player.stop() // First: local mute, generation revoke, flush, stop/release.
         ackIdentity = null; playerName = null; outputBusy = false
         hideImage()
-        epoch++; sequence = 0; helpScope.clear(); entryGate.clear()
+        epoch++; sequence = 0; helpScope.clear(); entryGate.clear(); childVolume.clear()
         if (!stopped.stopped || !stopped.released) { fail("release"); return }
         send("stop", "intent" to intent) // Only after local native calls completed.
     }
@@ -362,7 +399,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         close(); if (pending) managed(ManagementState.Phase.DEAD); status(code); failed()
     }
     fun close() {
-        managementState.close(); entryGate.clear(); childBlocked=true; managementPending=false
+        managementState.close(); entryGate.clear(); childVolume.clear(); childBlocked=true; managementPending=false
         images?.clear()
         active = false; isAwake = false; outputBusy = false; helpScope.clear()
         player.stop(); ackIdentity = null; hideImage()

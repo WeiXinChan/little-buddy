@@ -225,7 +225,7 @@ class V2VoiceActivity : Activity() {
                     else -> "连接暂不可用，不代表配置发行或设备验收成功。"
                 }
                 if (status == "listening" && voice?.isAwake == true) budget?.begin()
-            }, { images?.clear() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
+            }, { images?.inputChanged() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 playbackSettings = settings,
                 localHelp = { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 management = { entry -> runOnUiThread { if (ticket == transportRevision) requestParentManagement(entry) } },

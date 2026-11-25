@@ -7,14 +7,14 @@ from pathlib import Path
 import re
 import zipfile
 
-CONTRACT='v2-voice2-safety1-images1-management1-end1'
+CONTRACT='v2-voice2-safety1-images2-volume1-management1-end1'
 
 def compatible(apk, backend):
     if (type(apk.get('format')) is not int or type(backend.get('format')) is not int or
-        any(type(apk.get(k)) is not int for k in ('wire','images_v','management_v','local_help_v','session_end_v')) or
+        any(type(apk.get(k)) is not int for k in ('wire','images_v','volume_v','management_v','local_help_v','session_end_v')) or
         apk.get('format')!=1 or backend.get('format')!=1 or
         apk.get('protocol_contract')!=CONTRACT or backend.get('protocol_contract')!=CONTRACT or
-        [apk.get(k) for k in ('wire','images_v','management_v','local_help_v','session_end_v')]!=[2,1,1,1,1] or
+        [apk.get(k) for k in ('wire','images_v','volume_v','management_v','local_help_v','session_end_v')]!=[2,2,1,1,1,1] or
         not re.fullmatch('[a-f0-9]{40}',backend.get('source_sha','')) or
         not re.fullmatch('[a-f0-9]{64}',apk.get('resources_manifest_sha256',''))):
         raise ValueError('release_contract_mismatch')
@@ -39,7 +39,7 @@ def inspect(apk):
             raise ValueError('apk_resources_mismatch')
         if any(value in json.dumps(meta) for value in ['/home/','/tmp/','Bearer ','PRIVATE KEY','password']):
             raise ValueError('private_build_metadata')
-        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=16 or meta['version_name']!='2.0.0-rc2':
+        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=17 or meta['version_name']!='2.0.0-rc3':
             raise ValueError('candidate_version_mismatch')
         return meta
 
