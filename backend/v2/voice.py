@@ -538,7 +538,7 @@ class VoicePeer:
             if getattr(self.policy, 'needs_local_help', lambda _: False)(text) is True:
                 raise SafetyFault('content_blocked')
             if hasattr(self.providers, 'plan'):
-                context = self.session.context()
+                context = self.session.context(query=text or '')
                 if self.images_enabled and hasattr(self.providers,'image_catalogue'):
                     context['image_catalog']=self.providers.image_catalogue()
                 stage = 'plan'
@@ -576,7 +576,7 @@ class VoicePeer:
                     self.session.private_mode = True
                 elif action in {'change', 'leave'} and self.session.private_mode:
                     self.session.private_mode = False
-                    plan = await self.owned(operation, self.providers.plan, text, operation.session.context(shared=True))
+                    plan = await self.owned(operation, self.providers.plan, text, operation.session.context(shared=True,query=text or ''))
                 if action == 'leave':
                     plan.update(mode='chat', rules='', roles=[], secrets={})
                 if epoch != self.epoch or not self.session._output_live():
@@ -586,7 +586,14 @@ class VoicePeer:
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 stage = 'fact_commit'
-                self.session.record_input(text, facts)
+                accepted=self.session.record_input(text, facts)
+                if accepted is False:
+                    # A real storage bound is a normal conversational branch,
+                    # not a provider failure or a license to invent recollection.
+                    plan.update(sentences=['我这会儿记不全前面的细节，请再告诉我这次最重要的事，我们接着玩。'],anchors={},tools=[])
+                    plan.update(mode=self.session.game.get('mode','chat'),
+                                rules=self.session.game.get('rules',''),roles=self.session.game.get('roles',[]),
+                                secrets=dict(self.session.secrets))
                 stage = 'safety'
                 await self.review(operation, ''.join(plan['sentences']))
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}

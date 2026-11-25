@@ -10,6 +10,7 @@ import json
 import uuid
 from hashlib import sha256
 from copy import deepcopy
+from .memory import partition, retrieve
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,8 @@ class Session:
         self.memory_revision = 0
         self.recent = []
         self.facts = {}
+        self.source_archive = ''
+        self.memory_limited = False
         self.pending = deque()
         self.tasks, self.commands = {}, deque()
         self.player = None
@@ -91,7 +94,8 @@ class Session:
 
     def _fits(self, **changes):
         state = dict(public=self.public, private=self.private, game=self.game, secrets=self.secrets,
-                     recent=self.recent, facts=self.facts,
+                     recent=self.recent, facts=self.facts, source_archive=self.source_archive,
+                     memory_limited=self.memory_limited,
                      pending=[s.__dict__ for s in self.pending])
         state.update(changes)
         try:
@@ -122,6 +126,7 @@ class Session:
         self.memory_revision += 1
         self.public.clear()
         self.recent.clear(); self.facts.clear()
+        self.source_archive='';self.memory_limited=False
         self.private_mode = False
         self.private.clear()
         self.secrets.clear()
@@ -359,17 +364,27 @@ class Session:
                                   source_text=text, span=[fact['start'], fact['end']],
                                   source_id=source_id, dimension=dimension,
                                   evidence_only=True, private=self.private_mode)
-        # Sources are protected evidence, not replaceable category slots.
-        # Same-dimension statements can coexist or correct each other; only the
-        # full proposition establishes which. Unknown dimensions never delete.
-        # Keep every distinct source until the existing unified byte limit,
-        # then reject the entire candidate atomically instead of silent eviction.
         recent = (self.recent + [dict(text=text, role='child', turn=self.turn, private=self.private_mode)])[-8:]
-        if not self._fits(facts=candidate, recent=recent):
-            raise BufferError('input context capacity')
+        try:
+            candidate,archive=partition(candidate,self.source_archive)
+        except BufferError:
+            archive=None
+        if archive is None or not self._fits(facts=candidate,recent=recent,source_archive=archive,
+                                             reply_reserve=' '*8192):
+            # Preserve accepted evidence. A full memory must not kill the turn
+            # or silently replace old claims. Surface the coverage limit to the
+            # planner, keep the new input in a bounded recent window, and ask
+            # for confirmation rather than claiming unavailable recollection.
+            self.memory_limited=True
+            while recent and not self._fits(recent=recent):recent=recent[1:]
+            self.recent=recent
+            self.memory_revision+=1
+            return False
         self.facts = candidate
+        self.source_archive = archive
         self.recent = recent
         self.memory_revision += 1
+        return True
 
     def memory_snapshot(self, *, private=False):
         return (self.connection, self.session, self.turn, self.output, self.memory_revision,
@@ -430,13 +445,15 @@ class Session:
                 raise BufferError('private context capacity')
             self.private.append(text)
 
-    def context(self, *, shared=False):
+    def context(self, *, shared=False, query=''):
         if not self._live():
             return {}
         # No arbitrary model-authored summary can promote proposed facts.
+        facts,coverage=retrieve(self.facts,self.source_archive,query,not shared and self.private_mode)
+        coverage['capacity_limited']=self.memory_limited
         return {'heard': tuple(self.public), 'game': deepcopy(self.game),
                 'recent': deepcopy([r for r in self.recent if (not shared and self.private_mode) or not r['private']]),
-                'facts': deepcopy({k: v for k, v in self.facts.items() if (not shared and self.private_mode) or not v['private']}),
+                'facts': deepcopy(facts), 'memory':coverage,
                 'unrevealed': {} if shared else deepcopy(self.secrets),
                 'private': tuple(self.private) if self.private_mode and not shared else (),
                 'partial_unknown': tuple(sorted(self.uncertain))}

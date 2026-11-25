@@ -135,6 +135,9 @@ class UnifiedProviders:
 "anchors":{"plot.main":0,"clue.current":0}}。anchors把必须保留的剧情/线索/谜底/规则映射到sentences索引，最多16项。。
 动作必须由本轮孩子意图支持；未改规则时保留已有规则/角色/谜底。
 private仅在孩子明确谈私事时使用；共享剧情不能出现私事。
+facts是逐字来源证据，history不代表当前偏好或撤回；保留主语、否定与原命题，不将分类维度当作覆盖许可。
+memory.omitted_sources表示还有未检索来源，不代表孩子没说过；无法核对时自然请孩子确认，不编造回忆。
+memory.capacity_limited时坦诚记忆范围有限，围绕当前输入继续，不反复报故障或声称已保存新事实。
 新的状态是建议，完整播放后才生效；不能把尚未播放剧情当已发生。
 可选tools:[{kind:show_image|hide_image|generate_image,asset_id:默认图ID}]，最多1项。
 只从context.image_catalog选择匹配的默认图；没有该目录就tools为空。
