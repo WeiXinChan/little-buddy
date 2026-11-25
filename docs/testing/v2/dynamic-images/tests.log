@@ -1,0 +1,23 @@
+test_ancillary_text_removed_before_safety_and_no_disk_io (tests.v2.test_dynamic_images.Images.test_ancillary_text_removed_before_safety_and_no_disk_io) ... ok
+test_concrete_unified_tool_generates_verified_png_from_minimal_catalogue_name (tests.v2.test_dynamic_images.Images.test_concrete_unified_tool_generates_verified_png_from_minimal_catalogue_name) ... ok
+test_disabled_missing_reviews_and_key_do_not_infer_account_permission (tests.v2.test_dynamic_images.Images.test_disabled_missing_reviews_and_key_do_not_infer_account_permission) ... ok
+test_image_review_missing_or_rejected_never_returns_image (tests.v2.test_dynamic_images.Images.test_image_review_missing_or_rejected_never_returns_image) ... ok
+test_negative_control_bypassing_image_review_is_detected (tests.v2.test_dynamic_images.Images.test_negative_control_bypassing_image_review_is_detected) ... ok
+test_only_one_task_and_scoped_cancel_cannot_cancel_later_owner (tests.v2.test_dynamic_images.Images.test_only_one_task_and_scoped_cancel_cannot_cancel_later_owner) ... ok
+test_outer_caller_cancellation_at_network_closes_stream_without_late_result (tests.v2.test_dynamic_images.Images.test_outer_caller_cancellation_at_network_closes_stream_without_late_result) ... ok
+test_png_real_dimensions_crc_zlib_and_no_trailing_payload (tests.v2.test_dynamic_images.Images.test_png_real_dimensions_crc_zlib_and_no_trailing_payload) ... ok
+test_prompt_review_must_bind_exact_bytes_nonce_policy_and_literal_bool (tests.v2.test_dynamic_images.Images.test_prompt_review_must_bind_exact_bytes_nonce_policy_and_literal_bool) ... ok
+test_ready_buffer_rechecks_scope_and_auto_expiry_erases_owned_material (tests.v2.test_dynamic_images.Images.test_ready_buffer_rechecks_scope_and_auto_expiry_erases_owned_material) ... ok
+test_returned_urls_redirects_bad_base64_and_duplicate_fields_are_not_fetched (tests.v2.test_dynamic_images.Images.test_returned_urls_redirects_bad_base64_and_duplicate_fields_are_not_fetched) ... ok
+test_scope_revocation_at_http_and_review_boundaries_drops_results (tests.v2.test_dynamic_images.Images.test_scope_revocation_at_http_and_review_boundaries_drops_results) ... ok
+test_stream_stall_hits_total_budget_with_no_automatic_retry (tests.v2.test_dynamic_images.Images.test_stream_stall_hits_total_budget_with_no_automatic_retry) ... ok
+test_streaming_body_limit_and_http_encoding_are_bounded (tests.v2.test_dynamic_images.Images.test_streaming_body_limit_and_http_encoding_are_bounded) ... ok
+test_timeout_and_unconfirmed_cancellation_quarantine_without_retry (tests.v2.test_dynamic_images.Images.test_timeout_and_unconfirmed_cancellation_quarantine_without_retry) ... ok
+test_upstream_error_and_unknown_asset_do_not_leak_or_dispatch_extra_requests (tests.v2.test_dynamic_images.Images.test_upstream_error_and_unknown_asset_do_not_leak_or_dispatch_extra_requests) ... ok
+test_ready_is_hidden_partial_ack_cannot_reveal_and_full_ack_is_once (tests.v2.test_images.ImageRoutes.test_ready_is_hidden_partial_ack_cannot_reveal_and_full_ack_is_once) ... ok
+test_private_and_unspoken_riddle_cannot_prepare_answer (tests.v2.test_images.ImageRoutes.test_private_and_unspoken_riddle_cannot_prepare_answer) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 0.577s
+
+OK

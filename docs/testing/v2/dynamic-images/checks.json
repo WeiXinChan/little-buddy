@@ -1,0 +1,16 @@
+{
+  "base": "4f165ee56008dd79c9c1f2b34102695fd2aafdda",
+  "normal_executed": 17,
+  "normal_passed": 17,
+  "negative_controls_executed": 1,
+  "negative_controls_detected": 1,
+  "total_executed": 18,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "real_cloud_calls": 0,
+  "endpoint_body_unchanged": true,
+  "voice_and_schema_unchanged": true,
+  "suite": "16 new cases (15 normal + 1 mutation detection) plus 2 existing targeted ACK/private/riddle regressions",
+  "command": "python3 unittest TextTestRunner, see tests.log"
+}
