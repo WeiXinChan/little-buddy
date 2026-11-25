@@ -530,7 +530,7 @@ class VoicePeer:
                 result = await self.owned(operation, self.providers.endpoint, text, context)
                 if (not isinstance(result, dict) or set(result) != {'completion', 'meaning'}
                         or result['completion'] not in {'complete', 'incomplete', 'thinking'}
-                        or result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown'}):
+                        or result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown','management'}):
                     raise WireError('endpoint schema')
                 operation.ensure()
                 operation.budget.remaining()
@@ -559,6 +559,23 @@ class VoicePeer:
                     self.recognition = asyncio.create_task(self._analyze(data, following))
 
     async def decision(self, text, meaning, revision, deadline):
+        if meaning == 'management':
+            session,epoch,turn,output=self.session,self.epoch,self.session.turn,self.session.output
+            def current():
+                return (not self.closed and self.session is session and self.epoch==epoch and
+                        self.revision==revision and session.turn==turn and session.output==output and
+                        session._live() and session.clock()<deadline and
+                        not session.management_paused and not self.waiting_wake)
+            if not current():return
+            self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+            self.awaiting_input=False
+            fields=dict(session=session.session,turn=turn,revision=revision)
+            # A first-turn request has no open/bound. Establish its normal scope
+            # before the event; never make the event itself an authority source.
+            await self.send('scope',management_v=1,state='active',**fields)
+            if not current():return
+            await self.send('management',**fields)
+            return
         if meaning == 'new_turn':
             intent = uuid4().hex
             self.prepared = (text, deadline, intent, revision)

@@ -102,13 +102,15 @@ class UnifiedProviders:
 
     async def endpoint(self, text, context):
         result = await self.request("""
-只返回JSON {completion:complete|incomplete|thinking, meaning:new_turn|stop|noise|backchannel|thinking|unknown}。
+只返回JSON {completion:complete|incomplete|thinking, meaning:new_turn|stop|noise|backchannel|thinking|unknown|management}。
 根据上下文语义判断完整表达、思考、续说、纠正和附和。同一句嗯/对，若回答问题是new_turn，
-故事中附和是backchannel，犹豫是thinking。无法识别不当noise；停/等等是stop。""",
+故事中附和是backchannel，犹豫是thinking。无法识别不当noise；停/等等是stop。
+真实请求打开家长管理、设置或验证界面是management；只请求进入页面，不表示已验证或可修改设置。
+故事人物管理城镇、引用/练习这句话、退出游戏不是管理入口；含糊请求用unknown，不猜权限。""",
                                     dict(text=text, context=context), schemas.ENDPOINT)
         if (set(result) != {'completion', 'meaning'} or
                 result['completion'] not in {'complete', 'incomplete', 'thinking'} or
-                result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown'}):
+                result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown','management'}):
             raise ModelError('endpoint')
         return result
 
