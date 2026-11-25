@@ -1,0 +1,15 @@
+// Explicit test-only invocation; not applied by ordinary builds or production APK tasks.
+allprojects { p ->
+    p.pluginManager.withPlugin('com.android.application') {
+        if (p.path == ':app') {
+            if (!p.providers.gradleProperty('v2Test').isPresent() ||
+                gradle.startParameter.taskNames.isEmpty() ||
+                !gradle.startParameter.taskNames.every { it == ':app:assembleV2DebugAndroidTest' }) {
+                throw new GradleException('Native timestamp init requires only :app:assembleV2DebugAndroidTest and -Pv2Test')
+            }
+            p.extensions.getByName('androidComponents').finalizeDsl { dsl ->
+                dsl.defaultConfig.testInstrumentationRunner = 'com.littlebuddy.NativeTimestampRunner'
+            }
+        }
+    }
+}

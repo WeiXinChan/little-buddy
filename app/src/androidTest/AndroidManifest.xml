@@ -1,6 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Additional opt-in test APK runner only. Default SimUiRunner is unchanged. -->
-    <instrumentation android:name="com.littlebuddy.NativeTimestampRunner"
-        android:targetPackage="com.littlebuddy.sim.v2"
-        android:label="V2 native timestamp metadata probe" />
-</manifest>

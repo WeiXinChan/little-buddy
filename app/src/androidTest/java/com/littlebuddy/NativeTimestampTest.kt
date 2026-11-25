@@ -77,6 +77,11 @@ private class ProbeMetadata {
     @Volatile var outcome="NOT_EXECUTED"
     @Volatile var reason=""
     @Volatile var exceptionClass=""
+    @Volatile var nativeExceptionClass=""
+    @Volatile var stopExceptionClass=""
+    @Volatile var dependencyReason=""
+    @Volatile var resultJson=""
+    @Volatile var ownedLeaseComplete=false
     @Volatile var phase="preflight"
     @Volatile var failurePhase=""
     @Volatile var targetVersion=0
@@ -119,6 +124,9 @@ private class ProbeMetadata {
     @Synchronized fun snapshot()=Bundle().apply {
         putString("v2_timestamp_outcome",outcome);putString("v2_timestamp_reason",reason)
         putString("v2_timestamp_exception",exceptionClass);putString("v2_timestamp_phase",phase)
+        putString("native_exception_class",nativeExceptionClass);putString("stop_request_exception_class",stopExceptionClass)
+        putString("dependency_reason",dependencyReason);putString("v2_timestamp_result_json",resultJson)
+        putBoolean("owned_lease_complete",ownedLeaseComplete)
         putString("failure_phase",failurePhase);putInt("target_version_code",targetVersion);putInt("last_read_code",lastReadCode)
         putInt("sdk",Build.VERSION.SDK_INT);putInt("minimum_bytes",minimumBytes);putInt("native_bytes",nativeBytes)
         putInt("actual_buffer_frames",actualBufferFrames);putLong("start_duration_ms",startDurationMs)
@@ -144,6 +152,7 @@ private class ProbeControl(private val lease:RecorderLease,private val meta:Prob
     val cancelled=AtomicBoolean(false)
     private val lock=Any()
     private val stopOnce=AtomicBoolean(false)
+    val stopFailure=AtomicReference<String?>(null)
     private var native:AudioRecord?=null
     @Volatile private var stopper:Thread?=null
     fun install(value:AudioRecord){synchronized(lock){native=value}}
@@ -151,9 +160,13 @@ private class ProbeControl(private val lease:RecorderLease,private val meta:Prob
     fun cancel(){
         cancelled.set(true)
         if(!stopOnce.compareAndSet(false,true) || !lease.beginStop())return
-        val work=Thread({try{synchronized(lock){native?.let{if(it.recordingState==AudioRecord.RECORDSTATE_RECORDING)it.stop()}}}
-            finally{lease.endStop()}},"native-timestamp-stop")
-        stopper=work;work.start()
+        val work=Thread({
+            try {guardedProbeStop({synchronized(lock){native?.let{if(it.recordingState==AudioRecord.RECORDSTATE_RECORDING)it.stop()}}}) {
+                stopFailure.compareAndSet(null,it);meta.stopExceptionClass=it
+            }}finally{lease.endStop()}
+        },"native-timestamp-stop")
+        stopper=work
+        guardedProbeStop({work.start()}){stopFailure.compareAndSet(null,it);meta.stopExceptionClass=it;lease.endStop()}
     }
     fun release(){synchronized(lock){
         val value=native
@@ -194,11 +207,14 @@ class NativeTimestampTest {
     @Test fun nativeTimestampAndProductionLedger(){
         val meta=ProbeMetadata()
         var failure:Throwable?=null
+        var cleanupClass=""
+        var verdict:ProbeDecision?=null
         var activity:NativeTimestampForegroundActivity?=null
         var lease:RecorderLease?=null
         var control:ProbeControl?=null
         var worker:Thread?=null
         val workerFailure=AtomicReference<Throwable?>()
+        val workerCleanupFailure=AtomicReference<String?>(null)
         try {
             if(instrumentation !is NativeTimestampRunner)dependency("DEPENDENCY_EXPLICIT_NATIVE_RUNNER_REQUIRED")
             if(context.applicationContext.javaClass!=Application::class.java)dependency("DEPENDENCY_TARGET_APPLICATION_NOT_ISOLATED")
@@ -284,7 +300,7 @@ class NativeTimestampTest {
                     }
                     check(meta.positiveReads>=100 && meta.samplesRead>=32000){"insufficient continuous reads"}
                 }catch(error:Throwable){
-                    meta.failurePhase=meta.phase
+                    meta.failurePhase=meta.phase;meta.nativeExceptionClass=probeFailureClass(error)
                     val classified=when {
                         cancellation.cancelled.get() || !allowed(front)->NativeDependency("DEPENDENCY_FOREGROUND_LOST")
                         error is SecurityException->NativeDependency("DEPENDENCY_NATIVE_PERMISSION_OR_POLICY")
@@ -294,7 +310,7 @@ class NativeTimestampTest {
                 }
                 finally{
                     samples.fill(0);meta.phase="native_cleanup"
-                    try{cancellation.release()}catch(error:Throwable){workerFailure.compareAndSet(null,error)}
+                    try{cancellation.release()}catch(error:Throwable){workerCleanupFailure.set(probeFailureClass(error));workerFailure.compareAndSet(null,error)}
                 }
             },"native-timestamp-probe")
             worker=task;task.start();task.join(10000)
@@ -304,7 +320,7 @@ class NativeTimestampTest {
             check(meta.stopped && meta.released){"native release unconfirmed"}
             meta.outcome="PASS"
         }catch(error:Throwable){failure=error;if(meta.failurePhase.isEmpty())meta.failurePhase=meta.phase;meta.outcome=if(error is NativeDependency)"NOT_RUN_DEPENDENCY" else "FAIL"
-            meta.reason=safeReason(error);meta.exceptionClass=error.javaClass.simpleName
+            meta.reason=safeReason(error);meta.exceptionClass=probeFailureClass(error)
         }finally{
             try {
                 control?.cancel();worker?.join(1500)
@@ -312,15 +328,20 @@ class NativeTimestampTest {
                 if(worker==null)control?.release()
                 control?.joinStop()
                 if(activity!=null)instrumentation.runOnMainSync{activity?.finish()}
-                if(meta.outcome=="PASS" && (!meta.workerJoined || !meta.stopTaskJoined || !meta.released || !meta.stopped)){
-                    failure=AssertionError("native cleanup unconfirmed");meta.outcome="FAIL";meta.reason="NATIVE_CLEANUP_UNCONFIRMED"
-                }
-            }catch(error:Throwable){if(failure==null)failure=error;meta.outcome="FAIL";meta.reason="NATIVE_CLEANUP_EXCEPTION";meta.exceptionClass=error.javaClass.simpleName}
+            }catch(error:Throwable){cleanupClass=probeFailureClass(error)}
+            if(cleanupClass.isEmpty())cleanupClass=workerCleanupFailure.get() ?: ""
+            meta.dependencyReason=(failure as? NativeDependency)?.code ?: ""
+            meta.ownedLeaseComplete=lease?.complete() ?: false
+            val decision=decideProbeResult(meta.dependencyReason,
+                if(failure!=null && meta.dependencyReason.isEmpty())safeReason(checkNotNull(failure)) else "",
+                meta.exceptionClass,cleanupClass,control?.stopFailure?.get() ?: "",
+                ProbeReleaseProof(lease!=null,meta.stopped,meta.released,meta.workerJoined,meta.stopTaskJoined,meta.ownedLeaseComplete))
+            meta.outcome=decision.outcome;meta.reason=decision.reason;meta.exceptionClass=decision.exceptionClass
+            meta.resultJson=decision.json()
+            // The host regressions call this same decision's enforce(), not a parallel JUnit policy.
+            verdict=decision
             meta.phase="finished";meta.lease=ProcessRecorders.diagnostic();emit(meta)
         }
-        failure?.let {
-            if(it is NativeDependency)throw it
-            throw AssertionError("native timestamp probe: ${meta.reason}; failurePhase=${meta.failurePhase}; exception=${meta.exceptionClass}")
-        }
+        checkNotNull(verdict).enforce()
     }
 }

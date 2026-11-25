@@ -5,8 +5,11 @@ production NativeReadLedger and every threshold remain byte-for-byte unchanged.
 
 ## Explicit test-only isolation
 
-Select `com.littlebuddy.NativeTimestampRunner` (additional instrumentation in the test APK manifest),
-not the default SimUiRunner. Default runner behavior is unchanged. This runner substitutes a plain
+Build explicitly with the test-only init script below and select
+`com.littlebuddy.NativeTimestampRunner`, not the default SimUiRunner. AGP rewrites source test manifest
+instrumentation: the earlier source node became SimUiRunner, so that node was removed. This build
+has ONE dedicated runner selected through androidComponents.finalizeDsl; ordinary builds without
+this explicit init script still have SimUiRunner. The production build file and target APK are unchanged. This runner substitutes a plain
 Application via newApplication (no FeedbackApplication startup), and only substitutes the existing
 target component com.littlebuddy.V2VoiceActivity via newActivity with a test-only blank foreground
 Activity. The replacement instance runs in the target component's UID/process; it is not an Activity
@@ -23,29 +26,45 @@ Acquire the real ProcessRecorders lease BEFORE changing focus/launching the test
 If a child or management recorder already owns it, report NOT_RUN_DEPENDENCY without closing,
 pausing or replacing that recorder. An already configured target is never used to fetch credentials.
 Host-side idle preflight is REQUIRED: normal `am instrument` can restart a target process before
-Java test preflight. Do not run it against any live target PID; do not use force-stop/kill to clear a
-business process. The root's exclusive-device reservation must prevent another app launch between
-that check and instrumentation. `--no-restart` is not a substitute: on AOSP it instruments an existing
-process rather than creating this isolated Application; our Application identity check then refuses.
+Java test preflight. Unknown/active business, recording/playback, another test, or unsaved parent
+input must not be killed or displaced. A cached PID is not automatically an indefinite blocker:
+root explicitly authorizes preparation of a known controlled empty test process, as below.
+`--no-restart` is not a shortcut: AOSP instruments an existing process rather than constructing this
+isolated Application; our Application identity check refuses a non-isolated application.
 See [AOSP instrumentation implementation](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android15-release/services/core/java/com/android/server/am/ActivityManagerService.java).
 
 ## Exact invocation for root AFTER source review, on the one reserved device
 
 Install only the matching-signed test APK alongside root's already-installed code20 candidate.
-Do not replace the frozen target APK with a local app build. Read current PID/permissions/display
-state first. If any target PID exists, a capture/other test is active, the screen is locked, or
-permission/foreground is unavailable, retain DEPENDENCY and defer; do not reset data, credentials,
-lockscreen, grant parent rights, contact users for point tests or silently downgrade checks.
-RECORD_AUDIO can be granted through root's existing authorized test-permission flow before launch;
-the test never grants permissions/unlocks the screen itself. Do not grant via a PIN/Grant bypass.
+Do not replace the frozen target APK with a local app build. The Mac device owner first reserves
+the one device and records METADATA: exact installed code20 APK hash/version, target PID, which
+controlled test/install created it, secure=false/unconfigured state, no recording/playback/other
+test, and no unsaved parent input. Do not read credentials or collect any input contents to prove
+that state. Unknown state or any active business/draft remains DEPENDENCY; do not kill it.
+
+For the root-confirmed controlled upgrade/install flow stopped at the uninitialized parent page:
+first exit the page/application normally through the existing authorized automation, with no user
+key presses. If the remaining PID is confirmed to be solely that empty test residue (all facts
+above recorded), root has authorized Mac to explicitly stop ONLY that idle V2 package before
+instrumentation. It must not touch V1, stored config/credentials, or lockscreen. Do not wait for OS
+random cache eviction. A bare PID or businessIdlePreflight=true is not authority/identity; the
+recorded prior state and root authorization are the condition. Instrumentation never silently
+stops an unknown/active PID; the test itself performs no package stop command.
+
+RECORD_AUDIO may use root's existing authorized test-permission preparation. The test never grants
+permissions/unlocks screens itself. If permissions, focus, screen state or isolation fail, retain
+the metadata and DEPENDENCY, not a driver pass or a user functional point-test request.
 
 ```sh
-# SERIAL and TEST_APK are chosen by root, not by this author. No commands executed here.
+# SERIAL and TEST_APK selected by root. No device commands executed by author.
 adb -s "$SERIAL" shell pidof com.littlebuddy.sim.v2
-# Require empty PID output; if nonempty STOP this direction, do not force-stop.
-adb -s "$SERIAL" install -r "$TEST_APK"
+# Classify/record prior state first. Unknown/active/draft -> STOP this direction.
+# Normal exit first. ONLY if confirmed root-authorized empty test residue remains:
+# adb -s "$SERIAL" shell am force-stop com.littlebuddy.sim.v2
+# The commented stop is a deliberate Mac action, never an automatic PID-based fallback.
+adb -s "$SERIAL" install -r -t "$TEST_APK"
 adb -s "$SERIAL" shell pidof com.littlebuddy.sim.v2
-# Again require empty; root holds exclusive device and no other launch/test in between.
+# Require empty before instrument; root keeps single-device ownership and prevents other launches.
 adb -s "$SERIAL" shell am instrument -w -r \
   -e class com.littlebuddy.NativeTimestampTest#nativeTimestampAndProductionLedger \
   -e nativeTimestampProbe true -e businessIdlePreflight true \
@@ -84,7 +103,7 @@ All error paths attempt native stop/release; actual STOPPED and STATE_UNINITIALI
 Hold process lease until native release and true worker join; stop tasks are separately joined.
 A blocked JNI/cleanup cannot be forcibly interrupted/proven released: mark FAIL/resource unknown,
 keep lease failclosed, do not start another capture. Root must confirm instrumentation target process
-ended before any further device work; no automatic business force-stop is part of this procedure.
+ended before any further device work; no automatic business force-stop is part of this probe.
 
 Accept only final status-code7 Bundle `v2_timestamp_phase=finished`, `v2_timestamp_outcome=PASS`,
 real stopped/released/worker_joined/stop_task_joined true, lease released, continuous counts above,
@@ -98,9 +117,40 @@ network/SSH, owner/PIN/Grant, or production conversation/lifecycle integration.
 
 Use existing SDK/cache, no dependency installs:
 
-    bash scripts/with-build-lock env ANDROID_HOME=<SDK> ANDROID_SDK_ROOT=<same> ./gradlew --offline --no-daemon --max-workers=1 -Pv2Test :app:assembleV2DebugAndroidTest
+    bash scripts/with-build-lock env ANDROID_HOME=<SDK> ANDROID_SDK_ROOT=<same> ./gradlew --offline --no-daemon --max-workers=1 -Pv2Test -I app/src/androidTest/native-timestamp.init.gradle :app:assembleV2DebugAndroidTest
 
-Inspect the merged androidTest manifest for BOTH default SimUiRunner and the explicit new runner,
-targetPackage com.littlebuddy.sim.v2; no test APK Activity declaration. Inspect/sign/hash
+Inspect the final APK using aapt dump xmltree: exactly one instrumentation named NativeTimestampRunner,
+targetPackage com.littlebuddy.sim.v2, and no test APK Activity declaration. Keep the earlier ordinary
+merged manifest (only SimUiRunner) as evidence that the default is unchanged. Do not infer runner
+availability from the source XML or compilation alone. Inspect/sign/hash
 app/build/outputs/apk/androidTest/v2Debug/app-v2Debug-androidTest.apk. Report exact source SHA/tree,
 artifact hash/signature/runner and build result. Building the test APK does not mean OPPO execution.
+
+### Exception priority regression and privacy-safe artifact
+
+The real stop thread calls shared guardedProbeStop; native stop exceptions cannot escape to
+Android's uncaught handler, and only exception class/category is retained. Worker cleanup errors
+are separately retained even when the original failure is a dependency. Shared decideProbeResult
+and enforce() drive BOTH final JSON/Bundle and the actual JUnit outcome: cleanup/stop errors or any
+unconfirmed owned native/worker/stop/lease proof always throw safe AssertionError, never assumption
+skip. Original dependency_reason is retained separately. Only a fully cleaned dependency may skip.
+Host regression invokes that same enforce(), verifies actual thrown types/no uncaught message and
+parses7 failure-priority JSON records (4 JUnit methods). No native hardware is faked into PASS.
+
+    bash scripts/with-build-lock python3 app/src/androidTest/run-native-probe-regression.py
+
+Standard AGP test APK contains three pre-existing wake PCM fixture inputs, unrelated to this probe.
+They must NOT be distributed as probe output. The delivered probe-only test APK removes only those
+unused assets and old signing records, preserves every remaining entry (including DEX/manifest)
+byte-for-byte, then zipaligns and signs with the existing test key. Raw AGP APK is kept local only.
+The exact filter is app/src/androidTest/strip-probe-fixtures.py; signatures/hashes and retained-entry
+checks are in delivery evidence. This changes only the test artifact, never root's target APK or
+production inventory. Other fixture-dependent test cases are not supported in this filtered APK;
+only the explicitly selected native probe and its existing runner contract are the deliverable.
+
+    python3 app/src/androidTest/strip-probe-fixtures.py <raw-test.apk> <unsigned-probe.apk>
+    <sdk>/build-tools/35.0.0/zipalign -f 4 <unsigned-probe.apk> <aligned-probe.apk>
+    <sdk>/build-tools/35.0.0/apksigner sign --ks <existing-debug-keystore> --ks-key-alias androiddebugkey --out <probe.apk> <aligned-probe.apk>
+
+Require final JSON junit_failure=false, owned_lease_complete=true plus all cleanup flags for PASS;
+any FAIL JSON must correspond to real JUnit FAIL even if dependency_reason is also populated.
