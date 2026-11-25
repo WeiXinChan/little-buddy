@@ -40,6 +40,7 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
     private var hasInput = false
     private var probing = false
     private var completion: Completion? = null
+    val endpointCompletion:Completion? get()=completion
     private var decisionAt = 0L
     private var prompted = false
     private var soloSent = false
@@ -64,8 +65,8 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
         thinkingAt = null; excludedThinkingMs = 0
     }
     fun quiet() { speaking = false }
-    fun decision(version: Long, value: Completion) {
-        if (!awake || version != revision || !hasInput || speaking) return
+    fun decision(version: Long, value: Completion):Boolean {
+        if (!awake || version != revision || !hasInput || speaking) return false
         checkResponseDeadline()
         if (value == Completion.THINKING) {
             if (thinkingAt == null) thinkingAt = now()
@@ -74,6 +75,7 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
             excludedThinkingMs += excluded; responseDeadline += excluded; thinkingAt = null
         }
         probing = false; completion = value; decisionAt = now()
+        return true
     }
     fun interaction() { lastInteraction = now() }
     fun tick(outputBusy: Boolean) {

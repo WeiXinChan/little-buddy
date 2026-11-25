@@ -24,8 +24,31 @@ class V2VoiceActivity : Activity() {
     private var voice: VoiceClient? = null
     private var imageRoute: AndroidImageRoute? = null
     private var eyesAttached = false
-    private var capture: Capture? = null
-    private var exitCapture: ManagementCapture? = null
+    @Volatile private var eyeRevision=0L
+    private val captureRevision=java.util.concurrent.atomic.AtomicLong()
+    private var eyeView:V2EyesView?=null
+    private val eyeState=EyeState()
+    private fun resetEyes() {
+        val token=EyeToken(transportRevision,++eyeRevision)
+        eyeState.activate(token);eyeView?.show(eyeState.mood)
+    }
+    private fun publishEyes(ticket:Long,change:(EyeState,EyeToken)->Unit) {
+        val page=eyeRevision
+        runOnUiThread {
+            if(ticket!=transportRevision || page!=eyeRevision || !foreground || !hasWindowFocus() ||
+                !eyesAttached || managementRequested || managementVisible || helpVisible)return@runOnUiThread
+            change(eyeState,EyeToken(ticket,page));eyeView?.show(eyeState.mood)
+        }
+    }
+    private fun silenceEyes() {
+        eyeState.revoke();eyeRevision++;eyeView?.show(EyeMood.IDLE)
+    }
+    private fun cancelRecorders() {
+        captureRevision.incrementAndGet()
+        capture?.requestCancel();exitCapture?.requestCancel()
+    }
+    @Volatile private var capture: Capture? = null
+    @Volatile private var exitCapture: ManagementCapture? = null
     @Volatile private var transportRevision=0L
     @Volatile private var managementRevision=0L
     private var releasedRecorder = RecorderProof()
@@ -43,6 +66,7 @@ class V2VoiceActivity : Activity() {
     private var helpVisible = false
     private var managementReturning=false
     @Volatile private var foreground = false
+    @Volatile private var focused = false
     private var permissionRequested = false
     @Volatile private var connectionNotice="尚未配置V2连接；进入家长验证后可导入已发行的配置。"
     private fun eyes() {
@@ -50,6 +74,7 @@ class V2VoiceActivity : Activity() {
         imageRoute?.clear()
         val frame = android.widget.FrameLayout(this)
         val eyes = V2EyesView(this) { requestParentManagement() }.also { it.onLocalHelp = { showLocalHelp() } }
+        eyeView=eyes;resetEyes()
         frame.addView(eyes)
         val picture = android.widget.ImageView(this).apply {
             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
@@ -98,14 +123,15 @@ class V2VoiceActivity : Activity() {
     private fun openManagementPage(ticket: Long) {
         if (ticket!=managementRevision || !foreground || !hasWindowFocus() || !managementRequested) return
         managementRequested=false; managementVisible=true; eyesAttached=false
+        eyeState.revoke();eyeView?.show(EyeMood.IDLE);eyeRevision++
         panel=AndroidParentPanel(this, { leaveManagement() }, { stopVoice() }, { connectionNotice }).also { it.open() }
         startExitCapture(ticket)
     }
     private fun startExitCapture(ticket: Long) { owner.post {
-        if (ticket!=managementRevision || !foreground || !managementVisible || exitCapture!=null ||
+        if (ticket!=managementRevision || !foreground || !focused || !managementVisible || exitCapture!=null ||
             releaseState=="quarantined" || voice?.quarantined==true || checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED) return@post
         exitCapture=ManagementCapture(assets,owner,
-            { foreground && managementVisible && ticket==managementRevision },
+            { foreground && focused && managementVisible && ticket==managementRevision },
             { runOnUiThread { if (ticket==managementRevision && managementVisible && foreground && hasWindowFocus()) panel?.exit() } },
             { runOnUiThread { if (ticket==managementRevision) stopVoice() } }).also { it.start() }
     } }
@@ -148,14 +174,16 @@ class V2VoiceActivity : Activity() {
         managementReturning=false
         val ticket=++managementRevision
         val reservation=if (entry!=null) pageRequests.reserve(ticket) else null
-        if (entry==null) { helpVisible=false; help?.stop(); managementRequested=true; managementReturning=false; imageRoute?.clear() }
+        if (entry==null) { helpVisible=false; help?.stop(); managementRequested=true; managementReturning=false;silenceEyes();imageRoute?.clear() }
         owner.post {
             if (ticket!=managementRevision || !foreground) return@post
             val client=voice
             if (entry!=null && (client==null || !client.acceptManagementEntry(entry) {
                 reservation!=null && pageRequests.claim(reservation)
             })) return@post
+            if(entry!=null)runOnUiThread {if(ticket==managementRevision && managementRequested)silenceEyes()}
             val playerQuiet=client?.stopForManagement() ?: true
+            captureRevision.incrementAndGet();capture?.requestCancel()
             capture?.close(); capture?.let { releasedRecorder=it.nativeProof }
             val recorderQuiet=capture?.quarantined!=true
             if (recorderQuiet) capture=null
@@ -208,7 +236,7 @@ class V2VoiceActivity : Activity() {
         check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked)
         val ticket = transportRevision; val settings = execution; val images = imageRoute
         owner.post {
-            if (ticket != transportRevision || !foreground || voice != null || capture != null || releaseState == "quarantined") return@post
+            if (ticket != transportRevision || !foreground || !focused || voice != null || capture != null || releaseState == "quarantined") return@post
             releaseState = "active"; budget = PlaybackBudget(android.os.SystemClock::elapsedRealtime, settings.durationSeconds)
             val ssh=try { sshUser?.let { com.littlebuddy.v2.transport.V2Ssh(
                 com.littlebuddy.v2.transport.V2SshProfile.load(this@V2VoiceActivity,it)) } }
@@ -218,9 +246,11 @@ class V2VoiceActivity : Activity() {
                 ssh?.client(base) ?: base }
                 catch (_: Exception) { ssh?.close(); releaseState="released"; return@post }
             var lastLog: com.littlebuddy.v2.feedback.LogStage?=null
-            val client = VoiceClient(owner, { status ->
+            val client = VoiceClient(owner, statusCallback@ { status ->
+                if(ticket!=transportRevision || !foreground || !focused)return@statusCallback
+                publishEyes(ticket){state,key->state.status(key,status)}
                 val stage=when(status) { "compatibility","wake"->com.littlebuddy.v2.feedback.LogStage.CONNECT
-                    "listening"->com.littlebuddy.v2.feedback.LogStage.RECOGNIZE;"speaking"->com.littlebuddy.v2.feedback.LogStage.PLAY;else->null }
+                    "listening"->com.littlebuddy.v2.feedback.LogStage.RECOGNIZE;else->null }
                 if(stage!=null && stage!=lastLog) { lastLog=stage;com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this@V2VoiceActivity,stage) }
                 connectionNotice=when(status) {
                     "incompatible" -> "服务协议不兼容，儿童收音未启用；请管理员核对候选包与服务契约。"
@@ -233,12 +263,12 @@ class V2VoiceActivity : Activity() {
                 playbackSettings = settings,
                 localHelp = { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 management = { entry -> runOnUiThread { if (ticket == transportRevision) requestParentManagement(entry) } },
-                permitted = { foreground && ticket == transportRevision }, images = images,
+                permitted = { foreground && focused && ticket == transportRevision }, images = images,
                 managed = { phase -> runOnUiThread { if (ticket==transportRevision) managementChanged(phase) } },
                 sessionEnded = { runOnUiThread { if (ticket==transportRevision) {
                     managementRevision++; releaseAudio { quiet -> if (quiet && foreground) { eyes(); resumeConfigured() } }
                 } } }, requiredContract=ReleaseCompatibility.CONTRACT,
-                http=http, closeTransport={ ssh?.close() }, ready={ if (ticket==transportRevision && foreground && !managementRequested && !managementVisible) startChildCapture(checkNotNull(voice),ticket) })
+                http=http, closeTransport={ ssh?.close() }, actualOutput={playing->publishEyes(ticket){state,key->state.output(key,playing)}}, ready={ if (ticket==transportRevision && foreground && !managementRequested && !managementVisible) startChildCapture(checkNotNull(voice),ticket) })
             voice = client
             try { client.connect(address, credential)
                 // Capture starts only from the authenticated, compatible scope callback.
@@ -246,9 +276,12 @@ class V2VoiceActivity : Activity() {
         }
     }
     private fun startChildCapture(client: VoiceClient, ticket: Long) {
-        if (capture!=null || exitCapture!=null || releaseState=="quarantined") return
+        if (!foreground || !focused || ticket!=transportRevision || managementRequested || managementVisible || capture!=null || exitCapture!=null || releaseState=="quarantined") return
+        val recorderTicket=captureRevision.incrementAndGet()
+        publishEyes(ticket){state,key->state.beginRecorder(key,recorderTicket)}
         capture=Capture(assets,owner,client,
-            allowed={ foreground && ticket==transportRevision && !managementRequested && !managementVisible }) {
+            allowed={ foreground && focused && ticket==transportRevision && recorderTicket==captureRevision.get() && !managementRequested && !managementVisible },
+            recording={active->publishEyes(ticket){state,key->state.recording(key,recorderTicket,active)}}) {
             runOnUiThread { if (ticket==transportRevision) showLocalHelp() }
         }.also { it.start() }
         owner.removeCallbacks(durationLimit); owner.postDelayed(durationLimit,250)
@@ -273,7 +306,7 @@ class V2VoiceActivity : Activity() {
         }
     }
     private fun releaseAudio(done: (Boolean) -> Unit = {}) {
-        transportRevision++; imageRoute?.clear()
+        transportRevision++;cancelRecorders();resetEyes();imageRoute?.clear()
         owner.post {
         owner.removeCallbacks(durationLimit)
         voice?.close(); voice?.let { releasedPlayer = it.nativeProof() }
@@ -308,7 +341,7 @@ class V2VoiceActivity : Activity() {
         else if (!managementVisible && !helpVisible) { eyes(); resumeConfigured() }
     }
     override fun onPause() {
-        foreground = false; managementRevision++; managementRequested = false
+        foreground = false;cancelRecorders(); managementRevision++; managementRequested = false
         com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this,com.littlebuddy.v2.feedback.LogStage.CANCEL)
         panel?.pause(); helpVisible = false; help?.stop(); stopVoice(); super.onPause()
     }
@@ -324,7 +357,9 @@ class V2VoiceActivity : Activity() {
     @Deprecated("Deprecated in Java") override fun onBackPressed() { back() }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        focused=hasFocus
         if (!hasFocus) {
+            cancelRecorders()
             managementRevision++; managementRequested = false
             panel?.focusLost(); helpVisible = false; help?.stop(); stopVoice()
         } else if (foreground) {
@@ -337,7 +372,7 @@ class V2VoiceActivity : Activity() {
         if (grantResults.any { it != PackageManager.PERMISSION_GRANTED }) stopVoice() else resumeConfigured()
     }
     override fun onDestroy() {
-        foreground = false; managementRevision++; managementRequested = false
+        foreground = false;cancelRecorders(); managementRevision++; managementRequested = false
         panel?.close(); panel = null; help?.close(); help = null
         stopVoice(); owner.post { audioThread.quitSafely() }; configurationWorker.shutdown()
         super.onDestroy()
