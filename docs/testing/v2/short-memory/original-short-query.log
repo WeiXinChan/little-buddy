@@ -1,0 +1,83 @@
+test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) ... 
+  test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) (query='猫') ... FAIL
+  test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) (query='猫呢') ... FAIL
+  test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) (query='猫狗') ... FAIL
+  test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) (query='猫、狗') ... FAIL
+  test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) (query='猫和狗呢') ... FAIL
+test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) ... FAIL
+test_particles_never_make_forty_unrelated_new_sources_pseudo_relevant (tests.v2.test_memory_growth.ShortTopics.test_particles_never_make_forty_unrelated_new_sources_pseudo_relevant) ... FAIL
+
+======================================================================
+FAIL: test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) (query='猫')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 125, in test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction
+    self.assert_source(context,expected['我喜欢猫'])
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 118, in assert_source
+    self.assertEqual(entries.get(expected['source_id']),expected)
+AssertionError: None != {'value': '我喜欢猫', 'source': 'child', 'tur[190 chars]alse}
+
+======================================================================
+FAIL: test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) (query='猫呢')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 125, in test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction
+    self.assert_source(context,expected['我喜欢猫'])
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 118, in assert_source
+    self.assertEqual(entries.get(expected['source_id']),expected)
+AssertionError: None != {'value': '我喜欢猫', 'source': 'child', 'tur[190 chars]alse}
+
+======================================================================
+FAIL: test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) (query='猫狗')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 125, in test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction
+    self.assert_source(context,expected['我喜欢猫'])
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 118, in assert_source
+    self.assertEqual(entries.get(expected['source_id']),expected)
+AssertionError: None != {'value': '我喜欢猫', 'source': 'child', 'tur[190 chars]alse}
+
+======================================================================
+FAIL: test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) (query='猫、狗')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 125, in test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction
+    self.assert_source(context,expected['我喜欢猫'])
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 118, in assert_source
+    self.assertEqual(entries.get(expected['source_id']),expected)
+AssertionError: None != {'value': '我喜欢猫', 'source': 'child', 'tur[190 chars]alse}
+
+======================================================================
+FAIL: test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction) (query='猫和狗呢')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 125, in test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction
+    self.assert_source(context,expected['我喜欢猫'])
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 118, in assert_source
+    self.assertEqual(entries.get(expected['source_id']),expected)
+AssertionError: None != {'value': '我喜欢猫', 'source': 'child', 'tur[190 chars]alse}
+
+======================================================================
+FAIL: test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction (tests.v2.test_memory_growth.ShortTopics.test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 130, in test_short_single_parallel_and_particle_suffix_retrieve_exact_old_correction
+    self.assert_source(context,expected['刚才说错了，我不喜欢猫，我喜欢狗'])
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 118, in assert_source
+    self.assertEqual(entries.get(expected['source_id']),expected)
+AssertionError: None != {'value': '刚才说错了，我不喜欢猫，我喜欢狗', 'source': '[215 chars]alse}
+
+======================================================================
+FAIL: test_particles_never_make_forty_unrelated_new_sources_pseudo_relevant (tests.v2.test_memory_growth.ShortTopics.test_particles_never_make_forty_unrelated_new_sources_pseudo_relevant)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 137, in test_particles_never_make_forty_unrelated_new_sources_pseudo_relevant
+    self.assert_source(context,expected['刚才说错了，我不喜欢猫，我喜欢狗'])
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_memory_growth.py", line 118, in assert_source
+    self.assertEqual(entries.get(expected['source_id']),expected)
+AssertionError: None != {'value': '刚才说错了，我不喜欢猫，我喜欢狗', 'source': '[215 chars]alse}
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.062s
+
+FAILED (failures=7)

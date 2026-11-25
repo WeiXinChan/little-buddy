@@ -1,0 +1,37 @@
+{
+  "base": "4f0a75a92bca2e0433c7da5feb5404df0baf3bde",
+  "original_targeted_tests": 2,
+  "original_failures": 2,
+  "hot": 5,
+  "cold": 38,
+  "queries": {
+    "猫": {
+      "original_cat_found": false,
+      "correction_found": false
+    },
+    "狗": {
+      "original_cat_found": false,
+      "correction_found": false
+    },
+    "猫狗": {
+      "original_cat_found": false,
+      "correction_found": false
+    },
+    "猫呢": {
+      "original_cat_found": false,
+      "correction_found": false
+    },
+    "狗呢": {
+      "original_cat_found": false,
+      "correction_found": false
+    },
+    "喜欢猫": {
+      "original_cat_found": true,
+      "correction_found": true
+    },
+    "刚才说错了": {
+      "original_cat_found": false,
+      "correction_found": true
+    }
+  }
+}

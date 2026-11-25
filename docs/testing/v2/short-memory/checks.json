@@ -1,0 +1,48 @@
+{
+  "base": "4f0a75a92bca2e0433c7da5feb5404df0baf3bde",
+  "normal_executed": 12,
+  "normal_passed": 12,
+  "normal_failed": 0,
+  "normal_errors": 0,
+  "normal_skipped": 0,
+  "suite": [
+    "tests.v2.test_m05.Memory.test_correction_and_two_preference_dimensions_keep_bounded_sources",
+    "tests.v2.test_m05.Memory.test_new_memory_fields_share_capacity_and_input_update_is_atomic",
+    "tests.v2.test_memory_growth.ShortTopics",
+    "tests.v2.test_memory_growth.Growth.test_five_hundred_growing_sources_compress_and_retrieve_first_exact_negation",
+    "tests.v2.test_memory_growth.Growth.test_private_archive_not_retrieved_or_counted_by_shared_projection_and_handoff_clears",
+    "tests.v2.test_memory_growth.Growth.test_capacity_keeps_accepted_evidence_and_recent_input_with_explicit_gap",
+    "tests.v2.test_memory_growth.Growth.test_invalid_provenance_remains_atomic_after_archive_compression",
+    "tests.v2.test_memory_growth.Growth.test_compaction_keeps_heard_key_facts_but_never_proposed_facts"
+  ],
+  "original_final_run": {
+    "executed": 266,
+    "passed": 264,
+    "failed": 2,
+    "rerun": false,
+    "copied_log_sha256": "4151391778065df61a124023c8302755b33fcb8d33c292cd1bc8de7d4b7d9e15"
+  },
+  "original_targeted": {
+    "executed": 2,
+    "failed": 2
+  },
+  "original_new_short_query_repro": {
+    "executed": 2,
+    "failed_assertions": 7
+  },
+  "hot": 5,
+  "cold": 38,
+  "exact_unique_sources": 43,
+  "source_records_and_ids_unchanged": true,
+  "top_cold_query_limit": 12,
+  "projection_byte_limit": 18000,
+  "session_byte_limit": 65536,
+  "source_archive_limit": 1048576,
+  "production_scope": [
+    "backend/v2/memory.py"
+  ],
+  "real_cloud_calls": 0,
+  "android_deploy_or_supplier_changes": false,
+  "compile": "pass",
+  "diff_check": "pass"
+}
