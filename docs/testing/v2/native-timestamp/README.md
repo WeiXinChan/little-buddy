@@ -65,17 +65,31 @@ adb -s "$SERIAL" shell pidof com.littlebuddy.sim.v2
 adb -s "$SERIAL" install -r -t "$TEST_APK"
 adb -s "$SERIAL" shell pidof com.littlebuddy.sim.v2
 # Require empty before instrument; root keeps single-device ownership and prevents other launches.
-adb -s "$SERIAL" shell am instrument -w -r \
+adb -s "$SERIAL" shell am instrument --no-logcat -w -r \
   -e class com.littlebuddy.NativeTimestampTest#nativeTimestampAndProductionLedger \
   -e nativeTimestampProbe true -e businessIdlePreflight true \
   com.littlebuddy.sim.v2.test/com.littlebuddy.NativeTimestampRunner
 ```
 
 Save this selected instrumentation stdout as METADATA ONLY. Do not collect full logcat, PCM,
-recordings, transcripts or environmental content. If the device's am tool supports --no-logcat,
-root should add it to suppress generic crash-log attachments; lack of a privacy-safe invocation
-must be reported rather than collecting unrelated logs. Never invoke the default runner and
-interpret this probe's dependency skip as a driver pass. Runner forces disableAnalytics=true.
+recordings, transcripts or environmental content. Use `--no-logcat` as above. A missing option in
+`am help` is not proof the parser rejects it: OPPO API36 accepted this option in a check against a
+nonexistent component (no real probe started). AOSP Android16 [Am.java](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/cmds/am/src/com/android/commands/am/Am.java)
+recognizes the option. If a different device actually rejects it, retain that response: root may
+explicitly authorize plain `-w -r` text output with no protobuf/file/profile flags. In AOSP
+[Instrument.java](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/cmds/am/src/com/android/commands/am/Instrument.java),
+only ProtoStatusReporter calls readLogcat; TextStatusReporter emits the selected result bundles.
+Do not invoke logcat or enable protobuf/file/profile reporting. Unknown vendor behavior remains
+unverified. Never invoke the default runner or interpret a dependency skip as a driver pass.
+Runner forces disableAnalytics=true.
+
+An install observation timeout is not a terminal package-manager result. Retain the original
+client/session handle and partial stdout/stderr, inspect that same package's active/historical
+session and confirmation UI, and keep the device reserved while an owned install is live. Do not
+submit another install merely because an observation expired. A new attempt requires proof the
+original task is terminal or missing plus explicit bounded retry scope; preserve the first result.
+A nonexistent-component parser check, an install attempt and a real probe invocation are separate
+counts. None is hardware acceptance without the final probe oracle below.
 
 Class/method is exactly the command above. Missing exact class/probe/host-idle arguments refuses
 execution. Default-runner discovery reports an explicit dependency skip before native allocation.
