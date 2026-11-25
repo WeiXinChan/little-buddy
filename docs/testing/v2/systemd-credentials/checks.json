@@ -1,0 +1,23 @@
+{
+  "base": "ba7ad42596feb315cddb910d15baa53d0956f1e8",
+  "normal_executed": 10,
+  "normal_passed": 10,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "normal_scope": "8 new permission/mount boundaries + 2 directly affected existing temporary preflight/mode tests",
+  "real_synthetic_systemd_units": 2,
+  "original_namespace_exit": 23,
+  "original_namespace_expected_rejection": true,
+  "fixed_namespace_exit": 0,
+  "fixed_namespace_accepted": true,
+  "production_units_touched": 0,
+  "production_credentials_read": false,
+  "real_cloud_calls": 0,
+  "device": false,
+  "old_business_suites_rerun": false,
+  "deployment_source_modes_unchanged": true,
+  "ordinary_groupread_rejected": true,
+  "compile": "pass",
+  "diff_check": "pass"
+}

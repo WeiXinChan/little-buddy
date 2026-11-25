@@ -1,0 +1,15 @@
+test_descriptor_mount_identity_mismatch_is_not_accepted (tests.v2.test_systemd_credentials.Credentials.test_descriptor_mount_identity_mismatch_is_not_accepted) ... ok
+test_exact_root_mode_gid_path_and_root_caller_constraints (tests.v2.test_systemd_credentials.Credentials.test_exact_root_mode_gid_path_and_root_caller_constraints) ... ok
+test_leaf_parent_symlink_and_hardlink_rejected (tests.v2.test_systemd_credentials.Credentials.test_leaf_parent_symlink_and_hardlink_rejected) ... ok
+test_missing_proc_or_untrusted_anchor_fails_closed (tests.v2.test_systemd_credentials.Credentials.test_missing_proc_or_untrusted_anchor_fails_closed) ... ok
+test_normal_private_sources_remain_accepted_without_mount_or_environment (tests.v2.test_systemd_credentials.Credentials.test_normal_private_sources_remain_accepted_without_mount_or_environment) ... ok
+test_ordinary_groupread_directory_or_file_rejected_even_with_fake_environment (tests.v2.test_systemd_credentials.Credentials.test_ordinary_groupread_directory_or_file_rejected_even_with_fake_environment) ... ok
+test_size_type_and_nonsecret_rules_unchanged (tests.v2.test_systemd_credentials.Credentials.test_size_type_and_nonsecret_rules_unchanged) ... ok
+test_writable_filesystem_rejected_despite_spoofed_path_and_root_metadata (tests.v2.test_systemd_credentials.Credentials.test_writable_filesystem_rejected_despite_spoofed_path_and_root_metadata) ... ok
+test_real_control_release_verify_and_preflight_no_db_no_service (tests.v2.test_deploy_inputs.DeployInputs.test_real_control_release_verify_and_preflight_no_db_no_service) ... ok
+test_root_sources_and_systemd_readonly_credential_modes_are_distinct (tests.v2.test_deploy_inputs.DeployInputs.test_root_sources_and_systemd_readonly_credential_modes_are_distinct) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.669s
+
+OK
