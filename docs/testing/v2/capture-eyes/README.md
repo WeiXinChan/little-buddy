@@ -56,8 +56,8 @@ Run offline under scripts/with-build-lock:
     python3 scripts/test-v2-capture.py
 
 It compiles actual Capture/ManagementCapture/Playback/ring/lease/reducer against controlled
-Android/native substitutes (no device/microphone). OriginalCaptureTest is unchanged between old
-baseline and repaired production source: 21/50-frame delayed owner, cross-instance overlap,
+Android/native substitutes (no device/microphone). OriginalCaptureTest retains the original six behavioral assertions between old
+baseline and repaired production source (and strengthens wake-before-batch ordering): 21/50-frame delayed owner, cross-instance overlap,
 child/management mutual exclusion, native-before-model cancellation, re-wake coordinates.
 The baseline is exported from git b5be01b4, not a handwritten faulty reimplementation.
 Safety tests add zeroization, failure, post rejection, bounded wait, native constructor/start

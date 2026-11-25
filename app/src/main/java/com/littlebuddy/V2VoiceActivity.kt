@@ -268,7 +268,13 @@ class V2VoiceActivity : Activity() {
                 sessionEnded = { runOnUiThread { if (ticket==transportRevision) {
                     managementRevision++; releaseAudio { quiet -> if (quiet && foreground) { eyes(); resumeConfigured() } }
                 } } }, requiredContract=ReleaseCompatibility.CONTRACT,
-                http=http, closeTransport={ ssh?.close() }, actualOutput={playing->publishEyes(ticket){state,key->state.output(key,playing)}}, ready={ if (ticket==transportRevision && foreground && !managementRequested && !managementVisible) startChildCapture(checkNotNull(voice),ticket) })
+                http=http, closeTransport={ ssh?.close() }, actualOutput={playing->
+                    if(playing && foreground && focused && ticket==transportRevision && lastLog!=com.littlebuddy.v2.feedback.LogStage.PLAY) {
+                        lastLog=com.littlebuddy.v2.feedback.LogStage.PLAY
+                        com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this@V2VoiceActivity,com.littlebuddy.v2.feedback.LogStage.PLAY)
+                    }
+                    publishEyes(ticket){state,key->state.output(key,playing)}
+                }, ready={ if (ticket==transportRevision && foreground && !managementRequested && !managementVisible) startChildCapture(checkNotNull(voice),ticket) })
             voice = client
             try { client.connect(address, credential)
                 // Capture starts only from the authenticated, compatible scope callback.
