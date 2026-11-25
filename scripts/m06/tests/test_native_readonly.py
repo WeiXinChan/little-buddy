@@ -142,7 +142,7 @@ class NativeReadOnlyTests(unittest.TestCase):
    result=dict(test_exit=1,transport_complete=True,alignment_exit=0,finished=True,released=True,stopped=True,worker_done=True,lease_available=True,recording=False)
    def arm(source,validator,**kwargs):
     events.append('arm');self.assertEqual(source,7);self.assertEqual(kwargs,dict(input_backend='pa-only',receipt_prefix='mic-pa-'));return result
-   with patch.dict(os.environ,dict(M06_NATIVE_READONLY='1',M06_SDK_INPUT_GATE='1',BUDDY_SYNTHETIC_AVD_PROBE='1')),patch.object(main,'preflight',return_value=META),patch('native_readonly.NativeReadOnly',return_value=proof),patch.object(main,'run_arm',side_effect=arm):
+   with patch.dict(os.environ,dict(M06_REQUIRE_HDA='0',M06_NATIVE_READONLY='1',M06_SDK_INPUT_GATE='1',BUDDY_SYNTHETIC_AVD_PROBE='1')),patch.object(main,'preflight',return_value=META),patch('native_readonly.NativeReadOnly',return_value=proof),patch.object(main,'run_arm',side_effect=arm):
     self.assertEqual(main.main(),1)
    self.assertEqual(events,['prepare','arm'])
   finally:os.chdir(previous)
