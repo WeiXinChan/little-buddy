@@ -1,0 +1,13 @@
+test_combined_rejection_prevents_even_first_sentence (test_m10.M10.test_combined_rejection_prevents_even_first_sentence) ... ok
+test_later_segment_rejected_before_its_synthesis (test_m10.M10.test_later_segment_rejected_before_its_synthesis) ... ok
+test_malformed_and_unavailable_safety_fail_closed_and_redacted (test_m10.M10.test_malformed_and_unavailable_safety_fail_closed_and_redacted) ... ok
+test_negative_control_bypassing_semantic_gate_is_observable (test_m10.M10.test_negative_control_bypassing_semantic_gate_is_observable) ... ok
+test_negative_control_removing_literal_guard_is_observable (test_m10.M10.test_negative_control_removing_literal_guard_is_observable) ... ok
+test_normal_fantasy_and_refused_danger_pair_transport (test_m10.M10.test_normal_fantasy_and_refused_danger_pair_transport) ... ok
+test_relationship_literal_guard_after_semantic_allow (test_m10.M10.test_relationship_literal_guard_after_semantic_allow) ... ok
+test_r8801_safety_outage_preserves_independent_help (test_m10.SafetyHelpAcceptance.test_r8801_safety_outage_preserves_independent_help) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.072s
+
+OK
