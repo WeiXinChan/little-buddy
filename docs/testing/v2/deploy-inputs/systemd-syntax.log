@@ -1,0 +1,5 @@
+systemd-analyze verify --man=no temporary-unit
+Production python/WorkingDirectory/credential-source paths replaced with temporary fixture paths only.
+No unit installed, no service started, no credentials acquired.
+exit=0
+/etc/systemd/system/tat_agent.service:7: PIDFile= references a path below legacy directory /var/run/, updating /var/run/tat_agent.pid → /run/tat_agent.pid; please update the unit file accordingly.

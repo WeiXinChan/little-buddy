@@ -29,3 +29,6 @@
 ### 最小实测
 
 tests.log为新增10方法（正常9＋权限门槛负控1）和原配置/审核503抽查3，合计13执行/13通过/0跳过；不是全套QA。真实CLI子进程的loopback TLS/auth/scope/pause/resume/坏帧安全日志/SIGTERM，以及活动凭据到期清会话/新握手拒绝通过；没有儿童音频、供应商推理或真机。Python编译与diff检查通过。systemd-syntax.log仅临时单元替换可执行路径的语法验证exit0，不是生产安装/启动证明。发行包实际固定head打包/重复hash/解包verify结果在交付评论及package-check.json。
+
+
+部署接线补充：默认unit与v2-control现同时传入image-config和feedback-database，详情与首装父目录步骤见`docs/testing/v2/deploy-inputs/README.md`。root源0700/0600与DynamicUser只读credential副本语义不变。反馈状态在`StateDirectory=little-buddy-v2`下真实0700的feedback子目录；离线root预检不建目录/数据库，首装先由root准备父目录。默认不声明single-store-no-exports-v1，all_copies_deleted不能由单库删除推断。此前版本发行包不包含此接线，须由root从最终已合SHA重打包再审定启动；本批没有部署。

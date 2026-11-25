@@ -1,0 +1,21 @@
+{
+  "base": "fd98c722e4896ffe953840951f19456c76f46a33",
+  "normal_executed": 8,
+  "normal_passed": 8,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "negative_configuration_cases": "missing image inputs/old Qwen review model/insecure permissions/missing state/leaf symlink; included in normal methods, not separate mutation run",
+  "systemd_version": "systemd 255 (255.4-1ubuntu8.17)",
+  "systemd_syntax_exit": 0,
+  "systemd_syntax_fixture": "production executable/WorkingDirectory/credential-source paths replaced only; actual systemd-analyze, no install/start/credential acquisition",
+  "temporary_release_verify": "pass actual subprocess",
+  "temporary_live_check": "pass actual subprocess",
+  "feedback_database_created": false,
+  "feedback_copies_reviewed": false,
+  "real_credentials_read": false,
+  "real_cloud_calls": 0,
+  "services_started": 0,
+  "system_accounts_created": 0,
+  "heavy_lock_used": false
+}
