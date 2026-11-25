@@ -6,17 +6,31 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import stat
 import sys
 import uuid
 
 SERVICE='little-buddy-v2.service'
 ROOT=Path('/opt/little-buddy-v2')
 CONFIG=Path('/etc/little-buddy-v2')
+STATE=Path('/var/lib/little-buddy-v2/feedback')
 CONTRACT='v2-voice2-safety1-images2-volume1-management1-end1'
 
 
 def run(command,*,cwd=None):
     subprocess.run(command,cwd=cwd,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+
+
+def checked_image_sources():
+    # LoadCredential requires all three sources even when image.json disables
+    # generation. Mirror that requirement without opening/logging their contents.
+    directory=CONFIG.lstat()
+    if (not stat.S_ISDIR(directory.st_mode) or stat.S_IMODE(directory.st_mode)!=0o700 or
+        directory.st_uid not in {0,os.geteuid()}):raise ValueError()
+    for name in ('image.json','dashscope-image-key','dashscope-review-key'):
+        info=(CONFIG/name).lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink!=1 or stat.S_IMODE(info.st_mode)!=0o600 or
+            info.st_uid not in {0,os.geteuid()}):raise ValueError()
 
 
 def checked_release(sha):
@@ -25,11 +39,13 @@ def checked_release(sha):
     if target.is_symlink() or not (target/'.venv/bin/python').is_file():raise ValueError()
     python=str(target/'.venv/bin/python')
     run([python,'-B','-m','backend.v2.release','verify','--directory',str(target),'--ref',sha],cwd=target)
+    checked_image_sources()
     run([python,'-B','-m','backend.v2.live','--check','--cert',str(CONFIG/'tls-certificate.pem'),
         '--key',str(CONFIG/'tls-private-key.pem'),'--ca-file',str(CONFIG/'trust-anchor.pem'),
         '--tls-name','127.0.0.1','--token-file',str(CONFIG/'v2-device-token'),
         '--device-scope',str(CONFIG/'device-scope.json'),'--service-env',str(CONFIG/'service.env'),
-        '--credential-directory',str(CONFIG),'--apk-contract',CONTRACT],cwd=target)
+        '--credential-directory',str(CONFIG),'--image-config',str(CONFIG/'image.json'),
+        '--feedback-database',str(STATE/'issues.sqlite'),'--port','19483','--apk-contract',CONTRACT],cwd=target)
     return target
 
 
