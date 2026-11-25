@@ -27,7 +27,9 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val permitted: () -> Boolean = { true },
                            private var images: ImagePort? = null,
                            private val managed: (ManagementState.Phase) -> Unit = {},
-                           private val sessionEnded: () -> Unit = {}) {
+                           private val sessionEnded: () -> Unit = {},
+                           private val requiredContract: String? = null,
+                           private val ready: () -> Unit = {}) {
     fun nativeProof() = player.nativeProof()
     private var controlQuarantined=false
     val quarantined get() = player.quarantined || controlQuarantined
@@ -38,6 +40,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var epoch = 0L
     private var sequence = 0L
     private var active = false
+    private var compatible = requiredContract == null
+    private var compatibilityDeadline=0L
     @Volatile var isAwake = false; private set
     @Volatile var idleSerial = 0L; private set
     @Volatile var inputSerial = 0L; private set
@@ -73,7 +77,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         override fun run() {
             if (!active) return
             if (!permitted()) { fail("lifecycle"); return }
-            try { managementState.checkDeadline(); if (!childBlocked) { gate.checkResponseDeadline(); player.tick(); gate.tick(outputBusy) } } catch (_: Exception) { fail("playback"); return }
+            try { if (!compatible) check(SystemClock.elapsedRealtime()<compatibilityDeadline)
+                managementState.checkDeadline(); if (compatible && !childBlocked) { gate.checkResponseDeadline(); player.tick(); gate.tick(outputBusy) } } catch (_: Exception) { fail("playback"); return }
             handler.postDelayed(this, 10)
         }
     }
@@ -96,7 +101,11 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         socket = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) { handler.post {
                 if (socket !== webSocket || !active) return@post
-                status("wake"); pump.run(); heartbeat.run()
+                if (requiredContract!=null) {
+                    compatible=false; compatibilityDeadline=SystemClock.elapsedRealtime()+4000
+                    send("scope"); status("compatibility")
+                } else { compatible=true; status("wake"); ready() }
+                pump.run(); heartbeat.run()
             } }
             override fun onMessage(webSocket: WebSocket, text: String) { handler.post {
                 if (socket !== webSocket || !active) return@post
@@ -126,8 +135,17 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         if (event.getLong("epoch") != epoch) return
         val kind=event.getString("type")
         if (childBlocked && kind !in setOf("scope", "management_state", "revoke", "failure")) return
+        if (!compatible && kind!="scope") { if (kind=="failure") fail("incompatible"); return }
         when (kind) {
             "scope" -> {
+                if (!compatible) {
+                    if (event.getLong("epoch")!=epoch || event.getLong("revision")!=gate.revision ||
+                        !ReleaseCompatibility.accepts(event.getInt("v"),event.optString("protocol_contract", ""),
+                            event.optInt("management_v",-1),event.optString("session",""),event.optLong("turn",-1),
+                            event.getLong("epoch"),event.optLong("revision",-1),event.optString("state","")) ||
+                        event.optString("protocol_contract","")!=requiredContract) { fail("incompatible"); return }
+                    compatible=true; managementState.normal(managementScope(event)); status("wake"); ready(); return
+                }
                 if (!managementPending || event.getInt("management_v") != 1 ||
                     event.getString("state") !in setOf("active", "waiting_wake")) return
                 val request = managementState.scoped(managementScope(event)) ?: return
@@ -217,6 +235,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                     if (event.getString("player") != binding.player || event.getInt("stream") != binding.stream) return
                     images?.reveal(ImageReveal(ready, binding.player, binding.stream, event.getString("segment"), event.getLong("end")))
                 } else if (images == null) reveal(event.getString("effect"), event.getInt("topic"))
+                else error("unsupported visual effect")
             }
             "thinking_wait" -> status("thinking")
             "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status("listening") }
@@ -289,7 +308,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             event.getInt("topic"), event.getString("token"), ImageAsset(id, sha, 512, 512))
     }
     fun input(samples: ShortArray, count: Int, speech: Boolean = true, capturedAt: Long = SystemClock.elapsedRealtime()) {
-        if (!permitted() || childBlocked || !managementState.mediaAllowed) { samples.fill(0); return }
+        if (!permitted() || !compatible || childBlocked || !managementState.mediaAllowed) { samples.fill(0); return }
         val age = SystemClock.elapsedRealtime() - capturedAt
         require(age in 0..20000) { "capture age" }
         require(count in 1..3200)
@@ -298,7 +317,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         send("input", "pcm" to Base64.encodeToString(bytes.array(), Base64.NO_WRAP), "speech" to speech, "age_ms" to age)
         bytes.array().fill(0)
     }
-    fun wake(observedAt: Long = SystemClock.elapsedRealtime()) { if (isAwake || !active || !managementState.wake()) return; childBlocked=false; isAwake = true; gate.wake(observedAt); send("wake"); status("listening") }
+    fun wake(observedAt: Long = SystemClock.elapsedRealtime()) { if (isAwake || !active || !compatible || !managementState.wake()) return; childBlocked=false; isAwake = true; gate.wake(observedAt); send("wake"); status("listening") }
     fun frame(samples: ShortArray, speech: Boolean, capturedAt: Long = SystemClock.elapsedRealtime()) {
         if (childBlocked || !managementState.mediaAllowed) { samples.fill(0); return }
         if (speech) gate.speech(capturedAt) else gate.quiet()

@@ -7,7 +7,8 @@ import java.util.concurrent.Executors
 
 /** Serial IO/KDF worker. System prompts never retain a Grant or an old PIN buffer. */
 internal class AndroidParentPanel(private val activity: Activity, leave: () -> Unit,
-                                  private val securityRevoked: () -> Unit = {}) {
+                                  private val securityRevoked: () -> Unit = {},
+                                  private val connectionNotice: () -> String = { "" }) {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { run -> Thread(run, "v2-parent-io") }
     private lateinit var page: ParentPanelView
@@ -21,7 +22,7 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
         override fun run() { if (!closed) { model.tick(); main.postDelayed(this, 500) } }
     }
     init {
-        page = ParentPanelView(activity, model)
+        page = ParentPanelView(activity, model, connectionNotice = connectionNotice)
         prompt = AndroidOwnerPrompt(activity, { task -> worker.execute(task) }, { if (!closed && activity.hasWindowFocus()) open(force = true) })
     }
     private fun beginOwner(operation: OwnerOperation) { securityRevoked(); model.pause { page.pause() }; prompt.begin(operation) }

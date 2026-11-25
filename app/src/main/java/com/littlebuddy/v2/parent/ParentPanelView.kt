@@ -19,7 +19,8 @@ import android.widget.TextView
 
 /** Actual native widgets. No PIN String, saved input, autofill, suggestions or clipboard import. */
 internal class ParentPanelView(private val activity: Activity, private val model: ParentPanelModel,
-    private val feedback: ParentFeedbackRoute = AndroidParentFeedbackRoute) {
+    private val feedback: ParentFeedbackRoute = AndroidParentFeedbackRoute,
+    private val connectionNotice: () -> String = { "" }) {
     private val inputs = mutableListOf<EditText>()
     private val routes = ParentRouteSlot<ParentRoutePage>({ it.pause() }, { it.close() })
     fun pause() { clearInputs(); routes.pause() }
@@ -55,6 +56,8 @@ internal class ParentPanelView(private val activity: Activity, private val model
             PanelMode.CHANGE_PIN -> "修改 PIN"
             else -> "家长管理"
         }, 26f)
+        val version=activity.packageManager.getPackageInfo(activity.packageName,0)
+        label("V2 ${version.versionName} · 连接状态：${connectionNotice()}",14f)
         label(if (state.notice == PanelNotice.NONE && state.mode == PanelMode.SETTINGS)
             "已验证。退出或闲置后会锁定。" else notice(state.notice))
         when (state.mode) {
@@ -98,7 +101,7 @@ internal class ParentPanelView(private val activity: Activity, private val model
                 button("保存 PIN") { model.setOwnerPin(take(first), take(second)) }
             }
             PanelMode.CONNECTION -> {
-                label("只导入管理员已发行的本设备 V2 地址和凭据，不在这里创建账号或令牌。")
+                label("只导入管理员已发行的本设备 V2 地址和凭据，不在这里创建账号或令牌。TLS与候选协议核对通过后才启用儿童收音。")
                 val address = EditText(activity).apply { hint = "wss://…/v2/voice"; isSaveEnabled = false; body.addView(this) }
                 val secret = EditText(activity).apply {
                     hint = "已发行的设备连接凭据"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
