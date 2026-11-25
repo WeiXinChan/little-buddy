@@ -39,7 +39,7 @@ def inspect(apk):
             raise ValueError('apk_resources_mismatch')
         if any(value in json.dumps(meta) for value in ['/home/','/tmp/','Bearer ','PRIVATE KEY','password']):
             raise ValueError('private_build_metadata')
-        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=17 or meta['version_name']!='2.0.0-rc3':
+        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=18 or meta['version_name']!='2.0.0-rc4':
             raise ValueError('candidate_version_mismatch')
         return meta
 

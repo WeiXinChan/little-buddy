@@ -16,7 +16,9 @@ internal sealed class FeedbackScreen {
 /** Exactly one serial worker owns one vault/core, independently of page lifetime. */
 internal class FeedbackEngine(private val queue: FeedbackQueue, private val ui: FeedbackQueue,
     private val makeCore: (ParentAuthorizer) -> FeedbackCore,
-    private val available: () -> Boolean = { false }) {
+    private val available: () -> Boolean = { false },
+    private val cancelNetwork: ()->Unit = {},
+    private val withinPage: (FeedbackPageAuthority, ()->FeedbackScreen)->FeedbackScreen = { _,action->action() }) {
     private val router = FeedbackSessionRouter()
     private var core: FeedbackCore? = null // worker only
     private val page = AtomicReference<FeedbackController?>()
@@ -24,14 +26,14 @@ internal class FeedbackEngine(private val queue: FeedbackQueue, private val ui: 
     fun open(authority: FeedbackPageAuthority, render: (FeedbackScreen) -> Unit): FeedbackController {
         val next = FeedbackController(this, authority, render)
         router.install(authority)
-        page.getAndSet(next)?.retire()
+        page.getAndSet(next)?.let { cancelNetwork();it.retire() }
         next.showList()
         return next
     }
     fun current(controller: FeedbackController) = page.get() === controller && router.current(controller.authority)
     fun close(controller: FeedbackController) {
         router.close(controller.authority)
-        if (page.compareAndSet(controller, null)) queue.post { if (page.get() == null) core?.cancelDraft() }
+        if (page.compareAndSet(controller, null)) { cancelNetwork();queue.post { if (page.get() == null) core?.cancelDraft() } }
     }
     fun run(controller: FeedbackController, version: Long, action: (FeedbackCore) -> FeedbackScreen) {
         queue.post {
@@ -40,7 +42,7 @@ internal class FeedbackEngine(private val queue: FeedbackQueue, private val ui: 
                 ui.post { if (controller.matches(version)) controller.pause() }
                 return@post
             }
-            val screen = try { router.asPage(controller.authority) { action(core()) } }
+            val screen = try { withinPage(controller.authority) { router.asPage(controller.authority) { action(core()) } } }
             catch (error: FeedbackFailure) { FeedbackScreen.Notice(error.reason) }
             catch (_: Exception) { FeedbackScreen.Notice(Failure.STORAGE) }
             controller.stage(version, screen)
@@ -80,6 +82,8 @@ internal class FeedbackEngine(private val queue: FeedbackQueue, private val ui: 
         }
     }
     fun providerAvailable() = available()
+    fun cancel(controller: FeedbackController) { if(page.get()===controller)cancelNetwork() }
+    fun record(fields: Map<String,Any?>) { queue.post { runCatching { core().record(fields) } } }
 }
 
 internal class FeedbackController(private val engine: FeedbackEngine, internal val authority: FeedbackPageAuthority,
@@ -122,6 +126,7 @@ internal class FeedbackController(private val engine: FeedbackEngine, internal v
     fun matches(value: Long) = value == version.get() && sink != null
     internal fun deliver(screen: FeedbackScreen) { sink?.invoke(screen) }
     private fun action(invalidate: Boolean = true, work: (FeedbackCore) -> FeedbackScreen) {
+        engine.cancel(this)
         if (invalidate) authority.invalidate()
         val requested = version.incrementAndGet()
         pending.set(null)
@@ -147,6 +152,10 @@ internal class FeedbackController(private val engine: FeedbackEngine, internal v
     fun detail(id: String) = action { value ->
         token = null; value.cancelDraft()
         FeedbackScreen.Detail(value.list().find { it.id == id } ?: throw FeedbackFailure(Failure.STALE))
+    }
+    fun refresh(id: String) = action { value ->
+        token=null;value.refresh(id)
+        FeedbackScreen.Detail(value.list().find { it.id==id } ?: throw FeedbackFailure(Failure.STALE))
     }
     fun withdraw(id: String) = action { value ->
         token = null; value.withdraw(id); value.drainDeletions()

@@ -38,7 +38,7 @@ internal class AndroidOwner private constructor(val binding: String, private val
         private const val ALIAS = "little-buddy-v2-system-owner-v1"
         private var instance: AndroidOwner? = null
         private fun keys() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        @Synchronized fun open(activity: Activity): AndroidOwner {
+        @Synchronized fun open(activity: android.content.Context, create: Boolean = true): AndroidOwner {
             AndroidParentStore.worker()
             instance?.let { return it }
             if (Build.VERSION.SDK_INT < 30) {
@@ -48,6 +48,7 @@ internal class AndroidOwner private constructor(val binding: String, private val
             check(activity.getSystemService(KeyguardManager::class.java).isDeviceSecure)
             val store = keys()
             if (!store.containsAlias(ALIAS)) {
+                check(create) { "Owner key unavailable" }
                 // Never regenerate a missing owner key to take over an existing encrypted domain.
                 check(!store.containsAlias("little-buddy-v2-parent-v1"))
                 check(listOf("v2-parent-v1", "v2-parent-v1.bak", "v2-parent-v1.new")

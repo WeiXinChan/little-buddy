@@ -32,10 +32,17 @@ enum class Category { RECOGNITION, CONVERSATION, INTERRUPT, SOUND_NETWORK, IMAGE
 enum class FeedbackState { PENDING, SEND_FAILED, SUBMITTED, PROCESSING, REPLIED, DELETE_PENDING, DELETING, DELETE_FAILED, DELETED }
 /** Payload is deliberately not a data class: toString must never print user text. */
 class FeedbackPayload(val category: Category, val description: String, val logs: ByteArray)
-class SubmitReceipt(val submittedAt: Long)
+class SubmitReceipt(val submittedAt: Long, val deleteBy: Long? = null)
 class DeleteReceipt(val receivedAt: Long, val allCopiesDeleted: Boolean)
 
+class FeedbackRemote(val submittedAt: Long?, val deleteBy: Long, val state: FeedbackState, val reply: String)
 interface FeedbackProvider {
+    fun binding(): String? = null
+    fun submitAdmitted(key: String, payload: FeedbackPayload, binding: String?, admit: (() -> Unit) -> Boolean): SubmitReceipt =
+        submit(key,payload) { admit {} }
+    fun withdrawBound(key: String, binding: String?): DeleteReceipt = withdraw(key)
+    fun read(key: String, binding: String?, admit: (() -> Unit) -> Boolean): FeedbackRemote = throw FeedbackFailure(Failure.UNAVAILABLE)
+
     /** Unreviewed D02/D06 providers must return false. No network credentials in this domain. */
     fun available(): Boolean
     /** The reviewed adapter must enforce device binding and a final grant check at admission. */

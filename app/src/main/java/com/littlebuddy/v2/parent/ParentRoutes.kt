@@ -38,6 +38,12 @@ internal object AndroidParentRuntime {
         if (!AndroidParentStore.hasExistingDomain(activity)) return ParentPlaybackSettings()
         return load(activity).childConfiguration()?.playback
     }
+    /** Deletion-only recovery can load existing credentials, never initialize an owner/domain. */
+    fun existing(context: android.content.Context): ParentDomain? {
+        if(!AndroidParentStore.hasExistingDomain(context))return null
+        val owner=AndroidOwner.open(context,create=false)
+        return AndroidParentDomain.open(context.applicationContext,owner.binding,owner)
+    }
     fun load(activity: Activity): ParentDomain {
         val owner = AndroidOwner.open(activity); authority = owner
         return AndroidParentDomain.open(activity.applicationContext, owner.binding, owner)

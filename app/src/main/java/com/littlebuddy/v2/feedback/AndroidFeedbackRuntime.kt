@@ -12,8 +12,9 @@ import android.os.SystemClock
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.io.File
+import com.littlebuddy.v2.parent.ParentDomain
 
-/** Local monotonic continuity only, not a trusted server clock. No real provider is enabled. */
+/** Local monotonic continuity only, not a trusted server clock. Network activation still requires an imported private connection. */
 internal class AndroidFeedbackClock : FeedbackClock {
     private val wall = System.currentTimeMillis()
     private val elapsed = SystemClock.elapsedRealtime()
@@ -47,6 +48,8 @@ internal object AndroidFeedbackRuntime {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadScheduledExecutor { work -> Thread(work, "v2-feedback-local") }
     private var instance: FeedbackEngine? = null
+    private var transport: AndroidFeedbackTransport? = null
+    private var provider: FeedbackWireProvider? = null
     private var maintenance: FeedbackMaintenance? = null
     private var owner: FeedbackCoreOwner? = null // retained for process lifetime, all access on worker
     val jobScheduled: Boolean get() = maintenance?.jobScheduled == true
@@ -56,19 +59,26 @@ internal object AndroidFeedbackRuntime {
     @Synchronized fun open(context: Context): FeedbackEngine {
         instance?.let { return it }
         val app = context.applicationContext
+        val configured=AndroidFeedbackTransport(app).also { transport=it }
+        val network=FeedbackWireProvider(configured::configuration).also { provider=it }
         val queue = FeedbackQueue { action -> worker.execute(action) }
         val next = FeedbackEngine(queue, FeedbackQueue { action -> main.post(action) }, { authorizer ->
             check(Looper.myLooper() != Looper.getMainLooper())
             val store = owner ?: FeedbackCoreOwner(File(app.noBackupFilesDir, "m09-feedback.owner"),
-                { AndroidFeedbackVault.open(app) }, AndroidFeedbackClock()).also { owner = it }
+                { AndroidFeedbackVault.open(app) }, AndroidFeedbackClock(), network).also { owner = it }
             store.open(authorizer)
-        })
+        }, network::available, network::cancelActive, { authority,action->network.asPage(authority,action) })
         val cleanup = FeedbackMaintenance(queue, next, AndroidFeedbackJobSchedule(app), FeedbackPeriodic { tick ->
             worker.scheduleAtFixedRate({ tick() }, 60, 60, TimeUnit.SECONDS)
         })
         instance = next; maintenance = cleanup
         cleanup.start()
         return next
+    }
+    @Synchronized fun configure(context: Context, domain: ParentDomain) { open(context);transport!!.configure(domain) }
+    fun record(context: Context, stage: LogStage, error: LogError = LogError.NONE) {
+        val version=context.packageManager.getPackageInfo(context.packageName,0).versionCode
+        open(context).record(mapOf("stage" to stage,"error" to error,"version" to version,"elapsedMs" to 0L,"usage" to 0L))
     }
     @Synchronized fun request(context: Context, done: (Boolean) -> Unit) {
         open(context); maintenance!!.request(done)

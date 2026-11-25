@@ -18,8 +18,10 @@ internal interface FeedbackPageHandle {
 }
 internal object FeedbackPageFactory {
     fun create(activity: Activity, domain: ParentDomain, grant: ParentDomain.Grant,
-        gate: FeedbackGrantGate, onExit: () -> Unit): FeedbackPageHandle =
-        AndroidFeedbackPage(activity, ParentFeedbackAuthorizer(domain, grant, gate), onExit)
+        gate: FeedbackGrantGate, onExit: () -> Unit): FeedbackPageHandle {
+        AndroidFeedbackRuntime.configure(activity,domain)
+        return AndroidFeedbackPage(activity, ParentFeedbackAuthorizer(domain, grant, gate), onExit)
+    }
 }
 
 /** Native parent-only view. No Intent route, saved text state, sharing, external links or child speech. */
@@ -70,7 +72,8 @@ private class AndroidFeedbackPage(private val activity: Activity, authority: Fee
         when (screen) {
             is FeedbackScreen.Issues -> {
                 scrub(); begin("我提交的问题 · 仅本机")
-                if (!screen.available) label("反馈服务未配置：不能发送或获取新回复。本机清理仍可用。")
+                if (!screen.available) label("私有反馈连接未配置：不能发送或获取新回复。本机清理仍可用。")
+                else label("使用已配置的自建接收端；离线状态以实际回执为准，没有固定人工回复时限。")
                 if (!AndroidFeedbackRuntime.jobScheduled) label("后台清理调度未成功；应用运行和访问时仍检查到期。")
                 if (screen.items.isEmpty()) label("本机没有问题材料。")
                 screen.items.forEach { item -> button("${item.id}\n${state(item.state)} · 删除截止 ${time(item.deleteBy)}") { controller.detail(item.id) } }
@@ -101,6 +104,7 @@ private class AndroidFeedbackPage(private val activity: Activity, authority: Fee
                 label(if (item.localCleared) "本机副本已清除；这不代表服务端删除。" else item.description ?: "本机正文已撤回或到期，不可访问。")
                 scope(item.logs)
                 label("回复：${item.reply?.takeIf { it.isNotBlank() } ?: "暂无可用回复"}")
+                button("刷新接收状态与回复", !item.localCleared && item.state !in setOf(FeedbackState.DELETED,FeedbackState.DELETING,FeedbackState.DELETE_PENDING,FeedbackState.DELETE_FAILED)) { controller.refresh(item.id) }
                 button("撤回并删除整单", item.state != FeedbackState.DELETED) {
                     confirm("撤回本单说明、选定日志副本及回复；离线时仅记录删除请求。未经平台全部副本回执不会显示已删除，源日志不随之删除。") { controller.withdraw(item.id) }
                 }
@@ -118,7 +122,7 @@ private class AndroidFeedbackPage(private val activity: Activity, authority: Fee
                     Failure.INVALID -> "请检查说明（最多2000字）和所选时间范围。"
                     Failure.CLOCK -> "无法确认本机时间，材料访问已暂停。"
                     Failure.QUARANTINED, Failure.STORAGE -> "本机材料存储不可用，未报告操作成功。"
-                    Failure.NETWORK -> "发送结果尚未确认，不能视为提交成功。"
+                    Failure.NETWORK -> "连接或操作结果尚未确认；不会自动重发上传，也不能据此报告提交或删除成功。"
                 })
                 button("返回编辑") { controller.edit() }
                 button("返回列表") { controller.showList() }
