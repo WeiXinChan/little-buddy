@@ -120,7 +120,7 @@ class UnifiedProviders:
 
     async def endpoint(self, text, context):
         result = await self.request("""
-只返回JSON {completion:complete|incomplete|thinking, meaning:new_turn|stop|noise|backchannel|thinking|unknown|management}。
+只返回JSON {completion:complete|incomplete|thinking, meaning:new_turn|stop|noise|backchannel|thinking|unknown|management|volume_up|volume_down}。
 根据上下文语义判断完整表达、思考、续说、纠正和附和。同一句嗯/对，若回答问题是new_turn，
 故事中附和是backchannel，犹豫是thinking。无法识别不当noise；停/等等是stop。
 明确调整当前声音“大点/响一点”是volume_up，“小点/轻一点/太响了”是volume_down。
