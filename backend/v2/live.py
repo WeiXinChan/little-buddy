@@ -30,6 +30,7 @@ async def serve_checked(args,prepared,*,stop=None,ready=None):
     from backend.v2.companion import CompanionPolicy,DashScopeModel,UnifiedProviders
     from backend.v2.server import voice_server
     from backend.v2.files import disable_core_dumps
+    from backend.v2.image_runtime import configured_images
     disable_core_dumps()
     stop=stop or asyncio.Event()
     loop=asyncio.get_running_loop();installed=[]
@@ -39,13 +40,14 @@ async def serve_checked(args,prepared,*,stop=None,ready=None):
         async with http_client() as http:
             if time.time()>=prepared.expires_at:raise ConfigurationError('v2_device_scope_expired')
             speech=DashScope(http,key=prepared.provider_key,**prepared.config)
-            bundle=UnifiedProviders(speech,DashScopeModel(speech))
-            async with voice_server('127.0.0.1',args.port,prepared.tls,prepared.token,bundle,
-                                    CompanionPolicy(),expires_at=prepared.expires_at) as server:
-                notify_ready()
-                event('ready_loopback')
-                if ready is not None:ready.set_result(server.sockets[0].getsockname()[1])
-                await stop.wait()
+            async with configured_images(http,getattr(prepared,'images',None)) as images:
+                bundle=UnifiedProviders(speech,DashScopeModel(speech),dynamic_images=images)
+                async with voice_server('127.0.0.1',args.port,prepared.tls,prepared.token,bundle,
+                                        CompanionPolicy(),expires_at=prepared.expires_at) as server:
+                    notify_ready()
+                    event('ready_loopback')
+                    if ready is not None:ready.set_result(server.sockets[0].getsockname()[1])
+                    await stop.wait()
     finally:
         for sig in installed:loop.remove_signal_handler(sig)
         event('stopped')
@@ -58,6 +60,7 @@ def parser():
         result.add_argument('--'+name,required=True)
     result.add_argument('--port',type=int,default=19483)
     result.add_argument('--check',action='store_true',help='Offline only; never listens or calls providers')
+    result.add_argument('--image-config',help='Explicit protected image configuration; omitted means disabled')
     return result
 
 
