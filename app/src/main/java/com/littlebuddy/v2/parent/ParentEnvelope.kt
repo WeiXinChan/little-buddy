@@ -13,7 +13,7 @@ internal object ParentEnvelope {
         return cipher.iv + cipher.doFinal(plain)
     }
     fun open(bytes: ByteArray, key: SecretKey, aad: ByteArray): ByteArray {
-        check(bytes.size in 29..512) { "parent record invalid" }
+        check(bytes.size in 29..2048) { "parent record invalid" }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, bytes, 0, 12))
         cipher.updateAAD(aad)

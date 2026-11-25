@@ -7,7 +7,9 @@ import android.media.AudioTrack
 import android.os.Build
 import android.os.Handler
 
-internal class AndroidTrack(handler: Handler, routeLost: () -> Unit) : TrackPort {
+internal class AndroidTrack(handler: Handler,
+    private val settings: com.littlebuddy.v2.parent.ParentPlaybackSettings = com.littlebuddy.v2.parent.ParentPlaybackSettings(),
+    routeLost: () -> Unit) : TrackPort {
     private val track: AudioTrack
     private var route: Int? = null
     private val listener = AudioRouting.OnRoutingChangedListener { routing ->
@@ -28,6 +30,7 @@ internal class AndroidTrack(handler: Handler, routeLost: () -> Unit) : TrackPort
             .setTransferMode(AudioTrack.MODE_STREAM).setBufferSizeInBytes(maxOf(minimum, 4800)).build()
         try {
             check(track.state == AudioTrack.STATE_INITIALIZED)
+            check(track.setVolume(settings.volume / 100f) == AudioTrack.SUCCESS)
             if (Build.VERSION.SDK_INT >= 31) track.setStartThresholdInFrames(240)
             track.addOnRoutingChangedListener(listener, handler)
         } catch (failure: Exception) { track.release(); throw failure }
@@ -35,7 +38,10 @@ internal class AndroidTrack(handler: Handler, routeLost: () -> Unit) : TrackPort
     override val head get() = track.playbackHeadPosition.toLong() and 0xffffffffL
     override fun write(pcm: ShortArray, offset: Int) =
         track.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_NON_BLOCKING)
-    override fun play() = track.play()
+    override fun play() {
+        track.play()
+        track.playbackParams = android.media.PlaybackParams().setSpeed(settings.rate / 100f).setPitch(1f)
+    }
     override fun pause() = track.pause()
     override fun mute() { check(track.setVolume(0f) == AudioTrack.SUCCESS) }
     override fun flush() = track.flush()

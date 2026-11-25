@@ -1,0 +1,9 @@
+test_negative_control_wrong_normal_contract_is_detected (tests.v2.test_release_handshake.Handshake.test_negative_control_wrong_normal_contract_is_detected) ... ok
+test_scope_reports_precise_contract_before_capture_without_provider (tests.v2.test_release_handshake.Handshake.test_scope_reports_precise_contract_before_capture_without_provider) ... ok
+test_release_integrity_ref_and_extra_code_rejected (tests.v2.test_release.Preflight.test_release_integrity_ref_and_extra_code_rejected) ... ok
+test_real_cli_tls_auth_management_and_sigterm_safe_logs_without_cloud (tests.v2.test_release.Loopback.test_real_cli_tls_auth_management_and_sigterm_safe_logs_without_cloud) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.448s
+
+OK

@@ -51,6 +51,11 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
         sealed.commit(record, transaction)
     }
     companion object {
+        fun hasExistingDomain(context: Context): Boolean {
+            worker()
+            return listOf("v2-parent-v1", "v2-parent-v1.bak", "v2-parent-v1.new").any { context.noBackupFilesDir.resolve(it).exists() } ||
+                KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.containsAlias("little-buddy-v2-parent-v1")
+        }
         fun worker() { check(Looper.myLooper() != Looper.getMainLooper()) { "parent worker required" } }
     }
 }
@@ -73,20 +78,20 @@ private class AndroidParentKeys : ParentKeyProvider {
     companion object { private const val ALIAS = "little-buddy-v2-parent-v1" }
 }
 
-/** Factory owns one live authority per process. UI/provider wiring remains intentionally absent. */
+/** One live domain per process/binding. Local system crypto is distinct from remote issuance. */
 internal object AndroidParentDomain {
-    enum class Capability { UNCONFIGURED }
+    enum class Capability { SYSTEM_CRYPTO_ON_SUPPORTED_DEVICE, EXTERNAL_ISSUER_REQUIRED }
     // Explicit integration status; PIN possession never implies endpoint issuance rights.
-    val firstOwnership = Capability.UNCONFIGURED
-    val systemRecovery = Capability.UNCONFIGURED
-    val endpointIssuance = Capability.UNCONFIGURED
+    val firstOwnership = Capability.SYSTEM_CRYPTO_ON_SUPPORTED_DEVICE
+    val systemRecovery = Capability.SYSTEM_CRYPTO_ON_SUPPORTED_DEVICE
+    val endpointIssuance = Capability.EXTERNAL_ISSUER_REQUIRED
     private var domain: ParentDomain? = null
     private var binding: String? = null
-    @Synchronized fun open(context: Context, deviceBinding: String): ParentDomain {
+    @Synchronized fun open(context: Context, deviceBinding: String, owner: OwnerProof = UnconfiguredOwnerProof): ParentDomain {
         AndroidParentStore.worker()
         check(binding == null || binding == deviceBinding)
         return domain ?: ParentDomain(AndroidParentStore(context.applicationContext, deviceBinding),
-            SystemClock::elapsedRealtime, AndroidParentStore::worker, binding = deviceBinding).also {
+            SystemClock::elapsedRealtime, AndroidParentStore::worker, owner, binding = deviceBinding).also {
             binding = deviceBinding; domain = it
         }
     }

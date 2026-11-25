@@ -1,0 +1,34 @@
+app/src/test/java/com/littlebuddy/v2/parent/ExpiryCasTest.kt:24:22: warning: the corresponding parameter in the supertype 'ParentStore' is named 'record'. This may cause problems when calling this function with named arguments.
+  override fun write(r:ParentRecord,a:()->Boolean) {check(a());bytes=ParentCodec.encode(r)}
+                     ^
+app/src/test/java/com/littlebuddy/v2/parent/ExpiryCasTest.kt:24:37: warning: the corresponding parameter in the supertype 'ParentStore' is named 'authorized'. This may cause problems when calling this function with named arguments.
+  override fun write(r:ParentRecord,a:()->Boolean) {check(a());bytes=ParentCodec.encode(r)}
+                                    ^
+app/src/test/java/com/littlebuddy/v2/parent/ExpiryCasTest.kt:25:23: warning: the corresponding parameter in the supertype 'ParentStore' is named 'record'. This may cause problems when calling this function with named arguments.
+  override fun commit(r:ParentRecord,tx:ParentCommit) {
+                      ^
+app/src/test/java/com/littlebuddy/v2/parent/ExpiryCasTest.kt:25:38: warning: the corresponding parameter in the supertype 'ParentStore' is named 'transaction'. This may cause problems when calling this function with named arguments.
+  override fun commit(r:ParentRecord,tx:ParentCommit) {
+                                     ^^
+app/src/test/java/com/littlebuddy/v2/parent/RevocationBoundaryTest.kt:23:74: warning: the corresponding parameter in the supertype 'OwnerProof' is named 'challenge'. This may cause problems when calling this function with named arguments.
+  val d=ParentDomain(s,{100L},{},object:OwnerProof {override fun consume(c:OwnerChallenge)=true},"qa-only")
+                                                                         ^
+JUnit version 4.13.2
+...E
+Time: 3.417
+There was 1 failure:
+1) factoryReentryMustNotOverwriteNewHandleOrLoseRelease(com.littlebuddy.v2.parent.RecoveryBoundaryTest)
+java.lang.AssertionError: new route handle lost during reentrant factory: closed=[1]
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.littlebuddy.v2.parent.RecoveryBoundaryTest.factoryReentryMustNotOverwriteNewHandleOrLoseRelease(RecoveryBoundaryTest.kt:117)
+
+FAILURES!!!
+Tests run: 3,  Failures: 1
+
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-2bc89786daec/workdir/little-buddy/../qa42repair/boundary.py", line 180, in <module>
+    subprocess.run(command, check=True)
+  File "/usr/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['java', '-Xmx256m', '-cp', '/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-2bc89786daec/workdir/little-buddy/parent-tests-0ccu5htf:/home/ubuntu/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.2.21/fa374a986e128314c3db00a20aae55f72a258511/kotlin-stdlib-2.2.21.jar:/home/ubuntu/.gradle/caches/modules-2/files-2.1/junit/junit/4.13.2/8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12/junit-4.13.2.jar:/home/ubuntu/.gradle/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/42a25dc3219429f0e5d060061f71acb49bf010a0/hamcrest-core-1.3.jar', 'org.junit.runner.JUnitCore', 'com.littlebuddy.v2.parent.RecoveryBoundaryTest']' returned non-zero exit status 1.

@@ -1,0 +1,22 @@
+test_core_rejects_child_mutations_while_management_paused (tests.v2.test_management.Management.test_core_rejects_child_mutations_while_management_paused) ... ok
+test_disconnect_run_finally_clears_receipt_and_all_context (tests.v2.test_management.Management.test_disconnect_run_finally_clears_receipt_and_all_context) ... ok
+test_expiry_equality_and_heartbeat_do_not_extend_or_resurrect (tests.v2.test_management.Management.test_expiry_equality_and_heartbeat_do_not_extend_or_resurrect) ... ok
+test_explicit_conversation_end_clears_after_heard_farewell (tests.v2.test_management.Management.test_explicit_conversation_end_clears_after_heard_farewell) ... ok
+test_inflight_swallowed_cancellation_cannot_commit_after_management_pause (tests.v2.test_management.Management.test_inflight_swallowed_cancellation_cannot_commit_after_management_pause) ... ok
+test_management_and_waiting_wake_discard_even_invalid_pcm_without_provider_calls (tests.v2.test_management.Management.test_management_and_waiting_wake_discard_even_invalid_pcm_without_provider_calls) ... ok
+test_negative_control_accepting_stale_receipt_is_detected (tests.v2.test_management.Management.test_negative_control_accepting_stale_receipt_is_detected) ... ok
+test_one_child_exit_and_leave_game_keep_shared_session (tests.v2.test_management.Management.test_one_child_exit_and_leave_game_keep_shared_session) ... ok
+test_partial_audio_and_uncommitted_picture_cannot_become_heard_after_pause (tests.v2.test_management.Management.test_partial_audio_and_uncommitted_picture_cannot_become_heard_after_pause) ... ok
+test_partial_farewell_or_management_preemption_does_not_end_session (tests.v2.test_management.Management.test_partial_farewell_or_management_preemption_does_not_end_session) ... ok
+test_real_visual_prepare_cancelled_by_management_has_no_late_publish (tests.v2.test_management.Management.test_real_visual_prepare_cancelled_by_management_has_no_late_publish) ... ok
+test_roundtrip_keeps_only_committed_context_ttl_and_returns_wake_only (tests.v2.test_management.Management.test_roundtrip_keeps_only_committed_context_ttl_and_returns_wake_only) ... ok
+test_scope_query_before_first_child_turn_has_no_provider_or_ttl_effect (tests.v2.test_management.Management.test_scope_query_before_first_child_turn_has_no_provider_or_ttl_effect) ... ok
+test_unconfirmed_provider_release_quarantines_instead_of_resuming (tests.v2.test_management.Management.test_unconfirmed_provider_release_quarantines_instead_of_resuming) ... ok
+test_wrong_scope_revision_receipt_repeated_resume_and_revoke_cannot_reactivate (tests.v2.test_management.Management.test_wrong_scope_revision_receipt_repeated_resume_and_revoke_cannot_reactivate) ... ok
+test_close_failure_quarantines (tests.v2.test_m04.PeerTests.test_close_failure_quarantines) ... ok
+test_rules_roles_cross_game_and_private_projection (tests.v2.test_m05.Integration.test_rules_roles_cross_game_and_private_projection) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.736s
+
+OK

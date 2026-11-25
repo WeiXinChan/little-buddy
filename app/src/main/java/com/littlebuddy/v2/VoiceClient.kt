@@ -20,20 +20,35 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val failed: () -> Unit = {}, waits: Waits = Waits(),
                            private val observed: (PlaybackAck) -> Unit = {},
                            private val completed: (Long, Int) -> Unit = { _, _ -> },
-                           private val allowAck: (PlaybackAck) -> Boolean = { true }) {
+                           private val allowAck: (PlaybackAck) -> Boolean = { true },
+                           private var playbackSettings: com.littlebuddy.v2.parent.ParentPlaybackSettings = com.littlebuddy.v2.parent.ParentPlaybackSettings(),
+                           private val localHelp: (LocalHelpReason) -> Unit = {},
+                           private val management: () -> Unit = {},
+                           private val permitted: () -> Boolean = { true },
+                           private var images: ImagePort? = null,
+                           private val managed: (ManagementState.Phase) -> Unit = {},
+                           private val sessionEnded: () -> Unit = {},
+                           private val requiredContract: String? = null,
+                           private val ready: () -> Unit = {}) {
     fun nativeProof() = player.nativeProof()
-    val quarantined get() = player.quarantined
+    private var controlQuarantined=false
+    val quarantined get() = player.quarantined || controlQuarantined
+    private val managementState = ManagementState(SystemClock::elapsedRealtime)
+    @Volatile private var childBlocked = false
+    private var managementPending = false
     private var socket: WebSocket? = null
     private var epoch = 0L
     private var sequence = 0L
     private var active = false
+    private var compatible = requiredContract == null
+    private var compatibilityDeadline=0L
     @Volatile var isAwake = false; private set
     @Volatile var idleSerial = 0L; private set
     @Volatile var inputSerial = 0L; private set
     private var outputBusy = false
     private var responseRevision = -1L
     private val gate: InputGate = InputGate(waits, SystemClock::elapsedRealtime,
-        { version -> send("advance", "revision" to version); candidate() },
+        { version -> images?.clear(); send("advance", "revision" to version); candidate() },
         { version -> send("probe", "revision" to version) },
         { version -> send("seal", "revision" to version); inputSerial++ ; outputBusy = true },
         { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true },
@@ -41,25 +56,29 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         { isAwake = false; idleSerial++; interrupt(); status("wake") })
     private fun gateDeadline(): Long = gate.responseDeadline
     private fun gateVersion(): Long = gate.revision
+    private val helpScope = LocalHelpScope()
     private var ackIdentity: JSONObject? = null
     private var ackSequence = 0L
     private var playerName: String? = null
     private val http = OkHttpClient.Builder().retryOnConnectionFailure(false)
         .followRedirects(false).connectTimeout(4, TimeUnit.SECONDS).build()
-    private val player = Playback({ AndroidTrack(handler) { fail("route") } },
+    private val player = Playback({ AndroidTrack(handler, playbackSettings) { fail("route") } },
         SystemClock::elapsedRealtime) { ack ->
         observed(ack)
         if (ack.completed && responseRevision == gate.revision && ack.binding.epoch == epoch) gate.effectivePlayed()
         if (!allowAck(ack)) return@Playback
         val identity = ackIdentity ?: return@Playback
         val copy = JSONObject(identity.toString()).put("sequence", ackSequence++)
-        send("ack", "identity" to copy, "player" to ack.binding.player,
+        val sent = send("ack", "identity" to copy, "player" to ack.binding.player,
              "stream" to ack.binding.stream, "segment" to ack.segment, "head" to ack.head)
+        if (sent) recordImageAck(ack)
     }
     private val pump = object : Runnable {
         override fun run() {
             if (!active) return
-            try { gate.checkResponseDeadline(); player.tick(); gate.tick(outputBusy) } catch (_: Exception) { fail("playback"); return }
+            if (!permitted()) { fail("lifecycle"); return }
+            try { if (!compatible) check(SystemClock.elapsedRealtime()<compatibilityDeadline)
+                managementState.checkDeadline(); if (compatible && !childBlocked) { gate.checkResponseDeadline(); player.tick(); gate.tick(outputBusy) } } catch (_: Exception) { fail("playback"); return }
             handler.postDelayed(this, 10)
         }
     }
@@ -72,17 +91,21 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
 
     fun connect(address: String, token: String) {
-        check(!active && !player.quarantined)
+        check(!active && !player.quarantined && permitted())
         require(address.startsWith("wss://") && address.endsWith("/v2/voice") &&
                 !address.contains('@') && !address.contains('?') && !address.contains('#'))
         require(token.matches(Regex("[a-zA-Z0-9]{32,256}")))
         active = true
-        epoch = 0; sequence = 0
+        epoch = 0; sequence = 0; helpScope.clear()
         val request = Request.Builder().url(address).header("Authorization", "Bearer $token").build()
         socket = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) { handler.post {
                 if (socket !== webSocket || !active) return@post
-                status("wake"); pump.run(); heartbeat.run()
+                if (requiredContract!=null) {
+                    compatible=false; compatibilityDeadline=SystemClock.elapsedRealtime()+4000
+                    send("scope"); status("compatibility")
+                } else { compatible=true; status("wake"); ready() }
+                pump.run(); heartbeat.run()
             } }
             override fun onMessage(webSocket: WebSocket, text: String) { handler.post {
                 if (socket !== webSocket || !active) return@post
@@ -96,34 +119,78 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             }
         })
     }
-    private fun send(kind: String, vararg values: Pair<String, Any>) {
-        if (!active) return
+    private fun send(kind: String, vararg values: Pair<String, Any>): Boolean {
+        if (!active || !permitted()) return false
         val message = JSONObject().put("v", 2).put("type", kind).put("epoch", epoch).put("seq", sequence++)
         values.forEach { message.put(it.first, it.second) }
-        val current = socket ?: return
-        if (current.queueSize() > 64000 || !current.send(message.toString())) fail("backpressure")
+        val current = socket ?: return false
+        if (current.queueSize() > 64000 || !current.send(message.toString())) { fail("backpressure"); return false }
+        return true
     }
     private fun receive(text: String) {
+        if (!permitted()) { close(); return }
         require(text.length <= 16000)
         val event = JSONObject(text)
         require(event.getInt("v") == 2)
         if (event.getLong("epoch") != epoch) return
-        when (event.getString("type")) {
+        val kind=event.getString("type")
+        if (childBlocked && kind !in setOf("scope", "management_state", "revoke", "failure")) return
+        if (!compatible && kind!="scope") { if (kind=="failure") fail("incompatible"); return }
+        when (kind) {
+            "scope" -> {
+                if (!compatible) {
+                    if (event.getLong("epoch")!=epoch || event.getLong("revision")!=gate.revision ||
+                        !ReleaseCompatibility.accepts(event.getInt("v"),event.optString("protocol_contract", ""),
+                            event.optInt("management_v",-1),event.optString("session",""),event.optLong("turn",-1),
+                            event.getLong("epoch"),event.optLong("revision",-1),event.optString("state","")) ||
+                        event.optString("protocol_contract","")!=requiredContract) { fail("incompatible"); return }
+                    compatible=true; managementState.normal(managementScope(event)); status("wake"); ready(); return
+                }
+                if (!managementPending || event.getInt("management_v") != 1 ||
+                    event.getString("state") !in setOf("active", "waiting_wake")) return
+                val request = managementState.scoped(managementScope(event)) ?: return
+                moveManagementEpoch(request.scope)
+                send("management_pause", "session" to request.scope.session, "turn" to request.scope.turn,
+                    "revision" to request.scope.revision)
+            }
+            "management_state" -> {
+                if (event.getInt("management_v") != 1) return
+                val scope=managementScope(event)
+                when (event.getString("state")) {
+                    "expired" -> fail("expired")
+                    "paused" -> if (managementState.paused(scope,event.getString("pause"))) {
+                        managementPending=false; managed(ManagementState.Phase.PAUSED)
+                    }
+                    "waiting_wake" -> if (event.has("pause") && event.isNull("pause") && managementState.waiting(scope)) {
+                        managementPending=false; isAwake=false; idleSerial++
+                        managed(ManagementState.Phase.WAITING_WAKE)
+                    }
+                }
+            }
             "endpoint" -> {
                 gate.decision(event.getLong("revision"), Completion.valueOf(event.getString("completion").uppercase()))
             }
             "open" -> {
                 if (event.getLong("revision") != gate.revision) return
+                if (event.has("session") && event.has("turn")) {
+                    helpScope.bind(event.getString("session"), event.getLong("turn"), epoch, gate.revision)
+                    managementState.normal(managementScope(event))
+                }
                 outputBusy = true
                 responseRevision = gate.revision
                 check(player.binding == null)
                 playerName = UUID.randomUUID().toString()
-                send("bind", "player" to checkNotNull(playerName))
+                if (images != null) send("bind", "player" to checkNotNull(playerName), "features" to org.json.JSONArray().put("images_v1"))
+                else send("bind", "player" to checkNotNull(playerName))
             }
             "bound" -> {
                 require(event.getString("player") == playerName)
+                if (event.has("revision") && event.getLong("revision") != gate.revision) return
                 ackIdentity = event.getJSONObject("identity"); ackSequence = 0
+                helpScope.bind(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision)
+                managementState.normal(ManagementScope(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"),epoch,gate.revision))
                 player.bind(Binding(epoch, checkNotNull(playerName), event.getInt("stream")))
+                images?.bind(ImageScope(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision))
             }
             "audio" -> {
                 val data = Base64.decode(event.getString("pcm"), Base64.NO_WRAP)
@@ -149,16 +216,99 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 else -> status("clarify") // Unknown recognition never resumes audio.
             }
             }
-            "revoke" -> { player.stop(); ackIdentity = null; hideImage() }
-            "reveal" -> if (player.binding != null && !player.suspended)
-                reveal(event.getString("effect"), event.getInt("topic"))
+            "revoke" -> { images?.clear(); player.stop(); ackIdentity = null; hideImage() }
+            "image_ready" -> {
+                val ready = imageReady(event) ?: return
+                if (event.getString("source") != "default" || (!event.isNull("fallback_reason") &&
+                    event.getString("fallback_reason") !in setOf("dynamic_unavailable", "unknown_asset", "asset_invalid"))) return
+                images?.ready(ready)
+            }
+            "hide" -> {
+                if (!imageScopeCurrent(event) || event.getString("reason") !in setOf("requested", "input_changed")) return
+                images?.clear(); hideImage()
+            }
+            "reveal" -> if (player.binding != null && !player.suspended) {
+                if (event.getString("effect").startsWith("image:")) {
+                    val ready = imageReady(event) ?: return
+                    if (event.getString("effect") != "image:" + ready.token) return
+                    val binding = player.binding ?: return
+                    if (event.getString("player") != binding.player || event.getInt("stream") != binding.stream) return
+                    images?.reveal(ImageReveal(ready, binding.player, binding.stream, event.getString("segment"), event.getLong("end")))
+                } else if (images == null) reveal(event.getString("effect"), event.getInt("topic"))
+                else error("unsupported visual effect")
+            }
             "thinking_wait" -> status("thinking")
             "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status("listening") }
-            "failure" -> { interrupt(); status("failure") }
+            "session_end" -> {
+                if (event.getString("reason") != "conversation_ended" || !imageScopeCurrent(event)) return
+                close(); sessionEnded()
+            }
+            "management" -> {
+                if (event.getLong("revision") != gate.revision || !helpScope.matches(event.getString("session"),
+                    event.getLong("turn"), epoch, gate.revision)) return
+                management()
+            }
+            "failure" -> {
+                if (childBlocked) { fail("management"); return }
+                if (event.has("local_help")) {
+                    if (event.optString("code") != "safety") return
+                    val help = runCatching {
+                        val value = event.getJSONObject("local_help")
+                        if (value.keys().asSequence().toSet() != setOf("v", "prompt_id", "reason") ||
+                            event.getLong("revision") != gate.revision) null
+                        else helpScope.accept(event.getString("session"), event.getLong("turn"), epoch, gate.revision,
+                            value.getInt("v"), value.getString("prompt_id"), value.getString("reason"))
+                    }.getOrNull() ?: return // stale/malformed help must not close or lend authority to a newer turn
+                    interrupt(); status("failure"); localHelp(help)
+                } else { interrupt(); status("failure"); failed() }
+            }
             else -> error("unknown event")
         }
     }
+    private fun managementScope(event: JSONObject) = ManagementScope(event.getString("session"), event.getLong("turn"),
+        event.getLong("epoch"),event.getLong("revision"))
+    private fun moveManagementEpoch(scope: ManagementScope) {
+        epoch=scope.epoch; sequence=0; gate.managementWaiting(scope.revision)
+        ackIdentity=null; playerName=null; helpScope.clear(); images?.clear()
+    }
+    /** Caller has already stopped the children's recorder; no network action until native release confirms. */
+    fun stopForManagement(): Boolean {
+        childBlocked=true; isAwake=false; idleSerial++; images?.clear(); hideImage()
+        val stopped=player.stop(); ackIdentity=null; playerName=null; outputBusy=false
+        if (!stopped.stopped || !stopped.released) { fail("release"); return false }
+        return true
+    }
+    fun pauseManagement(): Boolean {
+        if (!active || !childBlocked) return false
+        return try { managementState.begin(epoch,gate.revision); managementPending=true; send("scope") }
+            catch (_: Exception) { fail("management"); false }
+    }
+    fun resumeManagement(settings: com.littlebuddy.v2.parent.ParentPlaybackSettings, route: ImagePort?): Boolean {
+        if (!active) return false
+        return try {
+            val request=managementState.resume() ?: return false
+            images?.clear(); images=route; playbackSettings=settings; managementPending=true; moveManagementEpoch(request.scope)
+            send("management_resume", "session" to request.scope.session, "turn" to request.scope.turn,
+                "revision" to request.scope.revision, "pause" to checkNotNull(request.receipt))
+        } catch (_: Exception) { fail("management"); false }
+    }
+    private fun recordImageAck(ack: PlaybackAck) {
+        if (ack.completed && !player.suspended && ack.binding == player.binding && responseRevision == gate.revision)
+            images?.acknowledged(ack.binding.player, ack.binding.stream, ack.segment, ack.head)
+    }
+    private fun imageScopeCurrent(event: JSONObject): Boolean =
+        event.getLong("revision") == gate.revision && helpScope.matches(event.getString("session"),
+            event.getLong("turn"), epoch, gate.revision)
+    private fun imageReady(event: JSONObject): ImageReady? {
+        if (!imageScopeCurrent(event)) return null
+        val id = event.getString("asset_id"); val sha = event.getString("sha256")
+        if (!id.matches(Regex("[a-z0-9-]{1,64}")) || !sha.matches(Regex("[a-f0-9]{64}"))) return null
+        if (event.getString("type") == "image_ready" && (event.getInt("width") != 512 || event.getInt("height") != 512)) return null
+        return ImageReady(ImageScope(event.getString("session"), event.getLong("turn"), epoch, gate.revision),
+            event.getInt("topic"), event.getString("token"), ImageAsset(id, sha, 512, 512))
+    }
     fun input(samples: ShortArray, count: Int, speech: Boolean = true, capturedAt: Long = SystemClock.elapsedRealtime()) {
+        if (!permitted() || !compatible || childBlocked || !managementState.mediaAllowed) { samples.fill(0); return }
         val age = SystemClock.elapsedRealtime() - capturedAt
         require(age in 0..20000) { "capture age" }
         require(count in 1..3200)
@@ -167,29 +317,38 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         send("input", "pcm" to Base64.encodeToString(bytes.array(), Base64.NO_WRAP), "speech" to speech, "age_ms" to age)
         bytes.array().fill(0)
     }
-    fun wake(observedAt: Long = SystemClock.elapsedRealtime()) { if (isAwake) return; isAwake = true; gate.wake(observedAt); send("wake"); status("listening") }
+    fun wake(observedAt: Long = SystemClock.elapsedRealtime()) { if (isAwake || !active || !compatible || !managementState.wake()) return; childBlocked=false; isAwake = true; gate.wake(observedAt); send("wake"); status("listening") }
     fun frame(samples: ShortArray, speech: Boolean, capturedAt: Long = SystemClock.elapsedRealtime()) {
+        if (childBlocked || !managementState.mediaAllowed) { samples.fill(0); return }
         if (speech) gate.speech(capturedAt) else gate.quiet()
         input(samples, samples.size, speech, capturedAt)
         samples.fill(0)
     }
-    fun quiet() { gate.quiet() }
+    fun quiet() { if (!childBlocked) gate.quiet() }
     fun candidate() {
+        if (childBlocked) return
         if (player.binding != null && !player.suspended) {
-            player.suspendOutput(); send("suspend")
+            images?.clear(); player.suspendOutput(); send("suspend")
         }
     }
     fun interrupt(intent: String = "") {
+        images?.clear()
         val stopped = player.stop() // First: local mute, generation revoke, flush, stop/release.
         ackIdentity = null; playerName = null; outputBusy = false
         hideImage()
-        epoch++; sequence = 0
+        epoch++; sequence = 0; helpScope.clear()
         if (!stopped.stopped || !stopped.released) { fail("release"); return }
         send("stop", "intent" to intent) // Only after local native calls completed.
     }
-    private fun fail(code: String) { close(); status(code); failed() }
+    private fun fail(code: String) {
+        val pending=childBlocked
+        if (pending && code!="expired") controlQuarantined=true
+        close(); if (pending) managed(ManagementState.Phase.DEAD); status(code); failed()
+    }
     fun close() {
-        active = false; isAwake = false; outputBusy = false
+        managementState.close(); childBlocked=true; managementPending=false
+        images?.clear()
+        active = false; isAwake = false; outputBusy = false; helpScope.clear()
         player.stop(); ackIdentity = null; hideImage()
         handler.removeCallbacks(pump); handler.removeCallbacks(heartbeat)
         val old = socket; socket = null

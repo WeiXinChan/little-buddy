@@ -16,7 +16,8 @@ import java.util.concurrent.atomic.AtomicInteger
  * No idle upload. Finite pre-roll preserves the KWS tail and short input onset.
  */
 internal class Capture(private val assets: AssetManager, private val owner: Handler,
-                       private val client: VoiceClient, private val failed: () -> Unit) {
+                       private val client: VoiceClient, private val allowed: () -> Boolean = { true },
+                       private val failed: () -> Unit) {
     private val cancelled = AtomicBoolean(false)
     private val pending = AtomicInteger(0)
     private var thread: Thread? = null
@@ -50,7 +51,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             uploadSamples += data.size
             check(pending.incrementAndGet() <= 20)
             owner.post {
-                try { if (!cancelled.get()) client.frame(data, speech, capturedAt) }
+                try { if (!cancelled.get() && allowed()) client.frame(data, speech, capturedAt) }
                 finally { data.fill(0); pending.decrementAndGet() }
             }
         }
@@ -67,11 +68,11 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 aec?.enabled = true // Availability/enabled are diagnostics, not acoustic PASS.
             }
             wake = SherpaWake(assets)
-            if (cancelled.get()) return
+            if (cancelled.get() || !allowed()) return
             native.startRecording()
             check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
             nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
-            while (!cancelled.get()) {
+            while (!cancelled.get() && allowed()) {
                 val count = native.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
                 check(count >= 0)
                 if (count == 0) { Thread.sleep(5); continue }

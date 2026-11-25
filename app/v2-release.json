@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "version_code": 15,
+  "version_name": "2.0.0-rc1",
+  "application_id": "com.littlebuddy.sim.v2",
+  "protocol_contract": "v2-voice2-safety1-images1-management1-end1",
+  "source_base": "b291ab9e2e09abb837637c43b7e42942fb0666a2"
+}

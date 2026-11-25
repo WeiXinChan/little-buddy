@@ -337,16 +337,17 @@ class SourceMemory(unittest.TestCase):
         self.assertEqual({f['dimension'] for f in facts},{'animal','color'})
         self.assertTrue(all(f['value']==text[f['span'][0]:f['span'][1]] for f in facts))
 
-    def test_actual_byte_capacity_rejects_atomically_without_evicting_unwithdrawn_sources(self):
+    def test_actual_byte_capacity_reports_gap_without_evicting_unwithdrawn_sources(self):
         s=Session(lambda:0)
-        for n in range(500):
+        for n in range(1500):
             text=f'我喜欢第{n}种合成动物'
-            before=deepcopy((s.facts,s.recent,s.memory_revision))
-            try:s.record_input(text,[self.source(text,'animal')])
-            except BufferError:
-                self.assertEqual((s.facts,s.recent,s.memory_revision),before)
-                self.assertIn('我喜欢第0种合成动物',str(s.facts))
-                self.assertGreater(n,5)
+            before=deepcopy((s.facts,s.source_archive))
+            if not s.record_input(text,[self.source(text,'animal')]):
+                self.assertEqual((s.facts,s.source_archive),before)
+                self.assertIn('我喜欢第0种合成动物',str(s.context(query='第0种合成动物')))
+                self.assertGreater(n,500)
+                self.assertTrue(s.context()['memory']['capacity_limited'])
+                self.assertIn(text,str(s.context()['recent']))
                 self.assertTrue(s._fits())
                 return
         self.fail('unified byte capacity was never enforced')

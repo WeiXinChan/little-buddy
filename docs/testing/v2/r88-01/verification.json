@@ -1,0 +1,32 @@
+{
+  "base": "379045c50f0ea234f19401ba2b8c82fda75f0528",
+  "qa_source": "e0d543f13bf55889454c01765cf3d4cac8f83c24",
+  "results": [
+    {
+      "name": "new-help",
+      "methods": 8,
+      "exit": 0
+    },
+    {
+      "name": "targeted",
+      "methods": 15,
+      "exit": 0
+    }
+  ],
+  "ordinary_methods": 20,
+  "negative_control_methods": 3,
+  "failures": 0,
+  "skipped": 0,
+  "external_cloud_calls": 0,
+  "device_runs": 0,
+  "tls": "one authenticated loopback WebSocket; supplier HTTP mocked",
+  "source_sha256": {
+    "backend/v2/voice.py": "8770a2ef438d25c1dcb37ab56d2661decbabfab2f1696ad805b3548860f28243",
+    "backend/v2/companion.py": "41c07c3e1d4a7e1f79cc2f1e9b5c03412f14784e19765fdf8160a4f4d455b08f",
+    "backend/v2/safety.py": "d68ec4fb572953c991994867c2fe83f3f7c0a75d30a4ba7a3f82ad69333177fb",
+    "backend/v2/runtime.py": "8dd5a8a40d3e9547ab49e0fb69db2f18110ed789dad01b61b725e14a919dee40",
+    "backend/v2/live.py": "57a6411f4978bd3871be4e1cd6c08d56f39280884ae6d7c79109fb1cf3cbbbd5",
+    "tests/v2/test_safety_help.py": "245d482e15395e74b39abaeb33077a2d91b12186b6846b3149a40d9c481af641",
+    "docs/testing/v2/r88-01/original/test_m10.py": "6795c3689888bd85acd2215884b9e7d772b9529d384d54f09e802dfc17df7f6e"
+  }
+}

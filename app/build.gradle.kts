@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
@@ -22,7 +24,14 @@ val releaseVersionName = providers.gradleProperty("buddyVersionName").map {
 require(releaseVersionCode.isPresent == releaseVersionName.isPresent) {
     "Provide buddyVersionCode and buddyVersionName together"
 }
+val v2Release = JsonSlurper().parse(file("v2-release.json")) as Map<*, *>
+val v2Code = (v2Release["version_code"] as Number).toInt()
+val v2Name = v2Release["version_name"] as String
+require(v2Code >= 15 && v2Name.matches(Regex("[0-9]+[.][0-9]+[.][0-9]+(?:-[a-zA-Z0-9.]+)?")))
 androidComponents {
+    onVariants(selector().withBuildType("v2Debug")) { variant ->
+        variant.outputs.forEach { it.versionCode.set(v2Code); it.versionName.set(v2Name) }
+    }
     onVariants(selector().withBuildType("release")) { variant ->
         variant.outputs.forEach { output ->
             if (releaseVersionCode.isPresent) {
@@ -32,6 +41,45 @@ androidComponents {
         }
     }
 }
+
+val v2Metadata = layout.buildDirectory.dir("generated/v2-release")
+val prepareV2Metadata by tasks.registering(Exec::class) {
+    workingDir(rootProject.projectDir)
+    inputs.files(rootProject.fileTree("app/src") { exclude("test/**", "androidTest/**", "release/**") },
+        rootProject.fileTree("assets/v2-default"),rootProject.fileTree("app/libs"),
+        rootProject.fileTree("gradle/wrapper"),rootProject.file("app/v2-release.json"),
+        rootProject.file("app/build.gradle.kts"),rootProject.file("scripts/v2-build-metadata.py"),
+        rootProject.file("settings.gradle.kts"),rootProject.file("gradle.properties"))
+    outputs.dir(v2Metadata)
+    commandLine("python3","scripts/v2-build-metadata.py","--output",v2Metadata.get().asFile.absolutePath)
+}
+tasks.matching { it.name == "preV2DebugBuild" }.configureEach { dependsOn(prepareV2Metadata) }
+
+val imageAssets = layout.buildDirectory.dir("generated/v2-images")
+val prepareV2Images by tasks.registering(Sync::class) {
+    from(rootProject.file("assets")) { include("v2-default/manifest.json", "v2-default/png/*.png") }
+    into(imageAssets)
+    doFirst {
+        val directory = rootProject.file("assets/v2-default")
+        val rows = JsonSlurper().parse(directory.resolve("manifest.json")) as List<*>
+        require(rows.size == 60)
+        val ids = mutableSetOf<String>()
+        for (row in rows) {
+            val item = row as Map<*, *>
+            val id = item["id"] as String
+            require(id.matches(Regex("[a-z0-9-]{1,64}")) && ids.add(id))
+            require(item["png"] == "png/$id.png" && item["width"] == 512 && item["height"] == 512)
+            val bytes = directory.resolve("png/$id.png").readBytes()
+            require(bytes.size in 24..1_048_576)
+            val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+            require(sha == item["png_sha256"]) { "Bundled image hash mismatch: $id" }
+            require(bytes.take(8) == listOf(137,80,78,71,13,10,26,10).map { it.toByte() })
+            val dimensions = ByteBuffer.wrap(bytes, 16, 8)
+            require(dimensions.int == 512 && dimensions.int == 512)
+        }
+    }
+}
+tasks.matching { it.name == "preV2DebugBuild" }.configureEach { dependsOn(prepareV2Images) }
 
 val wakeProbe = providers.gradleProperty("wakeProbe").map(String::toBoolean).orElse(false)
 val familyPrompt = providers.environmentVariable("LITTLE_BUDDY_FAMILY_PROMPT")
@@ -154,7 +202,6 @@ android {
             initWith(getByName("debug"))
             applicationIdSuffix = ".v2"
             ndk.abiFilters += "arm64-v8a"
-            versionNameSuffix = "-v2-m04"
             matchingFallbacks += "debug"
         }
         create("ciRelease") {
@@ -177,6 +224,8 @@ android {
             java.srcDir("src/debug/java")
             res.srcDir("src/debug/res")
             assets.srcDir("src/debug/assets")
+            assets.srcDir(imageAssets)
+            assets.srcDir(v2Metadata)
         }
         getByName("ciRelease") {
             java.srcDir("src/release/java")

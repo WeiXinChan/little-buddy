@@ -10,6 +10,7 @@ import json
 import uuid
 from hashlib import sha256
 from copy import deepcopy
+from .memory import partition, retrieve
 
 
 @dataclass(frozen=True)
@@ -59,11 +60,14 @@ class Session:
         self.heartbeat_deadline = clock() + lease
         self.deadline = 0
         self.active = True
+        self.management_paused = False
         self.public, self.private, self.secrets, self.game = [], [], {}, {}
         self.private_mode = False
         self.memory_revision = 0
         self.recent = []
         self.facts = {}
+        self.source_archive = ''
+        self.memory_limited = False
         self.pending = deque()
         self.tasks, self.commands = {}, deque()
         self.player = None
@@ -84,14 +88,15 @@ class Session:
 
     def valid_interaction(self):
         """Only confirmed child interaction; never heartbeat or management."""
-        if not self._live():
+        if not self._live() or self.management_paused:
             return False
         self.expires = self.clock() + self.ttl
         return True
 
     def _fits(self, **changes):
         state = dict(public=self.public, private=self.private, game=self.game, secrets=self.secrets,
-                     recent=self.recent, facts=self.facts,
+                     recent=self.recent, facts=self.facts, source_archive=self.source_archive,
+                     memory_limited=self.memory_limited,
                      pending=[s.__dict__ for s in self.pending])
         state.update(changes)
         try:
@@ -119,9 +124,11 @@ class Session:
         if self.active:
             self._revoke()
         self.active = False
+        self.management_paused=False
         self.memory_revision += 1
         self.public.clear()
         self.recent.clear(); self.facts.clear()
+        self.source_archive='';self.memory_limited=False
         self.private_mode = False
         self.private.clear()
         self.secrets.clear()
@@ -143,7 +150,7 @@ class Session:
         return True
 
     def begin_turn(self):
-        if not self._live():
+        if not self._live() or self.management_paused:
             raise RuntimeError('session closed')
         self.valid_interaction()
         self._revoke()
@@ -157,8 +164,22 @@ class Session:
         if self._live():
             self._revoke()
 
+    def pause_management(self):
+        if not self._live() or self.management_paused:return False
+        self.management_paused=True
+        self._revoke()
+        self.deadline=self.progress_deadline=0
+        self.response_confirmed=self.response_expired=False
+        return True
+
+    def resume_management(self):
+        if not self._live() or not self.management_paused:return False
+        self.management_paused=False
+        # Keep expires/heartbeat_deadline unchanged; caller returns to wake-only.
+        return True
+
     def _output_live(self):
-        if not self._live() or self.response_expired:
+        if not self._live() or self.management_paused or self.response_expired:
             return False
         limit = self.progress_deadline if self.response_confirmed else self.deadline
         if not limit or self.clock() >= limit:
@@ -200,7 +221,7 @@ class Session:
         return True
 
     def bind_player(self, handle):
-        if not self._live() or not handle:
+        if not self._live() or self.management_paused or not handle:
             raise RuntimeError('player unavailable')
         self.reset_player('rebuild')
         self.player = handle
@@ -304,7 +325,10 @@ class Session:
         if current.public or current.answer is not None or current.effect:
             self.revealed.add(segment)
         if current.effect:
-            self.commands.append(('reveal', current.effect, self.topic))
+            if current.effect.startswith('image:'):
+                self.commands.append(('reveal', current.effect, self.topic,current.name,current.end))
+            else:
+                self.commands.append(('reveal', current.effect, self.topic))
         return True
 
     def _played_facts(self, current):
@@ -328,7 +352,7 @@ class Session:
     def record_input(self, text, facts):
         if text is None:
             return
-        if not self._live() or not isinstance(text, str) or len(text) > 2048:
+        if not self._live() or self.management_paused or not isinstance(text, str) or len(text) > 2048:
             raise ValueError('input')
         if not isinstance(facts, list) or len(facts) > 8:
             raise ValueError('facts')
@@ -356,17 +380,27 @@ class Session:
                                   source_text=text, span=[fact['start'], fact['end']],
                                   source_id=source_id, dimension=dimension,
                                   evidence_only=True, private=self.private_mode)
-        # Sources are protected evidence, not replaceable category slots.
-        # Same-dimension statements can coexist or correct each other; only the
-        # full proposition establishes which. Unknown dimensions never delete.
-        # Keep every distinct source until the existing unified byte limit,
-        # then reject the entire candidate atomically instead of silent eviction.
         recent = (self.recent + [dict(text=text, role='child', turn=self.turn, private=self.private_mode)])[-8:]
-        if not self._fits(facts=candidate, recent=recent):
-            raise BufferError('input context capacity')
+        try:
+            candidate,archive=partition(candidate,self.source_archive)
+        except BufferError:
+            archive=None
+        if archive is None or not self._fits(facts=candidate,recent=recent,source_archive=archive,
+                                             reply_reserve=' '*8192):
+            # Preserve accepted evidence. A full memory must not kill the turn
+            # or silently replace old claims. Surface the coverage limit to the
+            # planner, keep the new input in a bounded recent window, and ask
+            # for confirmation rather than claiming unavailable recollection.
+            self.memory_limited=True
+            while recent and not self._fits(recent=recent):recent=recent[1:]
+            self.recent=recent
+            self.memory_revision+=1
+            return False
         self.facts = candidate
+        self.source_archive = archive
         self.recent = recent
         self.memory_revision += 1
+        return True
 
     def memory_snapshot(self, *, private=False):
         return (self.connection, self.session, self.turn, self.output, self.memory_revision,
@@ -374,7 +408,7 @@ class Session:
 
     def compact(self, snapshot, keep):
         # Extractive writeback only: no prose and no proposed/unplayed facts.
-        if not self._live() or snapshot != self.memory_snapshot(private=snapshot[-2]):
+        if not self._live() or self.management_paused or snapshot != self.memory_snapshot(private=snapshot[-2]):
             return False
         facts = snapshot[-1]
         if (not isinstance(keep, list) or any(type(i) is not int or not 0 <= i < len(facts) for i in keep)
@@ -401,7 +435,7 @@ class Session:
         return topic == self.topic and self.accept(event)
 
     def change_game(self, *, rules, roles, secrets):
-        if not self._live():
+        if not self._live() or self.management_paused:
             return False
         # Validate and detach every candidate before changing cancellation/topic state.
         if (not isinstance(rules, str) or not isinstance(roles, (list, tuple))
@@ -422,18 +456,20 @@ class Session:
     def remember_private(self, text):
         if not isinstance(text, str):
             raise ValueError('private text required')
-        if self._live():
+        if self._live() and not self.management_paused:
             if not self._fits(private=self.private + [text]):
                 raise BufferError('private context capacity')
             self.private.append(text)
 
-    def context(self, *, shared=False):
+    def context(self, *, shared=False, query=''):
         if not self._live():
             return {}
         # No arbitrary model-authored summary can promote proposed facts.
+        facts,coverage=retrieve(self.facts,self.source_archive,query,not shared and self.private_mode)
+        coverage['capacity_limited']=self.memory_limited
         return {'heard': tuple(self.public), 'game': deepcopy(self.game),
                 'recent': deepcopy([r for r in self.recent if (not shared and self.private_mode) or not r['private']]),
-                'facts': deepcopy({k: v for k, v in self.facts.items() if (not shared and self.private_mode) or not v['private']}),
+                'facts': deepcopy(facts), 'memory':coverage,
                 'unrevealed': {} if shared else deepcopy(self.secrets),
                 'private': tuple(self.private) if self.private_mode and not shared else (),
                 'partial_unknown': tuple(sorted(self.uncertain))}

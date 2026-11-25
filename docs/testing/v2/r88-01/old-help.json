@@ -1,0 +1,10 @@
+{
+  "source": "379045c50f0ea234f19401ba2b8c82fda75f0528",
+  "immutable_source": "git show each backend Python source into an isolated cwd/PYTHONPATH",
+  "qa_source": "e0d543f13bf55889454c01765cf3d4cac8f83c24",
+  "exit": 1,
+  "run": 8,
+  "pass": 7,
+  "fail": 1,
+  "skip": 0
+}
