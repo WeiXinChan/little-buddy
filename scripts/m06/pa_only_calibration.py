@@ -13,10 +13,18 @@ def main():
     assert os.environ.get('M06_SDK_INPUT_GATE')=='1' and os.environ.get('BUDDY_SYNTHETIC_AVD_PROBE')=='1'
     metadata=preflight(Path('render/native-input'));path=Path('render/sdk-gate-calibration.json')
     if not metadata['identity_ok'] or metadata['known_stub'] or metadata['properties']['ro.build.fingerprint'].get('value')!=FINGERPRINT:
-        path.write_text(json.dumps(dict(status='IDENTITY_OR_KNOWN_STUB_STOP',source6='NOT_RUN')));return 1
+        path.write_text(json.dumps(dict(status='IDENTITY_OR_KNOWN_STUB_STOP',source6='NOT_RUN',fixture='NOT_RUN')));return 1
+    if os.environ.get('M06_REQUIRE_HDA')=='1' and os.environ.get('M06_NATIVE_READONLY')!='1':
+        path.write_text(json.dumps(dict(status='HDA_HARD_STOP',reason='NATIVE_HDA_EVIDENCE_DISABLED',fixture='NOT_RUN',source6='NOT_RUN')));return 1
     if os.environ.get('M06_NATIVE_READONLY')=='1':
         from native_readonly import NativeReadOnly
-        NativeReadOnly().prepare(metadata)
+        if os.environ.get('M06_REQUIRE_HDA')=='1':
+            from hda_guard import runtime_gate
+            from sdk_input_gate import PrivatePulse
+            gate=runtime_gate(metadata,Path(os.environ['ANDROID_HOME']),NativeReadOnly().prepare,PrivatePulse())
+            if gate['status']!='AVAILABLE':
+                path.write_text(json.dumps(dict(status='HDA_HARD_STOP',source6='NOT_RUN',fixture='NOT_RUN')));return 1
+        else:NativeReadOnly().prepare(metadata)
     result=run_arm(7,pa_transport_complete,input_backend='pa-only',receipt_prefix='mic-pa-')
     path.write_text(json.dumps(dict(status='SOURCE7_PA_ONLY',source6='NOT_RUN',arm=result),indent=2))
     return 0 if result['test_exit']==0 and result['transport_complete'] and result['alignment_exit']==0 and all(result.get(k) for k in ('finished','released','stopped','worker_done','lease_available')) and not result['recording'] else 1

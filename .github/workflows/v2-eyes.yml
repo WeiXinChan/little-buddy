@@ -29,6 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           export ANDROID_SERIAL=emulator-5554
+          export M06_REQUIRE_HDA=1
           export JAVA_HOME="$JAVA_HOME_17_X64"
           export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
@@ -101,8 +102,9 @@ jobs:
           timeout 10s bash -c 'until [[ -S /tmp/.X11-unix/X99 ]]; do sleep 0.2; done'
           export PULSE_SOURCE=m06_input.monitor PULSE_SINK=v2_playback
           export QEMU_PA_SERVER="$PULSE_SERVER" QEMU_PA_SOURCE=m06_input.monitor QEMU_PA_SINK=v2_playback
+          python3 scripts/m06/hda_guard.py
           "$ANDROID_HOME/emulator/emulator" -version >render/emulator-version.txt 2>&1
-          "$ANDROID_HOME/emulator/emulator" -avd v2eyes -port 5554 -grpc 8554 -grpc-use-token -accel on -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
+          "$ANDROID_HOME/emulator/emulator" -avd v2eyes -feature -VirtioSndCard -port 5554 -grpc 8554 -grpc-use-token -accel on -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics > render/emulator.log 2>&1 &
           emulator_pid=$!
           export M06_EMULATOR_PID="$emulator_pid"
           test -f "$ANDROID_AVD_HOME/v2eyes.ini"

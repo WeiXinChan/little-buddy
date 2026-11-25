@@ -200,7 +200,12 @@ class PrivatePulse:
                         safe[key]=v
                     flags[a]=safe  # Only whitelisted typed audio options.
                 elif a in ('-no-audio','-noaudio'): raise IsolationError('AUDIO_DISABLED')
+            soundhw=None
+            if self.env.get('M06_REQUIRE_HDA')=='1':
+                from hda_guard import require_qemu_hda
+                soundhw=require_qemu_hda(nul_fields(Path(f'/proc/{pid}/cmdline')))
             audio[str(pid)]=dict(environment=fields,audio_backend_arguments=flags)
+            if soundhw is not None:audio[str(pid)]['soundhw']=soundhw
         row.update(private_pulse_n=True,private_unix=True,audio=audio)
         return row
 
