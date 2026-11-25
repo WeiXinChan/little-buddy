@@ -11,7 +11,7 @@ import android.os.Looper
 import android.os.SystemClock
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
+import java.io.File
 
 /** Local monotonic continuity only, not a trusted server clock. No real provider is enabled. */
 internal class AndroidFeedbackClock : FeedbackClock {
@@ -22,47 +22,73 @@ internal class AndroidFeedbackClock : FeedbackClock {
         return if (delta < 0) null else maxOf(System.currentTimeMillis(), wall + delta)
     }
 }
+/** Reuse a matching persisted job. Re-registering from onStartJob could cancel the active run. */
+internal class AndroidFeedbackJobSchedule(context: Context) : FeedbackJobSchedule {
+    private val app = context.applicationContext
+    override fun ensure(): Boolean {
+        val scheduler = app.getSystemService(JobScheduler::class.java) ?: return false
+        val component = ComponentName(app, FeedbackSweepService::class.java)
+        return FeedbackJobRegistration({
+            val current = scheduler.getPendingJob(AndroidFeedbackRuntime.JOB_ID)
+            current != null && current.service == component && current.isPersisted && current.isPeriodic &&
+                current.intervalMillis == PERIOD && current.networkType == JobInfo.NETWORK_TYPE_NONE &&
+                !current.isRequireCharging && !current.isRequireDeviceIdle &&
+                !current.isRequireBatteryNotLow && !current.isRequireStorageNotLow
+        }, {
+            val request = JobInfo.Builder(AndroidFeedbackRuntime.JOB_ID, component)
+                .setPersisted(true).setPeriodic(PERIOD).build()
+            scheduler.schedule(request) == JobScheduler.RESULT_SUCCESS
+        }).ensure()
+    }
+    companion object { const val PERIOD = 15 * 60_000L }
+}
 internal object AndroidFeedbackRuntime {
     const val JOB_ID = 0x4D09
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadScheduledExecutor { work -> Thread(work, "v2-feedback-local") }
     private var instance: FeedbackEngine? = null
-    @Volatile var jobScheduled = false; private set
+    private var maintenance: FeedbackMaintenance? = null
+    private var owner: FeedbackCoreOwner? = null // retained for process lifetime, all access on worker
+    val jobScheduled: Boolean get() = maintenance?.jobScheduled == true
+    @Synchronized fun start(context: Context) {
+        if (instance == null) open(context) else maintenance!!.start()
+    }
     @Synchronized fun open(context: Context): FeedbackEngine {
         instance?.let { return it }
         val app = context.applicationContext
-        val next = FeedbackEngine(FeedbackQueue { action -> worker.execute(action) },
-            FeedbackQueue { action -> main.post(action) }, { authorizer ->
-                check(Looper.myLooper() != Looper.getMainLooper())
-                FeedbackCore(AndroidFeedbackVault.open(app), AndroidFeedbackClock(), authorizer)
-            })
-        instance = next
-        // Worker exists for process lifetime; closing a parent page never cancels system deletion.
-        worker.scheduleAtFixedRate({ next.sweep() }, 0, 60, TimeUnit.SECONDS)
-        jobScheduled = try {
-            val request = JobInfo.Builder(JOB_ID, ComponentName(app, FeedbackSweepService::class.java))
-                .setPersisted(true).setPeriodic(15 * 60_000L).build()
-            app.getSystemService(JobScheduler::class.java).schedule(request) == JobScheduler.RESULT_SUCCESS
-        } catch (_: Exception) { false }
+        val queue = FeedbackQueue { action -> worker.execute(action) }
+        val next = FeedbackEngine(queue, FeedbackQueue { action -> main.post(action) }, { authorizer ->
+            check(Looper.myLooper() != Looper.getMainLooper())
+            val store = owner ?: FeedbackCoreOwner(File(app.noBackupFilesDir, "m09-feedback.owner"),
+                { AndroidFeedbackVault.open(app) }, AndroidFeedbackClock()).also { owner = it }
+            store.open(authorizer)
+        })
+        val cleanup = FeedbackMaintenance(queue, next, AndroidFeedbackJobSchedule(app), FeedbackPeriodic { tick ->
+            worker.scheduleAtFixedRate({ tick() }, 60, 60, TimeUnit.SECONDS)
+        })
+        instance = next; maintenance = cleanup
+        cleanup.start()
         return next
+    }
+    @Synchronized fun request(context: Context, done: (Boolean) -> Unit) {
+        open(context); maintenance!!.request(done)
+    }
+    fun jobRuns(context: Context, finish: (JobParameters, Boolean) -> Unit): FeedbackJobRuns<JobParameters> {
+        open(context)
+        return FeedbackJobRuns(maintenance!!, FeedbackQueue { action -> main.post(action) }, finish)
     }
 }
 
 /** Only the system can bind (manifest BIND_JOB_SERVICE); receives no material or credentials. */
 class FeedbackSweepService : JobService() {
-    private val active = AtomicReference<JobParameters?>()
+    private val runs by lazy { AndroidFeedbackRuntime.jobRuns(this) { params, retry -> jobFinished(params, retry) } }
     override fun onStartJob(params: JobParameters): Boolean {
         if (params.jobId != AndroidFeedbackRuntime.JOB_ID) return false
-        active.set(params)
-        AndroidFeedbackRuntime.open(this).sweep { success ->
-            Handler(Looper.getMainLooper()).post {
-                if (active.compareAndSet(params, null)) jobFinished(params, !success)
-            }
-        }
+        runs.start(params)
         return true
     }
     override fun onStopJob(params: JobParameters): Boolean {
-        active.compareAndSet(params, null)
+        if (params.jobId == AndroidFeedbackRuntime.JOB_ID) runs.stop(params)
         return true // queued sweep remains safe; it has deletion-only system authority
     }
 }

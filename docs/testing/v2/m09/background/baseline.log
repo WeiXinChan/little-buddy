@@ -1,0 +1,4 @@
+build/m09-core/run-g8qp02tn/baseline/AndroidFeedbackRuntime.kt:34:61: warning: 'val networkType: Int' is deprecated. Deprecated in Java.
+                current.intervalMillis == PERIOD && current.networkType == JobInfo.NETWORK_TYPE_NONE &&
+                                                            ^^^^^^^^^^^
+RESULT 111 0 0
