@@ -35,7 +35,10 @@ class V2VoiceActivity : Activity() {
     private var budget: PlaybackBudget? = null
     private var panel: AndroidParentPanel? = null
     private var help: LocalHelpOutput? = null
-    @Volatile private var managementRequested = false
+    private val pageRequests=ManagementPageRequests()
+    private var managementRequested: Boolean
+        get()=pageRequests.requested(managementRevision)
+        set(value) { if (value) pageRequests.immediate(managementRevision) else pageRequests.clear() }
     @Volatile private var managementVisible = false
     private var helpVisible = false
     private var managementReturning=false
@@ -139,14 +142,19 @@ class V2VoiceActivity : Activity() {
         }
     }
     /** Stop child hardware first, retain only the authenticated transport while requesting pause. */
-    internal fun requestParentManagement() {
+    internal fun requestParentManagement(entry: ManagementEntry?=null) {
         if (!foreground || !hasWindowFocus() || managementRequested || managementVisible) return
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return
-        helpVisible=false; help?.stop(); managementRequested=true; managementReturning=false; imageRoute?.clear()
+        managementReturning=false
         val ticket=++managementRevision
+        val reservation=if (entry!=null) pageRequests.reserve(ticket) else null
+        if (entry==null) { helpVisible=false; help?.stop(); managementRequested=true; managementReturning=false; imageRoute?.clear() }
         owner.post {
             if (ticket!=managementRevision || !foreground) return@post
             val client=voice
+            if (entry!=null && (client==null || !client.acceptManagementEntry(entry) {
+                reservation!=null && pageRequests.claim(reservation)
+            })) return@post
             val playerQuiet=client?.stopForManagement() ?: true
             capture?.close(); capture?.let { releasedRecorder=it.nativeProof }
             val recorderQuiet=capture?.quarantined!=true
@@ -210,7 +218,7 @@ class V2VoiceActivity : Activity() {
             }, { images?.clear() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 playbackSettings = settings,
                 localHelp = { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
-                management = { runOnUiThread { if (ticket == transportRevision) requestParentManagement() } },
+                management = { entry -> runOnUiThread { if (ticket == transportRevision) requestParentManagement(entry) } },
                 permitted = { foreground && ticket == transportRevision }, images = images,
                 managed = { phase -> runOnUiThread { if (ticket==transportRevision) managementChanged(phase) } },
                 sessionEnded = { runOnUiThread { if (ticket==transportRevision) {

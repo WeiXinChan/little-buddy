@@ -23,7 +23,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val allowAck: (PlaybackAck) -> Boolean = { true },
                            private var playbackSettings: com.littlebuddy.v2.parent.ParentPlaybackSettings = com.littlebuddy.v2.parent.ParentPlaybackSettings(),
                            private val localHelp: (LocalHelpReason) -> Unit = {},
-                           private val management: () -> Unit = {},
+                           private val management: (ManagementEntry) -> Unit = {},
                            private val permitted: () -> Boolean = { true },
                            private var images: ImagePort? = null,
                            private val managed: (ManagementState.Phase) -> Unit = {},
@@ -48,7 +48,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var outputBusy = false
     private var responseRevision = -1L
     private val gate: InputGate = InputGate(waits, SystemClock::elapsedRealtime,
-        { version -> images?.clear(); send("advance", "revision" to version); candidate() },
+        { version -> entryGate.clear(); images?.clear(); send("advance", "revision" to version); candidate() },
         { version -> send("probe", "revision" to version) },
         { version -> send("seal", "revision" to version); inputSerial++ ; outputBusy = true },
         { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true },
@@ -57,6 +57,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private fun gateDeadline(): Long = gate.responseDeadline
     private fun gateVersion(): Long = gate.revision
     private val helpScope = LocalHelpScope()
+    private val entryGate=ManagementEntryGate(SystemClock::elapsedRealtime)
     private var ackIdentity: JSONObject? = null
     private var ackSequence = 0L
     private var playerName: String? = null
@@ -144,9 +145,16 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                             event.optInt("management_v",-1),event.optString("session",""),event.optLong("turn",-1),
                             event.getLong("epoch"),event.optLong("revision",-1),event.optString("state","")) ||
                         event.optString("protocol_contract","")!=requiredContract) { fail("incompatible"); return }
-                    compatible=true; managementState.normal(managementScope(event)); status("wake"); ready(); return
+                    bindNormalScope(managementScope(event)); compatible=true; status("wake"); ready(); return
                 }
-                if (!managementPending || event.getInt("management_v") != 1 ||
+                if (!managementPending) {
+                    if (event.getLong("revision")==gate.revision && ReleaseCompatibility.accepts(event.getInt("v"),
+                        event.optString("protocol_contract",""),event.optInt("management_v",-1),event.optString("session",""),
+                        event.optLong("turn",-1),epoch,event.optLong("revision",-1),event.optString("state","")))
+                        bindNormalScope(managementScope(event))
+                    return
+                }
+                if (event.getInt("management_v") != 1 ||
                     event.getString("state") !in setOf("active", "waiting_wake")) return
                 val request = managementState.scoped(managementScope(event)) ?: return
                 moveManagementEpoch(request.scope)
@@ -173,8 +181,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             "open" -> {
                 if (event.getLong("revision") != gate.revision) return
                 if (event.has("session") && event.has("turn")) {
-                    helpScope.bind(event.getString("session"), event.getLong("turn"), epoch, gate.revision)
-                    managementState.normal(managementScope(event))
+                    bindNormalScope(managementScope(event))
                 }
                 outputBusy = true
                 responseRevision = gate.revision
@@ -187,8 +194,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 require(event.getString("player") == playerName)
                 if (event.has("revision") && event.getLong("revision") != gate.revision) return
                 ackIdentity = event.getJSONObject("identity"); ackSequence = 0
-                helpScope.bind(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision)
-                managementState.normal(ManagementScope(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"),epoch,gate.revision))
+                bindNormalScope(ManagementScope(ackIdentity!!.getString("session"),ackIdentity!!.getLong("turn"),epoch,gate.revision))
                 player.bind(Binding(epoch, checkNotNull(playerName), event.getInt("stream")))
                 images?.bind(ImageScope(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision))
             }
@@ -246,7 +252,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             "management" -> {
                 if (event.getLong("revision") != gate.revision || !helpScope.matches(event.getString("session"),
                     event.getLong("turn"), epoch, gate.revision)) return
-                management()
+                val entry=entryGate.issue(managementScope(event),gate.responseDeadline) ?: return
+                management(entry)
             }
             "failure" -> {
                 if (childBlocked) { fail("management"); return }
@@ -265,11 +272,18 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             else -> error("unknown event")
         }
     }
+    private fun bindNormalScope(scope: ManagementScope) {
+        helpScope.bind(scope.session,scope.turn,scope.epoch,scope.revision)
+        managementState.normal(scope)
+        entryGate.bind(scope) // Both normal consumers are ready before any entry/ready callback.
+    }
+    fun acceptManagementEntry(entry: ManagementEntry, decision: ()->Boolean): Boolean =
+        active && permitted() && !childBlocked && entryGate.accept(entry,epoch,gate.revision,decision)
     private fun managementScope(event: JSONObject) = ManagementScope(event.getString("session"), event.getLong("turn"),
         event.getLong("epoch"),event.getLong("revision"))
     private fun moveManagementEpoch(scope: ManagementScope) {
         epoch=scope.epoch; sequence=0; gate.managementWaiting(scope.revision)
-        ackIdentity=null; playerName=null; helpScope.clear(); images?.clear()
+        ackIdentity=null; playerName=null; helpScope.clear(); entryGate.clear(); images?.clear()
     }
     /** Caller has already stopped the children's recorder; no network action until native release confirms. */
     fun stopForManagement(): Boolean {
@@ -336,7 +350,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         val stopped = player.stop() // First: local mute, generation revoke, flush, stop/release.
         ackIdentity = null; playerName = null; outputBusy = false
         hideImage()
-        epoch++; sequence = 0; helpScope.clear()
+        epoch++; sequence = 0; helpScope.clear(); entryGate.clear()
         if (!stopped.stopped || !stopped.released) { fail("release"); return }
         send("stop", "intent" to intent) // Only after local native calls completed.
     }
@@ -346,7 +360,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         close(); if (pending) managed(ManagementState.Phase.DEAD); status(code); failed()
     }
     fun close() {
-        managementState.close(); childBlocked=true; managementPending=false
+        managementState.close(); entryGate.clear(); childBlocked=true; managementPending=false
         images?.clear()
         active = false; isAwake = false; outputBusy = false; helpScope.clear()
         player.stop(); ackIdentity = null; hideImage()
