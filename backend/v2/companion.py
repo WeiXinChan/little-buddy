@@ -9,6 +9,7 @@ import httpx
 from backend.v2.voice import VoiceFault
 from backend.v2 import schemas
 from backend.v2.safety import SafetyFault
+from backend.v2.images import DefaultImages
 from contextlib import asynccontextmanager
 
 SYSTEM = """你是瓦力，面向5–8岁儿童的AI语音玩伴。自然、简短、不过度夸奖或连续追问。
@@ -66,8 +67,9 @@ class CompanionPolicy:
 
 
 class UnifiedProviders:
-    def __init__(self, speech, model):
+    def __init__(self, speech, model, *, images=None):
         self.speech, self.model = speech, model
+        self.images = DefaultImages() if images is None else images
 
     def recognize(self, rate):
         return self.speech.recognize(rate)
@@ -82,6 +84,16 @@ class UnifiedProviders:
                     for offset in range(0, len(frame), 4800):
                         yield frame[offset:offset+4800]
             yield chunks()
+
+    def image_catalogue(self):
+        return self.images.catalogue()
+
+    def visual_candidate(self, request):
+        return self.images.candidate(request)
+
+    async def prepare_visual(self, request):
+        image=await self.images.prepare(request)
+        return image if self.images.accepts(image) else None
 
     async def request(self, task, data, schema):
         async with asyncio.timeout(8):
@@ -124,11 +136,16 @@ class UnifiedProviders:
 动作必须由本轮孩子意图支持；未改规则时保留已有规则/角色/谜底。
 private仅在孩子明确谈私事时使用；共享剧情不能出现私事。
 新的状态是建议，完整播放后才生效；不能把尚未播放剧情当已发生。
+可选tools:[{kind:show_image|hide_image|generate_image,asset_id:默认图ID}]，最多1项。
+只从context.image_catalog选择匹配的默认图；没有该目录就tools为空。
+不要声称工具已执行或新图已生成。generate_image缺动态服务将明确用默认图回退。
+图只会在最后一句完整播放后揭晓；猜谜未公开答案时不显示答案图，只有明确说出答案后才可揭图。
 轮流猜描述要保留答案直到明确结束该题；不是每一轮都换答案。""",
                                   dict(text=text or '只叫了瓦力，请提出一次自然邀请。', context=context), schemas.PLAN)
         if isinstance(plan, dict):
             plan.setdefault('anchors', {})
-        if (not isinstance(plan, dict) or set(plan) != {'action', 'mode', 'rules', 'roles', 'secrets', 'sentences', 'anchors'} or
+            plan.setdefault('tools', [])
+        if (not isinstance(plan, dict) or set(plan) != {'action', 'mode', 'rules', 'roles', 'secrets', 'sentences', 'anchors', 'tools'} or
                 plan['action'] not in {'continue', 'change', 'leave', 'handoff', 'private'} or
                 plan['mode'] not in {'chat', 'guess', 'story', 'adventure', 'association'} or
                 not isinstance(plan['rules'], str) or len(plan['rules']) > 2000 or
@@ -144,6 +161,13 @@ private仅在孩子明确谈私事时使用；共享剧情不能出现私事。
                 any(not isinstance(k, str) or not 1 <= len(k) <= 40 or type(v) is not int or
                     not 0 <= v < len(plan['sentences']) for k, v in plan['anchors'].items())):
             raise ModelError('anchors')
+        tools=plan['tools']
+        if (not isinstance(tools,list) or len(tools)>1 or any(
+            not isinstance(t,dict) or set(t)-{'kind','asset_id'} or
+            t.get('kind') not in {'show_image','hide_image','generate_image'} or
+            ('asset_id' in t and (not isinstance(t['asset_id'],str) or len(t['asset_id'])>64))
+            for t in tools)):
+            raise ModelError('tool schema')
         # Preserve current riddle on a continuation; model cannot silently change it.
         if plan['action'] == 'continue' and context.get('unrevealed'):
             plan['secrets'] = dict(context['unrevealed'])

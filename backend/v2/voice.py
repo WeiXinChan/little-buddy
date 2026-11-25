@@ -15,6 +15,7 @@ from uuid import uuid4
 from backend.v2.session import Identity, Session
 from backend.v2.budget import ResponseBudget
 from backend.v2.safety import SafetyFault, local_help
+from backend.v2.images import revealable
 
 
 class VoiceFault(Exception):
@@ -78,7 +79,7 @@ def decode(raw):
                'ack': {'identity', 'player', 'stream', 'segment', 'head'}, 'end': set()}
     if (not isinstance(event, dict) or event.get('v') != 2 or type(event.get('v')) is not int
             or event.get('type') not in schemas
-            or (set(event) - ({'speech', 'age_ms'} if event['type'] == 'input' else {'age_ms'} if event['type'] == 'wake_solo' else set())) != schemas[event['type']] | {'v', 'type', 'epoch', 'seq'}
+            or (set(event) - ({'speech', 'age_ms'} if event['type'] == 'input' else {'age_ms'} if event['type'] == 'wake_solo' else {'features'} if event['type'] == 'bind' else set())) != schemas[event['type']] | {'v', 'type', 'epoch', 'seq'}
             or any(type(event[k]) is not int or event[k] < 0 for k in ('epoch', 'seq'))):
         raise WireError('schema')
     return event
@@ -106,6 +107,9 @@ class VoicePeer:
         self.ack_sequence = 0
         self.send_sequence = 0
         self.closed = False
+        self.images_enabled = False
+        self.prepared_visual = None
+        self.visual_task = None
         self.recognition_scopes = {}
         self.generation_scopes = {}
         self.retired_tasks = set()
@@ -209,10 +213,62 @@ class VoicePeer:
             if self.session is not session or self.epoch != epoch or session.turn != turn:
                 break
             if command[0] == 'mute_flush':
+                self.invalidate_visual()
                 await self.send('revoke')
             elif command[0] == 'reveal':
-                await self.send('reveal', effect=command[1], topic=command[2])
+                if command[1].startswith('image:'):
+                    prepared=self.prepared_visual
+                    if (prepared is not None and command[1]=='image:'+prepared['token'] and
+                        self.visual_live(prepared) and command[2]==prepared['topic'] and len(command)==5):
+                        prepared['played']=(command[3],command[4])
+                        await self.reveal_visual(prepared)
+                else:
+                    await self.send('reveal', effect=command[1], topic=command[2])
         self.changed.set()
+
+    def visual_live(self, value):
+        return (self.images_enabled and not self.closed and self.session._live() and value['session']==self.session.session and
+                value['turn']==self.session.turn and value['revision']==self.revision and
+                value['epoch']==self.epoch and value['output']==self.session.output)
+
+    def invalidate_visual(self):
+        self.prepared_visual=None
+        task,self.visual_task=self.visual_task,None
+        if task is not None and not task.done():
+            task.cancel();self.track_retired(task)
+
+    async def prepare_visual(self, prepared, request, operation):
+        owner=asyncio.current_task()
+        try:
+            image=await self.owned(operation,self.providers.prepare_visual,request)
+            if self.prepared_visual is not prepared or not self.visual_live(prepared) or image is None:return
+            if prepared['answer_asset'] is not None and image.asset_id!=prepared['answer_asset']:return
+            prepared['ready']=image.payload()
+            fields={k:prepared[k] for k in ('session','turn','revision','topic','token')}
+            await self.send('image_ready',**fields,**prepared['ready'])
+            if self.prepared_visual is prepared and self.visual_live(prepared):await self.reveal_visual(prepared)
+        except (StaleOperation,asyncio.CancelledError):
+            return
+        except Exception:
+            if self.prepared_visual is prepared:self.prepared_visual=None
+        finally:
+            if self.visual_task is owner:self.visual_task=None
+
+    async def reveal_visual(self, prepared):
+        if (self.prepared_visual is not prepared or not self.visual_live(prepared) or
+            prepared['ready'] is None or prepared['played'] is None or prepared['topic']!=self.session.topic):return
+        self.prepared_visual=None # consume before transport can yield
+        fields={k:prepared[k] for k in ('session','turn','revision','topic','token')}
+        await self.send('reveal',effect='image:'+prepared['token'],**fields,
+            asset_id=prepared['ready']['asset_id'],sha256=prepared['ready']['sha256'],
+            player=self.session.player,stream=self.session.stream,
+            segment=prepared['played'][0],end=prepared['played'][1])
+
+    async def hide_visual(self, reason):
+        self.invalidate_visual()
+        if self.images_enabled:
+            await self.send('hide', session=self.session.session,turn=self.session.turn,
+                            revision=self.revision,topic=self.session.topic,reason=reason)
 
     async def cancel_generation(self):
         task, self.generation = self.generation, None
@@ -310,6 +366,7 @@ class VoicePeer:
                 raise WireError('revision')
             self.revision = version
             self.suspended = True
+            await self.hide_visual('input_changed')
             self.analysis = self.prepared = None
             self.session.valid_interaction()
             # Snapshot analysis can finish, but its old version cannot take effect.
@@ -339,6 +396,10 @@ class VoicePeer:
             self.input_budget.remaining()
             await self.decision(text, meaning, revision, self.input_budget.deadline)
         elif kind == 'bind':
+            features=event.get('features',[])
+            if not isinstance(features,list) or len(features)>1 or any(x!='images_v1' for x in features):
+                raise WireError('features')
+            self.images_enabled='images_v1' in features
             if (not isinstance(event['player'], str) or len(event['player']) > 128
                     or not event['player'] or self.session.player is not None or self.generation is None):
                 raise WireError('player')
@@ -472,11 +533,14 @@ class VoicePeer:
             # adaptation belongs to M05; no unrestricted model-proposed facts enter it.
             await self.compact_memory(epoch, operation)
             state = None
+            image_effect=None; answer_public=False
             stage = 'input_policy'
             if getattr(self.policy, 'needs_local_help', lambda _: False)(text) is True:
                 raise SafetyFault('content_blocked')
             if hasattr(self.providers, 'plan'):
                 context = self.session.context()
+                if self.images_enabled and hasattr(self.providers,'image_catalogue'):
+                    context['image_catalog']=self.providers.image_catalogue()
                 stage = 'plan'
                 plan = await self.owned(operation, self.providers.plan, text, context)
                 if epoch != self.epoch or not self.session._output_live():
@@ -526,6 +590,28 @@ class VoicePeer:
                 stage = 'safety'
                 await self.review(operation, ''.join(plan['sentences']))
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
+                image_effect=None; answer_public=False
+                tools=plan.get('tools',[])
+                if self.images_enabled and tools:
+                    request=tools[0]
+                    if request['kind']=='hide_image':
+                        await self.hide_visual('requested')
+                    elif (not self.session.private_mode and hasattr(self.providers,'prepare_visual') and
+                          hasattr(self.providers,'visual_candidate')):
+                        candidate=self.providers.visual_candidate(request)
+                        if candidate is not None:
+                            allowed,answer_public=revealable(plan,context,candidate)
+                            if allowed:
+                                self.invalidate_visual()
+                                prepared=dict(session=self.session.session,turn=self.session.turn,
+                                    revision=response_revision,topic=self.session.topic+1,token=uuid4().hex,
+                                    epoch=self.epoch,output=self.session.output,ready=None,played=None,
+                                    answer_asset=candidate.asset_id if answer_public else None)
+                                self.prepared_visual=prepared
+                                image_effect='image:'+prepared['token']
+                                self.visual_task=asyncio.create_task(self.prepare_visual(prepared,request,operation))
+                if answer_public:
+                    state['secrets']={} # proposal only, committed by the final played ACK
                 @asynccontextmanager
                 async def planned():
                     async def items():
@@ -559,9 +645,13 @@ class VoicePeer:
                             previous = chunk
                         if previous is None:
                             raise WireError('empty synthesis')
+                        final_sentence=state is not None and sentence_number==len(plan['sentences'])
+                        anchors=tuple(k for k,i in plan['anchors'].items() if i==sentence_number-1) if state is not None else ()
+                        if final_sentence and answer_public: anchors=tuple(dict.fromkeys(anchors+('answer.current',)))
                         await self.audio(previous, approved, epoch,
+                                         effect=image_effect if final_sentence else None,
                                          state=state if state is not None and sentence_number == len(plan['sentences']) else None,
-                                         anchors=tuple(k for k, i in plan['anchors'].items() if i == sentence_number-1) if state is not None else (), operation=operation)
+                                         anchors=anchors, operation=operation)
             while self.session.pending:
                 self.changed.clear()
                 if epoch != self.epoch or not self.session._output_live():
@@ -601,10 +691,15 @@ class VoicePeer:
             if self.quarantined:
                 await self.close_quarantined()
         finally:
+            visual=self.prepared_visual
+            if (visual is not None and visual['session']==operation.session_id and
+                visual['turn']==operation.turn and visual['output']==operation.output and
+                (owner.cancelling() or not operation.valid())):
+                self.invalidate_visual()
             self.generation_scopes.pop(owner, None)
             text = ''
 
-    async def audio(self, pcm, public, epoch, state=None, anchors=(), operation=None):
+    async def audio(self, pcm, public, epoch, state=None, anchors=(), operation=None, effect=None):
         operation = operation or Operation(self, epoch)
         operation.ensure()
         while len(self.session.pending) >= 2 or self.suspended:
@@ -620,7 +715,7 @@ class VoicePeer:
         name, start = uuid4().hex, self.session.sent_end
         end = start + len(pcm)//2
         if not self.session.send(replace(self.tts_identity, sequence=self.send_sequence),
-                                 name=name, public=public, end=end, approved=True, effective=True, state=state, anchors=anchors):
+                                 name=name, public=public, end=end, approved=True, effective=True, state=state, anchors=anchors, effect=effect):
             raise WireError('send rejected')
         self.send_sequence += 1
         await self.send('audio', player=self.session.player, stream=self.session.stream,
@@ -663,6 +758,7 @@ class VoicePeer:
                 await self.handle(receiver.result())
         finally:
             self.closed = True
+            self.invalidate_visual()
             for task in (monitor, receiver, self.recognition):
                 if task is not None:
                     task.cancel()
