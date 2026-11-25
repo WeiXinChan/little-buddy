@@ -1,0 +1,3 @@
+Synthetic executable path substitution only; no install/start/reload.
+exit=0
+/etc/systemd/system/tat_agent.service:7: PIDFile= references a path below legacy directory /var/run/, updating /var/run/tat_agent.pid → /run/tat_agent.pid; please update the unit file accordingly.

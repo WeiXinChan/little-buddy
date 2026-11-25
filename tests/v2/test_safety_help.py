@@ -66,6 +66,7 @@ class SafetyHelp(unittest.IsolatedAsyncioTestCase):
             service = directory/'service.env'
             service.write_text('\n'.join(f'{k}="{v}"' for k,v in CONFIG.items()))
             (directory/'dashscope-api-key').write_text('SYNTHETIC_PRIVATE_KEY')
+            service.chmod(0o600);(directory/'dashscope-api-key').chmod(0o600)
             async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as http:
                 bundle = configured_providers(http, environment={}, service_env=service, credential_directory=directory)
                 self.assertEqual(bundle.speech.asr, CONFIG['DASHSCOPE_ASR_MODEL'])
@@ -188,6 +189,7 @@ class SafetyHelp(unittest.IsolatedAsyncioTestCase):
             tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(root/'cert',root/'key')
             trust=ssl.create_default_context(cafile=str(root/'cert'))
             (root/'dashscope-api-key').write_text('SYNTHETIC_PRIVATE_KEY')
+            (root/'dashscope-api-key').chmod(0o600)
             async def response(request):
                 instruction=json.loads(request.content)['messages'][0]['content']
                 if '审核下一个' in instruction:return httpx.Response(503)
@@ -236,6 +238,7 @@ class RuntimeSettings(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'service.env'
             path.write_text('\n'.join(f'{k}="{v}"' for k,v in CONFIG.items())+'\nAPI_KEY=UNREAD_SECRET\n')
+            path.chmod(0o600)
             config=settings(environment={},service_env=path)
             self.assertEqual(config['llm'],'qwen3.8-flash')
             public=json.dumps(manifest(config))
@@ -246,6 +249,7 @@ class RuntimeSettings(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'service.env';marker=Path(directory)/'executed'
             path.write_text('\n'.join(f'{k}="{v}"' for k,v in CONFIG.items())+f'\nDASHSCOPE_LLM_MODEL="$(touch {marker})"\n')
+            path.chmod(0o600)
             with self.assertRaisesRegex(ValueError,'settings'):settings(environment={},service_env=path)
             self.assertFalse(marker.exists())
             with self.assertRaisesRegex(ValueError,'credential'):configured_providers(object(),environment=CONFIG)
