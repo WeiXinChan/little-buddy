@@ -1,0 +1,25 @@
+app/src/test/java/com/littlebuddy/v2/parent/ExpiryCasTest.kt:24:22: warning: the corresponding parameter in the supertype 'ParentStore' is named 'record'. This may cause problems when calling this function with named arguments.
+  override fun write(r:ParentRecord,a:()->Boolean) {check(a());bytes=ParentCodec.encode(r)}
+                     ^
+app/src/test/java/com/littlebuddy/v2/parent/ExpiryCasTest.kt:24:37: warning: the corresponding parameter in the supertype 'ParentStore' is named 'authorized'. This may cause problems when calling this function with named arguments.
+  override fun write(r:ParentRecord,a:()->Boolean) {check(a());bytes=ParentCodec.encode(r)}
+                                    ^
+app/src/test/java/com/littlebuddy/v2/parent/ExpiryCasTest.kt:25:23: warning: the corresponding parameter in the supertype 'ParentStore' is named 'record'. This may cause problems when calling this function with named arguments.
+  override fun commit(r:ParentRecord,tx:ParentCommit) {
+                      ^
+app/src/test/java/com/littlebuddy/v2/parent/ExpiryCasTest.kt:25:38: warning: the corresponding parameter in the supertype 'ParentStore' is named 'transaction'. This may cause problems when calling this function with named arguments.
+  override fun commit(r:ParentRecord,tx:ParentCommit) {
+                                     ^^
+app/src/test/java/com/littlebuddy/v2/parent/RevocationBoundaryTest.kt:23:74: warning: the corresponding parameter in the supertype 'OwnerProof' is named 'challenge'. This may cause problems when calling this function with named arguments.
+  val d=ParentDomain(s,{100L},{},object:OwnerProof {override fun consume(c:OwnerChallenge)=true},"qa-only")
+                                                                         ^
+JUnit version 4.13.2
+......PBKDF2 host-only iterations=600000 samples_ms=726,591,596,621
+................................controlled_precommit: revoke_returned_within_300ms=true write_committed=false stored_volume=60
+................deadline_before_CAS: expired_at=120100 committed=false volume=60
+......................................
+Time: 128.938
+
+OK (92 tests)
+
+Android adapter: NOT compiled (no PARENT_ANDROID_JAR)
