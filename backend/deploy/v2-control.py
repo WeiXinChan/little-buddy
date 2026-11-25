@@ -12,7 +12,7 @@ import uuid
 SERVICE='little-buddy-v2.service'
 ROOT=Path('/opt/little-buddy-v2')
 CONFIG=Path('/etc/little-buddy-v2')
-CONTRACT='v2-voice2-safety1-images1-management1-end1'
+CONTRACT='v2-voice2-safety1-images2-volume1-management1-end1'
 
 
 def run(command,*,cwd=None):

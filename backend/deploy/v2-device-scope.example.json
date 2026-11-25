@@ -4,5 +4,5 @@
   "endpoint": "wss://REPLACE_WITH_AUTHORIZED_V2_ENDPOINT/v2/voice",
   "token_sha256": "REPLACE_WITH_HASH_OF_SEPARATELY_ISSUED_V2_DEVICE_TOKEN",
   "not_after": 0,
-  "protocol_contract": "v2-voice2-safety1-images1-management1-end1"
+  "protocol_contract": "v2-voice2-safety1-images2-volume1-management1-end1"
 }

@@ -6,7 +6,7 @@
 
 `python3 -m backend.v2.release package --ref <固定40位SHA> --output <新文件.tar.gz>` 从指定Git提交打包，不夹带工作区未跟踪文件。包含V2后端及所需共用Python模块、完整60 PNG/清单、V2 systemd/控制脚本/配置例、完整默认依赖闭包的精确版本锁；不含密钥、设备材料、V1配置或Android代码。tar/gzip固定顺序/mtime，生成release-manifest.json：source_sha、每文件hash/大小、原协议与模型。对外传输SHA256由root对照本次交付值，包内清单本身不是签名或家庭归属证明。
 
-匹配APK必须由b30固定制品确认支持：wire v2，safety1本地帮助、images1准备/ACK揭晓、management1同连接暂停退出与scope、end1会话结束；契约ID `v2-voice2-safety1-images1-management1-end1`。preflight要求显式`--apk-contract`与scope内protocol_contract一致；这只是版本匹配声明，不声称读过/验过远端APK。旧wire兼容不等于旧APK满足本发行完整功能。
+匹配APK必须由b30固定制品确认支持：wire v2，safety1本地帮助、images2有界PNG传输及ACK揭晓/定时隐藏/延长再展示、volume1本次语音调音量、management1同连接暂停退出与scope、end1会话结束；契约ID `v2-voice2-safety1-images2-volume1-management1-end1`。preflight要求显式`--apk-contract`与scope内protocol_contract一致；这只是版本匹配声明，不声称读过/验过远端APK。旧wire兼容不等于旧APK满足本发行完整功能。
 
 ### 准确启动条件
 
