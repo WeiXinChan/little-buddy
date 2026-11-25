@@ -13,10 +13,12 @@ import sqlite3
 import stat
 import threading
 import time
-from uuid import UUID
+from uuid import UUID, RFC_4122
 
 DAY = 86_400_000
 WEEK = 7 * DAY
+ADMISSION_WINDOW = 3_600_000
+FUTURE_SKEW = 120_000
 CATEGORIES = {'RECOGNITION', 'CONVERSATION', 'INTERRUPT', 'SOUND_NETWORK', 'IMAGE', 'OTHER'}
 STAGES = {'CONNECT', 'RECOGNIZE', 'GENERATE', 'PLAY', 'CANCEL'}
 ERRORS = {'NONE', 'TIMEOUT', 'OFFLINE', 'REJECTED', 'INTERNAL'}
@@ -24,7 +26,7 @@ ERRORS = {'NONE', 'TIMEOUT', 'OFFLINE', 'REJECTED', 'INTERNAL'}
 
 class FeedbackError(ValueError):
     def __init__(self, code):
-        if code not in {'invalid', 'storage', 'clock', 'deleted', 'conflict', 'capacity', 'missing'}:
+        if code not in {'invalid', 'storage', 'clock', 'expired', 'deleted', 'conflict', 'capacity', 'missing'}:
             raise ValueError('feedback error code')
         self.code = code
         super().__init__(code)
@@ -34,10 +36,32 @@ def identity(device, key):
     if not isinstance(device, str) or not re.fullmatch('[a-f0-9]{64}', device):
         raise FeedbackError('invalid')
     try:
-        if not isinstance(key, str) or str(UUID(key)) != key or UUID(key).version != 4:
+        if (not isinstance(key, str) or str(UUID(key)) != key or UUID(key).variant != RFC_4122 or
+            UUID(key).version not in {4, 7}):
             raise ValueError()
     except ValueError:
         raise FeedbackError('invalid') from None
+
+
+def issued_at(key):
+    """A UUIDv7's timestamp cannot be changed while preserving the same key.
+
+    UUIDv4 remains readable/deletable for compatibility, but cannot create a new
+    record: forgetting its tombstone would otherwise permit indefinite replay.
+    """
+    value = UUID(key)
+    if value.version != 7:
+        raise FeedbackError('invalid')
+    return value.int >> 80
+
+
+def admission(key, now):
+    created = issued_at(key)
+    if created <= 0 or created > now+FUTURE_SKEW:
+        raise FeedbackError('clock')
+    if now >= created+ADMISSION_WINDOW:
+        raise FeedbackError('expired')
+    return created+ADMISSION_WINDOW
 
 
 def text(value):
@@ -161,6 +185,7 @@ class FeedbackStore:
                 if old['digest'] != digest:
                     raise FeedbackError('conflict')
                 return dict(id=key, submitted_at=old['submitted'], delete_by=old['delete_by'])
+            admission(key, now)
             if (self.db.execute('SELECT count(*) FROM issues WHERE device=?', (device,)).fetchone()[0] >= 64 or
                 self.db.execute('SELECT count(*) FROM issues').fetchone()[0] >= 1024):
                 raise FeedbackError('capacity')
@@ -181,7 +206,14 @@ class FeedbackStore:
         with self.transaction(deleting=True) as now:
             row = self.db.execute('SELECT submitted,delete_by FROM issues WHERE device=? AND id=?', (device, key)).fetchone()
             # Unknown keys are durably tombstoned before a delayed upload can arrive.
-            submitted, deadline = (row['submitted'], row['delete_by']) if row else (None, now+WEEK)
+            if row:
+                submitted, deadline = row['submitted'], row['delete_by']
+            else:
+                # A permanently inadmissible key needs no retained identifier.
+                try:deadline = admission(key, now)
+                except FeedbackError:
+                    return dict(id=key, received_at=now, store_deleted=True, delete_by=now)
+                submitted = None
             self.db.execute('INSERT OR REPLACE INTO issues VALUES (?,?,?,?,?,?,?,?,?,?)',
                 (device, key, submitted, deadline, 'DELETED', '', '', b'', '', ''))
             return dict(id=key, received_at=now, store_deleted=True, delete_by=deadline)

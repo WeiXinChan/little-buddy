@@ -2,12 +2,16 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from uuid import uuid4
+from uuid import UUID, uuid4
+from secrets import randbits
 
-from backend.v2.feedback_store import FeedbackStore, FeedbackError, WEEK
+from backend.v2.feedback_store import FeedbackStore, FeedbackError, WEEK, ADMISSION_WINDOW
 
 DEVICE = 'a' * 64
 OTHER = 'b' * 64
+
+def key_at(now):
+    return str(UUID(int=(now<<80)|(7<<76)|(randbits(12)<<64)|(2<<62)|randbits(62)))
 
 
 class Store(unittest.TestCase):
@@ -17,7 +21,7 @@ class Store(unittest.TestCase):
         self.now = 1_800_000_000_000
         self.store = FeedbackStore(self.path, clock=lambda: self.now)
         self.addCleanup(self.store.close)
-        self.key = str(uuid4())
+        self.key = key_at(self.now)
 
     def submit(self, key=None, description='Adult synthetic issue', logs=b''):
         return self.store.submit(DEVICE, key or self.key, 'IMAGE', description, logs)
@@ -83,7 +87,7 @@ class Store(unittest.TestCase):
         for logs in [b'PRIVATE_CHILD_TRANSCRIPT\n', good.replace(b'PLAY', b'PRIVATE'),
                      f'{self.now-WEEK},PLAY,NONE,17,50,24\n'.encode(), b'x'*(256*1024+1)]:
             with self.assertRaisesRegex(FeedbackError, 'invalid'):
-                self.submit(str(uuid4()), logs=logs)
+                self.submit(key_at(self.now), logs=logs)
 
     def test_clock_rollback_blocks_read_reply_submit_but_allows_redaction(self):
         self.submit(); self.now -= 1000
@@ -97,9 +101,42 @@ class Store(unittest.TestCase):
 
     def test_protected_files_and_device_capacity(self):
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
-        for _ in range(64): self.submit(str(uuid4()))
+        for _ in range(64): self.submit(key_at(self.now))
         with self.assertRaisesRegex(FeedbackError, 'capacity'):
-            self.submit(str(uuid4()))
+            self.submit(key_at(self.now))
         other = self.path.parent / 'alias'; other.symlink_to(self.path)
         with self.assertRaisesRegex(FeedbackError, 'storage'):
             FeedbackStore(other)
+
+    def test_expired_withdrawn_key_cannot_reupload_after_tombstone_erasure_and_restart(self):
+        original = self.submit()
+        self.store.withdraw(DEVICE, self.key)
+        self.now = original['delete_by']
+        self.store.sweep()
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM issues').fetchone()[0], 0)
+        restarted = FeedbackStore(self.path, clock=lambda: self.now); self.addCleanup(restarted.close)
+        with self.assertRaisesRegex(FeedbackError, 'expired'):
+            restarted.submit(DEVICE, self.key, 'IMAGE', 'Adult synthetic issue', b'')
+        self.assertEqual(restarted.db.execute('SELECT count(*) FROM issues').fetchone()[0], 0)
+
+    def test_admission_age_is_bound_to_original_key_not_a_refreshable_payload_field(self):
+        old = key_at(self.now-ADMISSION_WINDOW)
+        future = key_at(self.now+120001)
+        for key, reason in [(old, 'expired'), (future, 'clock'), (str(uuid4()), 'invalid')]:
+            with self.assertRaisesRegex(FeedbackError, reason):
+                self.submit(key)
+        self.submit()
+        self.now += ADMISSION_WINDOW+1
+        # A previously admitted idempotent request still returns its original receipt.
+        self.assertEqual(self.submit()['delete_by'], self.now-ADMISSION_WINDOW-1+WEEK)
+
+    def test_unknown_withdraw_tombstone_is_short_lived_but_late_upload_stays_rejected(self):
+        self.store.withdraw(DEVICE, self.key)
+        self.now += ADMISSION_WINDOW
+        self.store.sweep()
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM issues').fetchone()[0], 0)
+        with self.assertRaisesRegex(FeedbackError, 'expired'):
+            self.submit()
+        # Legacy unsent UUIDv4 keys can be withdrawn without retaining new identifiers.
+        self.store.withdraw(DEVICE, str(uuid4()))
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM issues').fetchone()[0], 0)

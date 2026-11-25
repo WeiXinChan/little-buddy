@@ -19,6 +19,7 @@ from backend.v2.feedback_admin import cli as admin
 from backend.v2.server import voice_server
 from backend.v2.voice import decode, WireError
 from test_release import Fixture
+from test_feedback_store import key_at
 
 
 class Receiver(unittest.IsolatedAsyncioTestCase):
@@ -29,7 +30,7 @@ class Receiver(unittest.IsolatedAsyncioTestCase):
         self.store = FeedbackStore(self.root/'issues.db'); self.addCleanup(self.store.close)
         self.device = sha256(self.fixture.token.encode()).hexdigest()
         self.receiver = FeedbackReceiver(self.store, self.device)
-        self.key = str(uuid4())
+        self.key = key_at(int(time.time()*1000))
 
     def message(self, operation, **fields):
         return json.dumps(dict(v=1, request=str(uuid4()), id=self.key, operation=operation, **fields))
@@ -97,3 +98,18 @@ class Receiver(unittest.IsolatedAsyncioTestCase):
     async def test_voice_size_guard_remains_even_when_listener_allows_feedback_payloads(self):
         with self.assertRaisesRegex(WireError, 'size'):
             decode(' ' * 16001)
+
+    async def test_original_review_counterexample_cannot_resurrect_after_expiry(self):
+        now = int(time.time()*1000)+100
+        self.store.clock = lambda: now
+        self.key = key_at(now)
+        upload = self.message('submit', category='IMAGE', description='Synthetic withdrawn report', logs='')
+        first = self.receiver.request(upload)
+        self.assertTrue(first['ok'])
+        self.assertTrue(self.receiver.request(self.message('withdraw'))['ok'])
+        now = first['result']['delete_by']
+        self.store.sweep()
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM issues').fetchone()[0], 0)
+        replay = self.receiver.request(upload)
+        self.assertEqual(replay['error'], 'expired')
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM issues').fetchone()[0], 0)
