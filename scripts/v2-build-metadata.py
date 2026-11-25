@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTRACT = 'v2-voice2-safety1-images1-management1-end1'
+CONTRACT = 'v2-voice2-safety1-images2-volume1-management1-end1'
 
 def selected(path):
     return path.startswith(('app/src/main/', 'app/src/debug/', 'app/src/v2Debug/', 'app/libs/', 'gradle/wrapper/', 'assets/v2-default/')) or path in {
@@ -17,7 +17,7 @@ def generate(output):
     config=json.loads((ROOT/'app/v2-release.json').read_text())
     assert set(config)=={'format','version_code','version_name','application_id','protocol_contract','source_base'}
     assert len(config['source_base'])==40 and all(c in '0123456789abcdef' for c in config['source_base'])
-    assert config['format']==1 and config['version_code']==16 and config['version_name']=='2.0.0-rc2'
+    assert config['format']==1 and config['version_code']==17 and config['version_name']=='2.0.0-rc3'
     assert config['application_id']=='com.littlebuddy.sim.v2' and config['protocol_contract']==CONTRACT
     paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).decode().split('\0')
     paths=sorted(p for p in paths if p and selected(p))
@@ -38,7 +38,7 @@ def generate(output):
     digest=hashlib.sha256(canonical).hexdigest()
     manifest=hashlib.sha256((ROOT/'assets/v2-default/manifest.json').read_bytes()).hexdigest()
     result=dict(config,build_id=f'v2-{config["version_code"]}-{digest[:16]}',source_content_sha256=digest,
-                resources_manifest_sha256=manifest,wire=2,images_v=1,management_v=1,local_help_v=1,session_end_v=1,
+                resources_manifest_sha256=manifest,wire=2,images_v=2,volume_v=1,management_v=1,local_help_v=1,session_end_v=1,
                 min_sdk=26,target_sdk=36,abi=['arm64-v8a'],distribution='internal_debug_candidate')
     output=Path(output); output.mkdir(parents=True,exist_ok=True)
     (output/'v2-build.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')

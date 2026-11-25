@@ -4,6 +4,7 @@ package com.littlebuddy.v2
 internal interface TrackPort {
     val head: Long
     fun write(pcm: ShortArray, offset: Int): Int
+    fun setVolume(percent: Int): Boolean = false
     fun play()
     fun pause()
     fun mute()
@@ -91,6 +92,13 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
             stop()
             throw failure
         }
+    }
+
+    fun setVolume(percent: Int) {
+        require(percent in 0..100)
+        check(!quarantined)
+        // This operation never play/resume/unmutes a native track.
+        track?.let { check(it.setVolume(percent)) }
     }
 
     fun suspendOutput() { track?.pause(); suspended = true }

@@ -16,8 +16,9 @@ from urllib.parse import urlsplit
 
 from backend.v2.files import ConfigurationError,checked_file,read_checked,disable_core_dumps
 from backend.v2.protocol import CONTRACT
+from backend.v2.models import TEXT_MODEL
 
-MODELS=dict(asr='fun-asr-realtime',llm='qwen3.8-flash',tts='cosyvoice-v3-flash',voice='longanyang')
+MODELS=dict(asr='fun-asr-realtime',llm=TEXT_MODEL,tts='cosyvoice-v3-flash',voice='longanyang')
 LOCK=Path(__file__).resolve().parents[1]/'requirements-v2.lock'
 
 
@@ -38,6 +39,7 @@ class Prepared:
     expires_at:int
     report:dict
     images:object=field(default=None,repr=False)
+    feedback:object=field(default=None,repr=False)
 
 
 def dependencies():
@@ -110,8 +112,11 @@ def prepare(args,*,now=time.time):
     report=manifest(config)
     from backend.v2.image_runtime import read_image_runtime
     images=read_image_runtime(getattr(args,'image_config',None),directory,config['workspace'])
+    from backend.v2.feedback_receiver import checked_runtime
+    feedback=checked_runtime(getattr(args,'feedback_database',None),getattr(args,'feedback_copies_policy',None))
     report.update(protocol_contract=CONTRACT,checks='offline_pass',
                   device_scope='operator_bound_v2_only_not_family_ownership_proof',
                   ingress_tls='not_probed',new_cloud_samples=0,
                   dynamic_images='configured_not_cloud_verified' if images is not None else 'disabled')
-    return Prepared(tls,token,provider_key,config,scope['not_after'],report,images)
+    if feedback is not None:report['feedback_provider']='self_hosted_configured_not_accepted'
+    return Prepared(tls,token,provider_key,config,scope['not_after'],report,images,feedback)
