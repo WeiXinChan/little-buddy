@@ -6,6 +6,7 @@ state; memory compaction can select existing heard facts, never invent new ones.
 import asyncio
 import json
 import httpx
+import time
 from backend.v2.voice import VoiceFault
 from backend.v2 import schemas
 from backend.v2.safety import SafetyFault
@@ -235,9 +236,24 @@ class DashScopeModel:
         self.last_status = None
         self.last_code = None
         self.usage = dict(requests=0, failures=0, prompt_tokens=0, completion_tokens=0)
+        self.usage_observed=dict(prompt_tokens=0,completion_tokens=0)
+        self.usage_missing=dict(prompt_tokens=0,completion_tokens=0)
+        self.latency=dict(count=0,total_ms=0.,max_ms=0.,buckets=[0]*6)
+        self.cancelled=0
+
+    def metrics(self):
+        # No content/identity/provider errors; bounded cumulative aggregates.
+        return dict(model=self.model,usage=dict(self.usage),usage_observed=dict(self.usage_observed),
+                    usage_missing=dict(self.usage_missing),cancelled=self.cancelled,
+                    latency=dict(count=self.latency['count'],total_ms=self.latency['total_ms'],
+                        max_ms=self.latency['max_ms'],buckets=list(self.latency['buckets']),
+                        upper_bounds_ms=[250,500,1000,3000,10000,None]),
+                    cost=dict(monetary=None,currency=None,status='rates_and_bill_not_verified',
+                              scope='llm_only',asr_tts='not_metered_here'))
 
     async def complete(self, instruction, data, *, schema=None):
         self.usage['requests'] += 1
+        started=time.perf_counter()
         try:
             response = await self.speech.http.post(
                 self.speech.chat_url, headers=self.speech.headers,
@@ -265,11 +281,18 @@ class DashScopeModel:
                 raise ModelError('upstream capacity')
             result = response.json()
             usage = result.get('usage', {})
+            if not isinstance(usage,dict):usage={}
             for name in ('prompt_tokens', 'completion_tokens'):
-                value = usage.get(name, 0)
+                value = usage.get(name)
                 if type(value) is int and value >= 0:
                     self.usage[name] += value
+                    self.usage_observed[name]+=1
+                else:
+                    self.usage_missing[name]+=1
             return result['choices'][0]['message']['content']
+        except asyncio.CancelledError:
+            self.cancelled+=1
+            raise
         except VoiceFault:
             self.usage['failures'] += 1
             raise
@@ -282,3 +305,9 @@ class DashScopeModel:
         except Exception:
             self.usage['failures'] += 1
             raise ModelError('model unavailable') from None
+        finally:
+            elapsed=max(0.,(time.perf_counter()-started)*1000)
+            self.latency['count']+=1;self.latency['total_ms']+=elapsed
+            self.latency['max_ms']=max(self.latency['max_ms'],elapsed)
+            bucket=next((i for i,b in enumerate((250,500,1000,3000,10000)) if elapsed<=b),5)
+            self.latency['buckets'][bucket]+=1
