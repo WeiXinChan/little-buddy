@@ -109,8 +109,8 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     /** Synthetic OwnerProof implementations are test evidence only. Production always denies
      * until a reviewed issuer/provider is wired. Recovery never clears configuration/pairing. */
     fun replacePin(pin: CharArray, proof: OwnerChallenge, epoch: Long): Boolean {
-        requireWorker()
         try {
+            requireWorker()
             if (!asciiPin(pin)) return false
             val ticket = synchronized(lock) {
                 if (quarantined || verifying || epoch != pageEpoch || challenge !== proof ||
@@ -135,8 +135,8 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     }
 
     fun verify(pin: CharArray, epoch: Long): Grant? {
-        requireWorker()
         try {
+            requireWorker()
             if (!asciiPin(pin)) return null
             val reservation = synchronized(lock) {
                 val current = record ?: return null

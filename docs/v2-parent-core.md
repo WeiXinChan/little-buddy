@@ -75,3 +75,44 @@ Gradle 缓存的 Kotlin 2.2.21/JUnit 4.13.2 与 Android API jar；无依赖下�
 这是候选参数的主机数据，未预热控制/统计显著性/目标机 p95，不能认定 OPPO 达标。
 后续目标机测量后审定参数，不得因性能问题静默降级。测试只打印轮数/耗时，不打印
 PIN、盐、派生值、密钥、凭据或音频。A27/A28/A34、D04 保持 OPEN，等待独立复核。
+
+## R86-01 修复与针对性验证（2026-11-25）
+
+QA 对旧 head `84129d6` 的静态审查指出：Android 每次写入都允许 `key(true)`，
+已打开的域运行中若 key 缺失，会尝试生成新 key 并覆盖记录。这是确认的代码分支
+问题，旧版 24 项 JVM 测试未覆盖该分支；不是 Android/OPPO 故障实测。
+
+本次 Android 适配委托给可注入 key/file 提供者的生产 `SealedParentStore`。
+只有 read 同时确认无记录且无 alias 才进入 FRESH；第一次可信初始化写入在尝试
+生成 key 前就消耗该资格。后续写入只取 existing key，缺失/失效立即隔离，不生成、
+不提交文件。读取和提交的既有密文作为连续性证据，换成另一把 key 也不能覆盖记录。
+生成后首次落盘失败永久隔离当前存储实例；重启时有 key 无记录同样隔离，不自动重试。
+生产首写仍必须先经过 ParentDomain 的真实归属证明，当前提供者未配置故默认拒绝。
+
+同时将 verify/replacePin 的 worker 检查移入 PIN 清理的 try/finally，检查抛错也清零
+调用者输入缓冲。不扩大 UI/音频改造；主线程 revoke 与完整磁盘 IO 共用锁、可能等待
+慢 IO 的宿主接线风险继续 OPEN，需未来宿主串行策略和设备延迟实证。
+
+本轮在同一管理员 heavy.lock 下串行执行：
+
+```sh
+scripts/with-build-lock env PARENT_ANDROID_JAR=/path/to/android.jar python3 scripts/v2-parent-tests.py
+# 只复跑 R86-01 和输入清理的 11 项针对性用例：
+scripts/with-build-lock python3 scripts/v2-parent-tests.py --r86-only
+# 临时副本故意恢复“缺 key 时生成”，两项运行中丢 key 反例必须失败：
+scripts/with-build-lock env PARENT_ANDROID_JAR=/path/to/android.jar python3 scripts/v2-parent-tests.py --r86-key-loss-negative-control
+```
+
+实际全量结果 **35/35，失败0、跳过0，56.922s，退出码0**：原24项及新增11项；
+所有 Kotlin 含 Android 适配同时编译通过。新增11项覆盖：既有记录缺key启动拒绝；
+open 后丢key再 verify/save 均拒绝且生成/覆盖为0；失效key与替换key拒绝；首次可信
+初始化只生成一次；无归属提供者不生成；首次生成后落盘失败及重启隔离；鉴权拒绝不
+生成；verify/replacePin 的 worker 检查抛错也清 PIN。用真实 JVM AES-GCM 和生产
+存储状态机，key-provider/file 为可计数合成端口，不是 Android KeyStore/AtomicFile。
+本轮主机KDF样本593/585/609/588ms，OPPO未测。临时副本负控实际运行11项，
+9项通过、运行中丢key后的 verify/save 两项按预期失败（4.402s）；JUnit退出码1，
+脚本核验失败数量后退出码0。负控不修改产品源码，不计入35项正向回归的通过分母。
+
+测试未占手机、未开模拟器/HDA、未运行 Gradle 或等待外部 CI；真实 Android 密钥
+删除/失效、AtomicFile 故障、生命周期及全部既有集成缺口仍未测，A27/A28/A34、D04
+保持 OPEN。新 head 待非作者复核受影响范围、root 审合。

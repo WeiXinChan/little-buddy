@@ -17,11 +17,39 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
     private val file = AtomicFile(context.noBackupFilesDir.resolve("v2-parent-v1"))
     private val aad = "little-buddy:v2:parent:1:$binding".toByteArray(Charsets.UTF_8)
     init { require(binding.isNotBlank() && binding.length <= 512) }
-    private fun keyStore() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-    private fun key(create: Boolean): SecretKey {
-        val existing = keyStore().getKey(ALIAS, null)
-        if (existing != null) return existing as SecretKey
-        check(create) { "parent key unavailable" }
+    private val sealed = SealedParentStore(object : ParentRecordFile {
+        override fun read(): ByteArray? = try { file.readFully() }
+        catch (_: java.io.FileNotFoundException) { null }
+        override fun commit(bytes: ByteArray, authorized: () -> Boolean) {
+            check(authorized()) { "parent authorization expired" }
+            val output = file.startWrite()
+            try {
+                output.write(bytes)
+                check(authorized()) { "parent authorization expired" }
+                file.finishWrite(output)
+            } catch (e: Exception) { file.failWrite(output); throw e }
+        }
+    }, AndroidParentKeys(), aad)
+    override fun read(): ParentRecord? {
+        worker()
+        return sealed.read()
+    }
+    override fun write(record: ParentRecord, authorized: () -> Boolean) {
+        worker()
+        sealed.write(record, authorized)
+    }
+    companion object {
+        fun worker() { check(Looper.myLooper() != Looper.getMainLooper()) { "parent worker required" } }
+    }
+}
+
+/** Creation is reachable only through SealedParentStore's one-shot fresh transition. */
+private class AndroidParentKeys : ParentKeyProvider {
+    private fun store() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+    override fun exists() = store().containsAlias(ALIAS)
+    override fun existing() = store().getKey(ALIAS, null) as SecretKey?
+    override fun create(): SecretKey {
+        check(!exists()) { "parent alias already exists" }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
             init(KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
@@ -30,37 +58,7 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
             generateKey()
         }
     }
-    override fun read(): ParentRecord? {
-        worker()
-        // AtomicFile may recover a .bak after interrupted commit; never inspect base alone.
-        val bytes = try { file.readFully() } catch (e: java.io.FileNotFoundException) {
-            check(!keyStore().containsAlias(ALIAS)) { "parent record unavailable" }
-            return null
-        }
-        val plain = ParentEnvelope.open(bytes, key(false), aad)
-        return try { ParentCodec.decode(plain) } finally { plain.fill(0) }
-    }
-    override fun write(record: ParentRecord, authorized: () -> Boolean) {
-        worker()
-        val plain = ParentCodec.encode(record)
-        val encrypted = try {
-            ParentEnvelope.seal(plain, key(true), aad)
-        } finally { plain.fill(0) }
-        check(authorized()) { "parent authorization expired" }
-        val output = file.startWrite()
-        try {
-            output.write(encrypted)
-            // Recheck immediately before publication, including time spent in encryption/IO.
-            check(authorized()) { "parent authorization expired" }
-            file.finishWrite(output)
-        } catch (e: Exception) { file.failWrite(output); throw e }
-        // Detect reported/partial storage faults before granting any further capability.
-        check(file.readFully().contentEquals(encrypted)) { "parent commit unavailable" }
-    }
-    companion object {
-        private const val ALIAS = "little-buddy-v2-parent-v1"
-        fun worker() { check(Looper.myLooper() != Looper.getMainLooper()) { "parent worker required" } }
-    }
+    companion object { private const val ALIAS = "little-buddy-v2-parent-v1" }
 }
 
 /** Factory owns one live authority per process. UI/provider wiring remains intentionally absent. */
