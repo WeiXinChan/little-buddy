@@ -13,10 +13,11 @@ internal data class Event(val at: Long, val stage: LogStage, val error: LogError
 class LogPreview(val from: Long?, val through: Long?, val count: Int, val bytes: Int)
 class Confirmation internal constructor(internal val revision: Long, internal val digest: String, val logs: LogPreview)
 class FeedbackView(val id: String, val category: Category, val description: String?, val state: FeedbackState,
-    val submittedAt: Long?, val deleteBy: Long, val reply: String?)
+    val submittedAt: Long?, val deleteBy: Long, val reply: String?,
+    val localCleared: Boolean = false, val logs: LogPreview = LogPreview(null, null, 0, 0))
 internal class Material(val id: String, val category: Category, var description: String, var logs: ByteArray,
     val created: Long, val logsUntil: Long, var submitted: Long? = null, var withdrawn: Long? = null,
-    var state: FeedbackState = FeedbackState.PENDING, var reply: String = "") {
+    var state: FeedbackState = FeedbackState.PENDING, var reply: String = "", var localCleared: Boolean = false) {
     fun expires() = deadline(submitted, withdrawn, created)
     fun redact() { description = ""; logs.fill(0); logs = byteArrayOf(); reply = "" }
 }
@@ -251,17 +252,36 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
         sweep()
         val time = now(); permit(Operation.READ, "list")
         return materials.values.filter { time < (it.submitted?.plus(WEEK) ?: (it.created + WEEK)) }.map {
-            val visible = it.withdrawn == null && time < it.expires()
+            val visible = !it.localCleared && it.withdrawn == null && time < it.expires()
             FeedbackView(it.id, it.category, if (visible) it.description else null, it.state,
-                it.submitted, it.expires(), if (visible) it.reply else null)
+                it.submitted, it.expires(), if (visible) it.reply else null, it.localCleared,
+                if (visible) logRange(it.logs) else LogPreview(null, null, 0, 0))
         }
     }
     /** Reply/supplement protocol never changes original timestamps. Not wired to an unreviewed server. */
     @Synchronized internal fun receiveReply(id: String, text: String) {
         val time = now(); validateText(text)
         val entry = materials[id] ?: return
-        if (entry.withdrawn != null || time >= entry.expires()) return
+        if (entry.localCleared || entry.withdrawn != null || time >= entry.expires()) return
         entry.reply = text; entry.state = FeedbackState.REPLIED; persist()
+    }
+    @Synchronized internal fun confirmationCurrent(token: Confirmation): Boolean {
+        val time = now()
+        return token === confirmation && token.revision == revision &&
+            draft?.preview?.from?.let { time >= it + WEEK } != true
+    }
+    /** Removes only this device's copy; remote status/delete task/immutable deadlines survive. */
+    @Synchronized fun clearLocalMaterial(id: String) {
+        now()
+        if (materials[id] == null) return
+        protectedChange(Operation.CLEAR_LOCAL, id, {
+            materials.getValue(id).let { it.redact(); it.localCleared = true }
+        })
+    }
+    private fun logRange(bytes: ByteArray): LogPreview {
+        if (bytes.isEmpty()) return LogPreview(null, null, 0, 0)
+        val lines = bytes.toString(Charsets.US_ASCII).lineSequence().filter { it.isNotEmpty() }.toList()
+        return LogPreview(lines.first().substringBefore(',').toLong(), lines.last().substringBefore(',').toLong(), lines.size, bytes.size)
     }
     @Synchronized fun clearLogs() {
         now()
@@ -295,19 +315,19 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
     }
     private fun encode(): ByteArray = ByteArrayOutputStream().also { buffer ->
         DataOutputStream(buffer).use { out ->
-            out.writeInt(1); out.writeLong(lastTime); out.writeInt(events.size)
+            out.writeInt(2); out.writeLong(lastTime); out.writeInt(events.size)
             events.forEach { out.writeLong(it.at); out.writeUTF(it.stage.name); out.writeUTF(it.error.name)
                 out.writeInt(it.version); out.writeLong(it.elapsed); out.writeLong(it.usage) }
             out.writeInt(materials.size)
             materials.values.forEach { out.writeUTF(it.id); out.writeUTF(it.category.name); out.writeUTF(it.description)
                 out.writeInt(it.logs.size); out.write(it.logs); out.writeLong(it.created); out.writeLong(it.logsUntil)
                 out.writeLong(it.submitted ?: -1); out.writeLong(it.withdrawn ?: -1)
-                out.writeUTF(it.state.name); out.writeUTF(it.reply) }
+                out.writeUTF(it.state.name); out.writeUTF(it.reply); out.writeBoolean(it.localCleared) }
         }
     }.toByteArray()
     private fun decode(bytes: ByteArray) {
         DataInputStream(ByteArrayInputStream(bytes)).use { input ->
-            require(input.readInt() == 1); lastTime = input.readLong(); require(lastTime >= 0)
+            val schema = input.readInt(); require(schema in 1..2); lastTime = input.readLong(); require(lastTime >= 0)
             val count = input.readInt(); require(count in 0..1000)
             repeat(count) { events.add(Event(input.readLong(), LogStage.valueOf(input.readUTF()),
                 LogError.valueOf(input.readUTF()), input.readInt(), input.readLong(), input.readLong())) }
@@ -322,8 +342,9 @@ class FeedbackCore(private val vault: FeedbackVault, private val clock: Feedback
                 require(created >= 0 && created <= lastTime && (submitted == null || submitted in created..lastTime))
                 require(withdrawn == null || withdrawn in created..lastTime)
                 val state = FeedbackState.valueOf(input.readUTF()); val reply = input.readUTF()
+                val localCleared = schema >= 2 && input.readBoolean()
                 require(description.codePointCount(0, description.length) <= 2000 && reply.codePointCount(0, reply.length) <= 2000)
-                materials[id] = Material(id, category, description, logs, created, logsUntil, submitted, withdrawn, state, reply)
+                materials[id] = Material(id, category, description, logs, created, logsUntil, submitted, withdrawn, state, reply, localCleared)
             }
             require(input.available() == 0)
         }

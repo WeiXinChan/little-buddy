@@ -8,7 +8,7 @@ internal const val WEEK = 7 * DAY
 
 /** A clock losing trust must return null; wall time rollback is rejected by the store. */
 fun interface FeedbackClock { fun now(): Long? }
-enum class Operation { DRAFT, READ, SUBMIT, WITHDRAW, CLEAR_LOGS }
+enum class Operation { DRAFT, READ, SUBMIT, WITHDRAW, CLEAR_LOGS, CLEAR_LOCAL }
 enum class Failure { DENIED, UNAVAILABLE, STORAGE, QUARANTINED, CLOCK, STALE, INVALID, NETWORK }
 class FeedbackFailure(val reason: Failure) : Exception(reason.name)
 
