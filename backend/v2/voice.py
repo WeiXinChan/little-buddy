@@ -66,6 +66,7 @@ class Operation:
 
 
 def decode(raw):
+    if not isinstance(raw,str) or len(raw.encode())>16000:raise WireError('size')
     if not isinstance(raw, str) or len(raw.encode()) > 16000:
         raise WireError('frame')
     def pairs(items):

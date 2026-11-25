@@ -8,7 +8,7 @@ from websockets.asyncio.server import serve
 from backend.v2.voice import VoicePeer
 
 
-def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, clock=time.time):
+def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, clock=time.time, feedback=None):
     if tls is None or not isinstance(token, str) or not 32 <= len(token) <= 256 or not token.isascii() or not token.isalnum():
         raise ValueError('TLS and random device credential required')
     active = False
@@ -16,7 +16,7 @@ def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, 
     logger.addHandler(logging.NullHandler())
 
     async def authenticate(socket, request):
-        if request.path != '/v2/voice':
+        if request.path != '/v2/voice' and not (feedback is not None and request.path == '/v2/feedback'):
             return socket.respond(HTTPStatus.NOT_FOUND, 'not found\n')
         values = request.headers.get_all('Authorization')
         if ((expires_at is not None and clock()>=expires_at) or len(values) != 1 or
@@ -25,6 +25,14 @@ def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, 
 
     async def handler(socket):
         nonlocal active
+        if socket.request.path == '/v2/feedback':
+            try:
+                if expires_at is None:await feedback.run(socket)
+                else:
+                    async with asyncio.timeout(max(0,expires_at-clock())):await feedback.run(socket)
+            except TimeoutError:await socket.close(1008,'device credential expired')
+            except Exception:await socket.close(1011,'feedback closed')
+            return
         if active:
             await socket.close(1013, 'busy')
             return
@@ -43,4 +51,4 @@ def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, 
             if not peer.quarantined:
                 active = False
     return serve(handler, host, port, ssl=tls, process_request=authenticate,
-                 max_size=16000, max_queue=4, write_limit=16000,close_timeout=1, logger=logger)
+                 max_size=400000 if feedback is not None else 16000, max_queue=4, write_limit=16000,close_timeout=1, logger=logger)
