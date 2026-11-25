@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from backend.v2.session import Identity, Session
 from backend.v2.budget import ResponseBudget
+from backend.v2.safety import SafetyFault, local_help
 
 
 class VoiceFault(Exception):
@@ -194,6 +195,11 @@ class VoicePeer:
             task.exception()
 
     async def send(self, kind, **fields):
+        if kind in {'bound', 'open'}:
+            # Establish scope on normal authenticated control frames, never learn it from a fault.
+            fields.setdefault('session', self.session.session)
+            fields.setdefault('turn', self.session.turn)
+            fields.setdefault('revision', self.revision)
         async with asyncio.timeout(2):
             await self.socket.send(json.dumps(dict(v=2, type=kind, epoch=self.epoch, **fields)))
 
@@ -435,6 +441,16 @@ class VoicePeer:
             # Replays remain rejected by exact pending-front ID and task sequence.
             self.session.revealed.intersection_update(s.name for s in self.session.pending)
 
+    async def review(self, operation, text):
+        try:
+            verdict = await self.owned(operation, self.providers.safe, text, operation.session.context())
+        except SafetyFault:
+            raise
+        except Exception:
+            raise SafetyFault('review_unavailable') from None
+        if verdict is not True:
+            raise SafetyFault('content_blocked' if verdict is False else 'review_unavailable')
+
     def respond(self, text, epoch):
         return self._respond(text, epoch, Operation(self, epoch))
 
@@ -442,6 +458,7 @@ class VoicePeer:
         owner = asyncio.current_task()
         self.generation_scopes[owner] = operation
         stage = 'bind'
+        response_revision = self.revision
         try:
             operation.ensure()
             while self.session.player is None:
@@ -455,6 +472,9 @@ class VoicePeer:
             # adaptation belongs to M05; no unrestricted model-proposed facts enter it.
             await self.compact_memory(epoch, operation)
             state = None
+            stage = 'input_policy'
+            if getattr(self.policy, 'needs_local_help', lambda _: False)(text) is True:
+                raise SafetyFault('content_blocked')
             if hasattr(self.providers, 'plan'):
                 context = self.session.context()
                 stage = 'plan'
@@ -504,15 +524,14 @@ class VoicePeer:
                 stage = 'fact_commit'
                 self.session.record_input(text, facts)
                 stage = 'safety'
-                if not await self.owned(operation, self.providers.safe, ''.join(plan['sentences']), operation.session.context()):
-                    raise WireError('safety')
+                await self.review(operation, ''.join(plan['sentences']))
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
                 @asynccontextmanager
                 async def planned():
                     async def items():
                         for sentence in plan['sentences']:
-                            if len(plan['sentences']) > 1 and not await self.owned(operation, self.providers.safe, sentence, operation.session.context()):
-                                raise WireError('safety')
+                            if len(plan['sentences']) > 1:
+                                await self.review(operation, sentence)
                             yield sentence
                     yield items()
                 manager = planned()
@@ -527,7 +546,7 @@ class VoicePeer:
                         raise WireError('text capacity')
                     approved = self.policy.segment(proposed)
                     if not approved:
-                        raise WireError('policy')
+                        raise SafetyFault('content_blocked')
                     stage = 'synthesis'
                     async with self.owned_resource(operation, self.providers.synthesize, approved, 24000) as chunks:
                         # One-chunk lookahead marks the final chunk's public fact.
@@ -564,7 +583,21 @@ class VoicePeer:
             await self.commands()
             if self.session is not operation.session or epoch != self.epoch or self.session.turn != operation.turn:
                 return
-            await self.send('failure', code=failure.code if isinstance(failure, VoiceFault) else 'timeout' if isinstance(failure, TimeoutError) else 'voice')
+            if isinstance(failure, SafetyFault) or isinstance(failure, VoiceFault) and failure.code == 'safety':
+                # Stop/revoke first. A newer input/connection cannot borrow this help notification.
+                if self.revision != response_revision or self.closed or not self.session._live():
+                    return
+                # The local help replaces this failed response, not a new cloud retry.
+                self.awaiting_input = False
+                self.capture.clear()
+                self.analysis = self.prepared = self.next_probe = None
+                self.input_budget = ResponseBudget(self.session.clock)
+                self.session.deadline = 0
+                reason = failure.reason if isinstance(failure, SafetyFault) else 'content_blocked'
+                await self.send('failure', code='safety', session=operation.session_id,
+                                turn=operation.turn, revision=response_revision, local_help=local_help(reason))
+            else:
+                await self.send('failure', code=failure.code if isinstance(failure, VoiceFault) else 'timeout' if isinstance(failure, TimeoutError) else 'voice')
             if self.quarantined:
                 await self.close_quarantined()
         finally:

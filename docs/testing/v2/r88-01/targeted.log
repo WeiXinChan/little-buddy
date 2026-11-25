@@ -1,0 +1,21 @@
+test_settings_are_literal_allowlisted_and_manifest_never_contains_credential_or_workspace (test_safety_help.RuntimeSettings.test_settings_are_literal_allowlisted_and_manifest_never_contains_credential_or_workspace) ... ok
+test_shell_substitution_and_missing_credential_do_not_execute_or_fall_back (test_safety_help.RuntimeSettings.test_shell_substitution_and_missing_credential_do_not_execute_or_fall_back) ... ok
+test_503_is_local_enum_payload_with_preestablished_scope_and_no_tts (test_safety_help.SafetyHelp.test_503_is_local_enum_payload_with_preestablished_scope_and_no_tts) ... ok
+test_authenticated_local_tls_delivers_scoped_help_without_audio (test_safety_help.SafetyHelp.test_authenticated_local_tls_delivers_scoped_help_without_audio) ... Executing <Task pending name='Task-8' coro=<SafetyHelp.test_authenticated_local_tls_delivers_scoped_help_without_audio() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_safety_help.py:201> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.188 seconds
+ok
+test_cancellation_of_review_never_delivers_help_or_audio (test_safety_help.SafetyHelp.test_cancellation_of_review_never_delivers_help_or_audio) ... ok
+test_explicit_help_cues_use_local_policy_even_when_model_is_down (test_safety_help.SafetyHelp.test_explicit_help_cues_use_local_policy_even_when_model_is_down) ... ok
+test_handoff_during_review_cannot_notify_the_replacement_session (test_safety_help.SafetyHelp.test_handoff_during_review_cannot_notify_the_replacement_session) ... ok
+test_later_segment_outage_never_synthesizes_the_unreviewed_remainder (test_safety_help.SafetyHelp.test_later_segment_outage_never_synthesizes_the_unreviewed_remainder) ... ok
+test_local_help_disarms_old_response_budget_without_extending_idle_ttl (test_safety_help.SafetyHelp.test_local_help_disarms_old_response_budget_without_extending_idle_ttl) ... ok
+test_negative_control_reverting_failure_code_trips_the_original_assertion (test_safety_help.SafetyHelp.test_negative_control_reverting_failure_code_trips_the_original_assertion) ... ok
+test_new_input_during_review_cannot_borrow_the_new_revision_for_help (test_safety_help.SafetyHelp.test_new_input_during_review_cannot_borrow_the_new_revision_for_help) ... ok
+test_normal_fiction_routes_all_four_games_and_chat_without_false_refusal (test_safety_help.SafetyHelp.test_normal_fiction_routes_all_four_games_and_chat_without_false_refusal) ... ok
+test_plan_outage_without_help_cue_remains_distinct_from_review_failure (test_safety_help.SafetyHelp.test_plan_outage_without_help_cue_remains_distinct_from_review_failure) ... ok
+test_revoke_transport_yield_cannot_publish_help_after_expiry (test_safety_help.SafetyHelp.test_revoke_transport_yield_cannot_publish_help_after_expiry) ... ok
+test_timeout_malformed_and_false_are_strictly_classified (test_safety_help.SafetyHelp.test_timeout_malformed_and_false_are_strictly_classified) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.346s
+
+OK
