@@ -1,0 +1,13 @@
+test_allocation_sites_and_unsupported_weak_types_are_explicit_not_native_bytes (tests.v2.test_tls_retention_preparation.Preparation.test_allocation_sites_and_unsupported_weak_types_are_explicit_not_native_bytes) ... ok
+test_any_unconfirmed_resource_rejects_atomically_and_keeps_histories (tests.v2.test_tls_retention_preparation.Preparation.test_any_unconfirmed_resource_rejects_atomically_and_keeps_histories) ... ok
+test_closed_history_release_preserves_saved_denominator_and_weakrefs_are_not_owners (tests.v2.test_tls_retention_preparation.Preparation.test_closed_history_release_preserves_saved_denominator_and_weakrefs_are_not_owners) ... ok
+test_defaults_and_invalid_arm_cannot_start_lock_or_worker (tests.v2.test_tls_retention_preparation.Preparation.test_defaults_and_invalid_arm_cannot_start_lock_or_worker) ... ok
+test_parent_invalid_metadata_is_terminal_keeps_artifact_no_retry (tests.v2.test_tls_retention_preparation.Preparation.test_parent_invalid_metadata_is_terminal_keeps_artifact_no_retry) ... ok
+test_read_only_analysis_labels_snapshot_delta_not_external_network_faults (tests.v2.test_tls_retention_preparation.Preparation.test_read_only_analysis_labels_snapshot_delta_not_external_network_faults) ... ok
+test_reset_setup_cleanup_and_pipe_io_counts_do_not_rewrite_legacy (tests.v2.test_tls_retention_preparation.Preparation.test_reset_setup_cleanup_and_pipe_io_counts_do_not_rewrite_legacy) ... ok
+test_single_fourteen_parent_contract_accepts_each_explicit_arm_only_once (tests.v2.test_tls_retention_preparation.Preparation.test_single_fourteen_parent_contract_accepts_each_explicit_arm_only_once) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.029s
+
+OK
