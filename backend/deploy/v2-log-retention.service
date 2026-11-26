@@ -1,0 +1,23 @@
+[Unit]
+Description=Little Buddy V2 namespace-only retention gate
+Requires=systemd-journald@little-buddy-v2.service
+After=systemd-journald@little-buddy-v2.service
+Before=little-buddy-v2.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -B /opt/little-buddy-v2/log-policy/v2-log-retention.py sweep --namespace little-buddy-v2
+TimeoutStartSec=35
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/log/journal/%m.little-buddy-v2 -/run/log/journal/%m.little-buddy-v2
+RestrictAddressFamilies=AF_UNIX
+LogNamespace=little-buddy-v2
+SyslogIdentifier=little-buddy-v2-retention
+StandardOutput=journal
+StandardError=journal

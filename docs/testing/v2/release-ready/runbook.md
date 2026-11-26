@@ -37,3 +37,5 @@ tests.log为新增10方法（正常9＋权限门槛负控1）和原配置/审核
 免费图片策略补充：root审查后可使用`backend/deploy/v2-image-free.example.json`切换2.1 Turbo优先/Pro后备（新增fallback_model、free_tier_only，专用key/政策ID与qwen4-max审核不变）。配置声明须对应两模型控制台用完即停，不是账户余额证明；不自动付费回退3.0。具体URL隔离、严格quota后备/双耗尽停止和有限真实单图验证步骤见`docs/testing/v2/free-image-routing/README.md`。旧实际image.json不会因部署代码自动改动；不据本地计数宣称免费，qwen-mt-image翻译额度不用于生图。按含适配的最终main核后端发行清单，RC8/APK版本无需为本后端改动变更。本批仅本地合成验证，未部署或真实推理。
 
 文本模型发行身份补充：release-manifest.json的models列默认1017，model_policy列精确允许文本集合、独立qwen4视觉审核、JSON格式、nonthinking与无自动fallback；runtime检查报告的models仍反映实际配置。打包器须从相同models.py的固定源码SHA运行，拒绝用新默认身份标注旧源码；verify检查model_policy身份及源码inventory。只改受控V2 service.env的一行文本选择，image.json/review key/图审模型不随之切换。最终切换由root完成更多语义/审核效果后决定，本批作者未部署/读取真实配置。
+
+日志安全发布门：新版包必须包含V2专用journald配置、稳定log-policy helper、小时timer/oneshot和服务drop-in。安装/只读预检/回滚限制及历史副本OPEN范围见`docs/testing/v2/log-retention/README.md`。不要把专用配置装成全局journald.conf，不执行全局vacuum。日志策略保留在current之外；旧包缺策略不允许作为直接回滚候选。root审合及独立QA前不安装或清理。

@@ -19,7 +19,7 @@ from backend.v2.files import ConfigurationError,read_checked
 from backend.v2.preflight import prepare,CONTRACT,MODELS
 from backend.v2.models import model_policy
 from backend.v2.live import cli,parser
-from backend.v2.release import verify
+from backend.v2.release import verify,LOG_POLICY_FILES
 
 ROOT=Path(__file__).resolve().parents[2]
 
@@ -122,8 +122,15 @@ class Preflight(unittest.TestCase):
         assets=b'[]';(folder/'assets/v2-default/manifest.json').write_bytes(assets)
         metadata['assets_manifest_sha256']=sha256(assets).hexdigest()
         metadata['files']['assets/v2-default/manifest.json']=dict(size=len(assets),sha256=sha256(assets).hexdigest())
+        for policy in LOG_POLICY_FILES:
+            target=folder/policy;target.parent.mkdir(parents=True,exist_ok=True);raw=(ROOT/policy).read_bytes();target.write_bytes(raw)
+            metadata['files'][policy]=dict(size=len(raw),sha256=sha256(raw).hexdigest())
         (folder/'release-manifest.json').write_text(json.dumps(metadata))
         verify(folder,'a'*40)
+        omitted=next(iter(LOG_POLICY_FILES));receipt=metadata['files'].pop(omitted)
+        (folder/'release-manifest.json').write_text(json.dumps(metadata))
+        with self.assertRaisesRegex(ValueError,'release_log_policy_missing'):verify(folder,'a'*40)
+        metadata['files'][omitted]=receipt
         wrong=dict(metadata,assets_manifest_sha256='0'*64)
         (folder/'release-manifest.json').write_text(json.dumps(wrong))
         with self.assertRaisesRegex(ValueError,'assets_version_mismatch'):verify(folder,'a'*40)

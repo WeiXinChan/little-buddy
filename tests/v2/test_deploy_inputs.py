@@ -39,7 +39,7 @@ class DeployInputs(unittest.TestCase):
         self.state=self.root/'state/feedback';self.state.mkdir(parents=True,mode=0o700)
         self.sha='a'*40;self.release=self.root/'releases'/self.sha
         (self.release/'.venv/bin').mkdir(parents=True);(self.release/'.venv/bin/python').symlink_to(sys.executable)
-        for name in ('v2-little-buddy.service','v2-control.py'):
+        for name in ('v2-little-buddy.service','v2-control.py',*CONTROL.LOG_FILES):
             target=self.release/'backend/deploy'/name;target.parent.mkdir(parents=True,exist_ok=True)
             shutil.copyfile(ROOT/'backend/deploy'/name,target)
         assets=self.release/'assets/v2-default/manifest.json';assets.parent.mkdir(parents=True);assets.write_text('[]')
@@ -109,8 +109,9 @@ class DeployInputs(unittest.TestCase):
             result=subprocess.run(command,cwd=cwd,env=env,capture_output=True,text=True,check=True)
             reports.append(json.loads(result.stdout))
         before=sorted(p.name for p in self.state.iterdir())
-        with patch.multiple(CONTROL,ROOT=self.root,CONFIG=self.config,STATE=self.state),patch.object(CONTROL,'run',side_effect=real_run):
+        with patch.multiple(CONTROL,ROOT=self.root,CONFIG=self.config,STATE=self.state),patch.object(CONTROL,'run',side_effect=real_run),patch.object(CONTROL,'checked_log_policy') as gate:
             self.assertEqual(CONTROL.checked_release(self.sha),self.release)
+        gate.assert_called_once_with(self.release)
         self.assertEqual(reports[0],{'release':'verified'})
         self.assertEqual(reports[1]['dynamic_images'],'configured_not_cloud_verified')
         self.assertEqual(reports[1]['feedback_provider'],'self_hosted_configured_not_accepted')
@@ -183,6 +184,9 @@ class DeployInputs(unittest.TestCase):
         text=UNIT.read_text().replace('/opt/little-buddy-v2/current/.venv/bin/python',sys.executable)
         text=text.replace('WorkingDirectory=/opt/little-buddy-v2/current','WorkingDirectory='+str(self.release))
         text=text.replace('/etc/little-buddy-v2',str(self.config))
+        for name in ('v2-log-retention.service','v2-log-retention.timer'):
+            raw=(ROOT/'backend/deploy'/name).read_text().replace('/opt/little-buddy-v2/log-policy/v2-log-retention.py',str(ROOT/'backend/deploy/v2-log-retention.py'))
+            (self.root/name.replace('v2-log','little-buddy-v2-log')).write_text(raw)
         path=self.root/'wali-v2-deploy-fixture.service';path.write_text(text)
         result=subprocess.run(['systemd-analyze','verify','--man=no',str(path)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)

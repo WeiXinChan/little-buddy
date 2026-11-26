@@ -1,0 +1,4 @@
+systemd255 static verify: temporary three units + drop-in; executable/working/config source paths substituted. No install/start/cleanup.
+exit=0
+
+/etc/systemd/system/tat_agent.service:7: PIDFile= references a path below legacy directory /var/run/, updating /var/run/tat_agent.pid → /run/tat_agent.pid; please update the unit file accordingly.

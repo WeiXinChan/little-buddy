@@ -33,6 +33,28 @@ def checked_image_sources():
             info.st_uid not in {0,os.geteuid()}):raise ValueError()
 
 
+LOG_FILES={
+    'v2-log-retention.py':Path('/opt/little-buddy-v2/log-policy/v2-log-retention.py'),
+    'v2-journald.conf':Path('/etc/systemd/journald@little-buddy-v2.conf'),
+    'v2-log-retention.service':Path('/etc/systemd/system/little-buddy-v2-log-retention.service'),
+    'v2-log-retention.timer':Path('/etc/systemd/system/little-buddy-v2-log-retention.timer'),
+    'v2-log-retention.dropin.conf':Path('/etc/systemd/system/little-buddy-v2.service.d/70-log-retention.conf'),
+}
+
+def checked_log_policy(target):
+    # Stable overlay remains installed across select/rollback; old/mismatched
+    # releases cannot silently remove or downgrade this policy.
+    for name,installed in LOG_FILES.items():
+        for parent in installed.parents:
+            info=parent.lstat()
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid!=0 or stat.S_IMODE(info.st_mode)&0o022:raise ValueError()
+        info=installed.lstat();source=target/'backend/deploy'/name
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid!=0 or info.st_nlink!=1 or
+            stat.S_IMODE(info.st_mode)!=0o644 or info.st_size>65536 or
+            source.is_symlink() or installed.read_bytes()!=source.read_bytes()):raise ValueError()
+    run(['/usr/bin/python3','-B',str(LOG_FILES['v2-log-retention.py']),'check','--namespace','little-buddy-v2'],cwd=target)
+
+
 def checked_release(sha):
     if not re.fullmatch('[a-f0-9]{40}',sha or ''):raise ValueError()
     target=ROOT/'releases'/sha
@@ -40,6 +62,7 @@ def checked_release(sha):
     python=str(target/'.venv/bin/python')
     run([python,'-B','-m','backend.v2.release','verify','--directory',str(target),'--ref',sha],cwd=target)
     checked_image_sources()
+    checked_log_policy(target)
     run([python,'-B','-m','backend.v2.live','--check','--cert',str(CONFIG/'tls-certificate.pem'),
         '--key',str(CONFIG/'tls-private-key.pem'),'--ca-file',str(CONFIG/'trust-anchor.pem'),
         '--tls-name','127.0.0.1','--token-file',str(CONFIG/'v2-device-token'),
