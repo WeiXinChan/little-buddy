@@ -110,7 +110,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if(cancelled.get() || !allowed())return
                 native.startRecording()
             }
-            check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+            clockCheck(native.recordingState == AudioRecord.RECORDSTATE_RECORDING,CaptureClockReason.RECORDER_NOT_RECORDING)
             nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
             runCatching{recording(true)}
             diagnosticStage=PinDiagnostic.Stage.CAPTURE_STARTUP
@@ -134,7 +134,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                 lastCapturedAt=if(replay)continuity.sampleTime(prefix.replayPosition) else continuity.read(count)
                 if (count == 0) { Thread.sleep(5); continue }
-                check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+                clockCheck(native.recordingState == AudioRecord.RECORDSTATE_RECORDING,CaptureClockReason.RECORDER_NOT_RECORDING)
                 nativeProof = nativeProof.copy(recording=true, frames=nativeProof.frames+count)
                 buffered.push(frame, count)
                 position = buffered.position
@@ -207,6 +207,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if (uploadSamples >= 300000) error("input capacity")
             }
         } catch (error: Exception) {
+            if(error is CaptureClockFailure)CaptureClockDiagnostic.emit(error)
             if (!cancelled.get()) PinDiagnostic.runtimeError(diagnosticStage,error)
             if (!cancelled.get()) owner.post { if(!cancelled.get() && allowed())failed() }
         } finally {

@@ -39,15 +39,15 @@ internal class CaptureClockEnvelope {
         var nextHigh=Math.addExact(candidate.nanoTime,PHASE_NS)
         if(old!=null){
             val df=candidate.frames-old.frames
-            check(df>0 && candidate.nanoTime>old.nanoTime){"capture timestamp regressed"}
+            clockCheck(df>0 && candidate.nanoTime>old.nanoTime,CaptureClockReason.TIMESTAMP_REGRESSED)
             val nanos=df*BILLION
             nextLow=maxOf(nextLow,Math.addExact(low,nanos/MAX))
             nextHigh=minOf(nextHigh,Math.addExact(high,(nanos+MIN-1)/MIN))
-            check(nextLow<=nextHigh){"capture phase/rate model exhausted"}
+            clockCheck(nextLow<=nextHigh,CaptureClockReason.PHASE_RATE_MODEL_EXHAUSTED)
         }
         val origin=first ?: candidate
         val df=candidate.frames-origin.frames;val dn=candidate.nanoTime-origin.nanoTime
-        check(df>=0 && dn>=0 && dn<=(Long.MAX_VALUE-TWO_FRAMES)/MAX){"capture clock model range"}
+        clockCheck(df>=0 && dn>=0 && dn<=(Long.MAX_VALUE-TWO_FRAMES)/MAX,CaptureClockReason.CLOCK_MODEL_RANGE)
         val lower=df*BILLION-dn*MIN;val upper=df*BILLION-dn*MAX
         while(pending.isNotEmpty() && candidate.nanoTime-pending.first.ns>=LONG_NS){
             val p=pending.removeFirst()
@@ -55,9 +55,9 @@ internal class CaptureClockEnvelope {
             minimumUpper=minimumUpper?.let{minOf(it,p.upper)} ?: p.upper
         }
         // Aggregated extrema check ALL eligible historical pairs, not just one rolling anchor.
-        maximumLower?.let{check(lower>=it-TWO_FRAMES){"capture long rate outside bound"}}
-        minimumUpper?.let{check(upper<=it+TWO_FRAMES){"capture long rate outside bound"}}
-        check(pending.size<MAX_PENDING){"capture clock history exhausted"}
+        maximumLower?.let{clockCheck(lower>=it-TWO_FRAMES,CaptureClockReason.LONG_RATE_OUTSIDE_BOUND)}
+        minimumUpper?.let{clockCheck(upper<=it+TWO_FRAMES,CaptureClockReason.LONG_RATE_OUTSIDE_BOUND)}
+        clockCheck(pending.size<MAX_PENDING,CaptureClockReason.CLOCK_HISTORY_EXHAUSTED)
         pending.addLast(Point(candidate.nanoTime,lower,upper))
         first=origin;last=candidate;low=nextLow;high=nextHigh
     }

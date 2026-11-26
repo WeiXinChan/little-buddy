@@ -25,60 +25,84 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     private var checkedAt=monoOrigin
     private var observed:CaptureStamp?=null
     private val clock=CaptureClockEnvelope()
+    private var attempted:CaptureStamp?=null
+    private var previous:CaptureStamp?=null
+    private var gapMs=0L
+    private var apiMs=0L
+    private var bridgeMs=0L
+    private var evidenceTime=monoOrigin
+    private fun difference(a:Long,b:Long)=try { Math.subtractExact(a,b) } catch(_:ArithmeticException) { 0L }
+    private fun evidence():CaptureClockEvidence {
+        val value=attempted ?: observed
+        return CaptureClockEvidence(value?.frames ?: 0,readSamples,
+            if(value!=null && previous!=null)difference(value.frames,previous!!.frames) else 0,
+            if(value!=null && previous!=null)difference(value.nanoTime,previous!!.nanoTime) else 0,
+            if(value!=null)difference(evidenceTime*1_000_000,value.nanoTime) else 0,
+            gapMs,apiMs,bridgeMs,capacity)
+    }
+    private fun guard(valid:Boolean,reason:CaptureClockReason) {
+        if(!valid)throw CaptureClockFailure(reason,evidence())
+    }
     private var starting=false
     private var startupPairs=0
     val startupAnchored get()=starting && startupPairs>=2
     fun beginStartup() {check(!starting && observed==null && readSamples==0L);starting=true}
     private fun softwareUpper(time:Long)=((time-monoOrigin+1)*MAX_RATE+999)/1000
     private fun softwareRoom(time:Long):Long {
-        check(time-monoOrigin<STARTUP_LIMIT_MS){"capture startup deadline"}
+        guard(time-monoOrigin<STARTUP_LIMIT_MS,CaptureClockReason.STARTUP_DEADLINE)
         val left=capacity-reserve-maxOf(0,softwareUpper(time)-readSamples)
-        check(left>0){"startup native continuity exhausted"}
+        guard(left>0,CaptureClockReason.STARTUP_NATIVE_CONTINUITY_EXHAUSTED)
         val room=left*1000/MAX_RATE
-        check(room>0){"startup native room exhausted"}
+        guard(room>0,CaptureClockReason.STARTUP_NATIVE_ROOM_EXHAUSTED)
         return minOf(room,STARTUP_LIMIT_MS-(time-monoOrigin))
     }
     fun stageRead(count:Int) {
         require(count>=0);check(starting)
         remainingMs() // Charge all read/JNI delay before accounting newly returned data.
         val total=readSamples+count
-        check(total<=STARTUP_SAMPLES && total<=softwareUpper(checkedAt)){"startup samples outside bound"}
+        guard(total<=STARTUP_SAMPLES && total<=softwareUpper(checkedAt),CaptureClockReason.STARTUP_SAMPLES_OUTSIDE_BOUND)
         observed?.let { value ->
-            check(total<=producedUpper(value,checkedAt)){"native read exceeds timestamp position"}
+            guard(total<=producedUpper(value,checkedAt),CaptureClockReason.NATIVE_READ_EXCEEDS_TIMESTAMP_POSITION)
         }
         readSamples=total
     }
     fun finishStartup() {
-        remainingMs();check(startupAnchored){"capture startup anchor unconfirmed"}
-        check(sampleTime(0)>=bootOrigin-2){"capture startup origin unproven"}
+        remainingMs();guard(startupAnchored,CaptureClockReason.STARTUP_ANCHOR_UNCONFIRMED)
+        guard(sampleTime(0)>=bootOrigin-2,CaptureClockReason.STARTUP_ORIGIN_UNPROVEN)
         starting=false
     }
     var readSamples=0L;private set
     val ready get()=observed!=null
     fun clockModel()=MODEL
     init {require(capacity>reserve && startupMs>0)}
-    private fun refresh():Pair<CaptureStamp?,Long> {
+    private fun refresh():Pair<CaptureStamp?,Long> = try { refreshChecked() }
+    catch(error:CaptureClockFailure) { throw CaptureClockFailure(error.reason,evidence()) }
+    private fun refreshChecked():Pair<CaptureStamp?,Long> {
         val before=mono()
-        check(before>=checkedAt && before>=monoOrigin){"capture clock regressed"}
+        previous=observed; attempted=null; gapMs=difference(before,checkedAt); apiMs=0
+        evidenceTime=before
+        guard(before>=checkedAt && before>=monoOrigin,CaptureClockReason.CLOCK_REGRESSED)
         val candidate=stamp() // JNI/provider time belongs to this same budget, never to the next read.
+        attempted=candidate
         val time=mono();val elapsed=boot()-bootOrigin
-        check(time>=before){"capture clock regressed during timestamp"}
-        check(kotlin.math.abs(elapsed-(time-monoOrigin))<=5){"capture timebase changed"}
+        evidenceTime=time;apiMs=difference(time,before);bridgeMs=elapsed-(time-monoOrigin)
+        guard(time>=before,CaptureClockReason.CLOCK_REGRESSED_DURING_TIMESTAMP)
+        guard(kotlin.math.abs(elapsed-(time-monoOrigin))<=5,CaptureClockReason.TIMEBASE_CHANGED)
         checkedAt=time
         if(starting)softwareRoom(time)
         if(candidate!=null) {
-            check(candidate.frames in 0..(Long.MAX_VALUE/1_000_000_000) && candidate.nanoTime>=0 && candidate.nanoTime<=time*1_000_000+1_000_000){"invalid capture timestamp"}
+            guard(candidate.frames in 0..(Long.MAX_VALUE/1_000_000_000) && candidate.nanoTime>=0 && candidate.nanoTime<=time*1_000_000+1_000_000,CaptureClockReason.INVALID_CAPTURE_TIMESTAMP)
             val old=observed
             if(old!=null) {
-                check(candidate.frames>=old.frames && candidate.nanoTime>=old.nanoTime){"capture timestamp regressed"}
+                guard(candidate.frames>=old.frames && candidate.nanoTime>=old.nanoTime,CaptureClockReason.TIMESTAMP_REGRESSED)
                 // A stationary frame must not be made fresh by changing its timestamp.
-                check(candidate.frames!=old.frames || candidate.nanoTime==old.nanoTime){"capture timestamp relabeled"}
+                guard(candidate.frames!=old.frames || candidate.nanoTime==old.nanoTime,CaptureClockReason.TIMESTAMP_RELABELED)
             }
             clock.observe(candidate)
             if(starting) {
-                check(candidate.frames<=softwareUpper(time)){"capture startup counter outside bound"}
+                guard(candidate.frames<=softwareUpper(time),CaptureClockReason.STARTUP_COUNTER_OUTSIDE_BOUND)
                 val origin=clock.earliestNs-Math.floorDiv(candidate.frames*1_000_000_000+MIN_RATE-1,MIN_RATE)
-                check(origin>=monoOrigin*1_000_000-1_000_000){"capture startup origin unproven"}
+                guard(origin>=monoOrigin*1_000_000-1_000_000,CaptureClockReason.STARTUP_ORIGIN_UNPROVEN)
                 if(candidate.frames>0) {
                     if(old==null || old.frames==0L)startupPairs=1
                     else if(candidate.frames>old.frames)startupPairs++
@@ -87,12 +111,12 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
             observed=candidate
         }
         val value=observed
-        if(value==null && !starting)check(time-monoOrigin<startupMs){"capture timestamp unavailable"}
+        if(value==null && !starting)guard(time-monoOrigin<startupMs,CaptureClockReason.TIMESTAMP_UNAVAILABLE)
         else if(value!=null){
-            check((time+1)*1_000_000-clock.earliestNs<=maxAgeNs){"capture timestamp stale"}
+            guard((time+1)*1_000_000-clock.earliestNs<=maxAgeNs,CaptureClockReason.TIMESTAMP_STALE)
             // A new estimate may shrink the frontier. Reject before prefix/KWS admission, not
             // merely on the next read; max(0, upper-read) must never hide inconsistent history.
-            check(readSamples<=producedUpper(value,time)){"native read exceeds timestamp position"}
+            guard(readSamples<=producedUpper(value,time),CaptureClockReason.NATIVE_READ_EXCEEDS_TIMESTAMP_POSITION)
         }
         return value to time
     }
@@ -108,18 +132,18 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         val produced=producedUpper(value,time)
         val unread=maxOf(0,produced-readSamples)
         val left=capacity-reserve-unread
-        check(left>0){"cumulative native continuity exhausted"}
+        guard(left>0,CaptureClockReason.CUMULATIVE_NATIVE_CONTINUITY_EXHAUSTED)
         val room=left*1000/MAX_RATE
-        check(room>0){"cumulative native room exhausted"}
+        guard(room>0,CaptureClockReason.CUMULATIVE_NATIVE_ROOM_EXHAUSTED)
         return if(starting)minOf(room,softwareRoom(time)) else room
     }
-    fun check(){remainingMs();check(ready){"capture timestamp not ready"}}
+    fun check(){remainingMs();guard(ready,CaptureClockReason.TIMESTAMP_NOT_READY)}
     fun read(count:Int):Long {
         require(count>=0);check()
         val value=checkNotNull(observed)
         val upper=producedUpper(value,checkedAt)
         val total=readSamples+count
-        check(total<=upper){"native read exceeds timestamp position"}
+        guard(total<=upper,CaptureClockReason.NATIVE_READ_EXCEEDS_TIMESTAMP_POSITION)
         readSamples=total
         return sampleTime(total)
     }

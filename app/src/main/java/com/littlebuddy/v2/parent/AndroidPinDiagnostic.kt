@@ -22,13 +22,19 @@ internal object AndroidPinDiagnostic {
                     if (item == null) LockSupport.parkNanos(100_000_000)
                     else try { Log.i("V2PinInitDiag", item) } catch (_: Throwable) { }
                 }
-                PinDiagnostic.install(null); queue.clear()
+                PinDiagnostic.install(null); com.littlebuddy.v2.CaptureClockDiagnostic.install(null); queue.clear()
             }, "v2-pin-diag").apply { isDaemon = true }
             writer.start()
+            com.littlebuddy.v2.CaptureClockDiagnostic.install { error ->
+                if(remaining.getAndDecrement()>0) {
+                    val e=error.evidence
+                    queue.offer("mono_ms=${System.nanoTime()/1_000_000} stage=CAPTURE_CLOCK_DETAIL reason=${error.reason.name} frames=${e.frames} reads=${e.reads} df=${e.deltaFrames} dn_ns=${e.deltaNs} age_ns=${e.ageNs} check_gap_ms=${e.checkGapMs} api_ms=${e.apiMs} bridge_ms=${e.bridgeMs} capacity=${e.capacity}")
+                }
+            }
             PinDiagnostic.install { seq, ms, stage, reason ->
                 if (remaining.getAndDecrement() > 0)
                     queue.offer("flow=$seq mono_ms=$ms stage=${stage.name} reason=${reason.name}")
             }
-        } catch (_: Throwable) { PinDiagnostic.install(null) }
+        } catch (_: Throwable) { PinDiagnostic.install(null); com.littlebuddy.v2.CaptureClockDiagnostic.install(null) }
     }
 }
