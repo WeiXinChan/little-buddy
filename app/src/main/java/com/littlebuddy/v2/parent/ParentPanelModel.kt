@@ -22,7 +22,8 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     private val render: (PanelState) -> Unit, private val leave: () -> Unit,
     private val ownerRequest: (OwnerOperation) -> Unit = {},
     private val ownerDiscard: (OwnerChallenge) -> Unit = {},
-    private val securityRevoked: () -> Unit = {}) {
+    private val securityRevoked: () -> Unit = {},
+    private val configurationSaved: () -> Unit = {}) {
     private val domain = AtomicReference<ParentDomain?>()
     private val revision = AtomicLong()
     private val viewRevision = AtomicLong()
@@ -298,7 +299,9 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         work {
             val saved = try { live(ticket) && d.provisionConnection(proof, epoch, ParentConnection(address, String(token), sshUser).also { it.requireRunnable() }) }
                 catch (_: Exception) { false } finally { token.fill('\u0000'); pending.remove(token) }
-            ui { if (live(ticket)) { ownerChallenge = null; page = -1L
+            ui { if (live(ticket)) {
+                if (saved) configurationSaved()
+                ownerChallenge = null; page = -1L
                 locked(d, if (saved) PanelNotice.CONNECTION_SAVED else PanelNotice.OWNER_UNAVAILABLE) } }
         }
     }

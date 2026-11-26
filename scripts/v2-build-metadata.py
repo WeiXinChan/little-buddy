@@ -21,7 +21,7 @@ def generate(output, pin_init_diagnostics=False, private_device_preset=False):
     assert config['application_id']=='com.littlebuddy.sim.v2' and config['protocol_contract']==CONTRACT
     assert not private_device_preset or pin_init_diagnostics
     if pin_init_diagnostics: config['version_name']='2.0.0-rc8.pin.fix2'
-    if private_device_preset: config['version_name']='2.0.0-rc8.pin.fix3.device1'
+    if private_device_preset: config['version_name']='2.0.0-rc8.pin.fix4.device1'
     paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).decode().split('\0')
     paths=sorted(p for p in paths if p and selected(p))
     inventory={}

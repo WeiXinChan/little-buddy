@@ -1,5 +1,6 @@
 package com.littlebuddy.v2.transport
 
+import com.littlebuddy.v2.parent.PinDiagnostic
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -180,7 +181,10 @@ internal class V2Ssh(private val profile: V2SshProfile) : AutoCloseable {
                         return object : Socket(Proxy.NO_PROXY) {
                             override fun connect(endpoint: SocketAddress, timeout: Int) {
                                 val mapped=synchronized(lock) { check(!closed);V2Forwarding.mapped(endpoint,localPort) }
-                                super.connect(mapped,timeout)
+                                try {
+                                    super.connect(mapped,timeout)
+                                    PinDiagnostic.event(PinDiagnostic.Stage.SOCKET,PinDiagnostic.Reason.SUCCESS)
+                                } catch(error:Exception) { PinDiagnostic.runtimeError(PinDiagnostic.Stage.SOCKET,error); throw error }
                             }
                         }
                     } catch (failure: Exception) {
@@ -200,6 +204,7 @@ internal class V2Ssh(private val profile: V2SshProfile) : AutoCloseable {
     }
 
     internal fun open() {
+        PinDiagnostic.event(PinDiagnostic.Stage.SSH,PinDiagnostic.Reason.BEGIN)
         synchronized(lock) { check(!closed) }
         val knownHost = if (profile.sshPort == 22) profile.host else "[${profile.host}]:${profile.sshPort}"
         val ssh = JSch().apply {
@@ -222,14 +227,17 @@ internal class V2Ssh(private val profile: V2SshProfile) : AutoCloseable {
         })
         try {
             ssh.connect(5_000)
+            PinDiagnostic.event(PinDiagnostic.Stage.SSH,PinDiagnostic.Reason.SUCCESS)
             synchronized(lock) {
                 check(!closed)
                 localPort=ssh.setPortForwardingL(V2SshProfile.LOOPBACK, 0,
                     V2SshProfile.LOOPBACK, V2SshProfile.PORT)
                 check(localPort in 1..65535)
                 session = ssh
+                PinDiagnostic.event(PinDiagnostic.Stage.FORWARD,PinDiagnostic.Reason.READY)
             }
         } catch (failure: Exception) {
+            PinDiagnostic.runtimeError(PinDiagnostic.Stage.SSH,failure)
             ssh.disconnect()
             throw failure
         }

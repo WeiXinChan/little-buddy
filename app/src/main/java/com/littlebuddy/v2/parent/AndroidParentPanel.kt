@@ -10,7 +10,8 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
                                   private val securityRevoked: () -> Unit = {},
                                   private val connectionNotice: () -> String = { "" },
     private val savePublicKey: (ParentPanelModel) -> Unit = {},
-    private val pageChanged: (PanelState) -> Unit = {}) {
+    private val pageChanged: (PanelState) -> Unit = {},
+    private val configurationSaved: () -> Unit = {}) {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { run -> Thread(run, "v2-parent-io") }
     private lateinit var page: ParentPanelView
@@ -23,7 +24,7 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
         AndroidParentRuntime.load(activity)
     },
         { task -> worker.execute(task) }, { task -> main.post(task) }, { state -> pageChanged(state); page.render(state) }, leave,
-        { operation -> beginOwner(operation) }, AndroidParentRuntime::discard, securityRevoked)
+        { operation -> beginOwner(operation) }, AndroidParentRuntime::discard, securityRevoked, configurationSaved)
     private val tick = object : Runnable {
         override fun run() { if (!closed) { model.tick(); main.postDelayed(this, 500) } }
     }

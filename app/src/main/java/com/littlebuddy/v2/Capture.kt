@@ -1,5 +1,6 @@
 package com.littlebuddy.v2
 
+import com.littlebuddy.v2.parent.PinDiagnostic
 import android.annotation.SuppressLint
 import android.content.res.AssetManager
 import android.media.AudioFormat
@@ -34,7 +35,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     fun start() {
         check(started.compareAndSet(false,true) && thread == null && !quarantined)
         lease=ProcessRecorders.acquire("child")
-        if(lease==null){quarantined=true;owner.post{if(allowed())failed()};return}
+        if(lease==null){PinDiagnostic.event(PinDiagnostic.Stage.CAPTURE_NATIVE,PinDiagnostic.Reason.QUARANTINED);quarantined=true;owner.post{if(allowed())failed()};return}
         val hold=checkNotNull(lease)
         val worker=Thread({ record() }, "v2-capture");thread=worker
         try {
@@ -71,6 +72,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 check(uploads.offer(batch,speech,lastCapturedAt))
             }catch(failure:Exception){batch.forEach{it.fill(0)};throw failure}
         }
+        var diagnosticStage=PinDiagnostic.Stage.CAPTURE_NATIVE
         var attemptedNative=false
         var attemptedWake=false
         var modelUncertain=false
@@ -91,6 +93,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 aec = AcousticEchoCanceler.create(native.audioSessionId)
                 aec?.enabled = true // Availability/enabled are diagnostics, not acoustic PASS.
             }
+            diagnosticStage=PinDiagnostic.Stage.CAPTURE_MODEL
+            PinDiagnostic.event(diagnosticStage,PinDiagnostic.Reason.BEGIN)
             attemptedWake=true
             wake = SherpaWake(assets){!cancelled.get() && allowed()}
             if (cancelled.get() || !allowed()) return
@@ -109,16 +113,25 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
             nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
             runCatching{recording(true)}
+            diagnosticStage=PinDiagnostic.Stage.CAPTURE_STARTUP
+            PinDiagnostic.event(diagnosticStage,PinDiagnostic.Reason.BEGIN)
             prefix.prepare({target->native.read(target,0,target.size,AudioRecord.READ_NON_BLOCKING)},
                 {!cancelled.get() && allowed()},{Thread.sleep(5)})
+            diagnosticStage=PinDiagnostic.Stage.CAPTURE_READ
+            PinDiagnostic.event(diagnosticStage,PinDiagnostic.Reason.READY)
             while (!cancelled.get() && allowed()) {
+                diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                 val room=continuity.remainingMs()
+                diagnosticStage=PinDiagnostic.Stage.CAPTURE_QUEUE
                 check(uploads.awaitRoom(frame.size,room)){"capture queue continuity"}
+                diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                 continuity.check()
+                diagnosticStage=PinDiagnostic.Stage.CAPTURE_READ
                 val replay=prefix.pending
                 val count=if(replay)prefix.take(frame) else native.read(frame,0,frame.size,AudioRecord.READ_NON_BLOCKING)
                 if(cancelled.get() || !allowed())break
                 check(count in 0..frame.size)
+                diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                 lastCapturedAt=if(replay)continuity.sampleTime(prefix.replayPosition) else continuity.read(count)
                 if (count == 0) { Thread.sleep(5); continue }
                 check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
@@ -134,7 +147,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 }
                 if (!awake) {
                     if(cancelled.get() || !allowed())break
+                    diagnosticStage=PinDiagnostic.Stage.CAPTURE_KWS
                     val candidate=wake?.accept(frame,count)
+                    diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                     continuity.check()
                     val tail=candidate ?: continue
                     if(cancelled.get() || !allowed())break
@@ -191,7 +206,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 // the owner callback; the backend separately retains the 600s session.
                 if (uploadSamples >= 300000) error("input capacity")
             }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            if (!cancelled.get()) PinDiagnostic.runtimeError(diagnosticStage,error)
             if (!cancelled.get()) owner.post { if(!cancelled.get() && allowed())failed() }
         } finally {
             uploads.cancel();frame.fill(0);startup?.clear();startupHandle=null;buffered.clear();runCatching{recording(false)}
