@@ -14,7 +14,7 @@
 - 固定发行位于`/opt/little-buddy-v2/releases/<SHA>`，root持有、目录0755/源码0644，内有独立`.venv`。root可离线`python3 -m venv .../.venv`，再`.venv/bin/pip install --no-index --find-links <受审wheelhouse> --no-deps -r backend/requirements-v2.lock`。不借V1虚拟环境或改V1依赖。
 - `/etc/little-buddy-v2`为root:root 0700，所需输入均root:root 0600的普通单链接文件：service.env、dashscope-api-key、v2-device-token、device-scope.json、tls-certificate.pem、tls-private-key.pem、trust-anchor.pem。不得把V1 token当V2凭据；例文件不含有效token、默认过期。scope是操作人员绑定本V2 endpoint/新token哈希/截止/协议的运行配置，不是OwnerProof或家庭绑定记录。
 - systemd通过LoadCredential提供动态非root用户可读的只读副本；不把root 0600源直接交给非root进程open。证书须有回环IP SAN 127.0.0.1，私钥匹配，trust-anchor须是受审信任链；OpenSSL离线验链/名称/用途/期限。该证书仅证明后端回环TLS腿，公网入口证书/代理上游校验与APK信任仍需root独立核实。
-- 现阶段发行模型固定已有Fun-ASR、deepseek-v4.1-flash-1017、CosyVoice-v3-flash/longanyang；不同模型/依赖版本报明确错误码，需重新审定发行，不能静默换模型。模型构造校验不调用供应商，不证明配额/当日可用。
+- 现阶段发行模型固定已有Fun-ASR、qwen4-max、CosyVoice-v3-flash/longanyang；不同模型/依赖版本报明确错误码，需重新审定发行，不能静默换模型。模型构造校验不调用供应商，不证明配额/当日可用。
 
 ### 检查、启动、停止与回滚
 

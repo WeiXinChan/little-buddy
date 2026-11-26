@@ -21,7 +21,7 @@ class Runtime(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
         config = dict(enabled=True, region='cn-beijing', workspace='synthetic', model='qwen-image-3.0',
-            review_model='deepseek-v4.1-flash-1017', resource_review_id='fixture-only', prompt_policy=PROMPT_POLICY,
+            review_model='qwen4-max', resource_review_id='fixture-only', prompt_policy=PROMPT_POLICY,
             image_policy=IMAGE_POLICY, width=512, height=512, timeout=8, result_ttl=15)
         path = root / 'image.json'
         path.write_text(json.dumps(config)); path.chmod(0o600)
