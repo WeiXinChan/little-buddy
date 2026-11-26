@@ -1,0 +1,72 @@
+test_attempt_deadline_stops_failure_in_denominator_and_cleans (tests.v2.test_tls_soak.TlsSoak.test_attempt_deadline_stops_failure_in_denominator_and_cleans) ... Executing <Task pending name='Task-2' coro=<TlsSoak.test_attempt_deadline_stops_failure_in_denominator_and_cleans() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:77> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.323 seconds
+ok
+test_cancelled_schedule_cleans_heartbeat_relay_and_server (tests.v2.test_tls_soak.TlsSoak.test_cancelled_schedule_cleans_heartbeat_relay_and_server) ... Executing <Task pending name='Task-17' coro=<TlsSoak.test_cancelled_schedule_cleans_heartbeat_relay_and_server() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:99> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.370 seconds
+ok
+test_dynamic_final_drain_observes_done_error_and_retains_stubborn (tests.v2.test_tls_soak.TlsSoak.test_dynamic_final_drain_observes_done_error_and_retains_stubborn) ... ok
+test_global_allowance_is_not_reset_by_reconnect_and_attempt_cap_does_not_idle (tests.v2.test_tls_soak.TlsSoak.test_global_allowance_is_not_reset_by_reconnect_and_attempt_cap_does_not_idle) ... Executing <Task pending name='Task-59' coro=<TlsSoak.test_global_allowance_is_not_reset_by_reconnect_and_attempt_cap_does_not_idle() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:88> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.269 seconds
+Executing <Task pending name='Task-59' coro=<TlsSoak.test_global_allowance_is_not_reset_by_reconnect_and_attempt_cap_does_not_idle() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:92> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.169 seconds
+ok
+test_plan_late_result_cannot_publish_after_rst (tests.v2.test_tls_soak.TlsSoak.test_plan_late_result_cannot_publish_after_rst) ... Executing <Task pending name='Task-122' coro=<TlsSoak.test_plan_late_result_cannot_publish_after_rst() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:65> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.520 seconds
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py", line 67, in test_plan_late_result_cannot_publish_after_rst
+    first=await t.attempt(net.TEXTS[0],'plan_rst');self.assertTrue(late.is_set())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/scripts/v2_tls_soak.py", line 309, in attempt
+    await row['endpoint'].wait();await self.command('seal',revision=1)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/locks.py", line 212, in wait
+    await fut
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/usr/lib/python3.12/unittest/__main__.py", line 18, in <module>
+    main(module=None)
+  File "/usr/lib/python3.12/unittest/main.py", line 105, in __init__
+    self.runTests()
+  File "/usr/lib/python3.12/unittest/main.py", line 281, in runTests
+    self.result = testRunner.run(self.test)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/runner.py", line 240, in run
+    test(result)
+  File "/usr/lib/python3.12/unittest/suite.py", line 84, in __call__
+    return self.run(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/suite.py", line 122, in run
+    test(result)
+  File "/usr/lib/python3.12/unittest/suite.py", line 84, in __call__
+    return self.run(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/suite.py", line 122, in run
+    test(result)
+  File "/usr/lib/python3.12/unittest/suite.py", line 84, in __call__
+    return self.run(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/suite.py", line 122, in run
+    test(result)
+  File "/usr/lib/python3.12/unittest/case.py", line 690, in __call__
+    return self.run(*args, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 131, in run
+    return super().run(result)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/case.py", line 634, in run
+    self._callTestMethod(testMethod)
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 123, in run
+    raise KeyboardInterrupt()
+KeyboardInterrupt

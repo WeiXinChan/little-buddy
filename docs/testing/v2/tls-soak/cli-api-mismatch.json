@@ -1,0 +1,193 @@
+{
+  "format": 1,
+  "layer": "real_loopback_tls_tcp_relay_synthetic_asr_model_tts",
+  "seed": 17,
+  "requested_seconds": 12.0,
+  "elapsed_seconds": 12.007,
+  "observation_seconds": 12.007,
+  "wall_60_minutes_observed": false,
+  "active_attempt_seconds": 11.785,
+  "stop_reason": "attempt_timeout",
+  "caller_cancelled": false,
+  "attempted": 1,
+  "delivered": 0,
+  "injected_fault_attempts": 0,
+  "interrupted_attempts": 0,
+  "failures": 1,
+  "attempts": [
+    {
+      "index": 0,
+      "fault": "normal_close",
+      "status": "attempt_timeout"
+    }
+  ],
+  "resource_collection_valid": false,
+  "connections_attempted": 1,
+  "peers_constructed": 1,
+  "connection_ledger": [
+    {
+      "index": 0,
+      "fault": "normal_close",
+      "status": "failed",
+      "frames": 0,
+      "acks": 0,
+      "cleanup_confirmed": true,
+      "pending_after_cleanup": 0,
+      "failure": null,
+      "session_cleared": true,
+      "old_heard_count": 0,
+      "new_session": true,
+      "old_ack_checked": null,
+      "control": null,
+      "heard_before_close": 0,
+      "pending_before_close": 0,
+      "game_mode": null,
+      "started_seconds": 0.223,
+      "completed_seconds": 12.008,
+      "pause_observed": null,
+      "close_handshake_confirmed": true,
+      "first_transport_ms": null,
+      "relay_bytes": {
+        "up": 1463,
+        "down": 2528
+      },
+      "relay_buffer_observed_max": 1359,
+      "injected_half_open_seconds": null,
+      "injected_pause_seconds": null
+    }
+  ],
+  "allowance": {
+    "model_calls": 0,
+    "tts_calls": 0,
+    "tts_unicode_characters": 0,
+    "reserved_units": 0,
+    "account_quota_known": false,
+    "bill_cny": null
+  },
+  "asr_calls": 1,
+  "model_stage_calls": {},
+  "cleanup": {
+    "confirmed": true,
+    "pending_tasks": 0,
+    "errors": 0,
+    "isolated": false
+  },
+  "resource_samples": [],
+  "resource_trends": {
+    "backend_rss_bytes": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "backend_fds": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "backend_threads": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "asyncio_tasks": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "retired_pending": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "active_operations": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "generation_pending": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "transport_tasks_pending": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "active_sessions": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "visual_pending": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "capture_bytes": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "asr_active": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "tts_active": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "recognition_operations": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "server_handlers_pending": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "relay_buffer_observed_max": {
+      "first": null,
+      "last": null,
+      "maximum": null,
+      "maximum_kind": "observed_sample_maximum"
+    }
+  },
+  "observations": 0,
+  "collection_errors": 11,
+  "loop_events": [],
+  "continuous_peaks_known": false,
+  "cloud_enabled": false,
+  "device_executed": false,
+  "packets_saved": false,
+  "acoustic_timings": null,
+  "billing": null,
+  "full_acceptance": false,
+  "p14_verified": false,
+  "missing": [
+    "device_network",
+    "supplier_network",
+    "real_asr",
+    "speaker_ack",
+    "60min_effective_interaction",
+    "billing"
+  ]
+}
