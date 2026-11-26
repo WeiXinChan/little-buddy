@@ -92,7 +92,7 @@ class VoicePeer(ProductionVoicePeer):
             raise
 
 class Sink:
-    def __init__(self,ack=True):self.peer=None;self.ack=ack;self.events=[];self.first=None;self.stopped=False;self.frames=0;self.audio_bytes=0;self.max_audio_bytes=0;self.acks=0
+    def __init__(self,ack=True):self.peer=None;self.ack=ack;self.events=[];self.first=None;self.stopped=False;self.frames=0;self.audio_bytes=0;self.max_audio_bytes=0;self.acks=0;self.game_commits=0
     async def send(self,raw):
         if self.stopped:raise ProbeLimit('sink_closed')
         event=json.loads(raw);kind=event['type']
@@ -106,7 +106,17 @@ class Sink:
             if self.first is None:self.first=time.monotonic()
             if self.ack:
                 p=self.peer;i=replace(p.ack_identity,sequence=p.ack_sequence);p.ack_sequence+=1
+                candidate=p.session.pending[0] if p.session.pending else None
+                topic=p.session.topic;turn=p.session.turn
                 if not p.session.ack(i,player=event['player'],stream=event['stream'],segment=event['segment'],head=event['end']):raise ProbeLimit('ack_rejected')
+                # Observe the exact production commit branch, not game presence
+                # or value inequality. A same-value state is still a real commit.
+                if (candidate is not None and candidate.name==event['segment'] and
+                    candidate.state is not None and not candidate.private and
+                    event['end']>=candidate.end and p.session.turn==turn and
+                    p.session.topic==topic+1 and
+                    all(item is not candidate for item in p.session.pending)):
+                    self.game_commits+=1
                 self.acks+=1;p.changed.set()
     async def close(self,*args):pass
 
@@ -164,7 +174,7 @@ async def run_case(case,providers,*,ack=True,observer=None):
             for turn in case['turns']:
                 previous=peer.session.context().get('heard',())
                 peer.session.begin_turn();await peer.commands()
-                start=time.monotonic();sink.first=None;sink.events.clear();sink.frames=sink.audio_bytes=sink.max_audio_bytes=sink.acks=0;peer.probe_resources.clear();offset=len(meter.calls)
+                start=time.monotonic();sink.first=None;sink.events.clear();sink.frames=sink.audio_bytes=sink.max_audio_bytes=sink.acks=sink.game_commits=0;peer.probe_resources.clear();offset=len(meter.calls)
                 peer.generation=asyncio.create_task(peer.respond(turn['input'],peer.epoch))
                 await peer.handle(json.dumps(dict(v=2,type='bind',epoch=peer.epoch,seq=peer.sequence+1,player='probe-'+str(peer.session.turn))))
                 await asyncio.shield(peer.generation)
@@ -182,7 +192,7 @@ async def run_case(case,providers,*,ack=True,observer=None):
                         raise ProbeLimit('observer_must_be_sync')
                 rows.append(dict(label=turn['label'],checks=checks,quality_assessable=ok,
                     peer_failure=peer_failure(peer),resource_diagnostics=deepcopy(peer.probe_resources),control_failures=[e['code'] for e in sink.events if e['type']=='failure'],
-                    delivery_metadata=dict(audio_chunks=sink.frames,audio_bytes=sink.audio_bytes,max_audio_bytes=sink.max_audio_bytes,acks_accepted=sink.acks,game_committed=bool(peer.session.game),resource_quarantined=peer.quarantined),
+                    delivery_metadata=dict(audio_chunks=sink.frames,audio_bytes=sink.audio_bytes,max_audio_bytes=sink.max_audio_bytes,acks_accepted=sink.acks,game_committed=sink.game_commits>0,resource_quarantined=peer.quarantined),
                     first_audio_after_text_ms=None if sink.first is None else round((sink.first-start)*1000,2),
                     completed_ms=round((time.monotonic()-start)*1000,2),stages=deepcopy(meter.calls[offset:])))
                 if not all(checks.values()):break # stop the batch; no quality retry

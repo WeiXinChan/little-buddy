@@ -1,0 +1,22 @@
+{
+  "old_head": "f76c1c3b1d623e3106017498ac6f78f40f69375e",
+  "original_qa": {
+    "executed": 27,
+    "passed": 26,
+    "failed": 1
+  },
+  "fixed": {
+    "affected_harness_methods": 25,
+    "unchanged_qa_metadata_methods": 3,
+    "unchanged_qa_cleanup_falsifiers": 2,
+    "unique_total": 30,
+    "passed": 30,
+    "failed": 0,
+    "skipped": 0
+  },
+  "qa_script_sha256": "322aa85fe3edbd1c85c22bbc5268a0fbe14f8cadc3590406601033f93e034064",
+  "cloud_calls": 0,
+  "production_changed": false,
+  "p12_verified": false,
+  "p15_verified": false
+}

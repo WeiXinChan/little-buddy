@@ -28,3 +28,12 @@ scripts/v2_multiturn_probe.py 的VoicePeer诊断子类仍委托全部生产resou
 ### 检查
 
 原13＋清理6＋新增诊断3＝22PASS，原QA清理falsifier2另列2PASS，共24唯一方法/0FAIL/0SKIP。只跑受影响harness集合，不跑后端全集。编译/diff通过。原首次云失败与旧清理失败不覆盖；新metadata/日志在同目录。新3项分别检查快关最终提交、慢关因果及secret样式未知值的白名单过滤。合成9600-byte帧不是本次真实供应商分片证据；下一次真实分片只记录数字。
+
+
+## D92-01：本轮提交证据更正
+
+旧f76c1c3b的game_committed=bool(game)确有跨轮误报，独立QA原27执行26PASS/1FAIL保留，不能沿用旧字段证明失败轮提交。commit-evidence目录保存逐字原metadata_checks.py与失败日志，原输入和断言未改，修后原3方法通过。
+
+现game_committed仅表示**本轮Sink观察到真实公共玩法state的最终ACK提交分支**：本轮每次audio回调，先读实际pending队首候选项；真实Session.ack返回True后，确认该候选与音频segment对应、带state且非private、达到candidate.end、turn保持不变、候选已从pending移除、topic恰加1，才增加本轮观察计数。同步读后观察，无复制ACK/提交逻辑、无写Session，也不根据game新旧值推测。每轮计数重置；旧game存在不作为证据。True表示观察到该分支，False表示未观察到此轮公共state提交，不表示旧game为空；此为合成ACK下的生产状态提交证据，不是实机已听证明。
+
+原跨轮反例第一轮提交旧规则，第二轮新规则在首句slowclose失败时，字段现为False；同值state连续重提3轮仍均True并且topic各推进1。新增边界还验证不同值提议无ACK后取消不继承旧计数、私事state即使ACK接受也不计公共game提交。原resource委托/0.5s确认/取消异常透传/计数隐私检查保持。25受影响＋原QA metadata3＋原清理falsifier2＝30唯一方法全部通过、0skip；不扩大成真实玩法或P12/P15通过。首次真实失败原件和前轮证据保持不变。
