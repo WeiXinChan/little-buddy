@@ -8,7 +8,7 @@ compiler=[jar('org.jetbrains.kotlin',a,v) for a,v in [('kotlin-compiler-embeddab
 runtime=[compiler[1],jar('junit','junit','4.13.2'),jar('org.hamcrest','hamcrest-core','1.3')]
 sources=list((root/'scripts/testing/capture').glob('*.kt'))
 sources=[s for s in sources if s.name!='NativeEvidence.kt']
-if os.environ.get('CAPTURE_SOURCE_BASE'):sources=[s for s in sources if s.name not in ['CaptureSafetyTest.kt','NativeLedgerTest.kt']]
+if os.environ.get('CAPTURE_SOURCE_BASE'):sources=[s for s in sources if s.name not in ['CaptureSafetyTest.kt','NativeLedgerTest.kt','CaptureBootstrapTest.kt']]
 base=Path(os.environ.get('CAPTURE_SOURCE_BASE',str(root/'app/src/main/java/com/littlebuddy/v2')))
 sources += [base/(n+'.kt') for n in ['Capture','ManagementCapture','WakeSamples']]
 sources += [root/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['Playback','NativeEvidence']]

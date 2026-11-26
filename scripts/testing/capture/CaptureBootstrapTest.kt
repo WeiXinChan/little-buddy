@@ -57,11 +57,13 @@ class CaptureBootstrapTest {
    val s=Source(0);var calls=0
    s.stampOverride={p->calls++;when(mode){
     0->CaptureStamp(0,(s.now-101)*1_000_000)
-    1->CaptureStamp(if(calls<3)p else -1,s.now*1_000_000)
+    1->CaptureStamp(if(calls<6)p else p-1,s.now*1_000_000)
     2->CaptureStamp(p/2,s.now*1_000_000)
     else->CaptureStamp(p,s.now*1_000_000-600_000_000)
    }}
-   assertNotNull("mode$mode",runCatching{s.prepare()}.exceptionOrNull());assertFalse(s.prefix.pending)
+   val error=runCatching{s.prepare()}.exceptionOrNull()
+   assertNotNull("mode$mode",error);if(mode==1)assertEquals("capture timestamp regressed",error?.message)
+   assertFalse(s.prefix.pending)
   }
  }
  @Test fun slowUnanchoredReadGapsAccumulateRatherThanRefreshNativeBudget(){
