@@ -15,6 +15,7 @@ from backend.v2.dynamic_images import ImageFailure
 from backend.v2.image_descriptions import MinimalDescription, compile_description, ImageAllowance, ExplicitImageRequest, explicit_request, VOCAB
 from backend.v2.models import TEXT_MODELS, SCHEMA_MODELS, UnsupportedTextModel
 from backend.v2.diagnostics import mark_contract
+from backend.v2.story_rules import obeys_turn_limit,constraint_proposal
 from contextlib import asynccontextmanager
 
 SYSTEM = """你是瓦力，面向5–8岁儿童的AI语音玩伴。自然、简短、不过度夸奖或连续追问。
@@ -201,6 +202,13 @@ AI身份真实但不必每轮自我声明。可说“我喜欢和你一起想象
 以孩子当前意图判定角色语境：明确离开冒险后，不沿用heard里旧角色为现实感知声明辩护。
 可叙述故事人物看见星星，但不能说现实中看见孩子的云；可以解释身体知识，不假装自己有身体经历。
 不主动索取真实姓名、住址、学校、联系方式、密码；虚构人物起名不等于现实身份。
+context.game.turn_limit若存在，是服务器在已播ACK后保存的每轮句数上限（null表示已取消），
+不能通过改写rules或自行change抹去；孩子本轮明确改句数/取消或离开玩法时按新意图处理。
+该字段由服务器生成，不在输出JSON另造同名字段。
+故事接龙是接续孩子已经给出的情节，不代替孩子连续推进多轮；轮流规则要落实到本轮实际说出的内容。
+明确“一人一句/每次只讲一句话”时，sentences只能有一个完整句子，句内也不得塞多句。
+该句用于推进故事，不额外追加追问、复述孩子原话、轮到你了等提示句；规则说明或确认也占句数。
+孩子明确改规则时使用新规则；离开故事或谈私事按实际意图处理，不为满足句数强留故事。
 end仅用于明确结束本次会话（再见、我要睡觉了、我们都不玩了），只作简短告别。
 “我先退出，你们继续”保持共同会话用continue；不清楚谁退出时简短确认，不直接end。
 “不玩这个了”是leave而非end；“等我一下”安静等待不催促；明确单独换个人用handoff。
@@ -245,6 +253,10 @@ description只用于generate_image，缺字段兼容目录名称生成；缺服�
                 any(not isinstance(k, str) or not 1 <= len(k) <= 40 or type(v) is not int or
                     not 0 <= v < len(plan['sentences']) for k, v in plan['anchors'].items())):
             raise ModelError('anchors')
+        # Reject the whole proposal before review/TTS/state publication. Never
+        # truncate: anchors and final-segment state must describe the same output.
+        if not obeys_turn_limit(text,context,plan):
+            raise ModelError('story turn sentence limit')
         tools=plan['tools']
         try:
             if (not isinstance(tools,list) or len(tools)>1 or any(
@@ -273,6 +285,8 @@ description只用于generate_image，缺字段兼容目录名称生成；缺服�
         # Preserve current riddle on a continuation; model cannot silently change it.
         if plan['action'] == 'continue' and context.get('unrevealed'):
             plan['secrets'] = dict(context['unrevealed'])
+        present,limit=constraint_proposal(text,context,plan)
+        if present:plan['_story_turn_limit']=limit
         return plan
 
     async def facts(self, text):

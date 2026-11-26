@@ -1,0 +1,23 @@
+{
+  "source": "46ce6426a3eb99f2cb7c802cd1720b2c7343e870",
+  "fixture_source": "real model persisted synthetic rule in remaining-case-story-moon-46ce6426.json",
+  "context": {
+    "game": {
+      "rules": "轮流编故事，一人接一句，题目是小猫去月球"
+    }
+  },
+  "input": "然后它遇到一颗蓝色星星。",
+  "plan": {
+    "mode": "story",
+    "action": "continue",
+    "rules": "轮流编故事，一人接一句，题目是小猫去月球",
+    "sentences": [
+      "小猫看见星星。",
+      "飞船继续前进。"
+    ]
+  },
+  "resolved_limit": null,
+  "accepted": true,
+  "expected_accepted": false,
+  "scope": "offline actual rule validator, not live two-sentence output"
+}

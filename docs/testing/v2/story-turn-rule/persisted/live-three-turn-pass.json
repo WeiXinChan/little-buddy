@@ -1,0 +1,262 @@
+{
+  "source": "46ce6426a3eb99f2cb7c802cd1720b2c7343e870",
+  "supervisor_deadline_seconds": 60,
+  "automatic_retry": false,
+  "full_acceptance": false,
+  "synthetic_only": true,
+  "supervisor_timeout": false,
+  "worker_exit": 0,
+  "probe": {
+    "format": 1,
+    "client_heartbeats": 3,
+    "client_heartbeat_failed": false,
+    "peer_failure": null,
+    "cleanup": {
+      "confirmed": true,
+      "pending_tasks": 0,
+      "provider_reusable": true
+    },
+    "usage_final": true,
+    "usage": {
+      "requests": 9,
+      "failures": 0,
+      "prompt_tokens": 11199,
+      "completion_tokens": 329
+    },
+    "case": "story-moon",
+    "fixture_sha256": "9ce5dd0e4988dc36fd38174c6fce771ae8954a0ebce9b4401a24d5e990c6d20e",
+    "layer": "synthetic_text_real_voicepeer_simulated_playback",
+    "turns": [
+      {
+        "label": "story-moon-1",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.89,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 68,
+          "audio_bytes": 273600,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 68,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 3175.78,
+        "completed_ms": 4840.76,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 1613.06,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 1381.23,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 663.49,
+            "ok": true
+          }
+        ]
+      },
+      {
+        "label": "story-moon-2",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.5,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 63,
+          "audio_bytes": 252480,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 63,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 3084.48,
+        "completed_ms": 4523.29,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 1776.04,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 571.28,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 679.11,
+            "ok": true
+          }
+        ]
+      },
+      {
+        "label": "story-moon-3",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.21,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 81,
+          "audio_bytes": 327360,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 81,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 2433.21,
+        "completed_ms": 4509.7,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 1061.11,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 837.35,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 719.52,
+            "ok": true
+          }
+        ]
+      }
+    ],
+    "model_requests": 9,
+    "tts_requests": 3,
+    "tts_unicode_characters": 67,
+    "full_acceptance": false,
+    "semantic_review_required": true,
+    "p12_verified": false,
+    "p15_verified": false,
+    "source": "46ce6426a3eb99f2cb7c802cd1720b2c7343e870",
+    "candidate": "deepseek-v4.1-flash-1017",
+    "rate_estimate_is_qwen4_proxy": true,
+    "synthetic_only": true,
+    "case_selection": "story-moon",
+    "root_actual_model_requests": 9,
+    "root_planning_denials": 0,
+    "root_model_planning_allowance_cny": 5.0,
+    "uncached_rate_estimate_cny": 0.14115,
+    "usage_unknown_requests": 0,
+    "actual_bill_verified": false,
+    "currency_bound_is_supplier_guarantee": false,
+    "asr_calls": 0,
+    "image_calls": 0,
+    "model_rate_source": "https://help.aliyun.com/zh/model-studio/qwen4-max"
+  },
+  "supervisor_elapsed_ms": 14190,
+  "complete_result_received": true,
+  "synthetic_semantic_observations": [
+    {
+      "label": "story-moon-1",
+      "mode": "story",
+      "roles": [
+        "小猫"
+      ],
+      "synthetic_rules": "轮流编故事，一人接一句，题目是小猫去月球",
+      "synthetic_played": [
+        "飞船嗖地飞起来，小猫趴在窗边看地球越来越小。"
+      ],
+      "rules_characters": 20,
+      "heard_items": 1,
+      "heard_characters": 22
+    },
+    {
+      "label": "story-moon-2",
+      "mode": "story",
+      "roles": [
+        "小猫"
+      ],
+      "synthetic_rules": "轮流编故事，一人接一句，题目是小猫去月球",
+      "synthetic_played": [
+        "飞船嗖地飞起来，小猫趴在窗边看地球越来越小。",
+        "小猫伸出爪子，轻轻碰了碰舷窗上的蓝色星星。"
+      ],
+      "rules_characters": 20,
+      "heard_items": 2,
+      "heard_characters": 43
+    },
+    {
+      "label": "story-moon-3",
+      "mode": "story",
+      "roles": [
+        "小猫"
+      ],
+      "synthetic_rules": "轮流编故事，一人接一句，题目是小猫去月球；飞船只能慢慢飞，不能突然传送",
+      "synthetic_played": [
+        "飞船嗖地飞起来，小猫趴在窗边看地球越来越小。",
+        "小猫伸出爪子，轻轻碰了碰舷窗上的蓝色星星。",
+        "小猫点点头，飞船就放慢速度，稳稳地慢慢飞向月球。"
+      ],
+      "rules_characters": 35,
+      "heard_items": 3,
+      "heard_characters": 67
+    }
+  ]
+}

@@ -963,6 +963,11 @@ class VoicePeer:
                 stage = 'safety'
                 await self.review(operation, ''.join(plan['sentences']))
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
+                if state['mode']=='story':
+                    if accepted is False and 'turn_limit' in self.session.game:
+                        state['turn_limit']=self.session.game['turn_limit']
+                    elif accepted is not False and '_story_turn_limit' in plan:
+                        state['turn_limit']=plan['_story_turn_limit']
                 image_effect=None; answer_public=False
                 tools=plan.get('tools',[])
                 if self.images_enabled and tools:
