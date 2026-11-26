@@ -11,7 +11,7 @@ import shlex
 import platform
 from importlib.metadata import version, PackageNotFoundError
 
-from backend.dashscope import DashScope
+from backend.v2.speech import V2Speech
 from backend.v2.companion import DashScopeModel, UnifiedProviders
 from backend.v2.files import read_checked
 
@@ -57,7 +57,7 @@ def providers(http, *, environment=None, service_env=None, credential_directory=
         key = read_checked(Path(directory)/'dashscope-api-key','provider_key',limit=4097).rstrip('\r\n')
         if not key or len(key) > 4096:
             raise ValueError()
-        speech = DashScope(http, key=key, **config)
+        speech = V2Speech(http, key=key, **config)
     except (OSError, UnicodeError, ValueError):
         raise ValueError('V2 provider credential unavailable or invalid') from None
     return UnifiedProviders(speech, DashScopeModel(speech))
