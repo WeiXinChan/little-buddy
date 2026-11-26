@@ -1,0 +1,30 @@
+{
+  "note": "AOSP android16-release snapshots, not OPPO HAL evidence; ExtendedTimestamp.h local snapshot is canonical AudioTimestamp.h URL below",
+  "sources": [
+    {
+      "local_name": "AudioRecord.cpp",
+      "url": "https://android.googlesource.com/platform/frameworks/av/+/refs/heads/android16-release/media/libaudioclient/AudioRecord.cpp?format=TEXT",
+      "sha256": "3cf46ede6b082ef05d845c177b9dcfac67a13fb8060409c40180e7b4c8ee14cc"
+    },
+    {
+      "local_name": "android_media_AudioRecord.cpp",
+      "url": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/core/jni/android_media_AudioRecord.cpp?format=TEXT",
+      "sha256": "ec2163942ec11cfbd3b972e883fb97173b37b9acddd5273e6e98649ba16c6182"
+    },
+    {
+      "local_name": "ExtendedTimestamp.h",
+      "url": "https://android.googlesource.com/platform/frameworks/av/+/refs/heads/android16-release/media/libaudioclient/include/media/AudioTimestamp.h?format=TEXT",
+      "sha256": "afa81c4c94793e6492c7e60bc1eb7d2001f9492c5f540bef110cbeab96bba2a3"
+    },
+    {
+      "local_name": "AudioTrackShared.h",
+      "url": "https://android.googlesource.com/platform/frameworks/av/+/refs/heads/android16-release/include/private/media/AudioTrackShared.h?format=TEXT",
+      "sha256": "741ad5d0799197c5312555664fa4efc43002cee9aed0a6f47d1fc2c50de41340"
+    },
+    {
+      "local_name": "AudioTrackShared.cpp",
+      "url": "https://android.googlesource.com/platform/frameworks/av/+/refs/heads/android16-release/media/libaudioclient/AudioTrackShared.cpp?format=TEXT",
+      "sha256": "8b01c5d5cffe94d5318c114e07f93f1b5a95cf51559462659aa3d6064aed8755"
+    }
+  ]
+}
