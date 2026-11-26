@@ -35,7 +35,7 @@ class Fixture:
         self.write('v2-device-token',self.token)
         self.write('dashscope-api-key','SYNTHETIC_PRIVATE_PROVIDER_KEY')
         self.write('service.env','\n'.join(f'{k}={v}' for k,v in dict(DASHSCOPE_WORKSPACE='synthetic',
-            DASHSCOPE_REGION='cn-beijing',DASHSCOPE_ASR_MODEL='fun-asr-realtime',DASHSCOPE_LLM_MODEL='deepseek-v4.1-flash-1017',
+            DASHSCOPE_REGION='cn-beijing',DASHSCOPE_ASR_MODEL='fun-asr-realtime',DASHSCOPE_LLM_MODEL='qwen4-max',
             DASHSCOPE_TTS_MODEL='cosyvoice-v3-flash',DASHSCOPE_TTS_VOICE='longanyang').items()))
         self.scope=dict(v=1,purpose='little-buddy-v2-device',endpoint='wss://v2.synthetic.invalid/v2/voice',
             token_sha256=sha256(self.token.encode()).hexdigest(),not_after=int(time.time())+3600,protocol_contract=CONTRACT)
@@ -98,7 +98,7 @@ class Preflight(unittest.TestCase):
         with patch('backend.v2.preflight.version',return_value='0'):
             with self.assertRaisesRegex(ConfigurationError,'dependency_version_mismatch'):prepare(self.fixture.args)
         path=self.fixture.path/'service.env';original=path.read_text()
-        self.fixture.write('service.env',original.replace('deepseek-v4.1-flash-1017','SYNTHETIC_PRIVATE_WRONG_MODEL'))
+        self.fixture.write('service.env',original.replace('qwen4-max','SYNTHETIC_PRIVATE_WRONG_MODEL'))
         with self.assertRaisesRegex(ConfigurationError,'provider_model_contract_mismatch'):prepare(self.fixture.args)
         self.fixture.write('service.env',original+'\nDASHSCOPE_LLM_MODEL=$(touch NEVER_EXECUTED)')
         with self.assertRaisesRegex(ConfigurationError,'service_env_invalid'):prepare(self.fixture.args)

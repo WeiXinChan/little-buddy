@@ -57,13 +57,13 @@ class DeployInputs(unittest.TestCase):
         self.write('v2-device-token',token);self.write('dashscope-api-key','SYNTHETIC_PROVIDER_KEY')
         for name in ('dashscope-image-key','dashscope-review-key'):self.write(name,'SYNTHETIC_ONLY_'+name)
         self.write('service.env','\n'.join(f'{k}={v}' for k,v in dict(DASHSCOPE_WORKSPACE='synthetic',
-            DASHSCOPE_REGION='cn-beijing',DASHSCOPE_ASR_MODEL='fun-asr-realtime',DASHSCOPE_LLM_MODEL='deepseek-v4.1-flash-1017',
+            DASHSCOPE_REGION='cn-beijing',DASHSCOPE_ASR_MODEL='fun-asr-realtime',DASHSCOPE_LLM_MODEL='qwen4-max',
             DASHSCOPE_TTS_MODEL='cosyvoice-v3-flash',DASHSCOPE_TTS_VOICE='longanyang').items()))
         self.write('device-scope.json',json.dumps(dict(v=1,purpose='little-buddy-v2-device',
             endpoint='wss://fixture.invalid/v2/voice',token_sha256=sha256(token.encode()).hexdigest(),
             not_after=int(time.time())+3600,protocol_contract=CONTRACT)))
         self.image=dict(enabled=True,region='cn-beijing',workspace='synthetic',model='qwen-image-3.0',
-            review_model='deepseek-v4.1-flash-1017',resource_review_id='synthetic-fixture-only',prompt_policy=PROMPT_POLICY,
+            review_model='qwen4-max',resource_review_id='synthetic-fixture-only',prompt_policy=PROMPT_POLICY,
             image_policy=IMAGE_POLICY,width=512,height=512,timeout=8,result_ttl=15)
         self.write('image.json',json.dumps(self.image))
         self.argv=['--check','--port','19483','--cert',str(self.config/'tls-certificate.pem'),
