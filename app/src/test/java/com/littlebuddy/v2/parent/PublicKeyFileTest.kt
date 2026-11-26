@@ -109,6 +109,34 @@ class PublicKeyFileTest {
         r.model.exportTransportKey({r.now+=120000;key}){file.release(it)};r.drain()
         assertEquals(PublicKeyFile.Result.CANCELLED,file.save{fail();Output()})
     }
+    @Test fun publicOnlyPickerContinuesWithoutRestoringParentAuthority() {
+        val r=Rig();val file=PublicKeyFile{r.now}
+        r.model.exportTransportKey({key}){file.release(it)};r.drain();r.model.pause()
+        assertEquals(ParentDomain.State.LOCKED,r.domain.state())
+        assertEquals(PublicKeyFile.Result.SAVED,file.save{Output()})
+        assertEquals(PanelMode.VERIFY,r.model.state.mode)
+        assertEquals(ParentDomain.State.LOCKED,r.domain.state())
+    }
+    @Test fun keyReadFailureReportsPromptlyWithoutFileOrExceptionText() {
+        val r=Rig();val file=PublicKeyFile{r.now};var rejected=0;var published=0
+        r.model.exportTransportKey({error("synthetic credential-shaped exception")},{published++},{rejected++;file.cancel()})
+        r.drain();assertEquals(1,rejected);assertEquals(0,published)
+        assertEquals(PublicKeyFile.Result.CANCELLED,file.save{fail();Output()})
+    }
+    @Test fun expiryInsideWriteDeletesInsteadOfPublishing() {
+        var now=0L;val file=PublicKeyFile{now};file.release(key)
+        val output=Output().apply{beforeWrite={now=120000}}
+        assertEquals(PublicKeyFile.Result.CANCELLED,file.save{output});assertTrue(output.deleted);assertFalse(output.published)
+    }
+    @Test fun workerBufferIsClearedAfterCompletion() {
+        val file=PublicKeyFile{0};file.release(key);var seen:ByteArray?=null
+        val output=object:PublicKeyFile.Destination {
+            override fun write(bytes:ByteArray){seen=bytes}
+            override fun publish(){}
+            override fun delete(){}
+        }
+        assertEquals(PublicKeyFile.Result.SAVED,file.save{output});assertTrue(seen!!.all{it==0.toByte()})
+    }
     companion object {
         private val PUBLIC:String by lazy {
             val rsa=KeyPairGenerator.getInstance("RSA").apply{initialize(2048)}.generateKeyPair().public as RSAPublicKey

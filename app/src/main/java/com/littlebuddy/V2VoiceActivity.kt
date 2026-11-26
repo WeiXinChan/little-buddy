@@ -127,8 +127,8 @@ class V2VoiceActivity : Activity() {
         managementRequested=false; managementVisible=true; eyesAttached=false
         eyeState.revoke();eyeView?.show(EyeMood.IDLE);eyeRevision++
         panel=AndroidParentPanel(this, { leaveManagement() }, { stopVoice() }, { connectionNotice },
-            savePublicKey = { model -> publicKeyFile.begin { publish ->
-                model.exportTransportKey({ com.littlebuddy.v2.transport.V2SshIdentity.load(create=true).registrationKey() }, publish)
+            savePublicKey = { model -> publicKeyFile.begin { publish, failed ->
+                model.exportTransportKey({ com.littlebuddy.v2.transport.V2SshIdentity.load(create=true).registrationKey() }, publish, failed)
             } },
             pageChanged = { state -> if (state.mode != PanelMode.SETTINGS || state.busy) publicKeyFile.focusLost() }
         ).also { it.open() }

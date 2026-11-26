@@ -21,7 +21,7 @@ Android8–9/API26–28：使用系统“另存为”，建议选择设备本地
 文档拒绝，不删除其中已有内容。不持有持久URI权限。
 
 实际生产链：ParentPanelView按钮 → Activity持有的AndroidPublicKeyFile.begin →
-model.exportTransportKey → 原V2SshIdentity.load(create=true).registrationKey() →
+model.exportTransportKey（失败回调仅文件路径使用，分享旧签名不变） → 原V2SshIdentity.load(create=true).registrationKey() →
 原最终d.acceptProtected(current)/当前页面检查 → 仅公钥release → 文件IO worker。
 现有alias复用；只有原授权路径首次没有key才允许既有load逻辑创建，不改/替换key。
 文件类没有ParentDomain、Grant、PrivateKey、PIN或连接凭据字段。
@@ -42,7 +42,7 @@ MediaStore.Downloads：只insert本次新行，IS_PENDING=1，写入/关闭/有�
 并未把这类情况说成保存成功。正常取消/异常清理由受控回归覆盖，真实provider待复验。
 
 检查：scripts/with-build-lock python3 scripts/public-key-file-tests.py
-16项可运行检查使用真实ParentPanelModel/ParentDomain最终门和生产文件核心，
+20项可运行检查使用真实ParentPanelModel/ParentDomain最终门和生产文件核心，
 含public-only序列化、失败/取消/发布竞争/清理失败、旧页/过期，非源码字符串断言。
 Android编译与原PIN回归按报告提供；不是手机导出/USB/Mac已验证。
 

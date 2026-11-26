@@ -29,14 +29,14 @@ internal class AndroidPublicKeyFile(private val activity: Activity) {
             message("公钥未保存：操作已到期，请重新验证后重试。")
         }
     }
-    fun begin(authorize: ((String) -> Unit) -> Unit) {
+    fun begin(authorize: ((String) -> Unit, () -> Unit) -> Unit) {
         if (destroyed) return
         if (cleanupUnconfirmed) { message("上次公钥文件清理未确认，请先检查下载目录。"); return }
         if (current != null) { message("正在保存或取消公钥文件，请稍候。"); return }
         val op = Operation(PublicKeyFile(SystemClock::elapsedRealtime)); current = op
         main.postDelayed(timeout, 120_000)
         try {
-            authorize { publicKey ->
+            authorize({ publicKey ->
                 if (current !== op || destroyed) return@authorize
                 val accepted = runCatching { op.file.release(publicKey) }.getOrDefault(false)
                 if (!accepted) { finish(op, PublicKeyFile.Result.FAILED); return@authorize }
@@ -51,7 +51,7 @@ internal class AndroidPublicKeyFile(private val activity: Activity) {
                         }, REQUEST)
                     } catch (_: Exception) { op.picker = false; finish(op, PublicKeyFile.Result.FAILED) }
                 }
-            }
+            }, { finish(op, PublicKeyFile.Result.FAILED) })
         } catch (_: Exception) { finish(op, PublicKeyFile.Result.FAILED) }
     }
     /** Picker focus loss revokes the parent normally. Only its already-released public payload
@@ -82,7 +82,10 @@ internal class AndroidPublicKeyFile(private val activity: Activity) {
         }
         if (op == null || destroyed || !op.file.allowed()) {
             io.execute { val clean = runCatching { deleteEmptyDocument(uri) }.isSuccess
-                main.post { op?.let { finish(it, if (clean) PublicKeyFile.Result.CANCELLED else PublicKeyFile.Result.CLEANUP_FAILED) } } }
+                main.post {
+                    if (op != null) finish(op, if (clean) PublicKeyFile.Result.CANCELLED else PublicKeyFile.Result.CLEANUP_FAILED)
+                    else if (!clean) { cleanupUnconfirmed = true; message("公钥文件清理未确认，请检查所选位置。") }
+                } }
         } else write(op, uri)
         return true
     }

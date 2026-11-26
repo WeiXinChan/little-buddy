@@ -276,17 +276,25 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         }
     }
     /** Public registration material only; publish after a fresh final Grant decision. */
-    fun exportTransportKey(create: () -> String, publish: (String) -> Unit) {
-        val d=domain.get() ?: return; val current=grant ?: return
-        if (!active || state.busy || state.mode!=PanelMode.SETTINGS || !d.localAction(current)) return
+    fun exportTransportKey(create: () -> String, publish: (String) -> Unit) =
+        exportTransportKey(create, publish, {})
+    /** File export can report failure promptly; the original sharing overload keeps its behavior. */
+    fun exportTransportKey(create: () -> String, publish: (String) -> Unit, unavailable: () -> Unit) {
+        val d=domain.get(); val current=grant
+        if (d==null || current==null || !active || state.busy || state.mode!=PanelMode.SETTINGS || !d.localAction(current)) {
+            unavailable(); return
+        }
         val ticket=revision.get()
+        fun rejected() { ui { if (live(ticket) && state.mode==PanelMode.SETTINGS) unavailable() } }
         work {
-            val key=runCatching { create() }.getOrNull() ?: return@work
+            val key=runCatching { create() }.getOrNull() ?: run { rejected(); return@work }
             var released: String? = null
             // Final decision publishes public material in memory on the worker, never a UI/IO callback.
             if (live(ticket)) d.acceptProtected(current) { released=key }
-            val material=released ?: return@work
-            ui { if (live(ticket) && state.mode==PanelMode.SETTINGS && d.isAuthorized(current)) publish(material) }
+            val material=released ?: run { rejected(); return@work }
+            ui { if (live(ticket) && state.mode==PanelMode.SETTINGS) {
+                if (d.isAuthorized(current)) publish(material) else unavailable()
+            } }
         }
     }
     fun importConnection(address: String, token: CharArray, sshUser: String? = null) {
