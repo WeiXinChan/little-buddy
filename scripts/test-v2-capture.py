@@ -12,7 +12,7 @@ if os.environ.get('CAPTURE_SOURCE_BASE'):sources=[s for s in sources if s.name n
 base=Path(os.environ.get('CAPTURE_SOURCE_BASE',str(root/'app/src/main/java/com/littlebuddy/v2')))
 sources += [base/(n+'.kt') for n in ['Capture','ManagementCapture','WakeSamples']]
 sources += [root/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['Playback','NativeEvidence']]
-for n in ['CaptureUploads','RecorderLease','EyeState','WakeOrigin','InputGate','NativeReadLedger','CaptureBootstrap']:
+for n in ['CaptureUploads','RecorderLease','EyeState','WakeOrigin','InputGate','CaptureClockEnvelope','NativeReadLedger','CaptureBootstrap']:
  if (base/(n+'.kt')).exists():sources.append(base/(n+'.kt'))
 with tempfile.TemporaryDirectory(dir=root,prefix='capture-tests-') as out:
  subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',out,*map(str,sources)],check=True)
@@ -21,7 +21,7 @@ if not os.environ.get('CAPTURE_SOURCE_BASE') and not os.environ.get('CAPTURE_CON
  sources=[root/'scripts/testing/capture'/n for n in ['Assets.kt','Onnx.kt']]
  sources+=list((root/'scripts/testing/wake-cancel').glob('*.kt'))
  sources+=[root/'app/src/main/java/com/littlebuddy/WakeReader.kt']
- sources+=[root/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['NativeReadLedger','CaptureBootstrap']]
+ sources+=[root/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['CaptureClockEnvelope','NativeReadLedger','CaptureBootstrap']]
  with tempfile.TemporaryDirectory(dir=root,prefix='wake-cancel-tests-') as out:
   subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',out,*map(str,sources)],check=True)
   subprocess.run(['java','-Xmx256m','-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.WakeCancellationTest','com.littlebuddy.BootstrapSherpaTest'],check=True)

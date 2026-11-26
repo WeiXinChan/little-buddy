@@ -1,0 +1,7 @@
+{
+  "base": "5318d85fc678c93bdc7eafc51ab9135bd684fc11",
+  "trace_sha256": "a794ea51c72b5f45b212ab9f4a4726636ac5e5156ae2f64afa9c806e8ab38abb",
+  "rows": 151,
+  "first_success_elapsed_ns": 153252308,
+  "scope": "one metadata observation; no PCM; no production PASS"
+}

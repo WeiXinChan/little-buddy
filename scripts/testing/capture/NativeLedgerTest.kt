@@ -64,7 +64,11 @@ class NativeLedgerTest {
    now+=10;CaptureStamp(now*16,now*1_000_000)
   }
   val room=ledger.remainingMs()
-  assertTrue(ledger.ready);assertEquals((3200L-320-160)*1000/16016,room)
+  assertTrue(ledger.ready)
+  // New earliest stamp=9.5ms and the current mono bin ends11ms: 25 additional possible
+  // samples spend room. This tightens169ms to168ms; it does not weaken the old safety bound.
+  assertEquals((3200L-320-185)*1000/16016,room)
+  assertTrue(room<(3200L-320-160)*1000/16016)
  }
  @Test fun timestampApiDelayAgesOldStampInsteadOfRenewingBudget(){
   var now=1L;var cost=0L;var candidate:CaptureStamp?=CaptureStamp(16,1_000_000)

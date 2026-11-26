@@ -26,6 +26,7 @@ class CaptureSafetyTest {
  }
  @Test fun cancellationDuringDrainWipesLaterFrames(){val jobs=mutableListOf<Runnable>();var count=0;lateinit var q:CaptureUploads
   q=CaptureUploads({jobs+=it;true},{1000},{true},{_,_,_->count++;q.cancel()},{fail("unexpected")})
+  q.nativeRoom(6400) // Same configured age bound as the real Capture, no production threshold change.
   val a=batch(50);q.offer(a,true,1000);jobs.single().run();zero(a);assertEquals(1,count)
  }
  @Test fun nativeAndWorkerAndStopAllMustFinishBeforeAnotherOwner(){val a=checkNotNull(ProcessRecorders.acquire("test"))
@@ -88,6 +89,7 @@ class CaptureSafetyTest {
 
  @Test fun consumeExceptionWipesCurrentAndRemainingBatchExactlyOnce(){val jobs=mutableListOf<Runnable>();var errors=0;var delivered=0
   val q=CaptureUploads({jobs+=it;true},{1000},{true},{_,_,_->delivered++;error("synthetic sink failure")},{errors++})
+  q.nativeRoom(6400) // Production always configures the actual native buffer before offer.
   val a=batch(50);q.offer(a,true,1000);jobs.single().run();zero(a);assertEquals(1,delivered);assertEquals(1,errors)
  }
  @Test fun cancellationAcrossNativeConstructionAndStartNeverAdmitsAnotherOwner(){
@@ -139,4 +141,20 @@ class CaptureSafetyTest {
   for(code in listOf("failure","route","unknown")){state.status(token,code);state.recording(token,1,false);assertEquals(EyeMood.FAULT,state.mood)}
   state.status(token,"clarify");state.recording(token,1,true);assertEquals(EyeMood.WAITING_CHILD,state.mood)
  }
+ @Test fun modelUncertaintyAndBatchDurationReachFirstSampleAgeAtActualConsumer(){
+  var now=1000L;var stamp=CaptureStamp(0,1_000_000_000)
+  val ledger=NativeReadLedger(3200,{now},{now}){stamp}
+  ledger.check();now=1040;stamp=CaptureStamp(640,1_040_000_000);val end=ledger.read(640)
+  assertEquals(1038L,end)
+  val jobs=mutableListOf<Runnable>();val seen=mutableListOf<Long>()
+  val q=CaptureUploads({jobs+=it;true},{now},{true},{_,_,at->seen+=at},{fail("unexpected")})
+  q.offer(batch(2),true,end);jobs.single().run()
+  assertEquals(listOf(997L,1017L),seen)
+  assertTrue(seen[0]<=ledger.sampleTime(0));assertTrue(seen[1]<=ledger.sampleTime(320))
+  var delivered=0;var failures=0;jobs.clear()
+  val expired=CaptureUploads({jobs+=it;true},{now},{true},{_,_,_->delivered++},{failures++})
+  val data=batch(2);expired.offer(data,true,end);now=1998;jobs.single().run()
+  assertEquals(0,delivered);assertEquals(1,failures);zero(data)
+ }
+
 }

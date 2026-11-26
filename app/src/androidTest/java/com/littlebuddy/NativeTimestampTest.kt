@@ -91,6 +91,7 @@ internal class ProbeMetadata {
     @Volatile var phase="preflight"
     @Volatile var failurePhase=""
     @Volatile var targetVersion=0
+    @Volatile var captureClockModel="not_executed"
     @Volatile var lastReadCode=Int.MIN_VALUE
     @Volatile var minimumBytes=0
     @Volatile var nativeBytes=0
@@ -133,7 +134,7 @@ internal class ProbeMetadata {
         putString("native_exception_class",nativeExceptionClass);putString("stop_request_exception_class",stopExceptionClass)
         putString("dependency_reason",dependencyReason);putString("v2_timestamp_result_json",resultJson)
         putBoolean("owned_lease_complete",ownedLeaseComplete)
-        putString("failure_phase",failurePhase);putInt("target_version_code",targetVersion);putInt("last_read_code",lastReadCode)
+        putString("capture_clock_model",captureClockModel);putString("failure_phase",failurePhase);putInt("target_version_code",targetVersion);putInt("last_read_code",lastReadCode)
         putInt("sdk",Build.VERSION.SDK_INT);putInt("minimum_bytes",minimumBytes);putInt("native_bytes",nativeBytes)
         putInt("actual_buffer_frames",actualBufferFrames);putLong("start_duration_ms",startDurationMs)
         putLong("first_api_success_ms",firstApiSuccessMs);putLong("first_ledger_ready_ms",firstLedgerReadyMs)
@@ -205,6 +206,7 @@ class NativeTimestampTest {
         // Production ledger reasons contain no material. Never output arbitrary native exception text.
         val reasons=setOf("capture clock regressed","capture clock regressed during timestamp","capture timebase changed",
             "invalid capture timestamp","capture timestamp regressed","incoherent capture time","capture rate outside bound",
+            "capture phase/rate model exhausted","capture long rate outside bound","capture clock model range","capture clock history exhausted",
             "capture timestamp relabeled","capture timestamp unavailable","capture timestamp stale",
             "cumulative native continuity exhausted","cumulative native room exhausted","capture timestamp not ready",
             "native read exceeds timestamp position","insufficient continuous reads","native release unconfirmed",
@@ -281,6 +283,7 @@ class NativeTimestampTest {
                             CaptureStamp(timestamp.framePosition,timestamp.nanoTime)
                         }else{meta.timestampUnavailable++;null}
                     }
+                    meta.captureClockModel=ledger.clockModel()
                     val prefix=CaptureBootstrap(ledger)
                     cancellation.installStartup(prefix)
                     meta.phase="native_start";meta.startCallMs=SystemClock.elapsedRealtime()

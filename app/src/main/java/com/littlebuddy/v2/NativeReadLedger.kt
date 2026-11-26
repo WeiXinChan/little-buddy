@@ -3,12 +3,14 @@ package com.littlebuddy.v2
 internal data class CaptureStamp(val frames:Long,val nanoTime:Long)
 
 /** Cumulative hardware capture position minus cumulative successful reads. Never rebases on read.
- * Timestamp extrapolation is bounded to <=100ms and +/-1000ppm, not accumulated for the session.
+ * Timestamp estimates use CaptureClockEnvelope; age/extrapolation remains <=100ms.
+ * Phase uncertainty and 1ms clock quantization are charged to produced upper and sample age.
  * A missing/stale/regressing/incoherent timestamp fails closed; no unbounded software fallback.
  */
 internal class NativeReadLedger(private val capacity:Int,private val mono:()->Long,
     private val boot:()->Long,private val stamp:()->CaptureStamp?) {
     companion object {
+        const val MODEL="phase500us-long500ms-v1"
         const val STARTUP_LIMIT_MS=500L
         const val STARTUP_SAMPLES=8000
         const val MIN_RATE=15984L
@@ -22,6 +24,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     private val maxAgeNs=minOf(100L,startupMs)*1_000_000
     private var checkedAt=monoOrigin
     private var observed:CaptureStamp?=null
+    private val clock=CaptureClockEnvelope()
     private var starting=false
     private var startupPairs=0
     val startupAnchored get()=starting && startupPairs>=2
@@ -41,8 +44,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         val total=readSamples+count
         check(total<=STARTUP_SAMPLES && total<=softwareUpper(checkedAt)){"startup samples outside bound"}
         observed?.let { value ->
-            val lag=maxOf(0,checkedAt*1_000_000-value.nanoTime)
-            check(total<=value.frames+(lag*MAX_RATE+999_999_999)/1_000_000_000){"native read exceeds timestamp position"}
+            check(total<=producedUpper(value,checkedAt)){"native read exceeds timestamp position"}
         }
         readSamples=total
     }
@@ -53,6 +55,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     }
     var readSamples=0L;private set
     val ready get()=observed!=null
+    fun clockModel()=MODEL
     init {require(capacity>reserve && startupMs>0)}
     private fun refresh():Pair<CaptureStamp?,Long> {
         val before=mono()
@@ -68,19 +71,13 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
             val old=observed
             if(old!=null) {
                 check(candidate.frames>=old.frames && candidate.nanoTime>=old.nanoTime){"capture timestamp regressed"}
-                if(old.frames>0 && candidate.frames>old.frames) {
-                    val frames=candidate.frames-old.frames
-                    val nanos=candidate.nanoTime-old.nanoTime
-                    check(nanos>0 && nanos<=Long.MAX_VALUE/MAX_RATE){"incoherent capture time"}
-                    check(frames*1_000_000_000>=nanos*MIN_RATE-2_000_000_000 &&
-                        frames*1_000_000_000<=nanos*MAX_RATE+2_000_000_000){"capture rate outside bound"}
-                }
                 // A stationary frame must not be made fresh by changing its timestamp.
                 check(candidate.frames!=old.frames || candidate.nanoTime==old.nanoTime){"capture timestamp relabeled"}
             }
+            clock.observe(candidate)
             if(starting) {
                 check(candidate.frames<=softwareUpper(time)){"capture startup counter outside bound"}
-                val origin=candidate.nanoTime-Math.floorDiv(candidate.frames*1_000_000_000,MIN_RATE)
+                val origin=clock.earliestNs-Math.floorDiv(candidate.frames*1_000_000_000+MIN_RATE-1,MIN_RATE)
                 check(origin>=monoOrigin*1_000_000-1_000_000){"capture startup origin unproven"}
                 if(candidate.frames>0) {
                     if(old==null || old.frames==0L)startupPairs=1
@@ -91,14 +88,24 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         }
         val value=observed
         if(value==null && !starting)check(time-monoOrigin<startupMs){"capture timestamp unavailable"}
-        else if(value!=null)check(time*1_000_000-value.nanoTime<=maxAgeNs){"capture timestamp stale"}
+        else if(value!=null){
+            check((time+1)*1_000_000-clock.earliestNs<=maxAgeNs){"capture timestamp stale"}
+            // A new estimate may shrink the frontier. Reject before prefix/KWS admission, not
+            // merely on the next read; max(0, upper-read) must never hide inconsistent history.
+            check(readSamples<=producedUpper(value,time)){"native read exceeds timestamp position"}
+        }
         return value to time
+    }
+    private fun producedUpper(value:CaptureStamp,time:Long):Long {
+        // mono() is floor milliseconds; account for its whole 1ms bin, plus the model's earliest
+        // possible capture time. Uncertainty always spends native room, never refreshes the budget.
+        val lag=maxOf(0,(time+1)*1_000_000-clock.earliestNs)
+        return value.frames+(lag*MAX_RATE+999_999_999)/1_000_000_000
     }
     fun remainingMs():Long {
         val (value,time)=refresh()
         if(value==null)return if(starting)softwareRoom(time) else startupMs-(time-monoOrigin)
-        val lag=maxOf(0,time*1_000_000-value.nanoTime)
-        val produced=value.frames+(lag*MAX_RATE+999_999_999)/1_000_000_000
+        val produced=producedUpper(value,time)
         val unread=maxOf(0,produced-readSamples)
         val left=capacity-reserve-unread
         check(left>0){"cumulative native continuity exhausted"}
@@ -110,8 +117,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     fun read(count:Int):Long {
         require(count>=0);check()
         val value=checkNotNull(observed)
-        val lag=maxOf(0,checkedAt*1_000_000-value.nanoTime)
-        val upper=value.frames+(lag*MAX_RATE+999_999_999)/1_000_000_000
+        val upper=producedUpper(value,checkedAt)
         val total=readSamples+count
         check(total<=upper){"native read exceeds timestamp position"}
         readSamples=total
@@ -122,8 +128,8 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         val value=checkNotNull(observed)
         val delta=position-value.frames
         val rate=if(delta<0)MIN_RATE else MAX_RATE
-        // Earliest estimate within the explicit short-window rate bound, and 1ms bridge rounding.
-        val nativeNs=value.nanoTime+Math.floorDiv(delta*1_000_000_000,rate)
+        // Earliest feasible model time (including phase uncertainty), and 1ms bridge rounding.
+        val nativeNs=clock.earliestNs+Math.floorDiv(delta*1_000_000_000,rate)
         return bootOrigin+Math.floorDiv(nativeNs-monoOrigin*1_000_000,1_000_000)-1
     }
 }
