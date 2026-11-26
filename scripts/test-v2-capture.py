@@ -12,6 +12,7 @@ if os.environ.get('CAPTURE_SOURCE_BASE'):sources=[s for s in sources if s.name n
 base=Path(os.environ.get('CAPTURE_SOURCE_BASE',str(root/'app/src/main/java/com/littlebuddy/v2')))
 sources += [base/(n+'.kt') for n in ['Capture','ManagementCapture','WakeSamples']]
 sources += [root/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['Playback','NativeEvidence']]
+sources += [root/'app/src/main/java/com/littlebuddy/v2/parent/PinDiagnostic.kt']
 for n in ['CaptureUploads','RecorderLease','EyeState','WakeOrigin','InputGate','CaptureClockFailure','CaptureClockEnvelope','NativeReadLedger','CaptureBootstrap']:
  if (base/(n+'.kt')).exists():sources.append(base/(n+'.kt'))
 with tempfile.TemporaryDirectory(dir=root,prefix='capture-tests-') as out:

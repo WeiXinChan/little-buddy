@@ -17,7 +17,7 @@ class PhasePairTest {
    assertEquals(CaptureClockReason.LONG_RAW_REJECT_PHASE_FEASIBLE,seen.single().reason)
    assertEquals(320L,w.fromFrame);assertEquals(8320L,w.toFrame)
    assertEquals(19_550_000L,w.fromNs);assertEquals(520_450_000L,w.toNs)
-   assertEquals(17_984_000_000L,w.lowerBudget);assertEquals(18_016_000_000L,w.upperBudget)
+   assertEquals(65_936_000_000L,w.lowerBudget);assertEquals(66_064_000_000L,w.upperBudget)
   } finally { CaptureClockDiagnostic.install(null) }
  }
  @Test fun endpointPhaseDoesNotRaiseTrueRateLimitsOrRenewHistoryBudget() {

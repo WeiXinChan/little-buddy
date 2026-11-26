@@ -10,7 +10,7 @@ internal data class CaptureStamp(val frames:Long,val nanoTime:Long)
 internal class NativeReadLedger(private val capacity:Int,private val mono:()->Long,
     private val boot:()->Long,private val stamp:()->CaptureStamp?) {
     companion object {
-        const val MODEL="phase500us-long500ms-phase2-v2"
+        const val MODEL="startup500us-runtime2ms-long500ms-v3"
         const val STARTUP_LIMIT_MS=500L
         const val STARTUP_SAMPLES=8000
         const val MIN_RATE=15984L
@@ -46,7 +46,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     private var starting=false
     private var startupPairs=0
     val startupAnchored get()=starting && startupPairs>=2
-    fun beginStartup() {check(!starting && observed==null && readSamples==0L);starting=true}
+    fun beginStartup() {check(!starting && observed==null && readSamples==0L);clock.beginStartup();starting=true}
     private fun softwareUpper(time:Long)=((time-monoOrigin+1)*MAX_RATE+999)/1000
     private fun softwareRoom(time:Long):Long {
         guard(time-monoOrigin<STARTUP_LIMIT_MS,CaptureClockReason.STARTUP_DEADLINE)
@@ -70,6 +70,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         remainingMs();guard(startupAnchored,CaptureClockReason.STARTUP_ANCHOR_UNCONFIRMED)
         guard(sampleTime(0)>=bootOrigin-2,CaptureClockReason.STARTUP_ORIGIN_UNPROVEN)
         starting=false
+        clock.finishStartup() // Retain established startup path and sample origin; spend larger phase reserve thereafter.
     }
     var readSamples=0L;private set
     val ready get()=observed!=null

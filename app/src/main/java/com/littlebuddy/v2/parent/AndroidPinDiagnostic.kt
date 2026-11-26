@@ -28,7 +28,7 @@ internal object AndroidPinDiagnostic {
             com.littlebuddy.v2.CaptureClockDiagnostic.install { error ->
                 val w=error.longWitness
                 if(w!=null && remaining.getAndDecrement()>0) {
-                    queue.offer("mono_ms=${System.nanoTime()/1_000_000} stage=CAPTURE_LONG_PAIR reason=${error.reason.name} from_frame=${w.fromFrame} from_ns=${w.fromNs} to_frame=${w.toFrame} to_ns=${w.toNs} df=${w.toFrame-w.fromFrame} dn_ns=${w.toNs-w.fromNs} lower_budget=${w.lowerBudget} upper_budget=${w.upperBudget} phase_ns=500000 min_rate=15984 max_rate=16016")
+                    queue.offer("mono_ms=${System.nanoTime()/1_000_000} stage=CAPTURE_LONG_PAIR reason=${error.reason.name} from_frame=${w.fromFrame} from_ns=${w.fromNs} to_frame=${w.toFrame} to_ns=${w.toNs} df=${w.toFrame-w.fromFrame} dn_ns=${w.toNs-w.fromNs} lower_budget=${w.lowerBudget} upper_budget=${w.upperBudget} phase_ns=2000000 min_rate=15984 max_rate=16016")
                 }
                 if(error.reason!=com.littlebuddy.v2.CaptureClockReason.LONG_RAW_REJECT_PHASE_FEASIBLE && remaining.getAndDecrement()>0) {
                     val e=error.evidence

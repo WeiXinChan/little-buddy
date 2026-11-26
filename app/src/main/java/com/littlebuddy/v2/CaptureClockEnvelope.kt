@@ -1,14 +1,15 @@
 package com.littlebuddy.v2
 
 /** Finite capture-time model, NOT an AudioTimestamp accuracy guarantee.
- * True time at each hardware frame must be within +/-0.5ms of its estimate, with a path whose
+ * True time at each hardware frame must be within +/-2ms of its estimate, with a path whose
  * rate stays 15984..16016Hz. Reachable intervals propagate; observations never reset that path.
  * Every pair >=500ms keeps the same rate interval and +/-2-frame allowance, with both
  * endpoint phase uncertainties propagated into the raw-pair time bound (not a new rate).
  */
 internal class CaptureClockEnvelope {
     companion object {
-        const val PHASE_NS=500_000L
+        const val PHASE_NS=2_000_000L
+        const val STARTUP_PHASE_NS=500_000L
         const val LONG_NS=500_000_000L
         private const val MIN=15984L
         private const val MAX=16016L
@@ -19,6 +20,9 @@ internal class CaptureClockEnvelope {
         // At most ~8025 distinct advancing frames in 0.5s under the model. No unbounded history.
         private const val MAX_PENDING=8192
     }
+    private var phaseNs=PHASE_NS
+    fun beginStartup() {check(last==null);phaseNs=STARTUP_PHASE_NS}
+    fun finishStartup() {phaseNs=PHASE_NS} // One bounded expansion, no path/history reset.
     private var last:CaptureStamp?=null
     private var first:CaptureStamp?=null
     private var low=0L
@@ -30,7 +34,7 @@ internal class CaptureClockEnvelope {
     private var reportedRawRejection=false
     // Admission may narrow lo, but resource/age accounting never refunds the phase reserve.
     // This outer bound is conservative even when several observations constrain a tighter path.
-    val earliestNs get()=checkNotNull(last).nanoTime-PHASE_NS
+    val earliestNs get()=checkNotNull(last).nanoTime-phaseNs
     fun observe(candidate:CaptureStamp) {
         if(last==candidate)return
         if(candidate.frames==0L){
@@ -39,8 +43,8 @@ internal class CaptureClockEnvelope {
             last=candidate;return
         }
         val old=last?.takeIf{it.frames>0}
-        var nextLow=candidate.nanoTime-PHASE_NS
-        var nextHigh=Math.addExact(candidate.nanoTime,PHASE_NS)
+        var nextLow=candidate.nanoTime-phaseNs
+        var nextHigh=Math.addExact(candidate.nanoTime,phaseNs)
         if(old!=null){
             val df=candidate.frames-old.frames
             clockCheck(df>0 && candidate.nanoTime>old.nanoTime,CaptureClockReason.TIMESTAMP_REGRESSED)
