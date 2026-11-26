@@ -353,7 +353,16 @@ def validate_samples(report):
     for attempt,window in zip(attempts,windows):
         phases={row['phase'] for row in window}
         require({'attempt_started','initial','before_network_fault','after_network_fault','before_transport_cleanup','after_transport_cleanup','attempt_finished'}<=phases)
-        require(window[0]['elapsed']>=attempt['started_seconds']-.02 and window[-1]['elapsed']>=attempt['completed_seconds']-.02)
+        # Anchors are emitted once by attempt(), except after_transport_cleanup:
+        # ObservedPeer.run finally emits that label too. Activity/periodic/retired
+        # samples may interleave arbitrarily; they are not singleton milestones.
+        anchors=('attempt_started','initial','before_network_fault','after_network_fault',
+                 'before_transport_cleanup','after_transport_cleanup','attempt_finished')
+        ordered=[row['phase'] for row in window if row['phase'] in anchors]
+        expected=list(anchors)
+        require(ordered==expected or ordered==expected[:-1]+['after_transport_cleanup','attempt_finished'])
+        require(abs(window[0]['elapsed']-attempt['started_seconds'])<=.02 and
+                abs(window[-1]['elapsed']-attempt['completed_seconds'])<=.02)
         if attempt['fault']=='asr_rst':require(any(row['asr_active']>0 and row['recognition_operations']>0 for row in window))
         else:require('operation_started' in phases and any(row['active_operations']>0 for row in window))
         cleanup=[row for row in window if row['phase']=='after_transport_cleanup'][-1]

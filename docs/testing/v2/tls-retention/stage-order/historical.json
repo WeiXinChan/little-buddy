@@ -1,0 +1,11 @@
+{
+  "report_sha256": "c2715a2608791d48ece4f8b579dfabfc69c8e656b5d0d88fb4ff9b98bf27648c",
+  "connections": 117,
+  "samples": 2119,
+  "unchanged": true,
+  "connections_validation": "pass",
+  "sample_validation": "pass",
+  "historical_asr_reversed_labels": "rejected",
+  "legacy_plus_two_rows": 117,
+  "execution": "read_only_no_tls14"
+}

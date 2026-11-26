@@ -1,0 +1,16 @@
+test_diagnostic_arbitrary_values_never_survive_allowlist (__main__.Boundaries.test_diagnostic_arbitrary_values_never_survive_allowlist) ... ok
+test_reversed_fault_stage_sequence_must_reject (__main__.Boundaries.test_reversed_fault_stage_sequence_must_reject) ... FAIL
+test_single_required_field_missing_rejects (__main__.Boundaries.test_single_required_field_missing_rejects) ... ok
+
+======================================================================
+FAIL: test_reversed_fault_stage_sequence_must_reject (__main__.Boundaries.test_reversed_fault_stage_sequence_must_reject)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/tls-retention/stage-order/independent-original.py", line 18, in test_reversed_fault_stage_sequence_must_reject
+    with self.assertRaises(m.Rejected):self.validate(reverse)
+AssertionError: Rejected not raised
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.036s
+
+FAILED (failures=1)
