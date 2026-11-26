@@ -1,0 +1,35 @@
+{
+  "source_sha256": "5b2ef58efa76e6e4e4af672e2b98f42a53dfd49259c186bdc01d3223555be291",
+  "samples": [
+    {
+      "label": "guess-animal-1",
+      "plan_ms": 3892.59,
+      "facts_ms": 1865.69,
+      "whole_safe_ms": 1035.05,
+      "first_safe_ms": 1675.84,
+      "serial_model_ms": 8469.17,
+      "unattributed_pre_audio_ms": 594.58,
+      "observed_first_transmitted_audio_ms": 9063.75,
+      "counterfactual_plan_facts_only_ms": 7198.06,
+      "counterfactual_dual_review_only_ms": 8028.7,
+      "counterfactual_both_ms": 6163.01,
+      "complete_ms": 16392.31
+    },
+    {
+      "label": "guess-animal-2",
+      "plan_ms": 2871.68,
+      "facts_ms": 1368.14,
+      "whole_safe_ms": 1721.23,
+      "first_safe_ms": 1963.17,
+      "serial_model_ms": 7924.22,
+      "unattributed_pre_audio_ms": 775.27,
+      "observed_first_transmitted_audio_ms": 8699.49,
+      "counterfactual_plan_facts_only_ms": 7331.35,
+      "counterfactual_dual_review_only_ms": 6978.26,
+      "counterfactual_both_ms": 5610.12,
+      "complete_ms": 16037.48
+    }
+  ],
+  "real_cloud_calls": 0,
+  "p12_verified": false
+}

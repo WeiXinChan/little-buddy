@@ -1,0 +1,20 @@
+{
+  "base": "4f991de1e2f18eb3f79db03ee1b217a6d4daa0db",
+  "new_methods": 14,
+  "affected_executed": 103,
+  "qa_metadata": 3,
+  "qa_cleanup": 2,
+  "unique_passed": 108,
+  "failed": 0,
+  "skipped": 0,
+  "prior_changed_inflight_assumption_failure_preserved": true,
+  "synthetic_first_audio_ms": {
+    "serial_dependency": 147.44,
+    "parallel": 84.15
+  },
+  "source_sha256": "5b2ef58efa76e6e4e4af672e2b98f42a53dfd49259c186bdc01d3223555be291",
+  "cloud_calls": 0,
+  "model_changed": false,
+  "p12_verified": false,
+  "p15_verified": false
+}

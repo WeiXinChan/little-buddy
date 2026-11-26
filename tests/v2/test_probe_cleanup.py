@@ -81,7 +81,12 @@ class Cleanup(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(p.probe_cleanup_handle.open)
                 self.assertIsNot(p.model,model)
         finally:await self.release_all(p,release,task)
-        self.assertEqual(len(model.requests),1) # in-flight fixture result only; no retry/new stage
+        # PLAN and input-only FACTS were independently in flight before revoke.
+        # Both may finish their fixture, but no retry/safety/TTS may start later.
+        self.assertEqual(len(model.requests),2)
+        self.assertEqual(sum('严格字段' in instruction for instruction,_ in model.requests),1)
+        self.assertEqual(sum('提取孩子' in instruction for instruction,_ in model.requests),1)
+        self.assertFalse(any('审核下一个' in instruction for instruction,_ in model.requests))
 
     async def test_repeated_caller_cancellation_preserves_unconfirmed_handle(self):
         p=fixtures.Probe().providers();entered=asyncio.Event();release=asyncio.Event()

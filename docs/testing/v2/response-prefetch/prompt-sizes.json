@@ -1,0 +1,21 @@
+{
+  "system_utf8_bytes": 1606,
+  "requests": [
+    {
+      "kind": "plan",
+      "instruction_utf8_bytes": 4667,
+      "data_utf8_bytes": 312
+    },
+    {
+      "kind": "facts",
+      "instruction_utf8_bytes": 2388,
+      "data_utf8_bytes": 24
+    },
+    {
+      "kind": "safe",
+      "instruction_utf8_bytes": 2004,
+      "data_utf8_bytes": 291
+    }
+  ],
+  "scope": "empty real Session / synthetic input; no live prompt transcript"
+}

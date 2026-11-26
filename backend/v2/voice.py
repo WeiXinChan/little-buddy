@@ -848,6 +848,24 @@ class VoicePeer:
         self.generation_scopes[owner] = operation
         stage = 'bind'
         response_revision = self.revision
+        fact_prefetch = None
+        prefetch_retired = False
+        async def prefetch_facts():
+            operation.ensure()
+            if response_revision != self.revision:raise StaleOperation()
+            return await self.read_request(operation, 'facts', text)
+        async def retire_prefetch():
+            nonlocal prefetch_retired
+            if fact_prefetch is None or prefetch_retired or fact_prefetch.done():return True
+            prefetch_retired = True
+            fact_prefetch.cancel()
+            try:
+                done, _ = await asyncio.wait({fact_prefetch}, timeout=.3)
+            except asyncio.CancelledError:
+                self.quarantined = True
+                raise
+            if not done:self.quarantined = True
+            return bool(done)
         try:
             operation.ensure()
             while self.session.player is None:
@@ -872,6 +890,12 @@ class VoicePeer:
                     context['image_catalog']=self.providers.image_catalogue()
                     context['image_controls']=self.dynamic_enabled and self.cache_live(self.visual_cache)
                 stage = 'plan'
+                # FACTS consumes only this immutable input text, never context.
+                # Existing private sessions (including shared re-planning) keep
+                # serial extraction; publication remains at the original gate.
+                if not self.session.private_mode:
+                    fact_prefetch = asyncio.create_task(prefetch_facts())
+                    self.track_retired(fact_prefetch)
                 plan = await self.read_request(operation, 'plan', text, context)
                 if epoch != self.epoch or not self.session._output_live():
                     return
@@ -880,6 +904,7 @@ class VoicePeer:
                 if action == 'handoff' and any((self.session.recent, self.session.facts,
                                                          self.session.public, self.session.private,
                                                          self.session.game, self.session.secrets)):
+                    if not await retire_prefetch():raise WireError('fact prefetch close timeout')
                     old = self.session
                     deadline = old.deadline
                     transition_revision = self.revision
@@ -913,7 +938,15 @@ class VoicePeer:
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 stage = 'facts'
-                facts = [] if ending else await self.read_request(operation, 'facts', text)
+                if ending:
+                    if not await retire_prefetch():raise WireError('fact prefetch close timeout')
+                    facts = []
+                elif fact_prefetch is not None:
+                    facts = await asyncio.shield(fact_prefetch)
+                else:
+                    facts = await self.read_request(operation, 'facts', text)
+                operation.ensure()
+                if response_revision != self.revision:raise StaleOperation()
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 stage = 'fact_commit'
@@ -1056,13 +1089,15 @@ class VoicePeer:
             if self.quarantined:
                 await self.close_quarantined()
         finally:
-            visual=self.prepared_visual
-            if (visual is not None and visual['session']==operation.session_id and
-                visual['turn']==operation.turn and visual['output']==operation.output and
-                (owner.cancelling() or not operation.valid())):
-                self.invalidate_visual()
-            self.generation_scopes.pop(owner, None)
-            text = ''
+            try:await retire_prefetch()
+            finally:
+                visual=self.prepared_visual
+                if (visual is not None and visual['session']==operation.session_id and
+                    visual['turn']==operation.turn and visual['output']==operation.output and
+                    (owner.cancelling() or not operation.valid())):
+                    self.invalidate_visual()
+                self.generation_scopes.pop(owner, None)
+                text = ''
 
     async def audio(self, pcm, public, epoch, state=None, anchors=(), operation=None, effect=None):
         operation = operation or Operation(self, epoch)
