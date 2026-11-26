@@ -1,0 +1,55 @@
+{
+  "head": "446ed91fb4a04c32f5a075f0c39574f34c4af1fa",
+  "tree": "7d907be8e81f85a9d068ba324929e3e29f77daaa",
+  "verdict": "HOLD",
+  "tests": {
+    "unique": 21,
+    "passed": 18,
+    "failed": 3,
+    "skipped": 0,
+    "author_and_original_affected": 17,
+    "independent": 4
+  },
+  "source_sha256": "e98147ce116cf5a1c436d256086e47a0fef2362cb2674fb352b0be19d50277d0",
+  "original_live_failure_sha256": "6cb512f4a4b503e0a5718e39bd0df1424c4177bd58c996c389bb1dda5d918dad",
+  "findings": [
+    {
+      "id": "STORY97-01",
+      "location": "backend/v2/companion.py:223-227",
+      "input": "不要再一人一句了，改成每人两句。",
+      "model_action": "change",
+      "model_rules": "每人两句，轮流编故事",
+      "model_sentences": [
+        "小猫启动飞船。",
+        "飞船慢慢升空。"
+      ],
+      "actual": "0TTS/delivery false",
+      "expected": "valid new rule, delivery true; no inherited negated old limit",
+      "suggestion": "derive operative positive/new rule before matching one-sentence cues; do not treat explicitly negated/quoted old rule in raw input as active constraint"
+    },
+    {
+      "id": "STORY97-02",
+      "location": "backend/v2/companion.py:222-225",
+      "input": "我们轮流编故事，每人说一句。",
+      "model_rules": "轮流编故事，每人说一句",
+      "actual": "6TTS/3turn, first state committed true despite two sentences",
+      "expected": "reject complete proposal before any TTS/ACK",
+      "suggestion": "bounded normalization of explicit count forms (每人/每次+说/讲/只说+一/1+句) with negative/new-rule precedence; keep unknown semantic coverage explicit"
+    },
+    {
+      "id": "STORY97-03",
+      "location": "backend/v2/companion.py:227-230",
+      "input": "我们一人一句编故事。",
+      "model_sentences": [
+        "小猫启动飞船. 飞船慢慢升空."
+      ],
+      "actual": "3TTS/3turn, first state committed true",
+      "expected": "reject multiple complete sentences even if one array item",
+      "suggestion": "include ASCII period as sentence terminator while preserving decimal numbers and clearly specifying ellipsis/quotation handling; do not truncate"
+    }
+  ],
+  "scope": "offline actual VoicePeer/Session ACK with fake model/TTS; no cloud/device/config/production changes",
+  "original_falsifier": "author original actualVoicePeer method input/assertions replayed in 17, PASS; old failure log preserved",
+  "positive_controls": "unrestricted two-sentence story and private transition accepted; explicit one-sentence3turn accepted by existing test; lawful change without negated cue accepted",
+  "semantic_limits": "Prompt improvements do not prove narrative advancement/role ownership/one-turn semantics. No full model quality pass."
+}

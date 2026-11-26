@@ -1,0 +1,72 @@
+test_ascii_sentence_periods_cannot_hide_multiple_sentences (__main__.Independent.test_ascii_sentence_periods_cannot_hide_multiple_sentences) ... FAIL
+test_explicit_negation_and_new_two_sentence_rule_must_be_accepted (__main__.Independent.test_explicit_negation_and_new_two_sentence_rule_must_be_accepted) ... FAIL
+test_natural_explicit_one_sentence_rule_must_block_multiple_sentences (__main__.Independent.test_natural_explicit_one_sentence_rule_must_block_multiple_sentences) ... FAIL
+test_unrestricted_story_and_private_transition_remain_accepted (__main__.Independent.test_unrestricted_story_and_private_transition_remain_accepted) ... ok
+
+======================================================================
+FAIL: test_ascii_sentence_periods_cannot_hide_multiple_sentences (__main__.Independent.test_ascii_sentence_periods_cannot_hide_multiple_sentences)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/story-turn-rule/qa97/independent.py", line 23, in test_ascii_sentence_periods_cannot_hide_multiple_sentences
+    self.assertEqual(report['tts_requests'],0,'one array entry can still contain multiple complete sentences')
+AssertionError: 3 != 0 : one array entry can still contain multiple complete sentences
+
+======================================================================
+FAIL: test_explicit_negation_and_new_two_sentence_rule_must_be_accepted (__main__.Independent.test_explicit_negation_and_new_two_sentence_rule_must_be_accepted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/story-turn-rule/qa97/independent.py", line 15, in test_explicit_negation_and_new_two_sentence_rule_must_be_accepted
+    self.assertTrue(report['turns'][0]['checks']['delivery'],'valid new rule must not inherit negated old limit')
+AssertionError: False is not true : valid new rule must not inherit negated old limit
+
+======================================================================
+FAIL: test_natural_explicit_one_sentence_rule_must_block_multiple_sentences (__main__.Independent.test_natural_explicit_one_sentence_rule_must_block_multiple_sentences)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/story-turn-rule/qa97/independent.py", line 19, in test_natural_explicit_one_sentence_rule_must_block_multiple_sentences
+    self.assertEqual(report['tts_requests'],0,'explicit one-sentence rule must gate complete proposal')
+AssertionError: 6 != 0 : explicit one-sentence rule must gate complete proposal
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.109s
+
+FAILED (failures=3)
+ASCII_PERIODS 3 True
+NEGATED_OLD_RULE 0 False
+EXPLICIT_VARIANT 6 True

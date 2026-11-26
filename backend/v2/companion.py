@@ -5,7 +5,6 @@ state; memory compaction can select existing heard facts, never invent new ones.
 """
 import asyncio
 import json
-import re
 import httpx
 import time
 from backend.v2.voice import VoiceFault
@@ -15,6 +14,7 @@ from backend.v2.images import DefaultImages
 from backend.v2.dynamic_images import ImageFailure
 from backend.v2.image_descriptions import MinimalDescription, compile_description, ImageAllowance, ExplicitImageRequest, explicit_request, VOCAB
 from backend.v2.models import TEXT_MODELS, SCHEMA_MODELS, UnsupportedTextModel
+from backend.v2.story_rules import obeys_turn_limit
 from contextlib import asynccontextmanager
 
 SYSTEM = """你是瓦力，面向5–8岁儿童的AI语音玩伴。自然、简短、不过度夸奖或连续追问。
@@ -219,16 +219,8 @@ description只用于generate_image，缺字段兼容目录名称生成；缺服�
             raise ModelError('anchors')
         # Reject the whole proposal before review/TTS/state publication. Never
         # truncate: anchors and final-segment state must describe the same output.
-        if plan['mode']=='story' and plan['action'] in {'continue','change'}:
-            cues=('一人一句','你一句我一句','每人一句','每次只讲一句','每次只说一句','一次一句')
-            rules=plan['rules']
-            if plan['action']=='continue':rules+=' '+context.get('game',{}).get('rules','')
-            explicit=any(cue in (text or '') or cue in rules for cue in cues)
-            if explicit:
-                count=sum(len([part for part in re.split(r'[。！？!?]+[”’」』]*', sentence) if part.strip()])
-                          for sentence in plan['sentences'])
-                if len(plan['sentences'])!=1 or count!=1:
-                    raise ModelError('story turn sentence limit')
+        if not obeys_turn_limit(text,context,plan):
+            raise ModelError('story turn sentence limit')
         tools=plan['tools']
         if (not isinstance(tools,list) or len(tools)>1 or any(
             not isinstance(t,dict) or set(t)-{'kind','asset_id','description'} or
