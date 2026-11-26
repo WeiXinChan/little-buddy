@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "mode": "existing_report_read_only",
+  "report_sha256": "00fd5e03b97726825aee7c713b62e8868b11545f2298a3a04a9aebc330f8d03e",
+  "frozen_source": "3aa8902f93db2e2a83577a50f32edccf8d42cd50",
+  "attempts": 120,
+  "sample_rows": 1325,
+  "sample_observations": 1325,
+  "failures": 0,
+  "rss_first": 37289984,
+  "rss_last": 38424576,
+  "rss_delta": 1134592,
+  "bands": [
+    {
+      "band": 0,
+      "samples": 221,
+      "rss_first": 37289984,
+      "rss_last": 37490688
+    },
+    {
+      "band": 1,
+      "samples": 220,
+      "rss_first": 37490688,
+      "rss_last": 37683200
+    },
+    {
+      "band": 2,
+      "samples": 220,
+      "rss_first": 37683200,
+      "rss_last": 37875712
+    },
+    {
+      "band": 3,
+      "samples": 220,
+      "rss_first": 37875712,
+      "rss_last": 38055936
+    },
+    {
+      "band": 4,
+      "samples": 220,
+      "rss_first": 38055936,
+      "rss_last": 38240256
+    },
+    {
+      "band": 5,
+      "samples": 224,
+      "rss_first": 38240256,
+      "rss_last": 38424576
+    }
+  ],
+  "decoded_report_reachable_bytes": 881563,
+  "size_scope": "this_process_JSON_decode_not_original_heap",
+  "source_expected_owner_task_handles": 241,
+  "task_handle_count_kind": "source_derived_not_measured",
+  "production_leak_confirmed": false,
+  "attribution": "unknown",
+  "profile_executed": false,
+  "original_report_modified": false,
+  "cloud_calls": 0,
+  "device_executed": false
+}
