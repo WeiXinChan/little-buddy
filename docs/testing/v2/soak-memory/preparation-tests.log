@@ -1,5 +1,6 @@
 test_allocation_groups_are_allocation_sites_never_local_values_or_paths (tests.v2.test_soak_memory_diagnostic.Diagnostic.test_allocation_groups_are_allocation_sites_never_local_values_or_paths) ... ok
 test_default_profile_and_hidden_worker_cannot_execute_or_take_lock (tests.v2.test_soak_memory_diagnostic.Diagnostic.test_default_profile_and_hidden_worker_cannot_execute_or_take_lock) ... ok
+test_failed_worker_metadata_is_final_and_no_second_arm_runs (tests.v2.test_soak_memory_diagnostic.Diagnostic.test_failed_worker_metadata_is_final_and_no_second_arm_runs) ... ok
 test_no_body_paths_or_traceback_source_are_in_analyzer_output (tests.v2.test_soak_memory_diagnostic.Diagnostic.test_no_body_paths_or_traceback_source_are_in_analyzer_output) ... ok
 test_profile_invalid_bounds_fail_before_lock_and_worker_needs_real_fd (tests.v2.test_soak_memory_diagnostic.Diagnostic.test_profile_invalid_bounds_fail_before_lock_and_worker_needs_real_fd) ... ok
 test_read_only_analyzer_preserves_all_rows_and_is_not_heap_attribution (tests.v2.test_soak_memory_diagnostic.Diagnostic.test_read_only_analyzer_preserves_all_rows_and_is_not_heap_attribution) ... ok
@@ -8,6 +9,6 @@ test_unknown_cloud_or_device_report_is_rejected (tests.v2.test_soak_memory_diagn
 test_weak_observer_cannot_keep_cycle_alive (tests.v2.test_soak_memory_diagnostic.Diagnostic.test_weak_observer_cannot_keep_cycle_alive) ... ok
 
 ----------------------------------------------------------------------
-Ran 8 tests in 0.016s
+Ran 9 tests in 0.018s
 
 OK

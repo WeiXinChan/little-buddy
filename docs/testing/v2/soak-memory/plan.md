@@ -19,7 +19,7 @@
 4. 每臂四点：导入/GC基线；原run_soak返回时报告仍持有；完整报告落盘且GC后继续持有；诊断子进程内删除本地报告引用再GC。后两点均先让出一个事件循环轮次供done回调收尾，避免把尚未执行的回调直接判为保活泄漏。释放只是归因操作，完整report/attempt/sample先原样写入`<arm>-full-soak.json`并hash，永不删样本、清任务集合或重置分母。每attempt另记真实Session字段长度、owner done/pending句柄、样本数及weak生产对象/Task/Operation存活计数，不读字段值。后两点RSS不回落可能只是Python arena，不能据此判泄漏；weakref清零也不证明所有未观察native对象无残留。
 5. profile默认禁用；必须显式--execute-profile，父进程非阻塞取得同一个现有root:root644 heavy.lock，忙则拒绝不等待/偷换。子进程必须-I隔离、显式执行标志及继承的同inode锁FD，不能直接走隐藏_worker绕过。仅默认合成provider，没有云/设备/未知数据入口。四臂串行、每臂默认30秒/上限120秒父监督，失败/未确认清理/超时立即停止，不自动重试，保留已产生报告。原产品lease/.5资源释放/调用预算不改。观察器最多8192弱槽、报告仍原4096采样上限。
 
-本轮已执行且仅有：源码/QA/原报告读取、analyze、8个准备单测（0.014s，8PASS/0FAIL/0SKIP），测试使用小型合成图/假snapshot和门禁mock，未调用tracemalloc.start、run_soak、外部子进程或heavy_lock。覆盖只读不改报告、未知层拒绝、无正文/路径输出、weakref不保活、共享对象估算、分配分组、profile默认拒绝、子worker门禁/边界。它们不是未执行profile路径的运行证明；该路径仍须QA与root短对照验证。
+本轮已执行且仅有：源码/QA/原报告读取、analyze、9个准备单测（约0.02s，9PASS/0FAIL/0SKIP），测试使用小型合成图/假snapshot和门禁mock，未调用tracemalloc.start、run_soak、实际外部子进程或实际heavy_lock；父监督失败分支仅用假archive/进程/锁验证第一臂失败即写终态并不续跑。覆盖只读不改报告、未知层拒绝、无正文/路径输出、weakref不保活、共享对象估算、分配分组、profile默认拒绝、子worker门禁/边界。它们不是未执行profile路径的运行证明；该路径仍须QA与root短对照验证。
 
 root协调锁释放后才可考虑的最小一组（本轮不执行、不要求用户另授权）：
 

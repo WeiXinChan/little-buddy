@@ -62,3 +62,19 @@ class Diagnostic(unittest.TestCase):
             for n,t in ((120,30),(6,1000)):
                 with self.assertRaises(m.Invalid):m.profile(self.root/'out',n,t)
         with self.assertRaises(m.Invalid):m.check_worker_lock(-1)
+
+    def test_failed_worker_metadata_is_final_and_no_second_arm_runs(self):
+        # Only parent bookkeeping with fake archive/process/lock; no worker,
+        # tracer, frozen production import, or actual lock is executed.
+        import tarfile
+        from contextlib import contextmanager
+        @contextmanager
+        def lock():yield 42
+        buffer=io.BytesIO()
+        with tarfile.open(fileobj=buffer,mode='w'):pass
+        failed=dict(cleanup=dict(confirmed=False,pending_tasks=1),failures=0,attempted=6)
+        out=self.root/'out'
+        with patch.object(m,'heavy_lock',lock),patch.object(m.subprocess,'check_output',return_value=buffer.getvalue()),patch.object(m.subprocess,'run',return_value=type('Fake',(),{'stdout':json.dumps(failed).encode()})()) as command:
+            with self.assertRaises(m.Invalid):m.profile(out,6,30)
+        self.assertEqual(command.call_count,1)
+        self.assertEqual(json.loads((out/'result.json').read_text())['status'],'workload_or_cleanup_failed_stopped')

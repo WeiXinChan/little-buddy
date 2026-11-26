@@ -236,7 +236,9 @@ def profile(output,attempts,timeout):
                     raise Invalid('worker_failed') from None
                 results.append(result)
                 (output/'result.json').write_text(json.dumps(dict(status='in_progress',completed=results,attribution='unknown'),indent=2))
-                if not result['cleanup']['confirmed'] or result['cleanup']['pending_tasks'] or result['failures'] or (arm!='idle' and result['attempted']!=attempts):raise Invalid('workload_or_cleanup_failed')
+                if not result['cleanup']['confirmed'] or result['cleanup']['pending_tasks'] or result['failures'] or (arm!='idle' and result['attempted']!=attempts):
+                    (output/'result.json').write_text(json.dumps(dict(status='workload_or_cleanup_failed_stopped',completed=results,attribution='unknown')))
+                    raise Invalid('workload_or_cleanup_failed')
             actual=results[:3]
             comparable=(len({r['input_schedule_sha256'] for r in actual})==1 and len({r['attempted'] for r in actual})==1 and
                         len({r['output_schedule_sha256'] for r in actual})==1 and len({json.dumps(r['model_stage_calls'],sort_keys=True) for r in actual})==1)
