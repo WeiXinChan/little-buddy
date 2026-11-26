@@ -1,0 +1,15 @@
+# FACTS单一枚举与模型可见契约
+
+显式依赖PR103固定head5a56e4e9e8138c64a34b103794095e27d25a98d8；保留97结构约束、98人格、99/100诊断及103共享预算纠正，不混104或PR102未审变更。
+
+root该head一次真实story-moon原报告逐字保留：第一轮facts/ModelError/fact_key，模型2/TTS0、cleanup确认。不是plan_sentence_limit，因此本次没有实际验证PLAN纠正；也不能反推更早未知FACTS失败根因。fact_key意味着key不属于本地允许集合，可能为未知字符串或可hash错误类型；原始返回值未保存，不能声称返回的是管道整串/某具体别名。
+
+已证的契约呈现缺口：UnifiedProviders.request将schemas.FACTS作为model.complete参数传入；当前Flash在DashScopeModel只发送response_format=json_object、不发送供应商json_schema，schema参数并没有单独进入messages。旧系统提示合法对象示例却把全部候选拼在一个key字符串里，dimension也类似，存在可验证的模型可见契约歧义。
+
+最小修复仅companion.facts系统指令：一个真正单一合法rule/unspecified示例，明确只在对应合成text存在时适用、不能把示例当本轮事实；类别中文说明、不得拼管道/列表/造别名。紧随同一schemas.FACTS序列化JSON Schema，key/dimension是真正enum数组，与适配器参数/本地契约同源；Flash仍JSON Object+nonthinking，不假称受供应商schema约束。qwen4显式候选仍原json_schema，并看到相同指令契约。数据payload仍严格仅本轮text，不附上下文、聊天、身份或音频。
+
+本地所有根结构/数量/字段/key/value类型长度/逐字来源/dimension检查原样不动；非法事实仍原子失败，不静默丢弃、不规范化错误key为合法值。没有新增独立retry/无限纠正/模型切换/费用路径。FACTS错误不能借PLAN句数纠正；真实VoicePeer仍0TTS/无提交。
+
+4新增＋52受影响共56唯一PASS/0FAIL/0SKIP，编译/diff通过。实际Flash HTTP payload证明模型可见schema与schemas.FACTS精确相同、response_format仍json_object、原输入仅text、参数不变；正向rule/精确span/defaultdimension及qwen4模式对照。错误key/整串管道/整数/不可hash类型/来源篡改/维度错误，在实际VoicePeer合成HTTP路径均按固定枚举失败：有效+非法混合也不部分写入，模型2/TTS0、FACTS只一次、无原文/canary入metadata。旧提示契约检测FAIL保留，仅证明提示可见性缺口，不冒充原云失败的逐字复现。
+
+PR103的PLAN纠正离线46PASS不代表真实故事已交付；原live FACTS FAIL继续保留，独立QA后由root选择有界真实合成样例验证。作者0云/设备/secret配置/部署/子agent，未重复旧全集。

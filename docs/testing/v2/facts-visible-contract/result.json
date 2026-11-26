@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "base_pr103": "5a56e4e9e8138c64a34b103794095e27d25a98d8",
+  "new_methods": 4,
+  "normal_methods": 56,
+  "passed": 56,
+  "failed": 0,
+  "skipped": 0,
+  "cloud_calls": 0,
+  "root_actual_bad_key_value_known": false,
+  "real_story_revalidated": false,
+  "local_source_validation_relaxed": false,
+  "facts_retry_added": false,
+  "files": {
+    "live-original-fact-key-failure.json": "61632e31dc45af350c1f85410ebc205c1aedcb918b59dd4bb17e2c4cc3d2a031",
+    "old-prompt-failure.log": "d7cd4ae16042448743733b49ecb98e161c77d9ff26a817b3409e26aee9770fec",
+    "report.md": "ea2024b7ede7b07b7e82106b6983c9478b2ee6aa67768e4c16370c2a21354a21",
+    "targeted.log": "509202c4bf6959f31a8435c207b3c90b327e93db554c9ad5528d6b45fb1d546a"
+  }
+}
