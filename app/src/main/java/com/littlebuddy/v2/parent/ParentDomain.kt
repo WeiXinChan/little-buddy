@@ -75,6 +75,8 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     private var deadline = 0L
     private var cooldownUntil = 0L
     private var challenge: OwnerChallenge? = null
+    // Lifecycle witness only; never accepted as a fresh receipt or commit authorization.
+    private var savingChallenge: OwnerChallenge? = null
 
     init {
         requireWorker()
@@ -176,7 +178,7 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
                     if (quarantined || page != epoch.current() || challenge !== proof ||
                         now() >= proof.expiresAt || proof.deviceBinding != binding ||
                         proof.operation != (if (record == null) OwnerOperation.INITIALIZE_PIN else OwnerOperation.RESET_PIN)) return false
-                    challenge = null; generation
+                    challenge = null; savingChallenge = proof; generation
                 }
                 if (!owner.consume(proof)) return false
                 val salt = ByteArray(16).also(SecureRandom()::nextBytes)
@@ -188,7 +190,10 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
                     epoch.revokeIf(page)
                 }
                 return committed
-            } finally { worker.unlock() }
+            } finally {
+                synchronized(lock) { if (savingChallenge === proof) savingChallenge = null }
+                worker.unlock()
+            }
         } finally { pin.fill('\u0000') }
     }
 
@@ -286,6 +291,12 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
         if (worker.isLocked || !valid(candidate)) null else record?.let {
             ParentPlaybackSettings(it.volumeLimit, it.speechRate, it.durationSeconds)
         }
+    }
+    /** A consumed receipt is no longer reusable, but its in-flight save still has a page/deadline.
+     * This predicate controls UI invalidation only. The original transaction checks final authority. */
+    fun ownerSaveCurrent(proof: OwnerChallenge, page: Long): Boolean = synchronized(lock) {
+        !quarantined && page == epoch.current() && now() < proof.expiresAt &&
+            (challenge === proof || savingChallenge === proof)
     }
     fun ownerChallengeCurrent(proof: OwnerChallenge, page: Long): Boolean = synchronized(lock) {
         !quarantined && page == epoch.current() && challenge === proof && now() < proof.expiresAt

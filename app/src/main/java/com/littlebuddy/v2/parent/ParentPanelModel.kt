@@ -117,7 +117,10 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         if (!active) return
         val d = domain.get() ?: return
         val proof = ownerChallenge
-        if (proof != null && !d.ownerChallengeCurrent(proof, page)) { ownerChallenge = null; lock(d); return }
+        val ownerCurrent = proof == null ||
+            (if (state.busy && state.mode == PanelMode.OWNER_PIN) d.ownerSaveCurrent(proof, page)
+             else d.ownerChallengeCurrent(proof, page))
+        if (!ownerCurrent) { ownerChallenge = null; lock(d); return }
         val current = grant
         if (current != null && !d.isAuthorized(current)) lock(d)
         else if (current == null && !state.busy && state.notice == PanelNotice.COOLDOWN &&
