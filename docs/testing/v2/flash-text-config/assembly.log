@@ -1,0 +1,24 @@
+test_allowlist_model_schema_and_probe_admission_are_exact (tests.v2.test_flash_text_config.Flash.test_allowlist_model_schema_and_probe_admission_are_exact) ... ok
+test_formal_live_entry_uses_selected_model_and_v2_release_adapter (tests.v2.test_flash_text_config.Flash.test_formal_live_entry_uses_selected_model_and_v2_release_adapter) ... {"service": "little-buddy-v2", "event": "ready_loopback"}
+{"service": "little-buddy-v2", "event": "stopped"}
+ok
+test_free_only_error_does_not_try_another_or_paid_model (tests.v2.test_flash_text_config.Flash.test_free_only_error_does_not_try_another_or_paid_model) ... ok
+test_invalid_plan_fact_safety_or_duplicate_json_never_passes_delivery (tests.v2.test_flash_text_config.Flash.test_invalid_plan_fact_safety_or_duplicate_json_never_passes_delivery) ... ok
+test_package_cannot_label_old_model_source_as_new_default (tests.v2.test_flash_text_config.Flash.test_package_cannot_label_old_model_source_as_new_default) ... Executing <Task finished name='Task-38' coro=<Flash.test_package_cannot_label_old_model_source_as_new_default() done, defined at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_flash_text_config.py:131> result=None created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.381 seconds
+ok
+test_preflight_accepts_explicit_candidates_rejects_omni_and_identity_is_honest (tests.v2.test_flash_text_config.Flash.test_preflight_accepts_explicit_candidates_rejects_omni_and_identity_is_honest) ... ok
+test_release_identity_binds_default_text_and_independent_review (tests.v2.test_flash_text_config.Flash.test_release_identity_binds_default_text_and_independent_review) ... Executing <Task finished name='Task-48' coro=<Flash.test_release_identity_binds_default_text_and_independent_review() done, defined at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_flash_text_config.py:115> result=None created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.525 seconds
+ok
+test_selected_default_flash_real_voicepeer_json_object_and_usage (tests.v2.test_flash_text_config.Flash.test_selected_default_flash_real_voicepeer_json_object_and_usage) ... ok
+test_visual_review_remains_qwen4_regardless_text_choice (tests.v2.test_flash_text_config.Flash.test_visual_review_remains_qwen4_regardless_text_choice) ... ok
+test_actual_live_assembly_injects_reviewed_adapter_and_closes_it (tests.v2.test_image_runtime.Runtime.test_actual_live_assembly_injects_reviewed_adapter_and_closes_it) ... {"service": "little-buddy-v2", "event": "ready_loopback"}
+{"service": "little-buddy-v2", "event": "stopped"}
+ok
+test_context_teardown_closes_concrete_adapter_on_failure (tests.v2.test_image_runtime.Runtime.test_context_teardown_closes_concrete_adapter_on_failure) ... ok
+test_disabled_does_not_read_credentials_or_require_a_file (tests.v2.test_image_runtime.Runtime.test_disabled_does_not_read_credentials_or_require_a_file) ... ok
+test_strict_configuration_and_protected_credentials (tests.v2.test_image_runtime.Runtime.test_strict_configuration_and_protected_credentials) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 1.095s
+
+OK

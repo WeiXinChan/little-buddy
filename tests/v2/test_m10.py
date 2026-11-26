@@ -66,7 +66,7 @@ class M10(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, json={'choices': [{'message': {'content': raw}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as http:
             adapter = DashScope(http, workspace='synthetic', region='cn-beijing', key='fake',
-                                asr='fake', llm='fake', tts='fake', voice='fake')
+                                asr='fake', llm='deepseek-v4.1-flash-1017', tts='fake', voice='fake')
             providers = UnifiedProviders(speech, DashScopeModel(adapter))
             p = VoicePeer(socket, providers, policy or CompanionPolicy())
             socket.peer = p

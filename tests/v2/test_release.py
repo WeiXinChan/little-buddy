@@ -16,7 +16,8 @@ import time
 import unittest
 from unittest.mock import patch
 from backend.v2.files import ConfigurationError,read_checked
-from backend.v2.preflight import prepare,CONTRACT
+from backend.v2.preflight import prepare,CONTRACT,MODELS
+from backend.v2.models import model_policy
 from backend.v2.live import cli,parser
 from backend.v2.release import verify
 
@@ -115,7 +116,7 @@ class Preflight(unittest.TestCase):
     def test_release_integrity_ref_and_extra_code_rejected(self):
         folder=self.fixture.path/'release';(folder/'backend/v2').mkdir(parents=True)
         raw=b'# synthetic release fixture\n';(folder/'backend/v2/live.py').write_bytes(raw)
-        metadata=dict(format=1,source_sha='a'*40,protocol_contract=CONTRACT,
+        metadata=dict(format=1,source_sha='a'*40,protocol_contract=CONTRACT,models=MODELS,model_policy=model_policy(),
             files={'backend/v2/live.py':dict(size=len(raw),sha256=sha256(raw).hexdigest())})
         (folder/'assets/v2-default').mkdir(parents=True)
         assets=b'[]';(folder/'assets/v2-default/manifest.json').write_bytes(assets)

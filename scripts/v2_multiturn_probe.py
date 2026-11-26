@@ -14,7 +14,7 @@ from types import MappingProxyType
 import time
 from backend.v2.companion import CompanionPolicy
 from backend.v2.voice import VoicePeer as ProductionVoicePeer
-from backend.v2.models import TEXT_MODEL
+from backend.v2.models import TEXT_MODELS
 
 class ProbeLimit(RuntimeError):pass
 
@@ -171,6 +171,11 @@ def usage_delta(before,after):
         known=type(a) is int and type(b) is int and b>=a
         if key.endswith('_tokens'):
             known=known and type(missing_before) is int and type(missing_after) is int and missing_after==missing_before
+            # Failed/cancelled requests have no complete provider usage receipt.
+            for section,name in (('usage','failures'),(None,'cancelled')):
+                old=before.get(section,{}).get(name) if section else before.get(name)
+                new=after.get(section,{}).get(name) if section else after.get(name)
+                if type(old) is int and type(new) is int and new>old:known=False
         result[key]=b-a if known else None
     return result
 
@@ -184,7 +189,7 @@ async def run_case(case,providers,*,ack=True,observer=None):
     if getattr(providers,'probe_cleanup_handle',None) is not None:raise ProbeLimit('provider_not_reusable')
     if len(case['turns'])!=3:raise ProbeLimit('case_limit')
     if providers.dynamic_images is not None:raise ProbeLimit('images_not_permitted')
-    if hasattr(providers.model,'model') and providers.model.model!=TEXT_MODEL:raise ProbeLimit('model_mismatch')
+    if hasattr(providers.model,'model') and (not isinstance(providers.model.model,str) or providers.model.model not in TEXT_MODELS):raise ProbeLimit('model_mismatch')
     original_model,original_speech=providers.model,providers.speech
     before=deepcopy(original_model.metrics()) if hasattr(original_model,'metrics') else {}
     state=BatchState();providers.probe_cleanup_handle=state

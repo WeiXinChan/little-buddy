@@ -1,0 +1,58 @@
+{
+  "region": "cn-beijing",
+  "models": {
+    "asr": "fun-asr-realtime",
+    "llm": "deepseek-v4.1-flash-1017",
+    "tts": "cosyvoice-v3-flash",
+    "voice": "longanyang"
+  },
+  "model_policy": {
+    "default_text": "deepseek-v4.1-flash-1017",
+    "allowed_text": [
+      "deepseek-v4.1-flash",
+      "deepseek-v4.1-flash-1017",
+      "qwen4-max"
+    ],
+    "image_review": "qwen4-max",
+    "thinking": false,
+    "automatic_fallback": false,
+    "response_formats": {
+      "deepseek-v4.1-flash": "json_object",
+      "deepseek-v4.1-flash-1017": "json_object",
+      "qwen4-max": "json_schema"
+    },
+    "validation": "strict_local_for_all_models",
+    "account_quota": "not_proven_by_configuration"
+  },
+  "model_revision": "provider_alias_not_immutable_revision",
+  "runtime": {
+    "python": "3.12.3",
+    "dependencies": {
+      "httpx": "0.28.1",
+      "websockets": "17.4"
+    }
+  },
+  "deployment": {
+    "bind": "127.0.0.1",
+    "default_port": 19483,
+    "tls_minimum": "1.2",
+    "max_tokens": 1400,
+    "thinking": false,
+    "speech_rate": 24000,
+    "context_bytes": 65536,
+    "device_token": "explicit_v2_scope_required"
+  },
+  "transports": [
+    "regional_https_chat",
+    "regional_wss_asr_tts"
+  ],
+  "device_credential": "separately_required",
+  "feedback_provider": "not_configured",
+  "prices": "not_verified",
+  "new_cloud_samples": 0,
+  "protocol_contract": "v2-voice2-safety1-images2-volume1-management1-end1",
+  "checks": "offline_pass",
+  "device_scope": "operator_bound_v2_only_not_family_ownership_proof",
+  "ingress_tls": "not_probed",
+  "dynamic_images": "disabled"
+}

@@ -14,6 +14,7 @@ from importlib.metadata import version, PackageNotFoundError
 from backend.v2.speech import V2Speech
 from backend.v2.companion import DashScopeModel, UnifiedProviders
 from backend.v2.files import read_checked
+from backend.v2.models import TEXT_MODELS, model_policy, UnsupportedTextModel
 
 FIELDS = {'workspace': 'DASHSCOPE_WORKSPACE', 'region': 'DASHSCOPE_REGION',
           'asr': 'DASHSCOPE_ASR_MODEL', 'llm': 'DASHSCOPE_LLM_MODEL',
@@ -44,6 +45,7 @@ def settings(*, environment=None, service_env=None):
     if any(not isinstance(v, str) or not v or len(v) > 256 or not v.isascii() or
            any(c.isspace() for c in v) for v in result.values()):
         raise ValueError('V2 service settings incomplete')
+    if result["llm"] not in TEXT_MODELS:raise UnsupportedTextModel()
     return result
 
 
@@ -70,6 +72,7 @@ def manifest(config):
         try:dependencies[name]=version(name)
         except PackageNotFoundError:dependencies[name]='not_installed'
     return dict(region=config['region'], models={k: config[k] for k in ('asr', 'llm', 'tts', 'voice')},
+                model_policy=model_policy(),
                 model_revision='provider_alias_not_immutable_revision',
                 runtime=dict(python=platform.python_version(),dependencies=dependencies),
                 deployment=dict(bind='127.0.0.1',default_port=19483,tls_minimum='1.2',

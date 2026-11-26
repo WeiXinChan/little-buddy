@@ -1,0 +1,31 @@
+{
+  "base": "4f991de1e2f18eb3f79db03ee1b217a6d4daa0db",
+  "counts": {
+    "test_flash_text_config": 9,
+    "test_model_metrics": 4,
+    "test_safety_help": 15,
+    "test_m05": 17,
+    "test_m10": 7,
+    "test_release": 10,
+    "test_deploy_inputs": 8,
+    "test_image_review": 7,
+    "test_image_runtime": 4,
+    "test_multiturn_probe": 13,
+    "test_probe_cleanup": 6,
+    "test_speech_release": 8
+  },
+  "new_methods": 9,
+  "unique_passed": 108,
+  "failed": 0,
+  "skipped": 0,
+  "cloud_calls": 0,
+  "paid_fallback": false,
+  "actual_deployment": false,
+  "original_reports_sha256": {
+    "flash-compare-deepseek-v4.1-flash-1017-4f991de1.json": "57fbfb868929c6250208f826193e2e0b21eb6aa0bf1eed778b78de9315257b23",
+    "flash-compare-deepseek-v4.1-flash-4f991de1.json": "7b9adaabc21ab0f7bd8c6e5d0bc9d90b98fcf81f2ce4a1b76c33cd3348d6cb29",
+    "flash-compare-qwen3.8-omni-flash-4f991de1.json": "57adec0664412067c6a9482373ced588ed27423f918d0e3832de5f3acfe7b223"
+  },
+  "p12_verified": false,
+  "p15_verified": false
+}

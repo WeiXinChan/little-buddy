@@ -1,0 +1,258 @@
+{
+  "source": "4f991de1e2f18eb3f79db03ee1b217a6d4daa0db",
+  "supervisor_deadline_seconds": 60,
+  "automatic_retry": false,
+  "full_acceptance": false,
+  "synthetic_only": true,
+  "supervisor_timeout": false,
+  "worker_exit": 0,
+  "probe": {
+    "format": 1,
+    "client_heartbeats": 5,
+    "client_heartbeat_failed": false,
+    "peer_failure": null,
+    "cleanup": {
+      "confirmed": true,
+      "pending_tasks": 0,
+      "provider_reusable": true
+    },
+    "usage_final": true,
+    "usage": {
+      "requests": 14,
+      "failures": 0,
+      "prompt_tokens": 14034,
+      "completion_tokens": 396
+    },
+    "case": "guess-animal",
+    "fixture_sha256": "050f9a5b9c436bd90e5954197a26382f9ddb61f2fed04677c7c215f623f22b16",
+    "layer": "synthetic_text_real_voicepeer_simulated_playback",
+    "turns": [
+      {
+        "label": "guess-animal-1",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 151.63,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 151.64,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 119,
+          "audio_bytes": 473280,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 119,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 3518.43,
+        "completed_ms": 8692.81,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 1196.59,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 565.92,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 535.07,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 527.32,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 673.08,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 542.7,
+            "ok": true
+          }
+        ]
+      },
+      {
+        "label": "guess-animal-2",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.1,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.63,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 100,
+          "audio_bytes": 399360,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 100,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 3275.11,
+        "completed_ms": 6798.71,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 1073.3,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 513.68,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 591.25,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 438.28,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 497.54,
+            "ok": true
+          }
+        ]
+      },
+      {
+        "label": "guess-animal-3",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": false,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 153.42,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 63,
+          "audio_bytes": 254400,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 63,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 3813.62,
+        "completed_ms": 5359.93,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 1800.31,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 690.58,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 627.68,
+            "ok": true
+          }
+        ]
+      }
+    ],
+    "model_requests": 14,
+    "tts_requests": 6,
+    "tts_unicode_characters": 92,
+    "full_acceptance": false,
+    "semantic_review_required": true,
+    "p12_verified": false,
+    "p15_verified": false,
+    "source": "4f991de1e2f18eb3f79db03ee1b217a6d4daa0db",
+    "candidate": "deepseek-v4.1-flash",
+    "rate_estimate_is_qwen4_proxy": true,
+    "synthetic_only": true,
+    "case_selection": "guess-animal-only",
+    "root_actual_model_requests": 14,
+    "root_planning_denials": 0,
+    "root_model_planning_allowance_cny": 5.0,
+    "uncached_rate_estimate_cny": 0.15222,
+    "usage_unknown_requests": 0,
+    "actual_bill_verified": false,
+    "currency_bound_is_supplier_guarantee": false,
+    "asr_calls": 0,
+    "image_calls": 0,
+    "model_rate_source": "https://help.aliyun.com/zh/model-studio/qwen4-max"
+  },
+  "supervisor_elapsed_ms": 21139,
+  "complete_result_received": true
+}

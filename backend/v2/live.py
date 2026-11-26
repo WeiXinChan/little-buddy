@@ -26,7 +26,8 @@ def notify_ready():
 
 
 async def serve_checked(args,prepared,*,stop=None,ready=None):
-    from backend.dashscope import DashScope,http_client
+    from backend.dashscope import http_client
+    from backend.v2.speech import V2Speech
     from backend.v2.companion import CompanionPolicy,DashScopeModel,UnifiedProviders
     from backend.v2.server import voice_server
     from backend.v2.files import disable_core_dumps
@@ -40,7 +41,7 @@ async def serve_checked(args,prepared,*,stop=None,ready=None):
             loop.add_signal_handler(sig,stop.set);installed.append(sig)
         async with http_client() as http:
             if time.time()>=prepared.expires_at:raise ConfigurationError('v2_device_scope_expired')
-            speech=DashScope(http,key=prepared.provider_key,**prepared.config)
+            speech=V2Speech(http,key=prepared.provider_key,**prepared.config)
             async with configured_images(http,getattr(prepared,'images',None)) as images, \
                        configured_feedback(getattr(prepared,'feedback',None),prepared.token) as feedback:
                 bundle=UnifiedProviders(speech,DashScopeModel(speech),dynamic_images=images)
