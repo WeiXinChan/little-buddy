@@ -28,8 +28,13 @@ internal class CaptureClockEnvelope {
     // This outer bound is conservative even when several observations constrain a tighter path.
     val earliestNs get()=checkNotNull(last).nanoTime-PHASE_NS
     fun observe(candidate:CaptureStamp) {
-        val old=last
-        if(old==candidate)return
+        if(last==candidate)return
+        if(candidate.frames==0L){
+            // No captured frame yet: preserve the observation for age/room, but it cannot anchor
+            // a capture-rate path. Startup still needs two positive pairs and sample0 proof.
+            last=candidate;return
+        }
+        val old=last?.takeIf{it.frames>0}
         var nextLow=candidate.nanoTime-PHASE_NS
         var nextHigh=Math.addExact(candidate.nanoTime,PHASE_NS)
         if(old!=null){

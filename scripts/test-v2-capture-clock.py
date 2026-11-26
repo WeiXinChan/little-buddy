@@ -13,7 +13,9 @@ trace=json.loads((fixture/'oppo-cadence-151.json').read_text())
 expected='\n'.join('\t'.join(str(r[k]) for k in ['f','ns','mono_before','mono_after','boot_after','read']) for r in trace)+'\n'
 assert (fixture/'oppo-cadence-151.tsv').read_text()==expected
 base=Path(os.environ.get('LEDGER_SOURCE_BASE',str(root/'app/src/main/java/com/littlebuddy/v2')))
-sources=[base/'NativeReadLedger.kt',root/'app/src/main/java/com/littlebuddy/v2/CaptureClockEnvelope.kt',root/'scripts/testing/capture-clock/ClockEnvelopeTest.kt']
+helper=base/'CaptureClockEnvelope.kt'
+if not helper.exists():helper=root/'app/src/main/java/com/littlebuddy/v2/CaptureClockEnvelope.kt'
+sources=[base/'NativeReadLedger.kt',helper,root/'scripts/testing/capture-clock/ClockEnvelopeTest.kt',root/'scripts/testing/capture-clock/ReadFrontierTest.kt']
 with tempfile.TemporaryDirectory(dir=root,prefix='clock-tests-') as out:
  subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',out,*map(str,sources)],check=True)
- subprocess.run(['java','-Xmx256m','-Dcapture.trace='+str(root/'scripts/testing/capture-clock/oppo-cadence-151.tsv'),'-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.v2.ClockEnvelopeTest'],check=True)
+ subprocess.run(['java','-Xmx256m','-Dcapture.trace='+str(root/'scripts/testing/capture-clock/oppo-cadence-151.tsv'),'-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.v2.ClockEnvelopeTest','com.littlebuddy.v2.ReadFrontierTest'],check=True)

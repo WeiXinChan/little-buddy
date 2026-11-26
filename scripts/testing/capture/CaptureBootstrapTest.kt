@@ -117,4 +117,25 @@ class CaptureBootstrapTest {
   assertFalse(thread.isAlive);assertNotNull(failure);assertFalse(s.prefix.pending)
   assertTrue(s.references.all{f->f.all{it==0.toShort()}})
  }
+ @Test fun newTimestampCannotAdmitAlreadyReadInconsistentPrefixBeforeAnotherNativeRead(){
+  var now=1000L;var reads=0;var delayPublish=false
+  val ledger=NativeReadLedger(3200,{now},{now}){
+   if(reads==0)null else {
+    val narrowed=reads==3 && delayPublish
+    if(reads==3)delayPublish=true
+    if(narrowed)CaptureStamp(641,1_041_000_000) else CaptureStamp(640,1_040_000_000)
+   }
+  }
+  val prefix=CaptureBootstrap(ledger);val refs=mutableListOf<ShortArray>()
+  val error=runCatching{prefix.prepare({frame->
+   now=1041;reads++;refs+=frame;val count=if(reads<3)320 else 32
+   frame.fill(7);count
+  },{true},{})}.exceptionOrNull()
+  assertEquals("native read exceeds timestamp position",error?.message)
+  assertEquals(672L,ledger.readSamples);assertEquals(3,reads);assertFalse(prefix.pending)
+  val field=CaptureBootstrap::class.java.getDeclaredField("pcm");field.isAccessible=true
+  assertTrue((field.get(prefix) as ShortArray).all{it==0.toShort()})
+  assertTrue(refs.all{it.all{sample->sample==0.toShort()}})
+ }
+
 }

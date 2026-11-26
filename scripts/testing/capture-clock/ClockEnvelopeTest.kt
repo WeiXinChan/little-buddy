@@ -95,4 +95,15 @@ class ClockEnvelopeTest {
   }
  }
 
+ @Test fun zeroFramePlaceholderCannotDefineCaptureOriginBeforeNativeProducerStarts(){
+  var now=1000L;var stamp=CaptureStamp(0,1_000_000_000)
+  val ledger=NativeReadLedger(3200,{now},{now}){stamp};ledger.beginStartup();ledger.remainingMs()
+  assertFalse(ledger.startupAnchored)
+  // Model native producer starts3ms after the empty placeholder, without rebasing sample counts.
+  now=1023;stamp=CaptureStamp(320,1_023_000_000);ledger.stageRead(320)
+  assertFalse(ledger.startupAnchored)
+  now=1043;stamp=CaptureStamp(640,1_043_000_000);ledger.stageRead(320);ledger.finishStartup()
+  assertEquals(640L,ledger.readSamples);assertTrue(ledger.sampleTime(0) in 1000..1003)
+ }
+
 }

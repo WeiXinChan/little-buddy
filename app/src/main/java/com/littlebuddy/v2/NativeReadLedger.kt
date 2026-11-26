@@ -88,7 +88,12 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         }
         val value=observed
         if(value==null && !starting)check(time-monoOrigin<startupMs){"capture timestamp unavailable"}
-        else if(value!=null)check((time+1)*1_000_000-clock.earliestNs<=maxAgeNs){"capture timestamp stale"}
+        else if(value!=null){
+            check((time+1)*1_000_000-clock.earliestNs<=maxAgeNs){"capture timestamp stale"}
+            // A new estimate may shrink the frontier. Reject before prefix/KWS admission, not
+            // merely on the next read; max(0, upper-read) must never hide inconsistent history.
+            check(readSamples<=producedUpper(value,time)){"native read exceeds timestamp position"}
+        }
         return value to time
     }
     private fun producedUpper(value:CaptureStamp,time:Long):Long {
