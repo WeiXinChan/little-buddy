@@ -5,6 +5,7 @@ state; memory compaction can select existing heard facts, never invent new ones.
 """
 import asyncio
 import json
+import re
 import httpx
 import time
 from backend.v2.voice import VoiceFault
@@ -173,6 +174,10 @@ class UnifiedProviders:
 "sentences":["1到4个简短句，每句不超过120字"],
 "anchors":{"plot.main":0,"clue.current":0}}。anchors把必须保留的剧情/线索/谜底/规则映射到sentences索引，最多16项。。
 动作必须由本轮孩子意图支持；未改规则时保留已有规则/角色/谜底。
+故事接龙是接续孩子已经给出的情节，不代替孩子连续推进多轮；轮流规则要落实到本轮实际说出的内容。
+明确“一人一句/每次只讲一句话”时，sentences只能有一个完整句子，句内也不得塞多句。
+该句用于推进故事，不额外追加追问、复述孩子原话、轮到你了等提示句；规则说明或确认也占句数。
+孩子明确改规则时使用新规则；离开故事或谈私事按实际意图处理，不为满足句数强留故事。
 end仅用于明确结束本次会话（再见、我要睡觉了、我们都不玩了），只作简短告别。
 “我先退出，你们继续”保持共同会话用continue；不清楚谁退出时简短确认，不直接end。
 “不玩这个了”是leave而非end；“等我一下”安静等待不催促；明确单独换个人用handoff。
@@ -212,6 +217,18 @@ description只用于generate_image，缺字段兼容目录名称生成；缺服�
                 any(not isinstance(k, str) or not 1 <= len(k) <= 40 or type(v) is not int or
                     not 0 <= v < len(plan['sentences']) for k, v in plan['anchors'].items())):
             raise ModelError('anchors')
+        # Reject the whole proposal before review/TTS/state publication. Never
+        # truncate: anchors and final-segment state must describe the same output.
+        if plan['mode']=='story' and plan['action'] in {'continue','change'}:
+            cues=('一人一句','你一句我一句','每人一句','每次只讲一句','每次只说一句','一次一句')
+            rules=plan['rules']
+            if plan['action']=='continue':rules+=' '+context.get('game',{}).get('rules','')
+            explicit=any(cue in (text or '') or cue in rules for cue in cues)
+            if explicit:
+                count=sum(len([part for part in re.split(r'[。！？!?]+[”’」』]*', sentence) if part.strip()])
+                          for sentence in plan['sentences'])
+                if len(plan['sentences'])!=1 or count!=1:
+                    raise ModelError('story turn sentence limit')
         tools=plan['tools']
         if (not isinstance(tools,list) or len(tools)>1 or any(
             not isinstance(t,dict) or set(t)-{'kind','asset_id','description'} or

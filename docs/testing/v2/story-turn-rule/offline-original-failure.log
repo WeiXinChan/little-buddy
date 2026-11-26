@@ -1,0 +1,26 @@
+test_actual_voicepeer_multisentence_rule_violation_never_tts_or_commits (tests.v2.test_story_turn_rule.StoryTurn.test_actual_voicepeer_multisentence_rule_violation_never_tts_or_commits) ... FAIL
+
+======================================================================
+FAIL: test_actual_voicepeer_multisentence_rule_violation_never_tts_or_commits (tests.v2.test_story_turn_rule.StoryTurn.test_actual_voicepeer_multisentence_rule_violation_never_tts_or_commits)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_story_turn_rule.py", line 18, in test_actual_voicepeer_multisentence_rule_violation_never_tts_or_commits
+    self.assertEqual(report['tts_requests'],0)
+AssertionError: 9 != 0
+
+----------------------------------------------------------------------
+Ran 1 test in 0.050s
+
+FAILED (failures=1)
