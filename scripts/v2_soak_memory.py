@@ -343,6 +343,7 @@ def profile(output,attempts,timeout):
                 workload_schedule_comparable=(len({r['input_schedule_sha256'] for r in actual})==1 and len({r['attempted'] for r in actual})==1 and
                             len({r['output_schedule_sha256'] for r in actual})==1 and len({json.dumps(r['model_stage_calls'],sort_keys=True) for r in actual})==1)
                 comparable=(len({r['reported_sample_rows'] for r in actual})==1 and
+                            all(type(r.get('report_structure')) is dict and type(r.get('measurement_overhead')) is dict and type(r.get('phases')) is list for r in actual) and
                             len({json.dumps(r.get('report_structure'),sort_keys=True) for r in actual})==1 and
                             len({json.dumps(r.get('measurement_overhead'),sort_keys=True) for r in actual})==1 and
                             len({json.dumps([p.get('report_reachable_bytes') for p in r.get('phases',[])]) for r in actual})==1 and

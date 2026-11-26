@@ -19,7 +19,7 @@ test_malformed_child_metadata_must_leave_terminal_result_not_in_progress (tests.
 test_memory_controls_with_different_retained_sample_workload_not_comparable (tests.v2.test_soak_memory_independent.Independent.test_memory_controls_with_different_retained_sample_workload_not_comparable) ... ok
 
 ----------------------------------------------------------------------
-Ran 19 tests in 0.194s
+Ran 19 tests in 0.235s
 
 OK
 MALFORMED_CHILD_TERMINAL worker_failed_stopped

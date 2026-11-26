@@ -67,6 +67,11 @@ class WorkerValidation(unittest.TestCase):
         with fake_supervisor(callback):r=m.profile(self.root/'out',6,30)
         self.assertTrue(r['workload_schedule_comparable']);self.assertTrue(r['memory_controls']['retained_sample_rows_equal'])
         self.assertFalse(r['memory_controls']['measurement_conditions_equal']);self.assertFalse(r['comparable'])
+        import ast
+        tree=ast.parse(Path(m.__file__).read_text())
+        node=next(n for n in ast.walk(tree) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='comparable' for t in n.targets))
+        incomplete=[dict(input_schedule_sha256='same',output_schedule_sha256='same',attempted=6,model_stage_calls={'plan':6},reported_sample_rows=2) for _ in range(3)]
+        self.assertFalse(eval(compile(ast.Expression(node.value),'<comparison>','eval'),{'json':json},dict(actual=incomplete)))
     def test_every_missing_top_level_field_is_terminal_without_second_arm(self):
         fields=None
         def obtain(args,**kwargs):

@@ -13,7 +13,7 @@ MEM111-02：
 
 - workload_schedule_comparable仅表示前三臂实际attempt/输入输出排程/model计数相同，不代表内存条件相同。
 - memory_controls单列每臂完整报告sample/attempt保留数、总observations/evicted、文件字节和顶层字段数；四阶段report_reachable_bytes及trace自身元数据；phase/checkpoint行数、弱引用观察/槽数、trace帧数。所有这些量也可能贡献分配，不能将差直接归为tracer或生产。
-- comparable保留为保守的memory_controls别名，要求报告保留结构、测量工作和报告图估算等观测条件一致，并满足原workload条件；不再是仅工作量比较。100/200/200的原QA表达式及完整父监督fixture都返回memory false，同时workload_schedule仍可为true。
+- comparable保留为保守的memory_controls别名，要求报告保留结构、测量工作和报告图估算等观测条件一致，并满足原workload条件；不再是仅工作量比较；缺少memory条件本身也返回不可比，不把三组缺失值都为None当作一致。100/200/200的原QA表达式及完整父监督fixture都返回memory false，同时workload_schedule仍可为true。
 - plain与traced本来就有不同的trace配置，memory measurement_conditions_equal通常为false；这是探索设计中的已知差，不是让工具反复重跑直到“刷成true”。即使保守比较为true，也不是生产对象身份或泄漏因果证明。结果继续controls_collected_not_leak_verdict/requires_review，idle仍不是相同工作负载。
 
 验证：19唯一方法19PASS/0FAIL/0SKIP（旧准备9、QA原3、新父监督fixture7），final.log。新7方法中含每个必需字段逐一删除、身份/类型/阶段/结构拒绝、完整报告缺失/hash/行数不实、第二臂失败保留第一臂字节和已验证结果、比较异常终态、完整100/200/200与相同样本但不同trace条件正反检查。旧作者cleanup失败fixture改为完整format2但cleanup=false，原终态断言保留；QA三方法输入/断言完全未改。数量多的表驱动子例不另算方法/独立突变。
