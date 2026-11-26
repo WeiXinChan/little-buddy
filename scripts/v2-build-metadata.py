@@ -8,6 +8,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = 'v2-voice2-safety1-images2-volume1-management1-end1'
+# RC9 is bound to the star-bunny correction; QA changes require an explicit reviewed pin update.
+RC9_RESOURCES_MANIFEST='d649ac79bc5203373ff44ebdd547bdd16772663467a22115fa75f589bef91ea1'
 
 def selected(path):
     return path.startswith(('app/src/main/', 'app/src/debug/', 'app/src/v2Debug/', 'app/libs/', 'gradle/wrapper/', 'assets/v2-default/')) or path in {
@@ -17,7 +19,7 @@ def generate(output):
     config=json.loads((ROOT/'app/v2-release.json').read_text())
     assert set(config)=={'format','version_code','version_name','application_id','protocol_contract','source_base'}
     assert len(config['source_base'])==40 and all(c in '0123456789abcdef' for c in config['source_base'])
-    assert config['format']==1 and config['version_code']==22 and config['version_name']=='2.0.0-rc8'
+    assert config['format']==1 and config['version_code']==23 and config['version_name']=='2.0.0-rc9'
     assert config['application_id']=='com.littlebuddy.sim.v2' and config['protocol_contract']==CONTRACT
     paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).decode().split('\0')
     paths=sorted(p for p in paths if p and selected(p))
@@ -37,6 +39,7 @@ def generate(output):
     canonical=json.dumps(inventory,sort_keys=True,separators=(',',':')).encode()
     digest=hashlib.sha256(canonical).hexdigest()
     manifest=hashlib.sha256((ROOT/'assets/v2-default/manifest.json').read_bytes()).hexdigest()
+    assert manifest==RC9_RESOURCES_MANIFEST, 'RC9 reviewed resource manifest required'
     result=dict(config,build_id=f'v2-{config["version_code"]}-{digest[:16]}',source_content_sha256=digest,
                 resources_manifest_sha256=manifest,wire=2,images_v=2,volume_v=1,management_v=1,local_help_v=1,session_end_v=1,
                 feedback_protocol="feedback-v1",min_sdk=26,target_sdk=36,abi=['arm64-v8a'],distribution='internal_debug_candidate')

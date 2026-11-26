@@ -8,6 +8,8 @@ import re
 import zipfile
 
 CONTRACT='v2-voice2-safety1-images2-volume1-management1-end1'
+# RC9 is bound to the star-bunny correction; QA changes require an explicit reviewed pin update.
+RC9_RESOURCES_MANIFEST='d649ac79bc5203373ff44ebdd547bdd16772663467a22115fa75f589bef91ea1'
 
 def compatible(apk, backend):
     if (type(apk.get('format')) is not int or type(backend.get('format')) is not int or
@@ -39,8 +41,10 @@ def inspect(apk):
             raise ValueError('apk_resources_mismatch')
         if any(value in json.dumps(meta) for value in ['/home/','/tmp/','Bearer ','PRIVATE KEY','password']):
             raise ValueError('private_build_metadata')
-        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=22 or meta['version_name']!='2.0.0-rc8':
+        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=23 or meta['version_name']!='2.0.0-rc9':
             raise ValueError('candidate_version_mismatch')
+        if meta['resources_manifest_sha256']!=RC9_RESOURCES_MANIFEST:
+            raise ValueError('candidate_resources_mismatch')
         return meta
 
 if __name__=='__main__':
