@@ -1,0 +1,121 @@
+{
+  "format": 2,
+  "worker_id": "ffffffffffffffffffffffffffffffff",
+  "source_sha": "3aa8902f93db2e2a83577a50f32edccf8d42cd50",
+  "arm": "plain",
+  "attempt_limit": 6,
+  "duration_limit": 3.0,
+  "attempted": 6,
+  "failures": 0,
+  "cleanup": {
+    "confirmed": true,
+    "pending_tasks": 0,
+    "provider_reusable": true
+  },
+  "full_report_sha256": "0763735d0fe222b4f554f06e52bff5bd5f9810561a56afcef1224eca638c8786",
+  "input_schedule_sha256": "361111a99e8785193d51563b17dd423ea11a03167a0ffe080f371d7b375fe8b7",
+  "output_schedule_sha256": "b763f2b9b271804f30d7d7da9b51b8d8ba713520dd3be1142ca97f227dd4d1b7",
+  "model_stage_calls": {
+    "plan": 6,
+    "facts": 6,
+    "safe": 6
+  },
+  "reported_sample_rows": 2,
+  "report_structure": {
+    "attempt_rows": 6,
+    "retained_sample_rows": 2,
+    "sample_observations": 2,
+    "sample_evicted": 0,
+    "top_level_fields": 8,
+    "file_bytes": 1232
+  },
+  "phases": [
+    {
+      "phase": "baseline_after_import_gc",
+      "rss_bytes": 100,
+      "live": {},
+      "counts": {},
+      "trace_current": null,
+      "trace_peak": null,
+      "trace_metadata_bytes": null,
+      "allocation_groups": null,
+      "report_reachable_bytes": null
+    },
+    {
+      "phase": "returned_report_held",
+      "rss_bytes": 100,
+      "live": {},
+      "counts": {},
+      "trace_current": null,
+      "trace_peak": null,
+      "trace_metadata_bytes": null,
+      "allocation_groups": null,
+      "report_reachable_bytes": 1020
+    },
+    {
+      "phase": "report_held_after_gc",
+      "rss_bytes": 100,
+      "live": {},
+      "counts": {},
+      "trace_current": null,
+      "trace_peak": null,
+      "trace_metadata_bytes": null,
+      "allocation_groups": null,
+      "report_reachable_bytes": 1020
+    },
+    {
+      "phase": "report_released_after_gc",
+      "rss_bytes": 100,
+      "live": {},
+      "counts": {},
+      "trace_current": null,
+      "trace_peak": null,
+      "trace_metadata_bytes": null,
+      "allocation_groups": null,
+      "report_reachable_bytes": null
+    }
+  ],
+  "context_checkpoints": [
+    {
+      "index": 0,
+      "sample_rows": 2,
+      "observations": 2
+    },
+    {
+      "index": 1,
+      "sample_rows": 2,
+      "observations": 2
+    },
+    {
+      "index": 2,
+      "sample_rows": 2,
+      "observations": 2
+    },
+    {
+      "index": 3,
+      "sample_rows": 2,
+      "observations": 2
+    },
+    {
+      "index": 4,
+      "sample_rows": 2,
+      "observations": 2
+    },
+    {
+      "index": 5,
+      "sample_rows": 2,
+      "observations": 2
+    }
+  ],
+  "measurement_overhead": {
+    "phase_rows": 4,
+    "context_checkpoint_rows": 6,
+    "weak_registry_observations": 0,
+    "weak_slots": 0,
+    "tracer_frames": 0
+  },
+  "observer": "same_weak_registry_in_plain_and_traced",
+  "attribution": "unproven",
+  "rss_is_not_live_heap": true,
+  "production_modified": false
+}

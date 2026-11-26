@@ -1,0 +1,10 @@
+test_busy_lock_refuses_without_real_fd_lock_or_process (tests.v2.test_soak_memory_independent.Independent.test_busy_lock_refuses_without_real_fd_lock_or_process) ... ok
+test_malformed_child_metadata_must_leave_terminal_result_not_in_progress (tests.v2.test_soak_memory_independent.Independent.test_malformed_child_metadata_must_leave_terminal_result_not_in_progress) ... ok
+test_memory_controls_with_different_retained_sample_workload_not_comparable (tests.v2.test_soak_memory_independent.Independent.test_memory_controls_with_different_retained_sample_workload_not_comparable) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.017s
+
+OK
+MALFORMED_CHILD_TERMINAL worker_failed_stopped
+DIFFERENT_SAMPLE_COUNTS False

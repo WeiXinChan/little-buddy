@@ -1,0 +1,26 @@
+test_busy_lock_refuses_without_real_fd_lock_or_process (tests.v2.test_soak_memory_independent.Independent.test_busy_lock_refuses_without_real_fd_lock_or_process) ... ok
+test_malformed_child_metadata_must_leave_terminal_result_not_in_progress (tests.v2.test_soak_memory_independent.Independent.test_malformed_child_metadata_must_leave_terminal_result_not_in_progress) ... FAIL
+test_memory_controls_with_different_retained_sample_workload_not_comparable (tests.v2.test_soak_memory_independent.Independent.test_memory_controls_with_different_retained_sample_workload_not_comparable) ... FAIL
+
+======================================================================
+FAIL: test_malformed_child_metadata_must_leave_terminal_result_not_in_progress (tests.v2.test_soak_memory_independent.Independent.test_malformed_child_metadata_must_leave_terminal_result_not_in_progress)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_soak_memory_independent.py", line 20, in test_malformed_child_metadata_must_leave_terminal_result_not_in_progress
+    self.assertNotEqual(status,'in_progress','rejected child metadata must persist final failed/unknown state')
+AssertionError: 'in_progress' == 'in_progress' : rejected child metadata must persist final failed/unknown state
+
+======================================================================
+FAIL: test_memory_controls_with_different_retained_sample_workload_not_comparable (tests.v2.test_soak_memory_independent.Independent.test_memory_controls_with_different_retained_sample_workload_not_comparable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_soak_memory_independent.py", line 27, in test_memory_controls_with_different_retained_sample_workload_not_comparable
+    self.assertFalse(comparable,'memory control workload includes retained sample dictionaries, not just model schedule')
+AssertionError: True is not false : memory control workload includes retained sample dictionaries, not just model schedule
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.014s
+
+FAILED (failures=2)
+MALFORMED_CHILD_TERMINAL in_progress
+DIFFERENT_SAMPLE_COUNTS True

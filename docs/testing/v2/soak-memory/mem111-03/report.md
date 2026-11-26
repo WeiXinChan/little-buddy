@@ -1,0 +1,20 @@
+PR111 MEM111-03追加修复；MEM111-01/02原QA已关闭，本批维持原反例并增加测量有效性门。3aa归因仍unknown，不宣称真实profile可用、N6已跑或生产泄漏已定位。
+
+已读取QA pr111-fix-review/review.json及sampling.py。新原脚本逐字复制为tests/v2/test_soak_memory_sampling_independent.py，sha256 af85600aa8c94eb116cb2e88c2ba5ff65eabfeb5902ea19fcc38c0e342710e2c；输入/断言未改。原MEM111-01/02脚本sha256仍4297c3d375d4b1357d5ad1e22561e214d867a9be43068df760abd1fb66461dd2。
+
+修前original-failure.log记录：新1方法FAIL，真实绑定的合成完整artifact声明errors1/validfalse/missing_metrics含RSS/resource_collection_validfalse，旧父仍4个假child并写controls_collected_not_leak_verdict。original-full-report.json与original-worker-metadata.json保存同类旧输入的实际字节/hash/字段；均是无实际worker的合成fixture，不是采集结果。修后既复跑原脚本，也用原保存artifact逐字节重放（只换父关联worker_id），验证首臂停止且不修改文件。
+
+修复仅在父已读取并核hash的完整报告验证路径：
+
+- 非idle必须resource_collection_valid is True；sampling八个原字段完整，valid is True，errors为精确int0，missing_metrics必须空list。active_observed is True且continuous_peaks_known is False，与固定3aa的观测语义一致，不把观测当连续峰。
+- observations/retained/evicted严格整数，拒bool/float/负数；retained为1..4096，observations为1..100000，evicted为0..100000。100000是宽松的诊断拒绝上限，不是来源推导的实际最大采样量或测量证明。与实际样本长度、固定4096环容量及observations=retained+evicted交叉一致。保留原metadata/实际artifact的计数绑定，不补值。
+- idle单独要求原合成零attempt/零样本/observations和evicted精确int0；不要求不存在的生产采集成功标志，也不允许把resource_collection_valid=true或伪sampling成功字段当idle测量。实际worker/原run_soak报告生成逻辑未改；新增成功字段只在正确采集的轻量正例fixture中模拟原3aa实际报告。
+- 缺字段/失败/类型/计数不实沿现有worker_artifact_invalid→worker_failed_stopped终态，归因unknown，不接纳到completed、不跑下一臂；保留已落盘完整artifact及之前已验证结果。没有裁样本、清计数或覆盖报告为成功。
+
+验证：final.log共26唯一轻量方法26PASS/0FAIL/0SKIP（此前19、新原QA1、相邻测量门6）。新QA原断言打印raised=true/child_calls1/status worker_failed_stopped。原三条QA脚本仍通过；保留原20项中19PASS/1FAIL的QA结论，不以扩大分母冲销。
+
+相邻fixture覆盖resource/八sampling字段逐一缺失，status/valid整数伪装、errors bool/float/string/非零，missing_metrics非list/非空，计数错误类型/负数/边界/不一致，正确4096保留+4100观察/4淘汰与如实绑定的100001超限反例，idle不造成功、原保存artifact不修改。完整父流程的正常/采样数量可比性及坏第二臂保留首臂等旧项均保留。
+
+命令：python3 -m unittest tests.v2.test_soak_memory_diagnostic tests.v2.test_soak_memory_worker_validation tests.v2.test_soak_memory_independent tests.v2.test_soak_memory_sampling_independent tests.v2.test_soak_memory_sampling_validation -v
+
+所有profile父监督调用只在fake archive/process/lock下进行，少量临时JSON是手工合成，未执行实际profile/worker/run_soak/tracemalloc负载、没有真实heavy.lock访问/Gradle/云/设备/部署/新agent，未触75560。原3aa报告及其120/1325分母未动。仍须独立QA复核后，root确认锁释放再另行决定单组N6；本批不自动执行或重试。
