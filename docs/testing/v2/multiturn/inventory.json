@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "sha256": "f1e4e4b6a6bf7390a57a669def6bf7ecb5a8bd6d0d38c41c9a6b855cfeabfbf0",
+  "cases": [
+    {
+      "id": "guess-animal",
+      "turns": 3
+    },
+    {
+      "id": "guess-object",
+      "turns": 3
+    },
+    {
+      "id": "story-moon",
+      "turns": 3
+    },
+    {
+      "id": "story-forest",
+      "turns": 3
+    },
+    {
+      "id": "adventure-space",
+      "turns": 3
+    },
+    {
+      "id": "adventure-sea",
+      "turns": 3
+    },
+    {
+      "id": "association-round",
+      "turns": 3
+    },
+    {
+      "id": "association-flying",
+      "turns": 3
+    },
+    {
+      "id": "cross-game",
+      "turns": 3
+    },
+    {
+      "id": "exchange-question",
+      "turns": 3
+    },
+    {
+      "id": "change-rules",
+      "turns": 3
+    },
+    {
+      "id": "abandon",
+      "turns": 3
+    }
+  ],
+  "cloud_calls": 0
+}

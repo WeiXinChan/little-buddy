@@ -1,0 +1,427 @@
+{
+  "format": 1,
+  "synthetic_only": true,
+  "cases": [
+    {
+      "id": "guess-animal",
+      "turns": [
+        {
+          "label": "guess-animal-1",
+          "input": "我们玩猜动物，你出题我猜，每次只给一条线索。",
+          "expect": {
+            "mode": "guess",
+            "terms": [
+              "线索"
+            ]
+          }
+        },
+        {
+          "label": "guess-animal-2",
+          "input": "是不是大象？再给一个线索。",
+          "expect": {
+            "mode": "guess",
+            "terms": [
+              "线索"
+            ]
+          }
+        },
+        {
+          "label": "guess-animal-3",
+          "input": "这次换我出题，你来猜：长耳朵爱吃胡萝卜。",
+          "expect": {
+            "mode": "guess",
+            "terms": [
+              "出题"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "guess-object",
+      "turns": [
+        {
+          "label": "guess-object-1",
+          "input": "猜家里的东西吧，你描述，我猜，不先说答案。",
+          "expect": {
+            "mode": "guess",
+            "terms": [
+              "猜"
+            ]
+          }
+        },
+        {
+          "label": "guess-object-2",
+          "input": "是杯子吗？提示它有什么用。",
+          "expect": {
+            "mode": "guess",
+            "terms": [
+              "猜"
+            ]
+          }
+        },
+        {
+          "label": "guess-object-3",
+          "input": "现在由我问你猜：能照亮房间的是什么？",
+          "expect": {
+            "mode": "guess",
+            "terms": [
+              "猜"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "story-moon",
+      "turns": [
+        {
+          "label": "story-moon-1",
+          "input": "轮流编小猫去月球的故事，我先说小猫坐上飞船。",
+          "expect": {
+            "mode": "story",
+            "terms": [
+              "轮流"
+            ]
+          }
+        },
+        {
+          "label": "story-moon-2",
+          "input": "它发现窗外有一颗蓝色星星，轮到你接。",
+          "expect": {
+            "mode": "story",
+            "terms": [
+              "轮流"
+            ]
+          }
+        },
+        {
+          "label": "story-moon-3",
+          "input": "改一下，飞船只能慢慢飞，不许突然传送。",
+          "expect": {
+            "mode": "story",
+            "terms": [
+              "慢"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "story-forest",
+      "turns": [
+        {
+          "label": "story-forest-1",
+          "input": "你一句我一句编小熊在森林找朋友的故事。",
+          "expect": {
+            "mode": "story",
+            "terms": [
+              "句"
+            ]
+          }
+        },
+        {
+          "label": "story-forest-2",
+          "input": "小熊先遇见小鸟，你接着讲。",
+          "expect": {
+            "mode": "story",
+            "terms": [
+              "句"
+            ]
+          }
+        },
+        {
+          "label": "story-forest-3",
+          "input": "加个规则，每次只讲一句话。",
+          "expect": {
+            "mode": "story",
+            "terms": [
+              "句"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "adventure-space",
+      "turns": [
+        {
+          "label": "adventure-space-1",
+          "input": "来太空探险，我当船长，你当领航员，我来选航线。",
+          "expect": {
+            "mode": "adventure",
+            "terms": [
+              "船长",
+              "领航员"
+            ]
+          }
+        },
+        {
+          "label": "adventure-space-2",
+          "input": "我选择月亮站，报告前面有什么。",
+          "expect": {
+            "mode": "adventure",
+            "terms": [
+              "船长",
+              "领航员"
+            ]
+          }
+        },
+        {
+          "label": "adventure-space-3",
+          "input": "换角色，你当船长，我当领航员。",
+          "expect": {
+            "mode": "adventure",
+            "terms": [
+              "船长",
+              "领航员"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "adventure-sea",
+      "turns": [
+        {
+          "label": "adventure-sea-1",
+          "input": "假装海底寻宝，我是潜水员，你是向导，我决定方向。",
+          "expect": {
+            "mode": "adventure",
+            "terms": [
+              "潜水员",
+              "向导"
+            ]
+          }
+        },
+        {
+          "label": "adventure-sea-2",
+          "input": "我选珊瑚那条路，你介绍发现。",
+          "expect": {
+            "mode": "adventure",
+            "terms": [
+              "潜水员",
+              "向导"
+            ]
+          }
+        },
+        {
+          "label": "adventure-sea-3",
+          "input": "改规则，不碰任何动物，只观察。",
+          "expect": {
+            "mode": "adventure",
+            "terms": [
+              "观察"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "association-round",
+      "turns": [
+        {
+          "label": "association-round-1",
+          "input": "轮流说圆圆的东西，不能重复，我先说皮球。",
+          "expect": {
+            "mode": "association",
+            "terms": [
+              "轮流"
+            ]
+          }
+        },
+        {
+          "label": "association-round-2",
+          "input": "我说月亮，轮到你说一个新的。",
+          "expect": {
+            "mode": "association",
+            "terms": [
+              "轮流"
+            ]
+          }
+        },
+        {
+          "label": "association-round-3",
+          "input": "改成轮流说蓝色的东西，还是不能重复。",
+          "expect": {
+            "mode": "association",
+            "terms": [
+              "蓝色"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "association-flying",
+      "turns": [
+        {
+          "label": "association-flying-1",
+          "input": "接龙说会飞的东西，一人一个，我先说小鸟。",
+          "expect": {
+            "mode": "association",
+            "terms": [
+              "接"
+            ]
+          }
+        },
+        {
+          "label": "association-flying-2",
+          "input": "我接飞机，你来接，别重复。",
+          "expect": {
+            "mode": "association",
+            "terms": [
+              "接"
+            ]
+          }
+        },
+        {
+          "label": "association-flying-3",
+          "input": "改成两个字的东西，我先说风筝。",
+          "expect": {
+            "mode": "association",
+            "terms": [
+              "两个字"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "cross-game",
+      "turns": [
+        {
+          "label": "cross-game-1",
+          "input": "你出动物谜语我来猜，不要先说答案。",
+          "expect": {
+            "mode": "guess",
+            "terms": [
+              "猜"
+            ]
+          }
+        },
+        {
+          "label": "cross-game-2",
+          "input": "不猜了，把刚才的动物变成童话主角，我们轮流编故事。",
+          "expect": {
+            "mode": "story",
+            "terms": [
+              "轮流"
+            ]
+          }
+        },
+        {
+          "label": "cross-game-3",
+          "input": "我给主角一艘小船，接着讲。",
+          "expect": {
+            "mode": "story",
+            "terms": [
+              "轮流"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "exchange-question",
+      "turns": [
+        {
+          "label": "exchange-question-1",
+          "input": "猜水果吧，你问我答，每次一条线索。",
+          "expect": {
+            "mode": "guess",
+            "terms": [
+              "线索"
+            ]
+          }
+        },
+        {
+          "label": "exchange-question-2",
+          "input": "换我出题你猜：黄色弯弯的水果。",
+          "expect": {
+            "mode": "guess",
+            "terms": [
+              "出题"
+            ]
+          }
+        },
+        {
+          "label": "exchange-question-3",
+          "input": "我再出一个，红红圆圆可以榨汁。",
+          "expect": {
+            "mode": "guess",
+            "terms": [
+              "出题"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "change-rules",
+      "turns": [
+        {
+          "label": "change-rules-1",
+          "input": "轮流说水果，一次一个，不重复。",
+          "expect": {
+            "mode": "association",
+            "terms": [
+              "水果"
+            ]
+          }
+        },
+        {
+          "label": "change-rules-2",
+          "input": "改规则：现在只说红色水果。",
+          "expect": {
+            "mode": "association",
+            "terms": [
+              "红色"
+            ]
+          }
+        },
+        {
+          "label": "change-rules-3",
+          "input": "我说草莓，你接一个红色水果。",
+          "expect": {
+            "mode": "association",
+            "terms": [
+              "红色"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "abandon",
+      "turns": [
+        {
+          "label": "abandon-1",
+          "input": "玩山洞探险，我选路，你当向导。",
+          "expect": {
+            "mode": "adventure",
+            "terms": [
+              "向导"
+            ]
+          }
+        },
+        {
+          "label": "abandon-2",
+          "input": "我不想玩探险了，也不要继续闯关，我们随便聊聊。",
+          "expect": {
+            "mode": "chat",
+            "terms": []
+          }
+        },
+        {
+          "label": "abandon-3",
+          "input": "聊聊今天的云是什么形状吧。",
+          "expect": {
+            "mode": "chat",
+            "terms": []
+          }
+        }
+      ]
+    }
+  ]
+}
