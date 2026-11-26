@@ -27,6 +27,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     private val uploads=CaptureUploads({owner.post(it)},android.os.SystemClock::elapsedRealtime,
         { !cancelled.get() && allowed() },{data,speech,at->client.frame(data,speech,at)},
         {requestCancel();owner.post{failed()}})
+    @Volatile private var startupHandle:CaptureBootstrap?=null
     @Volatile private var thread: Thread? = null
     @Volatile var nativeProof = RecorderProof(); private set
     @Volatile var quarantined = false; private set
@@ -59,6 +60,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var detector = SpeechDetector(320, initialFloor = 36.0)
         var lastCapturedAt=android.os.SystemClock.elapsedRealtime()
         var ledger:NativeReadLedger?=null
+        var startup:CaptureBootstrap?=null
         var uploadSamples = 0
         fun upload(batch: List<ShortArray>, speech: Boolean) {
             try {
@@ -92,13 +94,6 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             attemptedWake=true
             wake = SherpaWake(assets){!cancelled.get() && allowed()}
             if (cancelled.get() || !allowed()) return
-            synchronized(nativeLock){
-                if(cancelled.get() || !allowed())return
-                native.startRecording()
-            }
-            check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
-            nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
-            runCatching{recording(true)}
             val timestamp=AudioTimestamp()
             val continuity=NativeReadLedger(nativeBytes/2,CaptureMonotonic::nowMs,
                 android.os.SystemClock::elapsedRealtime) {
@@ -106,15 +101,25 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     CaptureStamp(timestamp.framePosition,timestamp.nanoTime) else null
             }
             ledger=continuity
+            val prefix=CaptureBootstrap(continuity);startup=prefix;startupHandle=prefix
+            synchronized(nativeLock){
+                if(cancelled.get() || !allowed())return
+                native.startRecording()
+            }
+            check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+            nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
+            runCatching{recording(true)}
+            prefix.prepare({target->native.read(target,0,target.size,AudioRecord.READ_NON_BLOCKING)},
+                {!cancelled.get() && allowed()},{Thread.sleep(5)})
             while (!cancelled.get() && allowed()) {
                 val room=continuity.remainingMs()
-                if(!continuity.ready){Thread.sleep(5);continue}
                 check(uploads.awaitRoom(frame.size,room)){"capture queue continuity"}
                 continuity.check()
-                val count=native.read(frame,0,frame.size,AudioRecord.READ_NON_BLOCKING)
+                val replay=prefix.pending
+                val count=if(replay)prefix.take(frame) else native.read(frame,0,frame.size,AudioRecord.READ_NON_BLOCKING)
                 if(cancelled.get() || !allowed())break
                 check(count in 0..frame.size)
-                lastCapturedAt=continuity.read(count)
+                lastCapturedAt=if(replay)continuity.sampleTime(prefix.replayPosition) else continuity.read(count)
                 if (count == 0) { Thread.sleep(5); continue }
                 check(native.recordingState == AudioRecord.RECORDSTATE_RECORDING)
                 nativeProof = nativeProof.copy(recording=true, frames=nativeProof.frames+count)
@@ -189,7 +194,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         } catch (_: Exception) {
             if (!cancelled.get()) owner.post { if(!cancelled.get() && allowed())failed() }
         } finally {
-            uploads.cancel();frame.fill(0);buffered.clear();runCatching{recording(false)}
+            uploads.cancel();frame.fill(0);startup?.clear();startupHandle=null;buffered.clear();runCatching{recording(false)}
             // Native stop/release precedes any potentially blocking model disposal.
             var released=!attemptedNative
             synchronized(nativeLock) {
@@ -220,7 +225,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     /** Caller-thread cancellation never waits for the audio owner. Native stop is independent;
      * the shared lease includes its completion and the original model worker's completion. */
     fun requestCancel() {
-        cancelled.set(true);uploads.cancel()
+        cancelled.set(true);startupHandle?.clear();uploads.cancel()
         if(!stopRequested.compareAndSet(false,true))return
         val hold=lease ?: return
         if(!hold.beginStop())return

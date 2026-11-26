@@ -37,11 +37,11 @@ class ContinuousCaptureTest {
  }
 
  @Test fun delayedStartUsesHardwareCountAndRejectsBufferFilledInsideBlockedStart(){
-  for(phase in 0..2)continuous({0},configure={
-   when(phase){0->AudioRecord.beforeStart={Thread.sleep(300)};1->AudioRecord.afterStart={Thread.sleep(300)};else->AudioRecord.timestampDelayMs=80}
+  for(phase in 0..3)continuous({0},configure={
+   when(phase){0->AudioRecord.beforeStart={Thread.sleep(60)};1->AudioRecord.afterStart={Thread.sleep(300)};2->AudioRecord.timestampDelayMs=80;else->AudioRecord.beforeStart={Thread.sleep(300)}}
   }){cap,h,client,failures->
    val end=System.nanoTime()+2_000_000_000
-   if(phase!=1){
+   if(phase!=1 && phase!=3){
     while(cap.nativeProof.frames<640&&System.nanoTime()<end)Thread.sleep(5)
     h.drain();assertTrue(cap.nativeProof.frames>=640);assertEquals(0,failures());assertFalse(cap.nativeProof.released)
    }else{

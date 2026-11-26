@@ -9,6 +9,8 @@ internal data class CaptureStamp(val frames:Long,val nanoTime:Long)
 internal class NativeReadLedger(private val capacity:Int,private val mono:()->Long,
     private val boot:()->Long,private val stamp:()->CaptureStamp?) {
     companion object {
+        const val STARTUP_LIMIT_MS=500L
+        const val STARTUP_SAMPLES=8000
         const val MIN_RATE=15984L
         private const val MAX_RATE=16016L
         fun durationMs(samples:Long)=(samples*1000+MIN_RATE-1)/MIN_RATE
@@ -20,6 +22,35 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     private val maxAgeNs=minOf(100L,startupMs)*1_000_000
     private var checkedAt=monoOrigin
     private var observed:CaptureStamp?=null
+    private var starting=false
+    private var startupPairs=0
+    val startupAnchored get()=starting && startupPairs>=2
+    fun beginStartup() {check(!starting && observed==null && readSamples==0L);starting=true}
+    private fun softwareUpper(time:Long)=((time-monoOrigin+1)*MAX_RATE+999)/1000
+    private fun softwareRoom(time:Long):Long {
+        check(time-monoOrigin<STARTUP_LIMIT_MS){"capture startup deadline"}
+        val left=capacity-reserve-maxOf(0,softwareUpper(time)-readSamples)
+        check(left>0){"startup native continuity exhausted"}
+        val room=left*1000/MAX_RATE
+        check(room>0){"startup native room exhausted"}
+        return minOf(room,STARTUP_LIMIT_MS-(time-monoOrigin))
+    }
+    fun stageRead(count:Int) {
+        require(count>=0);check(starting)
+        remainingMs() // Charge all read/JNI delay before accounting newly returned data.
+        val total=readSamples+count
+        check(total<=STARTUP_SAMPLES && total<=softwareUpper(checkedAt)){"startup samples outside bound"}
+        observed?.let { value ->
+            val lag=maxOf(0,checkedAt*1_000_000-value.nanoTime)
+            check(total<=value.frames+(lag*MAX_RATE+999_999_999)/1_000_000_000){"native read exceeds timestamp position"}
+        }
+        readSamples=total
+    }
+    fun finishStartup() {
+        remainingMs();check(startupAnchored){"capture startup anchor unconfirmed"}
+        check(sampleTime(0)>=bootOrigin-2){"capture startup origin unproven"}
+        starting=false
+    }
     var readSamples=0L;private set
     val ready get()=observed!=null
     init {require(capacity>reserve && startupMs>0)}
@@ -31,6 +62,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         check(time>=before){"capture clock regressed during timestamp"}
         check(kotlin.math.abs(elapsed-(time-monoOrigin))<=5){"capture timebase changed"}
         checkedAt=time
+        if(starting)softwareRoom(time)
         if(candidate!=null) {
             check(candidate.frames in 0..(Long.MAX_VALUE/1_000_000_000) && candidate.nanoTime>=0 && candidate.nanoTime<=time*1_000_000+1_000_000){"invalid capture timestamp"}
             val old=observed
@@ -46,16 +78,25 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
                 // A stationary frame must not be made fresh by changing its timestamp.
                 check(candidate.frames!=old.frames || candidate.nanoTime==old.nanoTime){"capture timestamp relabeled"}
             }
+            if(starting) {
+                check(candidate.frames<=softwareUpper(time)){"capture startup counter outside bound"}
+                val origin=candidate.nanoTime-Math.floorDiv(candidate.frames*1_000_000_000,MIN_RATE)
+                check(origin>=monoOrigin*1_000_000-1_000_000){"capture startup origin unproven"}
+                if(candidate.frames>0) {
+                    if(old==null || old.frames==0L)startupPairs=1
+                    else if(candidate.frames>old.frames)startupPairs++
+                }
+            }
             observed=candidate
         }
         val value=observed
-        if(value==null)check(time-monoOrigin<startupMs){"capture timestamp unavailable"}
-        else check(time*1_000_000-value.nanoTime<=maxAgeNs){"capture timestamp stale"}
+        if(value==null && !starting)check(time-monoOrigin<startupMs){"capture timestamp unavailable"}
+        else if(value!=null)check(time*1_000_000-value.nanoTime<=maxAgeNs){"capture timestamp stale"}
         return value to time
     }
     fun remainingMs():Long {
         val (value,time)=refresh()
-        if(value==null)return startupMs-(time-monoOrigin)
+        if(value==null)return if(starting)softwareRoom(time) else startupMs-(time-monoOrigin)
         val lag=maxOf(0,time*1_000_000-value.nanoTime)
         val produced=value.frames+(lag*MAX_RATE+999_999_999)/1_000_000_000
         val unread=maxOf(0,produced-readSamples)
@@ -63,7 +104,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         check(left>0){"cumulative native continuity exhausted"}
         val room=left*1000/MAX_RATE
         check(room>0){"cumulative native room exhausted"}
-        return room
+        return if(starting)minOf(room,softwareRoom(time)) else room
     }
     fun check(){remainingMs();check(ready){"capture timestamp not ready"}}
     fun read(count:Int):Long {

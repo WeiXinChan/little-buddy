@@ -23,6 +23,7 @@ import androidx.test.runner.AndroidJUnitRunner
 import com.littlebuddy.v2.CaptureMonotonic
 import com.littlebuddy.v2.CaptureStamp
 import com.littlebuddy.v2.NativeReadLedger
+import com.littlebuddy.v2.CaptureBootstrap
 import com.littlebuddy.v2.ProcessRecorders
 import com.littlebuddy.v2.RecorderLease
 import org.junit.AssumptionViolatedException
@@ -203,7 +204,10 @@ class NativeTimestampTest {
             "capture timestamp relabeled","capture timestamp unavailable","capture timestamp stale",
             "cumulative native continuity exhausted","cumulative native room exhausted","capture timestamp not ready",
             "native read exceeds timestamp position","insufficient continuous reads","native release unconfirmed",
-            "native probe worker did not finish","native buffer smaller than requested","native format mismatch")
+            "native probe worker did not finish","native buffer smaller than requested","native format mismatch","capture startup deadline","startup native continuity exhausted",
+            "startup native room exhausted","startup samples outside bound","capture startup counter outside bound",
+            "capture startup origin unproven","capture startup anchor unconfirmed","capture startup cache exhausted",
+            "capture startup cancelled","invalid startup read")
         return error.message?.takeIf{it in reasons} ?: "NATIVE_PROBE_FAILED"
     }
     @SuppressLint("MissingPermission")
@@ -255,9 +259,6 @@ class NativeTimestampTest {
                     meta.actualBufferFrames=native.bufferSizeInFrames
                     check(meta.actualBufferFrames>=bytes/2){"native buffer smaller than requested"}
                     check(native.sampleRate==16000 && native.channelCount==1 && native.audioFormat==AudioFormat.ENCODING_PCM_16BIT){"native format mismatch"}
-                    meta.phase="native_start";meta.startCallMs=SystemClock.elapsedRealtime()
-                    cancellation.start();meta.startDurationMs=SystemClock.elapsedRealtime()-meta.startCallMs
-                    if(native.recordingState!=AudioRecord.RECORDSTATE_RECORDING)dependency("DEPENDENCY_NATIVE_START_RESTRICTED");meta.started=true
                     val timestamp=AudioTimestamp()
                     val ledger=NativeReadLedger(bytes/2,CaptureMonotonic::nowMs,SystemClock::elapsedRealtime){
                         val began=System.nanoTime()
@@ -276,13 +277,26 @@ class NativeTimestampTest {
                             CaptureStamp(timestamp.framePosition,timestamp.nanoTime)
                         }else{meta.timestampUnavailable++;null}
                     }
+                    val prefix=CaptureBootstrap(ledger)
+                    meta.phase="native_start";meta.startCallMs=SystemClock.elapsedRealtime()
+                    cancellation.start();meta.startDurationMs=SystemClock.elapsedRealtime()-meta.startCallMs
+                    if(native.recordingState!=AudioRecord.RECORDSTATE_RECORDING)dependency("DEPENDENCY_NATIVE_START_RESTRICTED");meta.started=true
+                    meta.phase="timestamp_startup"
+                    try {
+                        prefix.prepare({target->
+                            val n=native.read(target,0,target.size,AudioRecord.READ_NON_BLOCKING)
+                            meta.lastReadCode=n
+                            if(n==0)meta.emptyReads++ else if(n>0)meta.positiveReads++
+                            n
+                        },{!cancellation.cancelled.get() && allowed(front)}, {Thread.sleep(5)})
+                        meta.samplesRead=ledger.readSamples
+                    }finally{meta.samplesRead=ledger.readSamples;prefix.clear()} // No KWS or retained PCM in this instrumentation.
                     var beganReading=-1L;var lastReport=SystemClock.elapsedRealtime()
                     meta.phase="timestamp_startup"
                     while(true){
                         if(cancellation.cancelled.get() || !allowed(front))dependency("DEPENDENCY_FOREGROUND_LOST")
                         if(Build.VERSION.SDK_INT>=29 && native.activeRecordingConfiguration?.isClientSilenced==true)dependency("DEPENDENCY_NATIVE_CLIENT_SILENCED")
                         val room=ledger.remainingMs();meta.minRoomMs=minOf(meta.minRoomMs,room);meta.lastRoomMs=room
-                        if(!ledger.ready){Thread.sleep(5);continue}
                         if(beganReading<0){beganReading=SystemClock.elapsedRealtime();meta.firstLedgerReadyMs=beganReading-meta.startCallMs;meta.phase="continuous_read"}
                         ledger.check()
                         var empty=false
