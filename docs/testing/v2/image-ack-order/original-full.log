@@ -1,0 +1,58 @@
+...........................................................................................{"service": "little-buddy-v2", "event": "ready_loopback"}
+{"service": "little-buddy-v2", "event": "stopped"}
+...Executing <Task finished name='Task-1105' coro=<Flash.test_package_cannot_label_old_model_source_as_new_default() done, defined at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-8c4eebd1bbc1/workdir/parent-completion/tests/v2/test_flash_text_config.py:131> result=None created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.349 seconds
+..Executing <Task finished name='Task-1115' coro=<Flash.test_release_identity_binds_default_text_and_independent_review() done, defined at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-8c4eebd1bbc1/workdir/parent-completion/tests/v2/test_flash_text_config.py:115> result=None created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.503 seconds
+.........................................E.....E...............{"service": "little-buddy-v2", "event": "ready_loopback"}
+{"service": "little-buddy-v2", "event": "stopped"}
+........................Executing <Task pending name='Task-2042' coro=<TlsTests.test_full_duplex_wire_stream_coordinates_and_auth() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-8c4eebd1bbc1/workdir/parent-completion/tests/v2/test_m04_transport.py:28> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.100 seconds
+...................................................................................................................................................................................................................
+======================================================================
+ERROR: test_old_failure_finally_cannot_revoke_later_legal_player (test_image_descriptions.Descriptions.test_old_failure_finally_cannot_revoke_later_legal_player)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-8c4eebd1bbc1/workdir/parent-completion/tests/v2/test_image_descriptions.py", line 306, in test_old_failure_finally_cannot_revoke_later_legal_player
+    p.session.begin_turn();p.session.drain_commands();p.session.bind_player('new-player');p.session.drain_commands()
+    ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-8c4eebd1bbc1/workdir/parent-completion/backend/v2/session.py", line 154, in begin_turn
+    raise RuntimeError('session closed')
+RuntimeError: session closed
+
+======================================================================
+ERROR: test_unplayed_failure_help_is_revoked_at_original_budget_late_ack_rejected (test_image_descriptions.Descriptions.test_unplayed_failure_help_is_revoked_at_original_budget_late_ack_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-8c4eebd1bbc1/workdir/parent-completion/tests/v2/test_image_descriptions.py", line 282, in test_unplayed_failure_help_is_revoked_at_original_budget_late_ack_rejected
+    p.changed.set();await task
+                    ^^^^^^^^^^
+TypeError: object NoneType can't be used in 'await' expression
+
+----------------------------------------------------------------------
+Ran 394 tests in 107.515s
+
+FAILED (errors=2)
+{"synthetic_serial_dependency_first_audio_ms": 146.1, "synthetic_overlapped_first_audio_ms": 84.54, "not_cloud_latency": true}
+{"elapsed_ms": 16138, "without_heartbeat_delivery": false, "with_heartbeat_delivery": true, "heartbeats": 4, "lease": 15, "budget": 15, "cloud_calls": 0}

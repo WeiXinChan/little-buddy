@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "pr_base": "08183d8caff7233bff92de7809ca2de799665281",
+  "combined_base": "c130bfdf9c1387891104d8e079dc401049d959e6",
+  "modified_product_files": [],
+  "original_test_methods_unchanged": 24,
+  "new_methods": 3,
+  "module": {
+    "executed": 27,
+    "passed": 27,
+    "seconds": 0.398
+  },
+  "combined_full": {
+    "executed": 397,
+    "passed": 397,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 48.905
+  },
+  "old_helper_falsifiers": {
+    "executed": 2,
+    "errors": 2,
+    "exit": 1
+  },
+  "cloud_calls": 0,
+  "device_operations": 0,
+  "files": {
+    "combined-full.log": "f0c586fa5c79b019c5051d657226a67a57d3fe07c7a12260e434b06b4e2c2b54",
+    "module.log": "de99b19679a95e04f8ceb38a9e15a68cfbb8683e1ba899a8ef1ff1961bc1c37c",
+    "old-helper-falsifier.log": "6fa9bf24aa2ee4b9c2d687144cf60ea30a0a375940e5622c7903d6412d9c2387",
+    "original-full.log": "dcec6456bcaa4e91ee970bab61c552722164868db30cf0dd089bbc91329335c6",
+    "original-module.log": "a1cf4346a9b21b99864791e1850e7c472988cb1b8141844a766c5ca085e54605",
+    "report.md": "63ffe2c2308d72b6f9134042ea93aea7eff2cd839c8a401a56c1b23e8817ed27",
+    "root-experiment.log": "62b1136ff67c644fb9a1a9c019c9eb3b027ec34c5c17fcb4fca15cb2f13c0101",
+    "root-experiment.py": "aa87ed9ddabff51129454d029aa203fb8b90307e970998972aebb1ce394b3348"
+  },
+  "test_source_sha256": "539eb0073074cf4d4a9c76fc43c9e731b05dd2cc9963054fa69efc7fb1297271"
+}
