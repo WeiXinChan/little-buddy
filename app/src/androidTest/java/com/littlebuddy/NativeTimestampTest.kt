@@ -39,6 +39,7 @@ class NativeTimestampRunner : AndroidJUnitRunner() {
     companion object {
         const val METHOD="com.littlebuddy.NativeTimestampTest#nativeTimestampAndProductionLedger"
         const val STARTUP_METHOD="com.littlebuddy.NativeTimestampStartupTest#compareTimestampStartup"
+        const val CADENCE_METHOD="com.littlebuddy.NativeTimestampCadenceTest#observeOneBoundedCadence"
         const val TARGET="com.littlebuddy.V2VoiceActivity"
     }
     override fun newApplication(loader:ClassLoader,name:String,context:Context):Application =
@@ -46,7 +47,8 @@ class NativeTimestampRunner : AndroidJUnitRunner() {
     override fun onCreate(arguments:Bundle?) {
         val selected=Bundle(arguments ?: Bundle())
         val selectedClass=selected.getString("class")
-        require(selectedClass in setOf(METHOD,STARTUP_METHOD) &&
+        require(selectedClass in setOf(METHOD,STARTUP_METHOD,CADENCE_METHOD) &&
+            (selectedClass!=CADENCE_METHOD || selected.getString("nativeTimestampCadenceDiagnostic")=="true") &&
             (selectedClass!=STARTUP_METHOD || selected.getString("nativeTimestampStartupDiagnostic")=="true") && selected.getString("nativeTimestampProbe")=="true" &&
             selected.getString("businessIdlePreflight")=="true") { "native probe requires exact class and host idle preflight" }
         selected.putString("disableAnalytics","true")
