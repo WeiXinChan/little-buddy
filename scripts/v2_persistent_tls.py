@@ -32,7 +32,7 @@ def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True).encode(
 def hex_string(value,size):return type(value) is str and len(value)==size and all(c in '0123456789abcdef' for c in value)
 
 @contextmanager
-def internal_authority(args):
+def internal_authority(args,*,program=None):
     # Reject a direct internal invocation before child I/O. --enable isn't proof.
     require(sys.flags.isolated==1 and args.mode in {'_driver','_service'})
     require(type(args.lock_fd) is int and args.lock_fd>=3 and type(args.supervisor_pid) is int and args.supervisor_pid>1)
@@ -53,9 +53,10 @@ def internal_authority(args):
               (int(device[0],16),int(device[1],16),int(device[2]))==(os.major(info.st_dev),os.minor(info.st_dev),info.st_ino))
         if held:break
     require(held)
+    program=Path(program or __file__).resolve()
     parent=Path('/proc/'+str(args.parent_pid)+'/cmdline').read_bytes().split(b'\0')
     expected=b'prepare' if args.mode=='_driver' else b'_driver'
-    require(expected in parent and any(v in parent for v in (b'scripts.v2_persistent_tls',b'scripts/v2_persistent_tls.py',str(Path(__file__).resolve()).encode())))
+    require(expected in parent and any(v in parent for v in (('scripts.'+program.stem).encode(),('scripts/'+program.name).encode(),str(program).encode())))
     if args.mode=='_service':require(args.source.encode() in parent and args.run_id.encode() in parent)
     # Re-validates the same inode/root-owned 0644 global lock, retaining the same FD.
     with heavy_lock(args.lock_fd):
@@ -157,8 +158,8 @@ class Service:
         elif op not in {'state','shutdown'}:raise Rejected('ipc_op')
         return dict(ok=True,state=self.state())
 
-async def serve_child(fd,cert,key,authority):
-    ipc=await channel(fd);owner=Service();tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(cert,key)
+async def serve_child(fd,cert,key,authority,*,factory=None,lifetime=SECONDS):
+    ipc=await channel(fd);owner=(factory or Service)();tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(cert,key)
     class Observed(VoicePeer):
         def __init__(self,*a,**kw):
             require(owner.peer is None and not owner.isolated)
@@ -172,7 +173,7 @@ async def serve_child(fd,cert,key,authority):
         server=await voice_server('127.0.0.1',0,tls,TOKEN,UnifiedProviders(owner.speech,owner.meter),CompanionPolicy());owner.server=server
         await ipc.send(dict(ok=True,port=server.sockets[0].getsockname()[1],pid=os.getpid(),protocol=CONTRACT,authority=authority))
         try:
-            async with asyncio.timeout(SECONDS):
+            async with asyncio.timeout(lifetime):
                 while True:
                     event=await ipc.receive()
                     try:result=await owner.dispatch(event)
@@ -197,6 +198,8 @@ class Wire:
         async with self.send_lock:
             if kind=='stop':self.epoch+=1;self.seq=0
             seq=self.seq;await self.ws.send(json.dumps(dict(v=2,type=kind,epoch=self.epoch,seq=seq,**fields)));self.seq+=1;return seq
+    async def before_ack(self,event):pass
+    async def after_ack(self,event):pass
     async def receive(self):
         async for raw in self.ws:
             event=json.loads(raw)
@@ -215,7 +218,8 @@ class Wire:
                     seq=await self.command('ack',**self.old_ack)
                     after=(await self.ipc.call('barrier',seq=seq))['state']['state_hash'];self.old_checked=before==after;require(self.old_checked)
                 ack=dict(identity=dict(self.identity,sequence=self.ack_seq),player=event['player'],stream=event['stream'],segment=event['segment'],head=event['end'])
-                self.ack_seq+=1;self.acks+=1;self.turn_acks+=1;self.last_ack=ack;await self.command('ack',**ack);self.acked.set()
+                await self.before_ack(event)
+                self.ack_seq+=1;self.acks+=1;self.turn_acks+=1;self.last_ack=ack;await self.command('ack',**ack);await self.after_ack(event);self.acked.set()
             elif kind=='reply_end':self.delivered=True;self.done.set()
             elif kind=='failure':self.control='failure';self.done.set()
     async def heartbeat(self):
