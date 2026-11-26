@@ -1,0 +1,340 @@
+{
+  "source": "92e58140fc3706de382f9cd30e7c84740e082c39",
+  "supervisor_deadline_seconds": 60,
+  "automatic_retry": false,
+  "full_acceptance": false,
+  "synthetic_only": true,
+  "supervisor_timeout": false,
+  "worker_exit": 0,
+  "probe": {
+    "format": 1,
+    "client_heartbeats": 5,
+    "client_heartbeat_failed": false,
+    "peer_failure": null,
+    "cleanup": {
+      "confirmed": true,
+      "pending_tasks": 0,
+      "provider_reusable": true
+    },
+    "usage_final": true,
+    "usage": {
+      "requests": 17,
+      "failures": 0,
+      "prompt_tokens": 19737,
+      "completion_tokens": 386
+    },
+    "case": "abandon",
+    "fixture_sha256": "01406aef8e48cbcafb8e26bbbd1f2b4383054d388cea2957645d43c09491dff7",
+    "layer": "synthetic_text_real_voicepeer_simulated_playback",
+    "turns": [
+      {
+        "label": "abandon-1",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.95,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.19,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.62,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 113,
+          "audio_bytes": 444480,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 113,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 3096.79,
+        "completed_ms": 8245.1,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 1457.89,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 878.41,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 427.33,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 530.83,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 868.1,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 515.83,
+            "ok": true
+          }
+        ]
+      },
+      {
+        "label": "abandon-2",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 153.14,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.93,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 152.3,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 109,
+          "audio_bytes": 429120,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 109,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 3440.18,
+        "completed_ms": 8569.89,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 1139.63,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 908.47,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 902.99,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 677.04,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 608.37,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 744.49,
+            "ok": true
+          }
+        ]
+      },
+      {
+        "label": "abandon-3",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 151.84,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 151.62,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 81,
+          "audio_bytes": 322560,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 81,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 3378.16,
+        "completed_ms": 7740.13,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 1262.8,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 725.79,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 756.27,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 669.03,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 1702.77,
+            "ok": true
+          }
+        ]
+      }
+    ],
+    "model_requests": 17,
+    "tts_requests": 8,
+    "tts_unicode_characters": 99,
+    "full_acceptance": false,
+    "semantic_review_required": true,
+    "p12_verified": false,
+    "p15_verified": false,
+    "source": "92e58140fc3706de382f9cd30e7c84740e082c39",
+    "candidate": "deepseek-v4.1-flash-1017",
+    "rate_estimate_is_qwen4_proxy": true,
+    "synthetic_only": true,
+    "case_selection": "abandon",
+    "root_actual_model_requests": 17,
+    "root_planning_denials": 0,
+    "root_model_planning_allowance_cny": 5.0,
+    "uncached_rate_estimate_cny": 0.22824,
+    "usage_unknown_requests": 0,
+    "actual_bill_verified": false,
+    "currency_bound_is_supplier_guarantee": false,
+    "asr_calls": 0,
+    "image_calls": 0,
+    "model_rate_source": "https://help.aliyun.com/zh/model-studio/qwen4-max"
+  },
+  "supervisor_elapsed_ms": 24843,
+  "complete_result_received": true,
+  "synthetic_semantic_observations": [
+    {
+      "label": "abandon-1",
+      "mode": "adventure",
+      "roles": [
+        "探险小队员",
+        "向导"
+      ],
+      "synthetic_rules": "山洞探险：孩子选路，我当向导；用简短描述推进，不替孩子做选择。",
+      "synthetic_played": [
+        "好啊，我是山洞向导！",
+        "前面有两个洞口，一个亮亮的，一个黑黑的。",
+        "你想走哪一边？"
+      ],
+      "rules_characters": 31,
+      "heard_items": 3,
+      "heard_characters": 37
+    },
+    {
+      "label": "abandon-2",
+      "mode": "chat",
+      "roles": [],
+      "synthetic_rules": "随便聊聊，简短自然，不追问太多。",
+      "synthetic_played": [
+        "好啊，我是山洞向导！",
+        "前面有两个洞口，一个亮亮的，一个黑黑的。",
+        "你想走哪一边？",
+        "好呀，山洞探险就先收起来。",
+        "那你想聊点什么？",
+        "也可以说说今天开心的事。"
+      ],
+      "rules_characters": 16,
+      "heard_items": 6,
+      "heard_characters": 70
+    },
+    {
+      "label": "abandon-3",
+      "mode": "chat",
+      "roles": [],
+      "synthetic_rules": "随便聊聊，简短自然，不追问太多。",
+      "synthetic_played": [
+        "好啊，我是山洞向导！",
+        "前面有两个洞口，一个亮亮的，一个黑黑的。",
+        "你想走哪一边？",
+        "好呀，山洞探险就先收起来。",
+        "那你想聊点什么？",
+        "也可以说说今天开心的事。",
+        "我也爱看云，它们总在慢慢变样子。",
+        "你看的那朵云现在像什么呀？"
+      ],
+      "rules_characters": 16,
+      "heard_items": 8,
+      "heard_characters": 99
+    }
+  ]
+}

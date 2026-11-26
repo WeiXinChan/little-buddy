@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "base": "75dfeecc0c6a608b8432012e6f0f3584abce4a05",
+  "normal_methods": 37,
+  "passed": 37,
+  "failed": 0,
+  "skipped": 0,
+  "new_methods": 5,
+  "paired_synthetic_scenarios": 15,
+  "cloud_calls": 0,
+  "live_semantics_verified": false,
+  "original_prompt_contract_exit": 1,
+  "files": {
+    "docs/testing/v2/a22-persona/abandon-original.json": "b0820ac91e10bec165662bbe46198e733b2527e880990c762a10968710648509",
+    "docs/testing/v2/a22-persona/old-prompt-contract-failure.log": "bd0365ac3b546858f36d7872b2448cc9bc63ee46b3466080b31b58c2ac8c0456",
+    "docs/testing/v2/a22-persona/report.md": "a4939e728cccb3426f18282a4224588bea13be6de60bd8a928e5195e3a8035d9",
+    "docs/testing/v2/a22-persona/targeted.log": "7452a2999c6d749a00b91ffeb13735daa499e33c23e51284804afd3d706746b5",
+    "docs/testing/v2/a22-persona/tests.log": "3162d1dede1cf6846625018b18bfeeeaf5601202e5bde6500e7c3005176baa19"
+  }
+}

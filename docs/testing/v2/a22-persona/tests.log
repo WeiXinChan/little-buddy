@@ -1,0 +1,10 @@
+test_abandon_then_cloud_risk_uses_actual_chat_context_not_old_role_license (tests.v2.test_a22_persona.Persona.test_abandon_then_cloud_risk_uses_actual_chat_context_not_old_role_license) ... ok
+test_pair_verdicts_flow_through_actual_review_and_ack_not_first_person_filter (tests.v2.test_a22_persona.Persona.test_pair_verdicts_flow_through_actual_review_and_ack_not_first_person_filter) ... ok
+test_plan_and_review_receive_the_same_scoped_persona_distinction (tests.v2.test_a22_persona.Persona.test_plan_and_review_receive_the_same_scoped_persona_distinction) ... ok
+test_sentence_review_cannot_be_bypassed_by_allowing_combined_review (tests.v2.test_a22_persona.Persona.test_sentence_review_cannot_be_bypassed_by_allowing_combined_review) ... ok
+test_unavailable_or_malformed_review_does_not_publish (tests.v2.test_a22_persona.Persona.test_unavailable_or_malformed_review_does_not_publish) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.254s
+
+OK
