@@ -1,0 +1,31 @@
+{
+  "version": "17.4",
+  "locked": "17.4",
+  "sources": {
+    "Connection.close": {
+      "module": "websockets.asyncio.connection",
+      "line": 621,
+      "sha256": "c33b4eff40393a9c6031ec8491be4d4ff299e1cd773cd55e185d342373b50395"
+    },
+    "Connection.wait_closed": {
+      "module": "websockets.asyncio.connection",
+      "line": 656,
+      "sha256": "278c15b55f6bc09b73f24c8f69ee939057c038a13273e4b2aecbfe817f310cd8"
+    },
+    "Connection.connection_lost": {
+      "module": "websockets.asyncio.connection",
+      "line": 1022,
+      "sha256": "ed34a9b75ab37cf252251060f51ecccd4200b7c7ebc9d60973e152e6d8ae0d2d"
+    },
+    "Connection.send_context": {
+      "module": "websockets.asyncio.connection",
+      "line": 866,
+      "sha256": "3dbc998ac51e6845047e0d71b76debbea0a95aa32daa53cd6c4c85ba8fe1fad1"
+    },
+    "connect.__aexit__": {
+      "module": "websockets.asyncio.client",
+      "line": 579,
+      "sha256": "10879581bb196f5b7502cbefeda58be1997a7f88cdf082a10b86fec2e013d930"
+    }
+  }
+}

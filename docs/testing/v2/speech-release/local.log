@@ -1,0 +1,13 @@
+test_actual_voicepeer_three_turns_two_sentences_each_real_local_tts (tests.v2.test_speech_release.Release.test_actual_voicepeer_three_turns_two_sentences_each_real_local_tts) ... ok
+test_cancel_during_real_unanswered_close_aborts_then_confirms_before_raising (tests.v2.test_speech_release.Release.test_cancel_during_real_unanswered_close_aborts_then_confirms_before_raising) ... ok
+test_real_body_failure_preserved_after_confirmed_release (tests.v2.test_speech_release.Release.test_real_body_failure_preserved_after_confirmed_release) ... ok
+test_real_cancelled_body_confirms_release_and_propagates_cancel (tests.v2.test_speech_release.Release.test_real_cancelled_body_confirms_release_and_propagates_cancel) ... ok
+test_real_normal_close_confirms_connection_lost_and_tasks (tests.v2.test_speech_release.Release.test_real_normal_close_confirms_connection_lost_and_tasks) ... ok
+test_real_peer_does_not_respond_to_close_is_aborted_and_confirmed (tests.v2.test_speech_release.Release.test_real_peer_does_not_respond_to_close_is_aborted_and_confirmed) ... ok
+test_runtime_factory_selects_v2_adapter_without_changing_v1_default (tests.v2.test_speech_release.Release.test_runtime_factory_selects_v2_adapter_without_changing_v1_default) ... ok
+test_unconfirmed_connection_lost_fails_closed_no_second_connect (tests.v2.test_speech_release.Release.test_unconfirmed_connection_lost_fails_closed_no_second_connect) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.707s
+
+OK
