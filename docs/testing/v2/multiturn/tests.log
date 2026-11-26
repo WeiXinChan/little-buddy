@@ -1,0 +1,18 @@
+test_async_observer_is_rejected_without_running_its_body (tests.v2.test_multiturn_probe.Probe.test_async_observer_is_rejected_without_running_its_body) ... ok
+test_catalogue_covers_eight_topics_and_explicit_transition_targets (tests.v2.test_multiturn_probe.Probe.test_catalogue_covers_eight_topics_and_explicit_transition_targets) ... ok
+test_image_configuration_or_oversized_case_cannot_run (tests.v2.test_multiturn_probe.Probe.test_image_configuration_or_oversized_case_cannot_run) ... ok
+test_observer_exception_stops_before_next_turn_and_is_not_pass (tests.v2.test_multiturn_probe.Probe.test_observer_exception_stops_before_next_turn_and_is_not_pass) ... ok
+test_observer_receives_detached_immutable_actual_context_without_expected (tests.v2.test_multiturn_probe.Probe.test_observer_receives_detached_immutable_actual_context_without_expected) ... ok
+test_played_history_loss_or_unchanged_history_is_not_continuity (tests.v2.test_multiturn_probe.Probe.test_played_history_loss_or_unchanged_history_is_not_continuity) ... ok
+test_real_voicepeer_progresses_context_from_actual_ack_not_expectations (tests.v2.test_multiturn_probe.Probe.test_real_voicepeer_progresses_context_from_actual_ack_not_expectations) ... ok
+test_request_gate_counts_actual_retry_calls_and_rejects_before_io (tests.v2.test_multiturn_probe.Probe.test_request_gate_counts_actual_retry_calls_and_rejects_before_io) ... ok
+test_rule_role_and_abandon_detectors_flag_mismatch (tests.v2.test_multiturn_probe.Probe.test_rule_role_and_abandon_detectors_flag_mismatch) ... ok
+test_run_report_excludes_provider_previous_usage (tests.v2.test_multiturn_probe.Probe.test_run_report_excludes_provider_previous_usage) ... ok
+test_safety_rejection_never_counts_delivered_or_heard (tests.v2.test_multiturn_probe.Probe.test_safety_rejection_never_counts_delivered_or_heard) ... ok
+test_usage_is_batch_delta_with_missing_unknown_not_zero (tests.v2.test_multiturn_probe.Probe.test_usage_is_batch_delta_with_missing_unknown_not_zero) ... ok
+test_wrong_mode_stops_batch_instead_of_overwriting_context (tests.v2.test_multiturn_probe.Probe.test_wrong_mode_stops_batch_instead_of_overwriting_context) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.101s
+
+OK

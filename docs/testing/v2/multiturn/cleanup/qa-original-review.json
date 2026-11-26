@@ -1,0 +1,40 @@
+{
+  "head": "dafa9150cf24523eae3d72a25615548c39423865",
+  "tree": "aa9cdbb24a491645128c3c95a288e00499da5f18",
+  "base": "9dd265e7",
+  "source_sha256": {
+    "scripts/v2_multiturn_probe.py": "88ed08f489becc18b9989011627f3290d8567bdb0dab289d6cfe1a961a9fb0f0",
+    "tests/v2/test_multiturn_probe.py": "097c70207507f5cdd7c9ef872677442d5a734448cac6c7826e0c1ed3c2392160",
+    "docs/testing/v2/multiturn/cases.json": "f1e4e4b6a6bf7390a57a669def6bf7ecb5a8bd6d0d38c41c9a6b855cfeabfbf0"
+  },
+  "verdict": "HOLD: MT-01 unbounded retired-task cleanup; MT-02 rejected observer Task remains active",
+  "findings": [
+    {
+      "id": "MT-01",
+      "location": "scripts/v2_multiturn_probe.py:126-130",
+      "repro": "actual VoicePeer+fake TTS context manager __aexit__ catches cancellation and waits on test-release event; outer45 timeout shortened only in harness to40ms; after800ms generationdone but retired1, run_case pending and wrappersnotrestored; release lets all tasks complete",
+      "expected": "bounded cleanup plus explicit failure/quarantine/ownership, no unbounded gather outside deadline"
+    },
+    {
+      "id": "MT-02",
+      "location": "scripts/v2_multiturn_probe.py:116-119",
+      "repro": "sync observer returns asyncio.Task; rejected as ProbeLimit but only bare coroutines are closed; Task body runs and remains pending after report",
+      "expected": "dispose/cancel supported awaitables with bounded cleanup, or enforce stricter trusted callback protocol without leaked tasks"
+    }
+  ],
+  "tests": {
+    "original_methods": 13,
+    "original_passed": 13,
+    "independent_methods": 2,
+    "independent_passed": 0,
+    "independent_failed": 2,
+    "unique_total": 15,
+    "skips": 0,
+    "scope": "actual VoicePeer/Session/ACK/modelport/TTSport; fake model and synthetic PCM; timeout acceleration test-only; no ASR/TLS/device/quality/bill validation",
+    "initial_independent_import_duplicate": "initial discovery reran imported13; overlapping not counted; final focused2 failures retained separately"
+  },
+  "all_counterexample_tasks_released_and_joined": true,
+  "production_business_model_config_changed": false,
+  "actual_cloud_device_secret_deployment_merge": false,
+  "p12_p15_full_acceptance": false
+}

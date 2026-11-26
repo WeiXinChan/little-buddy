@@ -1,0 +1,29 @@
+{
+  "old_head": "dafa9150cf24523eae3d72a25615548c39423865",
+  "old_author_tests": {
+    "passed": 13
+  },
+  "old_falsifiers": {
+    "executed": 2,
+    "failed": 2,
+    "exit_code": 1
+  },
+  "fixed_tests": {
+    "original": 13,
+    "new_cleanup_boundaries": 6,
+    "unchanged_qa_falsifiers": 2,
+    "unique_total": 21,
+    "passed": 21,
+    "failed": 0,
+    "skipped": 0
+  },
+  "original_files_sha256": {
+    "independent_checks.py": "1241c561bb8c4229829ea99d1835d86d6832dfc5a2a8e788b4441bb9b0041282",
+    "qa-original-fail.log": "3a848f3565ea075093255dc7f7f96bab7015105345c4f4c275b01852dd2fcb9d",
+    "qa-original-review.json": "f0f4f0b467554187295a42a52f59db23ba897fa3e03fac7ad000765e1edbb5c9"
+  },
+  "cloud_calls": 0,
+  "p12_verified": false,
+  "p15_verified": false,
+  "remaining": "Independent QA; pending arbitrary stubborn resources require worker process isolation, never provider reuse."
+}

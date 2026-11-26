@@ -1,0 +1,11 @@
+test_already_running_stubborn_observer_is_retained_and_cannot_reuse_provider (tests.v2.test_probe_cleanup.Cleanup.test_already_running_stubborn_observer_is_retained_and_cannot_reuse_provider) ... ok
+test_cooperative_caller_cancel_confirms_exit_and_restores_provider (tests.v2.test_probe_cleanup.Cleanup.test_cooperative_caller_cancel_confirms_exit_and_restores_provider) ... ok
+test_normal_cleanup_restores_provider_and_allows_next_explicit_case (tests.v2.test_probe_cleanup.Cleanup.test_normal_cleanup_restores_provider_and_allows_next_explicit_case) ... ok
+test_outer_budget_does_not_wait_for_model_cancellation_ack (tests.v2.test_probe_cleanup.Cleanup.test_outer_budget_does_not_wait_for_model_cancellation_ack) ... ok
+test_rejected_future_cancelled_and_normal_wrappers_restored (tests.v2.test_probe_cleanup.Cleanup.test_rejected_future_cancelled_and_normal_wrappers_restored) ... ok
+test_repeated_caller_cancellation_preserves_unconfirmed_handle (tests.v2.test_probe_cleanup.Cleanup.test_repeated_caller_cancellation_preserves_unconfirmed_handle) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.517s
+
+OK
