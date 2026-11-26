@@ -1,0 +1,28 @@
+test_partial_final_ack_does_not_commit_constraint_then_final_ack_does (tests.v2.test_story_persisted_constraint.Persisted.test_partial_final_ack_does_not_commit_constraint_then_final_ack_does) ... ok
+test_core_rejects_invalid_structured_constraint_and_detaches_valid_proposal (tests.v2.test_story_persisted_constraint.Persisted.test_core_rejects_invalid_structured_constraint_and_detaches_valid_proposal) ... ERROR
+
+======================================================================
+ERROR: test_core_rejects_invalid_structured_constraint_and_detaches_valid_proposal (tests.v2.test_story_persisted_constraint.Persisted.test_core_rejects_invalid_structured_constraint_and_detaches_valid_proposal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_story_persisted_constraint.py", line 121, in test_core_rejects_invalid_structured_constraint_and_detaches_valid_proposal
+    self.assertFalse(s.emit(s.task('tts'),name='x',public='x',end=1,state=state))
+                     ^^^^^^
+AttributeError: 'Session' object has no attribute 'emit'
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.175s
+
+FAILED (errors=1)

@@ -14,7 +14,7 @@ from backend.v2.images import DefaultImages
 from backend.v2.dynamic_images import ImageFailure
 from backend.v2.image_descriptions import MinimalDescription, compile_description, ImageAllowance, ExplicitImageRequest, explicit_request, VOCAB
 from backend.v2.models import TEXT_MODELS, SCHEMA_MODELS, UnsupportedTextModel
-from backend.v2.story_rules import obeys_turn_limit
+from backend.v2.story_rules import obeys_turn_limit,constraint_proposal
 from contextlib import asynccontextmanager
 
 SYSTEM = """你是瓦力，面向5–8岁儿童的AI语音玩伴。自然、简短、不过度夸奖或连续追问。
@@ -174,6 +174,9 @@ class UnifiedProviders:
 "sentences":["1到4个简短句，每句不超过120字"],
 "anchors":{"plot.main":0,"clue.current":0}}。anchors把必须保留的剧情/线索/谜底/规则映射到sentences索引，最多16项。。
 动作必须由本轮孩子意图支持；未改规则时保留已有规则/角色/谜底。
+context.game.turn_limit若存在，是服务器在已播ACK后保存的每轮句数上限（null表示已取消），
+不能通过改写rules或自行change抹去；孩子本轮明确改句数/取消或离开玩法时按新意图处理。
+该字段由服务器生成，不在输出JSON另造同名字段。
 故事接龙是接续孩子已经给出的情节，不代替孩子连续推进多轮；轮流规则要落实到本轮实际说出的内容。
 明确“一人一句/每次只讲一句话”时，sentences只能有一个完整句子，句内也不得塞多句。
 该句用于推进故事，不额外追加追问、复述孩子原话、轮到你了等提示句；规则说明或确认也占句数。
@@ -247,6 +250,8 @@ description只用于generate_image，缺字段兼容目录名称生成；缺服�
         # Preserve current riddle on a continuation; model cannot silently change it.
         if plan['action'] == 'continue' and context.get('unrevealed'):
             plan['secrets'] = dict(context['unrevealed'])
+        present,limit=constraint_proposal(text,context,plan)
+        if present:plan['_story_turn_limit']=limit
         return plan
 
     async def facts(self, text):

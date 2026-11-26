@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "previous_head": "936751828cd97870e363d3e977eeeed88fe4e59f",
+  "new_methods": 8,
+  "author_methods": 61,
+  "qa_original_methods": 4,
+  "unique_passed": 65,
+  "failed": 0,
+  "skipped": 0,
+  "cloud_calls": 0,
+  "old_plan_root_cause_confirmed": false,
+  "files": {
+    "fixture-debug.log": "6bd26e0afc08687b48e41b527eeb0cb5aef6dbaeb5bb4e7e7ee3d62de6038473",
+    "initial.log": "c6ff407acd2c320be0a8a6d542dd2a60041d309d92f004f58828a97bd7ad4e2a",
+    "live-three-turn-pass.json": "4d4b53d03ed3b0e909c002b11c88fdccb8c40e0819a1e6440292ad1a0728e686",
+    "new.log": "36fbc3a99ecbd2b0e9761edf29782c473adbc0c56282c861236a772be5c88cc7",
+    "original-failure.log": "56de1f07e4a4c142af778c3e7834ae8eebd8743150b66f9d7e74146a65c0245b",
+    "qa-original.log": "9db81a07c50c883bd472439251e9cf742a734ff12c995e22c8283466d469e014",
+    "report.md": "972b462d240dc5fa2f52425e445650e1d0e3014925ffd6a2f4db1830a3d6e557",
+    "root-counterexample.json": "0b489af113e268f9801d32bdd30164856a7bef234a2b844422b9c3abe8c3c78b",
+    "targeted.log": "8d0497986a6020097c8a08c89ec56872c912ae1dc599028905e1f303b32cfaab"
+  }
+}
