@@ -1,0 +1,12 @@
+test_all_failed_attempts_are_counted_and_global_allowance_not_reset (tests.v2.test_soak_runner.Soak.test_all_failed_attempts_are_counted_and_global_allowance_not_reset) ... ok
+test_caller_cancellation_and_resource_failures_are_observable (tests.v2.test_soak_runner.Soak.test_caller_cancellation_and_resource_failures_are_observable) ... ok
+test_external_cloud_and_device_are_off_by_default_before_io (tests.v2.test_soak_runner.Soak.test_external_cloud_and_device_are_off_by_default_before_io) ... ok
+test_mixed_actual_protocol_interrupt_and_injected_network_are_distinct (tests.v2.test_soak_runner.Soak.test_mixed_actual_protocol_interrupt_and_injected_network_are_distinct) ... ok
+test_real_elapsed_schedule_waits_not_rapid_count_and_never_claims_hour (tests.v2.test_soak_runner.Soak.test_real_elapsed_schedule_waits_not_rapid_count_and_never_claims_hour) ... ok
+test_stop_event_returns_failure_denominator_and_restores_confirmed_provider (tests.v2.test_soak_runner.Soak.test_stop_event_returns_failure_denominator_and_restores_confirmed_provider) ... ok
+test_stubborn_provider_bounded_cleanup_closed_meter_and_nonreuse (tests.v2.test_soak_runner.Soak.test_stubborn_provider_bounded_cleanup_closed_meter_and_nonreuse) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 2.215s
+
+OK

@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "base": "75dfeecc0c6a608b8432012e6f0f3584abce4a05",
+  "new_methods": 8,
+  "normal_methods": 21,
+  "passed": 21,
+  "failed": 0,
+  "skipped": 0,
+  "cloud_calls": 0,
+  "device_executed": false,
+  "hour_executed": false,
+  "full_acceptance": false,
+  "files": {
+    "docs/testing/v2/soak/original-readiness-audit.json": "ff463f508b29c12c896e3b3f78866bd8dc836aeced3daa1fb9cc165cd9e25871",
+    "docs/testing/v2/soak/runbook.md": "2eafd503360c1a8fc00768cf28114735f3701ba67a466fda8c9d3781999b3238",
+    "docs/testing/v2/soak/short-fixture.json": "f4ea63f86375729982f4be501fefa1f6c96ba84ce00c608982de63a5e651a9c3",
+    "docs/testing/v2/soak/targeted.log": "4b7e7620ae8dc3e0d1146395110468d06e881c387cd4367f4c007ef295ad503c",
+    "docs/testing/v2/soak/tests.log": "72849a7dc82b46a7936fc87f654e912f5a85a218d070bbd5ec9cddee3eb7d8fd"
+  }
+}
