@@ -1,0 +1,8 @@
+test_diagnostic_arbitrary_values_never_survive_allowlist (__main__.Boundaries.test_diagnostic_arbitrary_values_never_survive_allowlist) ... ok
+test_reversed_fault_stage_sequence_must_reject (__main__.Boundaries.test_reversed_fault_stage_sequence_must_reject) ... ok
+test_single_required_field_missing_rejects (__main__.Boundaries.test_single_required_field_missing_rejects) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.055s
+
+OK

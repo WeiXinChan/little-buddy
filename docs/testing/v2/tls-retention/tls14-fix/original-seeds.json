@@ -1,0 +1,2013 @@
+[
+  {
+    "result": {
+      "format": 1,
+      "source_sha": "c4864f78868ab29f50713ca214f82554801c6248",
+      "arm": "retain_plain",
+      "nonce": "0d3aa42e79cba9d6257c716ab7f34684",
+      "attempted": 14,
+      "full_report_sha256": "c026a242339f1c8ec96c4988a9812422a94186de3bf0ad56779e21ad663b95c5",
+      "full_report_bytes": 6024,
+      "observations": 1,
+      "retained_samples": 1,
+      "model_stage_calls": {
+        "endpoint": 13,
+        "plan": 13,
+        "facts": 13,
+        "safe": 12
+      },
+      "allowance": {
+        "model_calls": 51,
+        "tts_calls": 12,
+        "tts_unicode_characters": 84,
+        "reserved_units": 63,
+        "account_quota_known": false,
+        "bill_cny": null
+      },
+      "cleanup": {
+        "confirmed": true,
+        "pending_tasks": 0,
+        "errors": 0,
+        "isolated": false
+      },
+      "points": [
+        {
+          "phase": "baseline_after_import_gc",
+          "rss_bytes": 100,
+          "strong": null,
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        },
+        {
+          "phase": "report_held_owner_held",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        },
+        {
+          "phase": "report_saved_loop_gc_owner_held",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        },
+        {
+          "phase": "history_retained_control",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        },
+        {
+          "phase": "report_released_owner_held",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        },
+        {
+          "phase": "observer_owner_released_loop_gc",
+          "rss_bytes": 100,
+          "strong": null,
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        }
+      ],
+      "connection_boundaries": [
+        {
+          "index": 0,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 1,
+          "strong": {
+            "connection_row_slots": 1,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 1,
+            "relay_slots": 1,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 1,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 2,
+          "strong": {
+            "connection_row_slots": 2,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 2,
+            "relay_slots": 2,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 2,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 3,
+          "strong": {
+            "connection_row_slots": 3,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 3,
+            "relay_slots": 3,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 3,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 4,
+          "strong": {
+            "connection_row_slots": 4,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 4,
+            "relay_slots": 4,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 4,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 5,
+          "strong": {
+            "connection_row_slots": 5,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 5,
+            "relay_slots": 5,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 5,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 6,
+          "strong": {
+            "connection_row_slots": 6,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 6,
+            "relay_slots": 6,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 6,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 7,
+          "strong": {
+            "connection_row_slots": 7,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 7,
+            "relay_slots": 7,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 7,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 8,
+          "strong": {
+            "connection_row_slots": 8,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 8,
+            "relay_slots": 8,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 8,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 9,
+          "strong": {
+            "connection_row_slots": 9,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 9,
+            "relay_slots": 9,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 9,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 10,
+          "strong": {
+            "connection_row_slots": 10,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 10,
+            "relay_slots": 10,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 10,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 11,
+          "strong": {
+            "connection_row_slots": 11,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 11,
+            "relay_slots": 11,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 11,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 12,
+          "strong": {
+            "connection_row_slots": 12,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 12,
+            "relay_slots": 12,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 12,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 13,
+          "strong": {
+            "connection_row_slots": 13,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 13,
+            "relay_slots": 13,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 13,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 14,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        }
+      ],
+      "lifetime_connections": 14,
+      "release_control": null,
+      "relay_accounting": [
+        {
+          "index": 0,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 1,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 2,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 3,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 4,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 5,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 6,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 7,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 8,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 9,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 10,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 11,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 12,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 13,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        }
+      ],
+      "tracer_frames": 0,
+      "attribution": "unknown",
+      "native_tls_allocations_measured": false
+    },
+    "arm": "retain_plain",
+    "nonce": "0d3aa42e79cba9d6257c716ab7f34684",
+    "report_utf8": "{\"layer\": \"real_loopback_tls_tcp_relay_synthetic_asr_model_tts\", \"cloud_enabled\": false, \"device_executed\": false, \"attempted\": 14, \"connections_attempted\": 14, \"peers_constructed\": 14, \"attempts\": [{\"index\": 0, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 1, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 2, \"fault\": \"asr_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 3, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 4, \"fault\": \"plan_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 5, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 6, \"fault\": \"partial_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 7, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 8, \"fault\": \"pause_resume\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 9, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 10, \"fault\": \"half_open\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 11, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 12, \"fault\": \"playback_stop\", \"status\": \"interrupted\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 13, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}], \"connection_ledger\": [{\"index\": 0, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 1, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 2, \"fault\": \"asr_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 3, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 4, \"fault\": \"plan_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 5, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 6, \"fault\": \"partial_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 7, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 8, \"fault\": \"pause_resume\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 9, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 10, \"fault\": \"half_open\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 11, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 12, \"fault\": \"playback_stop\", \"status\": \"interrupted\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 13, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}], \"cleanup\": {\"confirmed\": true, \"pending_tasks\": 0, \"errors\": 0, \"isolated\": false}, \"resource_collection_valid\": true, \"collection_errors\": 0, \"observations\": 1, \"resource_samples\": [{\"backend_rss_bytes\": 100}], \"model_stage_calls\": {\"endpoint\": 13, \"plan\": 13, \"facts\": 13, \"safe\": 12}, \"allowance\": {\"model_calls\": 51, \"tts_calls\": 12, \"tts_unicode_characters\": 84, \"reserved_units\": 63, \"account_quota_known\": false, \"bill_cny\": null}, \"failures\": 0}"
+  },
+  {
+    "result": {
+      "format": 1,
+      "source_sha": "c4864f78868ab29f50713ca214f82554801c6248",
+      "arm": "retain_traced",
+      "nonce": "9116c22ea0b20e6cac7a6cc35c6877eb",
+      "attempted": 14,
+      "full_report_sha256": "c026a242339f1c8ec96c4988a9812422a94186de3bf0ad56779e21ad663b95c5",
+      "full_report_bytes": 6024,
+      "observations": 1,
+      "retained_samples": 1,
+      "model_stage_calls": {
+        "endpoint": 13,
+        "plan": 13,
+        "facts": 13,
+        "safe": 12
+      },
+      "allowance": {
+        "model_calls": 51,
+        "tts_calls": 12,
+        "tts_unicode_characters": 84,
+        "reserved_units": 63,
+        "account_quota_known": false,
+        "bill_cny": null
+      },
+      "cleanup": {
+        "confirmed": true,
+        "pending_tasks": 0,
+        "errors": 0,
+        "isolated": false
+      },
+      "points": [
+        {
+          "phase": "baseline_after_import_gc",
+          "rss_bytes": 100,
+          "strong": null,
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": 10,
+          "python_peak": 20,
+          "tracer_metadata": 2,
+          "python_allocation_groups": {
+            "diagnostic": 0,
+            "tls_tool": 0,
+            "sampling_tool": 0,
+            "production": 0,
+            "asyncio": 0,
+            "ssl_python": 0,
+            "other": 0
+          }
+        },
+        {
+          "phase": "report_held_owner_held",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": 10,
+          "python_peak": 20,
+          "tracer_metadata": 2,
+          "python_allocation_groups": {
+            "diagnostic": 0,
+            "tls_tool": 0,
+            "sampling_tool": 0,
+            "production": 0,
+            "asyncio": 0,
+            "ssl_python": 0,
+            "other": 0
+          }
+        },
+        {
+          "phase": "report_saved_loop_gc_owner_held",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": 10,
+          "python_peak": 20,
+          "tracer_metadata": 2,
+          "python_allocation_groups": {
+            "diagnostic": 0,
+            "tls_tool": 0,
+            "sampling_tool": 0,
+            "production": 0,
+            "asyncio": 0,
+            "ssl_python": 0,
+            "other": 0
+          }
+        },
+        {
+          "phase": "history_retained_control",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": 10,
+          "python_peak": 20,
+          "tracer_metadata": 2,
+          "python_allocation_groups": {
+            "diagnostic": 0,
+            "tls_tool": 0,
+            "sampling_tool": 0,
+            "production": 0,
+            "asyncio": 0,
+            "ssl_python": 0,
+            "other": 0
+          }
+        },
+        {
+          "phase": "report_released_owner_held",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": 10,
+          "python_peak": 20,
+          "tracer_metadata": 2,
+          "python_allocation_groups": {
+            "diagnostic": 0,
+            "tls_tool": 0,
+            "sampling_tool": 0,
+            "production": 0,
+            "asyncio": 0,
+            "ssl_python": 0,
+            "other": 0
+          }
+        },
+        {
+          "phase": "observer_owner_released_loop_gc",
+          "rss_bytes": 100,
+          "strong": null,
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": 10,
+          "python_peak": 20,
+          "tracer_metadata": 2,
+          "python_allocation_groups": {
+            "diagnostic": 0,
+            "tls_tool": 0,
+            "sampling_tool": 0,
+            "production": 0,
+            "asyncio": 0,
+            "ssl_python": 0,
+            "other": 0
+          }
+        }
+      ],
+      "connection_boundaries": [
+        {
+          "index": 0,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 1,
+          "strong": {
+            "connection_row_slots": 1,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 1,
+            "relay_slots": 1,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 1,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 2,
+          "strong": {
+            "connection_row_slots": 2,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 2,
+            "relay_slots": 2,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 2,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 3,
+          "strong": {
+            "connection_row_slots": 3,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 3,
+            "relay_slots": 3,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 3,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 4,
+          "strong": {
+            "connection_row_slots": 4,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 4,
+            "relay_slots": 4,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 4,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 5,
+          "strong": {
+            "connection_row_slots": 5,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 5,
+            "relay_slots": 5,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 5,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 6,
+          "strong": {
+            "connection_row_slots": 6,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 6,
+            "relay_slots": 6,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 6,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 7,
+          "strong": {
+            "connection_row_slots": 7,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 7,
+            "relay_slots": 7,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 7,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 8,
+          "strong": {
+            "connection_row_slots": 8,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 8,
+            "relay_slots": 8,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 8,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 9,
+          "strong": {
+            "connection_row_slots": 9,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 9,
+            "relay_slots": 9,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 9,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 10,
+          "strong": {
+            "connection_row_slots": 10,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 10,
+            "relay_slots": 10,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 10,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 11,
+          "strong": {
+            "connection_row_slots": 11,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 11,
+            "relay_slots": 11,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 11,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 12,
+          "strong": {
+            "connection_row_slots": 12,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 12,
+            "relay_slots": 12,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 12,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 13,
+          "strong": {
+            "connection_row_slots": 13,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 13,
+            "relay_slots": 13,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 13,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 14,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        }
+      ],
+      "lifetime_connections": 14,
+      "release_control": null,
+      "relay_accounting": [
+        {
+          "index": 0,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 1,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 2,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 3,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 4,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 5,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 6,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 7,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 8,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 9,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 10,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 11,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 12,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 13,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        }
+      ],
+      "tracer_frames": 8,
+      "attribution": "unknown",
+      "native_tls_allocations_measured": false
+    },
+    "arm": "retain_traced",
+    "nonce": "9116c22ea0b20e6cac7a6cc35c6877eb",
+    "report_utf8": "{\"layer\": \"real_loopback_tls_tcp_relay_synthetic_asr_model_tts\", \"cloud_enabled\": false, \"device_executed\": false, \"attempted\": 14, \"connections_attempted\": 14, \"peers_constructed\": 14, \"attempts\": [{\"index\": 0, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 1, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 2, \"fault\": \"asr_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 3, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 4, \"fault\": \"plan_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 5, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 6, \"fault\": \"partial_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 7, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 8, \"fault\": \"pause_resume\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 9, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 10, \"fault\": \"half_open\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 11, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 12, \"fault\": \"playback_stop\", \"status\": \"interrupted\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 13, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}], \"connection_ledger\": [{\"index\": 0, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 1, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 2, \"fault\": \"asr_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 3, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 4, \"fault\": \"plan_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 5, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 6, \"fault\": \"partial_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 7, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 8, \"fault\": \"pause_resume\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 9, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 10, \"fault\": \"half_open\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 11, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 12, \"fault\": \"playback_stop\", \"status\": \"interrupted\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 13, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}], \"cleanup\": {\"confirmed\": true, \"pending_tasks\": 0, \"errors\": 0, \"isolated\": false}, \"resource_collection_valid\": true, \"collection_errors\": 0, \"observations\": 1, \"resource_samples\": [{\"backend_rss_bytes\": 100}], \"model_stage_calls\": {\"endpoint\": 13, \"plan\": 13, \"facts\": 13, \"safe\": 12}, \"allowance\": {\"model_calls\": 51, \"tts_calls\": 12, \"tts_unicode_characters\": 84, \"reserved_units\": 63, \"account_quota_known\": false, \"bill_cny\": null}, \"failures\": 0}"
+  },
+  {
+    "result": {
+      "format": 1,
+      "source_sha": "c4864f78868ab29f50713ca214f82554801c6248",
+      "arm": "release_plain",
+      "nonce": "ad164dd54c33a2f66154681a1b4049f5",
+      "attempted": 14,
+      "full_report_sha256": "c026a242339f1c8ec96c4988a9812422a94186de3bf0ad56779e21ad663b95c5",
+      "full_report_bytes": 6024,
+      "observations": 1,
+      "retained_samples": 1,
+      "model_stage_calls": {
+        "endpoint": 13,
+        "plan": 13,
+        "facts": 13,
+        "safe": 12
+      },
+      "allowance": {
+        "model_calls": 51,
+        "tts_calls": 12,
+        "tts_unicode_characters": 84,
+        "reserved_units": 63,
+        "account_quota_known": false,
+        "bill_cny": null
+      },
+      "cleanup": {
+        "confirmed": true,
+        "pending_tasks": 0,
+        "errors": 0,
+        "isolated": false
+      },
+      "points": [
+        {
+          "phase": "baseline_after_import_gc",
+          "rss_bytes": 100,
+          "strong": null,
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        },
+        {
+          "phase": "report_held_owner_held",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        },
+        {
+          "phase": "report_saved_loop_gc_owner_held",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        },
+        {
+          "phase": "confirmed_history_control",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 0,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 0,
+            "relay_slots": 0,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        },
+        {
+          "phase": "report_released_owner_held",
+          "rss_bytes": 100,
+          "strong": {
+            "connection_row_slots": 0,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 0,
+            "relay_slots": 0,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        },
+        {
+          "phase": "observer_owner_released_loop_gc",
+          "rss_bytes": 100,
+          "strong": null,
+          "weak": {
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          },
+          "python_current": null,
+          "python_peak": null,
+          "tracer_metadata": null,
+          "python_allocation_groups": null
+        }
+      ],
+      "connection_boundaries": [
+        {
+          "index": 0,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 1,
+          "strong": {
+            "connection_row_slots": 1,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 1,
+            "relay_slots": 1,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 1,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 2,
+          "strong": {
+            "connection_row_slots": 2,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 2,
+            "relay_slots": 2,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 2,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 3,
+          "strong": {
+            "connection_row_slots": 3,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 3,
+            "relay_slots": 3,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 3,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 4,
+          "strong": {
+            "connection_row_slots": 4,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 4,
+            "relay_slots": 4,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 4,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 5,
+          "strong": {
+            "connection_row_slots": 5,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 5,
+            "relay_slots": 5,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 5,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 6,
+          "strong": {
+            "connection_row_slots": 6,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 6,
+            "relay_slots": 6,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 6,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 7,
+          "strong": {
+            "connection_row_slots": 7,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 7,
+            "relay_slots": 7,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 7,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 8,
+          "strong": {
+            "connection_row_slots": 8,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 8,
+            "relay_slots": 8,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 8,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 9,
+          "strong": {
+            "connection_row_slots": 9,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 9,
+            "relay_slots": 9,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 9,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 10,
+          "strong": {
+            "connection_row_slots": 10,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 10,
+            "relay_slots": 10,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 10,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 11,
+          "strong": {
+            "connection_row_slots": 11,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 11,
+            "relay_slots": 11,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 11,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 12,
+          "strong": {
+            "connection_row_slots": 12,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 12,
+            "relay_slots": 12,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 12,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 13,
+          "strong": {
+            "connection_row_slots": 13,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 13,
+            "relay_slots": 13,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        },
+        {
+          "index": 13,
+          "phase": "closed_before_attempt_task_return",
+          "lifetime_connections": 14,
+          "strong": {
+            "connection_row_slots": 14,
+            "peer_history_task_slots": 0,
+            "writer_slots": 0,
+            "pending_tasks": 0,
+            "peer_slots": 14,
+            "relay_slots": 14,
+            "unique_writers": 0,
+            "done_tasks": 0,
+            "relay_task_slots": 0,
+            "global_task_slots": 0,
+            "all_unique_task_handles": 0,
+            "live": {},
+            "weak_slots": 0,
+            "unsupported_observations": {}
+          }
+        }
+      ],
+      "lifetime_connections": 14,
+      "release_control": {
+        "released_connection_rows": 14,
+        "released_peer_slots": 14,
+        "released_relay_slots": 14
+      },
+      "relay_accounting": [
+        {
+          "index": 0,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 1,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 2,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 3,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 4,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 5,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 6,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 7,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 8,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 9,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 10,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 11,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 12,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        },
+        {
+          "index": 13,
+          "legacy_total": 1,
+          "reset_calls": {
+            "global_cleanup": 1
+          },
+          "reset_setup_errors": {
+            "global_cleanup": 1
+          },
+          "pipe_io_errors": {},
+          "unclassified_legacy": 0
+        }
+      ],
+      "tracer_frames": 0,
+      "attribution": "unknown",
+      "native_tls_allocations_measured": false
+    },
+    "arm": "release_plain",
+    "nonce": "ad164dd54c33a2f66154681a1b4049f5",
+    "report_utf8": "{\"layer\": \"real_loopback_tls_tcp_relay_synthetic_asr_model_tts\", \"cloud_enabled\": false, \"device_executed\": false, \"attempted\": 14, \"connections_attempted\": 14, \"peers_constructed\": 14, \"attempts\": [{\"index\": 0, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 1, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 2, \"fault\": \"asr_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 3, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 4, \"fault\": \"plan_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 5, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 6, \"fault\": \"partial_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 7, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 8, \"fault\": \"pause_resume\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 9, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 10, \"fault\": \"half_open\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 11, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 12, \"fault\": \"playback_stop\", \"status\": \"interrupted\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 13, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}], \"connection_ledger\": [{\"index\": 0, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 1, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 2, \"fault\": \"asr_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 3, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 4, \"fault\": \"plan_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 5, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 6, \"fault\": \"partial_rst\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 7, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 8, \"fault\": \"pause_resume\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 9, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 10, \"fault\": \"half_open\", \"status\": \"fault_injected\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 11, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 12, \"fault\": \"playback_stop\", \"status\": \"interrupted\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}, {\"index\": 13, \"fault\": \"normal_close\", \"status\": \"delivered\", \"cleanup_confirmed\": true, \"session_cleared\": true, \"pending_after_cleanup\": 0, \"new_session\": true, \"relay_network_errors\": 1}], \"cleanup\": {\"confirmed\": true, \"pending_tasks\": 0, \"errors\": 0, \"isolated\": false}, \"resource_collection_valid\": true, \"collection_errors\": 0, \"observations\": 1, \"resource_samples\": [{\"backend_rss_bytes\": 100}], \"model_stage_calls\": {\"endpoint\": 13, \"plan\": 13, \"facts\": 13, \"safe\": 12}, \"allowance\": {\"model_calls\": 51, \"tts_calls\": 12, \"tts_unicode_characters\": 84, \"reserved_units\": 63, \"account_quota_known\": false, \"bill_cny\": null}, \"failures\": 0}"
+  }
+]
