@@ -60,4 +60,32 @@ class StartupDiagnosticTest {
         val bad=StartupObservation(StartupMode.TIMESTAMP_ONLY);StartupDiagnostic.run(Port("bad"),bad)
         assertEquals("API_PAIR_ANOMALY",StartupDiagnostic.interpretation(bad,b))
     }
+    @Test fun exactDeadlineSuccessIsRawLateAndNeverWindowAvailability(){
+        var time=0L
+        val port=object:StartupPort {override fun nowMs()=time;override fun allowed()=true
+            override fun read(samples:ShortArray,count:Int)=0
+            override fun timestamp():StartupApiSample {time=1000;return StartupApiSample(0,16000,1000000000)}
+            override fun pause(ms:Long){time+=ms}}
+        val a=StartupObservation(StartupMode.TIMESTAMP_ONLY);StartupDiagnostic.run(port,a)
+        assertEquals(1000L,a.firstSuccessMs);assertEquals(1000L,a.firstWellFormedMs)
+        assertEquals(-1L,a.firstWindowSuccessMs);assertEquals(-1L,a.firstWindowWellFormedMs)
+        assertEquals(1,a.lateApiCalls);assertEquals(1,a.lateSuccesses);assertEquals(1,a.lateWellFormed)
+        assertEquals("UNAVAILABLE_IN_TWO_WINDOWS_NOT_PERMANENT_UNSUPPORTED",StartupDiagnostic.interpretation(a,a))
+        val b=StartupObservation(StartupMode.READ_THEN_TIMESTAMP);b.firstWindowWellFormedMs=20
+        assertEquals("READ_PATH_OR_ORDER_WARMUP_ASSOCIATION",StartupDiagnostic.interpretation(a,b))
+    }
+    @Test fun sampleBudgetAndReadCancellationRetainCountsWipeAndNeverStartNextApi(){
+        for(cancel in listOf(false,true)){
+            var allowed=true;var calls=0;var buffer:ShortArray?=null
+            val port=object:StartupPort {override fun nowMs()=0L;override fun allowed()=allowed
+                override fun read(samples:ShortArray,count:Int):Int {buffer=samples;samples.fill(7);if(cancel)allowed=false;return count}
+                override fun timestamp():StartupApiSample {calls++;return StartupApiSample(-3)}
+                override fun pause(ms:Long){} }
+            val result=StartupObservation(StartupMode.READ_THEN_TIMESTAMP)
+            val error=runCatching{StartupDiagnostic.run(port,result)}.exceptionOrNull()
+            assertEquals(if(cancel)320L else 19200L,result.readSamples)
+            assertEquals(if(cancel)0 else 59,calls);assertTrue(buffer!!.all{it==0.toShort()})
+            if(cancel)assertEquals("DIAG_CANCELLED",error?.message) else {assertNull(error);assertEquals("SAMPLE_LIMIT",result.terminal)}
+        }
+    }
 }

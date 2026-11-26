@@ -42,6 +42,8 @@ class NativeTimestampStartupTest {
             putLong("first_success_ms_after_start_return",result.firstSuccessMs)
             putLong("first_success_ms_after_start_call",if(result.firstSuccessMs<0)-1 else meta.startDurationMs+result.firstSuccessMs)
             putLong("first_success_frames",result.firstSuccessFrames);putLong("first_success_ns",result.firstSuccessNs)
+            putLong("first_window_success_ms",result.firstWindowSuccessMs);putLong("first_window_well_formed_ms",result.firstWindowWellFormedMs)
+            putInt("late_api_calls",result.lateApiCalls);putInt("late_successes",result.lateSuccesses);putInt("late_well_formed",result.lateWellFormed)
             putLong("first_well_formed_ms",result.firstWellFormedMs);putInt("invalid_pairs",result.invalidPairs)
             putInt("position_regressions",result.positionRegressions);putInt("time_regressions",result.timeRegressions)
             putLong("last_frames",result.lastFrames);putLong("last_ns",result.lastNs);putLong("max_stamp_age_ns",result.maxAgeNs)

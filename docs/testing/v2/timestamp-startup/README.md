@@ -101,3 +101,15 @@ priority regressions: app/src/androidTest/run-native-probe-regression.py. Device
 Build only assembleV2DebugAndroidTest with -Pv2Test and explicit native-timestamp.init.gradle.
 Retain final aapt runner/target checks, existing-key signature, PCM-free filtered artifact hash and
 original known-failing APK/hash evidence. No version bump, production build-file change or APK freeze.
+
+## Deadline evidence correction (supersedes held APK122fd2ca)
+
+Raw first_success_ms / first_well_formed_ms include late API returns, with late_api_calls,
+late_successes and late_well_formed counters. Window-specific first_window_success_ms and
+first_window_well_formed_ms require return strictly before1000ms (equal is expired). Only the
+window-specific pair participates in availability interpretation. A call begun within the window
+can physically return late; this remains metadata, not in-window availability or production PASS.
+After read returns, sample count is retained and its temporary buffer immediately wiped, then
+cancellation and elapsed/sample/API budgets are rechecked before starting any timestamp API.
+No claim of physical JNI interruption is made. Original QA two-test source/FAIL logs are preserved;
+the exact same source is included unchanged in the offline regression runner.
