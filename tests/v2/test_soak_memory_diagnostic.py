@@ -72,9 +72,12 @@ class Diagnostic(unittest.TestCase):
         def lock():yield 42
         buffer=io.BytesIO()
         with tarfile.open(fileobj=buffer,mode='w'):pass
-        failed=dict(cleanup=dict(confirmed=False,pending_tasks=1),failures=0,attempted=6)
+        from tests.v2.test_soak_memory_worker_validation import worker_fixture
+        def callback(args,**kwargs):
+            result=worker_fixture(args,cleanup_confirmed=False)
+            return type('Fake',(),{'stdout':json.dumps(result).encode()})()
         out=self.root/'out'
-        with patch.object(m,'heavy_lock',lock),patch.object(m.subprocess,'check_output',return_value=buffer.getvalue()),patch.object(m.subprocess,'run',return_value=type('Fake',(),{'stdout':json.dumps(failed).encode()})()) as command:
+        with patch.object(m,'heavy_lock',lock),patch.object(m.subprocess,'check_output',return_value=buffer.getvalue()),patch.object(m.subprocess,'run',side_effect=callback) as command:
             with self.assertRaises(m.Invalid):m.profile(out,6,30)
         self.assertEqual(command.call_count,1)
         self.assertEqual(json.loads((out/'result.json').read_text())['status'],'workload_or_cleanup_failed_stopped')

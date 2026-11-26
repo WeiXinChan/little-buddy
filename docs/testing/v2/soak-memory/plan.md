@@ -1,3 +1,5 @@
+MEM111-01/02更新：worker format2监督校验及workload/memory条件分离以`mem111-fix/report.md`为准。下文保留初版准备背景；本批仍无实际profile执行。
+
 本批仅轻量准备。未运行tracemalloc、VoicePeer对照、profile或新长测，未打开/争抢heavy.lock，未观察/控制session75560/PID3943853，不改PR108分支或在途源码。PR108 root修复f5b38d4及QA23PASS仅作为背景，不重复改动。没有已证生产泄漏。
 
 只读复算：已读root offline-soak-3600-3aa8902f.json及QA soak3600-evidence-review/review.md。原报告sha256 `00fd5e03b97726825aee7c713b62e8868b11545f2298a3a04a9aebc330f8d03e`；120 attempt（80交付/40预设stop）、1325样本，六段数量221/220/220/220/220/224。RSS37289984→38424576，增加1134592 bytes；六段仍升、未平台。FD/线程恒定与pending0不证明无泄漏。只读分析JSON保留各段首末值和分母，未修改原件。

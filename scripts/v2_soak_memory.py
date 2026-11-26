@@ -12,6 +12,8 @@ import gc
 from hashlib import sha256
 import json
 import os
+import math
+import secrets
 from pathlib import Path
 import stat
 import subprocess
@@ -136,7 +138,7 @@ def check_worker_lock(fd):
     try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
     except BlockingIOError:raise Invalid('lock_busy') from None
 
-async def worker(arm,attempts,artifact):
+async def worker(arm,attempts,artifact,worker_id):
     # Executed only in the exported frozen-source child, never by default CLI.
     sys.path.insert(0,str(Path.cwd()))
     from scripts import v2_soak as soak
@@ -184,7 +186,7 @@ async def worker(arm,attempts,artifact):
     point('baseline_after_import_gc')
     if arm=='idle':
         await asyncio.sleep(duration)
-        report=dict(attempts=[],resource_samples=[],cleanup=dict(confirmed=True,pending_tasks=0))
+        report=dict(attempts=[],resource_samples=[],sampling=dict(observations=0,evicted=0),cleanup=dict(confirmed=True,pending_tasks=0,provider_reusable=None))
     else:
         with patch.multiple(soak,BackendTransport=ObservedBackend,BatchState=ObservedOwner,ResourceCollector=ObservedCollector):
             report=await soak.run_soak(limits)
@@ -198,16 +200,110 @@ async def worker(arm,attempts,artifact):
     ledger=report['attempts']
     signature=sha256(json.dumps([(r.get('index'),r.get('scenario'),r.get('injected')) for r in ledger]).encode()).hexdigest()
     output_signature=sha256(json.dumps([(r.get('status'),(r.get('observed') or {}).get('frames'),(r.get('observed') or {}).get('game_mode')) for r in ledger]).encode()).hexdigest()
-    outcome=dict(attempted=len(ledger),output_schedule_sha256=output_signature,model_stage_calls=report.get('model_stage_calls'),
+    structure=dict(attempt_rows=len(ledger),retained_sample_rows=len(report['resource_samples']),
+                   sample_observations=report['sampling']['observations'],sample_evicted=report['sampling']['evicted'],
+                   top_level_fields=len(report),file_bytes=Path(artifact).stat().st_size)
+    outcome=dict(report_structure=structure,attempted=len(ledger),output_schedule_sha256=output_signature,model_stage_calls=report.get('model_stage_calls'),
                  reported_sample_rows=len(report['resource_samples']),failures=sum(r.get('status') not in {'delivered','interrupted'} for r in ledger),
                  cleanup=report['cleanup'],full_report_sha256=digest.hexdigest(),input_schedule_sha256=signature)
     del ledger
     await asyncio.sleep(0);gc.collect();point('report_held_after_gc',report)
     del report;await asyncio.sleep(0);gc.collect();point('report_released_after_gc')
     if traced:tracemalloc.stop()
-    return dict(arm=arm,source_sha=SOURCE,attempt_limit=attempts,duration_limit=duration,**outcome,phases=phases,
-                context_checkpoints=checkpoints,observer='same_weak_registry_in_plain_and_traced',
+    return dict(format=2,worker_id=worker_id,arm=arm,source_sha=SOURCE,attempt_limit=attempts,duration_limit=duration,**outcome,phases=phases,
+                context_checkpoints=checkpoints,measurement_overhead=dict(phase_rows=len(phases),context_checkpoint_rows=len(checkpoints),
+                    weak_registry_observations=registry.observations,weak_slots=sum(map(len,registry.refs.values())),tracer_frames=8 if traced else 0),observer='same_weak_registry_in_plain_and_traced',
                 attribution='unproven',rss_is_not_live_heap=True,production_modified=False)
+
+PHASES=('baseline_after_import_gc','returned_report_held','report_held_after_gc','report_released_after_gc')
+KINDS=frozenset(('task','operation','ownership','transport','peer','session','collector'))
+COUNTERS=frozenset(('owner_task_handles','owner_done_task_handles','owner_pending',*(
+    'session_'+name+'_size' for name in ('public','private','recent','facts','source_archive','pending','game','secrets'))))
+FAILURE_CODES=frozenset(('worker_identity_invalid','worker_metadata_invalid','worker_artifact_invalid','worker_failed','comparison_failed'))
+
+def integer(value,maximum=10**12):return type(value) is int and 0<=value<=maximum
+
+def digest(value):return isinstance(value,str) and len(value)==64 and all(c in '0123456789abcdef' for c in value)
+
+def ensure(condition):
+    if not condition:raise Invalid('worker_metadata_invalid')
+
+def counters(value,keys):
+    return type(value) is dict and value.keys()<=keys and all(integer(v) for v in value.values())
+
+def schedule_hashes(report):
+    ledger=report['attempts']
+    inputs=sha256(json.dumps([(r.get('index'),r.get('scenario'),r.get('injected')) for r in ledger]).encode()).hexdigest()
+    outputs=sha256(json.dumps([(r.get('status'),(r.get('observed') or {}).get('frames'),(r.get('observed') or {}).get('game_mode')) for r in ledger]).encode()).hexdigest()
+    return inputs,outputs
+
+def validate_worker(result,arm,attempts,worker_id,artifact):
+    """Only a fully bound, typed result may enter completed. No success defaults."""
+    if (type(result) is not dict or result.get('format')!=2 or type(result.get('format')) is not int or
+        result.get('worker_id')!=worker_id or result.get('arm')!=arm or result.get('source_sha')!=SOURCE or
+        type(result.get('attempt_limit')) is not int or result['attempt_limit']!=attempts):raise Invalid('worker_identity_invalid')
+    keys={'format','worker_id','arm','source_sha','attempt_limit','duration_limit','attempted','failures','cleanup',
+          'full_report_sha256','input_schedule_sha256','output_schedule_sha256','model_stage_calls',
+          'reported_sample_rows','report_structure','phases','context_checkpoints','measurement_overhead',
+          'observer','attribution','rss_is_not_live_heap','production_modified'}
+    try:
+        ensure(result.keys()==keys)
+        ensure(type(result['duration_limit']) in (int,float) and math.isfinite(result['duration_limit']) and result['duration_limit']==max(3.,attempts*.3))
+        ensure(integer(result['attempted'],attempts) and integer(result['failures'],result['attempted']))
+        cleanup=result['cleanup']
+        ensure(type(cleanup) is dict and cleanup.keys()=={'confirmed','pending_tasks','provider_reusable'})
+        ensure(type(cleanup['confirmed']) is bool and integer(cleanup['pending_tasks']))
+        ensure(type(cleanup['provider_reusable']) is bool if arm!='idle' else cleanup['provider_reusable'] is None)
+        ensure(all(digest(result[k]) for k in ('full_report_sha256','input_schedule_sha256','output_schedule_sha256')))
+        calls=result['model_stage_calls']
+        ensure(calls is None if arm=='idle' else counters(calls,{'plan','facts','safe','compact'}))
+        structure=result['report_structure']
+        ensure(type(structure) is dict and structure.keys()=={'attempt_rows','retained_sample_rows','sample_observations','sample_evicted','top_level_fields','file_bytes'})
+        ensure(all(integer(v) for v in structure.values()))
+        ensure(integer(result['reported_sample_rows'],4096) and structure['retained_sample_rows']==result['reported_sample_rows'])
+        ensure(structure['attempt_rows']==result['attempted'] and structure['sample_observations']-structure['retained_sample_rows']==structure['sample_evicted'])
+        ensure(structure['file_bytes']<=16*1024*1024)
+        overhead=result['measurement_overhead']
+        ensure(type(overhead) is dict and overhead.keys()=={'phase_rows','context_checkpoint_rows','weak_registry_observations','weak_slots','tracer_frames'})
+        ensure(all(integer(v) for v in overhead.values()) and overhead['weak_slots']<=min(8192,overhead['weak_registry_observations']))
+        ensure(overhead['tracer_frames']==(0 if arm=='plain' else 8))
+        ensure(result['observer']=='same_weak_registry_in_plain_and_traced' and result['attribution']=='unproven')
+        ensure(result['rss_is_not_live_heap'] is True and result['production_modified'] is False)
+        phases=result['phases']
+        ensure(type(phases) is list and len(phases)==overhead['phase_rows']==4)
+        for expected,row in zip(PHASES,phases):
+            ensure(type(row) is dict and row.keys()=={'phase','rss_bytes','live','counts','trace_current','trace_peak','trace_metadata_bytes','allocation_groups','report_reachable_bytes'})
+            ensure(row['phase']==expected and (row['rss_bytes'] is None or integer(row['rss_bytes'])))
+            ensure(row['report_reachable_bytes'] is None if expected in (PHASES[0],PHASES[3]) else integer(row['report_reachable_bytes']))
+            ensure(counters(row['counts'],COUNTERS) and type(row['live']) is dict and row['live'].keys()<=KINDS)
+            for value in row['live'].values():
+                ensure(type(value) is dict and value.keys()=={'observed','retained_weak_slots','live'} and all(integer(v) for v in value.values()))
+                ensure(value['live']<=value['retained_weak_slots']<=value['observed'])
+            if arm=='plain':ensure(all(row[k] is None for k in ('trace_current','trace_peak','trace_metadata_bytes','allocation_groups')))
+            else:
+                ensure(all(integer(row[k]) for k in ('trace_current','trace_peak','trace_metadata_bytes')) and row['trace_peak']>=row['trace_current'])
+                groups=row['allocation_groups'];ensure(type(groups) is dict and groups.keys()==set(GROUPS))
+                for group in groups.values():ensure(type(group) is dict and group.keys()=={'bytes','blocks'} and all(integer(v) for v in group.values()))
+        checkpoints=result['context_checkpoints']
+        ensure(type(checkpoints) is list and len(checkpoints)==overhead['context_checkpoint_rows'])
+        ensure(len(checkpoints)==(0 if arm=='idle' else result['attempted']))
+        for index,row in enumerate(checkpoints):
+            ensure(counters(row,COUNTERS|{'index','sample_rows','observations'}) and {'index','sample_rows','observations'}<=row.keys() and row['index']==index)
+    except (AssertionError,KeyError,TypeError,ValueError):raise Invalid('worker_metadata_invalid') from None
+    try:
+        info=artifact.lstat()
+        ensure(stat.S_ISREG(info.st_mode) and info.st_nlink==1 and info.st_size==structure['file_bytes']<=16*1024*1024)
+        raw=artifact.read_bytes();ensure(sha256(raw).hexdigest()==result['full_report_sha256'])
+        full=json.loads(raw);ensure(type(full) is dict and len(full)==structure['top_level_fields'])
+        ensure(type(full['attempts']) is list and len(full['attempts'])==result['attempted'])
+        ensure(type(full['resource_samples']) is list and len(full['resource_samples'])==result['reported_sample_rows'])
+        ensure(full['sampling']['observations']==structure['sample_observations'] and full['sampling']['evicted']==structure['sample_evicted'])
+        ensure(full['cleanup']==cleanup and full.get('model_stage_calls')==calls)
+        ensure(schedule_hashes(full)==(result['input_schedule_sha256'],result['output_schedule_sha256']))
+        ensure(sum(row.get('status') not in {'delivered','interrupted'} for row in full['attempts'])==result['failures'])
+        if arm!='idle':ensure(full['cloud_enabled'] is False and full['device_executed'] is False)
+    except Exception:raise Invalid('worker_artifact_invalid') from None
+
 
 def profile(output,attempts,timeout):
     if attempts not in (6,12,24) or type(timeout) is not int or not 10<=timeout<=120:raise Invalid('profile_bounds')
@@ -222,28 +318,49 @@ def profile(output,attempts,timeout):
             del archive
             results=[]
             for arm in ('plain','traced','traced_repeat','idle'):
-                artifact=output.resolve()/(arm+'-full-soak.json')
+                artifact=output.resolve()/(arm+'-full-soak.json');worker_id=secrets.token_hex(16)
                 args=[sys.executable,'-I','-B',str(Path(__file__).resolve()),'_worker','--arm',arm,
-                      '--attempts',str(attempts),'--artifact',str(artifact),'--execute-profile','--lock-fd',str(lock_fd)]
+                      '--attempts',str(attempts),'--artifact',str(artifact),'--execute-profile','--lock-fd',str(lock_fd),'--worker-id',worker_id]
                 try:
                     child=subprocess.run(args,cwd=export,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
                                          timeout=timeout,pass_fds=(lock_fd,),env={'PATH':'/usr/bin:/bin','LANG':'C.UTF-8'},check=True)
-                    if len(child.stdout)>1024*1024:raise Invalid('worker_metadata_size')
+                    if len(child.stdout)>1024*1024:raise Invalid('worker_metadata_invalid')
                     result=json.loads(child.stdout)
-                except Exception:
-                    # Previous full reports remain; never retry another arm on a failed/unknown cleanup.
-                    (output/'result.json').write_text(json.dumps(dict(status='worker_failed_stopped',completed=results,attribution='unknown')))
-                    raise Invalid('worker_failed') from None
-                results.append(result)
-                (output/'result.json').write_text(json.dumps(dict(status='in_progress',completed=results,attribution='unknown'),indent=2))
-                if not result['cleanup']['confirmed'] or result['cleanup']['pending_tasks'] or result['failures'] or (arm!='idle' and result['attempted']!=attempts):
-                    (output/'result.json').write_text(json.dumps(dict(status='workload_or_cleanup_failed_stopped',completed=results,attribution='unknown')))
-                    raise Invalid('workload_or_cleanup_failed')
+                    validate_worker(result,arm,attempts,worker_id,artifact)
+                    results.append(result)
+                    if not result['cleanup']['confirmed'] or result['cleanup']['pending_tasks'] or result['failures'] or (arm!='idle' and result['attempted']!=attempts):
+                        (output/'result.json').write_text(json.dumps(dict(status='workload_or_cleanup_failed_stopped',completed=results,attribution='unknown')))
+                        raise Invalid('workload_or_cleanup_failed')
+                    (output/'result.json').write_text(json.dumps(dict(status='in_progress',completed=results,attribution='unknown'),indent=2))
+                except Exception as error:
+                    code=str(error) if isinstance(error,Invalid) and str(error) in FAILURE_CODES|{'workload_or_cleanup_failed'} else 'worker_failed'
+                    status='workload_or_cleanup_failed_stopped' if code=='workload_or_cleanup_failed' else 'worker_failed_stopped'
+                    (output/'result.json').write_text(json.dumps(dict(status=status,failed_arm=arm,failure=code,completed=results,
+                        artifact_preserved=artifact.exists(),attribution='unknown')))
+                    raise Invalid(code) from None
             actual=results[:3]
-            comparable=(len({r['input_schedule_sha256'] for r in actual})==1 and len({r['attempted'] for r in actual})==1 and
-                        len({r['output_schedule_sha256'] for r in actual})==1 and len({json.dumps(r['model_stage_calls'],sort_keys=True) for r in actual})==1)
-            report=dict(status='controls_collected_not_leak_verdict',source_sha=SOURCE,comparable=comparable,completed=results,
-                        attribution='requires_review',idle_is_not_workload_control=True,cloud_calls=0,device_executed=False)
+            try:
+                workload_schedule_comparable=(len({r['input_schedule_sha256'] for r in actual})==1 and len({r['attempted'] for r in actual})==1 and
+                            len({r['output_schedule_sha256'] for r in actual})==1 and len({json.dumps(r['model_stage_calls'],sort_keys=True) for r in actual})==1)
+                comparable=(len({r['reported_sample_rows'] for r in actual})==1 and
+                            len({json.dumps(r.get('report_structure'),sort_keys=True) for r in actual})==1 and
+                            len({json.dumps(r.get('measurement_overhead'),sort_keys=True) for r in actual})==1 and
+                            len({json.dumps([p.get('report_reachable_bytes') for p in r.get('phases',[])]) for r in actual})==1 and
+                            len({r['input_schedule_sha256'] for r in actual})==1 and len({r['attempted'] for r in actual})==1 and
+                            len({r['output_schedule_sha256'] for r in actual})==1 and len({json.dumps(r['model_stage_calls'],sort_keys=True) for r in actual})==1)
+                memory_controls=dict(comparable=comparable,criterion='same_observed_report_structure_and_measurement_work_not_production_identity',
+                    retained_sample_rows_equal=len({r['reported_sample_rows'] for r in actual})==1,
+                    measurement_conditions_equal=len({json.dumps(r['measurement_overhead'],sort_keys=True) for r in actual})==1,
+                    arms=[dict(arm=r['arm'],report_structure=r['report_structure'],measurement_overhead=r['measurement_overhead'],
+                        held_report_reachable_bytes=[p['report_reachable_bytes'] for p in r['phases']],
+                        tracer_metadata_bytes=[p['trace_metadata_bytes'] for p in r['phases']]) for r in actual])
+                report=dict(status='controls_collected_not_leak_verdict',source_sha=SOURCE,comparable=comparable,
+                            comparable_scope='memory_controls_conservative_not_workload_only',workload_schedule_comparable=workload_schedule_comparable,
+                            memory_controls=memory_controls,completed=results,attribution='requires_review',idle_is_not_workload_control=True,
+                            cloud_calls=0,device_executed=False)
+            except Exception:
+                (output/'result.json').write_text(json.dumps(dict(status='comparison_failed_stopped',completed=results,attribution='unknown')))
+                raise Invalid('comparison_failed') from None
             (output/'result.json').write_text(json.dumps(report,indent=2)+'\n')
             return report
 
@@ -251,7 +368,7 @@ def cli(argv=None):
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='command',required=True)
     read=sub.add_parser('analyze');read.add_argument('--report',required=True);read.add_argument('--output',required=True)
     run=sub.add_parser('profile');run.add_argument('--execute-profile',action='store_true');run.add_argument('--attempts',type=int,default=12);run.add_argument('--timeout',type=int,default=30);run.add_argument('--output',required=True)
-    child=sub.add_parser('_worker');child.add_argument('--arm',choices=('plain','traced','traced_repeat','idle'),required=True);child.add_argument('--attempts',type=int,choices=(6,12,24),required=True);child.add_argument('--artifact',required=True);child.add_argument('--execute-profile',action='store_true');child.add_argument('--lock-fd',type=int,default=-1)
+    child=sub.add_parser('_worker');child.add_argument('--arm',choices=('plain','traced','traced_repeat','idle'),required=True);child.add_argument('--attempts',type=int,choices=(6,12,24),required=True);child.add_argument('--artifact',required=True);child.add_argument('--execute-profile',action='store_true');child.add_argument('--lock-fd',type=int,default=-1);child.add_argument('--worker-id',default='')
     args=parser.parse_args(argv)
     try:
         if args.command=='analyze':
@@ -262,7 +379,8 @@ def cli(argv=None):
         else:
             if not args.execute_profile or not sys.flags.isolated:raise Invalid('worker_requires_isolation')
             check_worker_lock(args.lock_fd)
-            result=asyncio.run(worker(args.arm,args.attempts,args.artifact))
+            if len(args.worker_id)!=32 or any(c not in '0123456789abcdef' for c in args.worker_id):raise Invalid('worker_identity_invalid')
+            result=asyncio.run(worker(args.arm,args.attempts,args.artifact,args.worker_id))
             print(json.dumps(result));return 0
         print(json.dumps(dict(memory_diagnostic='prepared' if args.command=='analyze' else 'controls_collected',profile_executed=args.command=='profile')));return 0
     except Exception:
