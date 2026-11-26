@@ -2,7 +2,7 @@
 
 Prep base: 0279281e71e54bcd981798e76d389c818bd3a13d. Separate branch/checkout; no changes in root's
 parent-completion/root-v2-rc8 or backend tree. No device/ADB/install/lockscreen/config import, no Gradle
-build, no interaction with long observation PID3917773. No new agents, services, keys or deployment.
+build, no interaction with old long observation PID3917773 or the root-owned session75560. No new agents, services, keys or deployment.
 
 ## Exact release gate and dependency
 
@@ -12,7 +12,8 @@ protocol. They also pin RC9 to PR109 f0185497b2df1347a70f494df774a6fdbd1623f3's 
 
 d649ac79bc5203373ff44ebdd547bdd16772663467a22115fa75f589bef91ea1
 
-This is a pre-review pin, not a claim PR109 passed QA/merged. If QA changes the image or manifest,
+Root later reported independent visual QA PASS for PR109; this author did not perform that QA.
+The pin still does not claim merge/freeze. If QA changes the image or manifest,
 update the pin/test projection only against root's reviewed fixed head. No bypass flag, fallback
 library, accepting code22/unknown future version, or renaming RC8. The prep branch still has old
 resources; metadata generation deliberately refuses it. Do not make a final APK from this tree.
@@ -25,10 +26,11 @@ Star-bunny PNG SHA: 4076745a4988a76252df6e05ea42a43e0e62d5f74f7000a0700393d0b8f5
 Old manifest SHA: 16ec66f3cca282e4070481d803eb8a833f31ee6a1a7733f48bb0948329f1826e
 
 PR106 (544701a256609927e91b246e0403e66a2a4e0322) and its dependent PR108/109 were unmerged on initial
-read. Root must complete the normal dependency review/merge sequence (including any reviewed
+read. Root later reported PR108 final f5b38d4 independently23PASS and PR106 awaiting its second CI.
+Root must complete the normal dependency review/merge sequence (including any reviewed
 successor to PR108) and this version PR, then use the latest clean integrated main Android code.
 Do not cherry-pick/copy the pending resource tree or pretend this minimal version PR integrates it.
-No final candidate before PR109 QA+merge. Final source SHA/tree comes from actual integrated main;
+No final candidate before PR109 QA+merge AND root releases the actual heavy-lock/build gate. Final source SHA/tree comes from actual integrated main;
 source_base is the prep/fork baseline, not a substitute for final commit or inventory digest.
 
 ## Existing identity/signing, V1 separation and upgrade
@@ -82,3 +84,12 @@ The latter uses temporary mini git source trees and ZIP metadata fixtures explic
 APKs. Tests cover RC9 correct identity, reject old/unknown/mislabelled version, old library despite
 relabelled RC9, tampered inventory/local source drift, uninventoried files and backend hash mismatch.
 They do not certify PR109 artwork, signing/upgrade or final integrated APK.
+
+## Root scheduling update (not an author-run test result)
+
+Root reported old session79841 ended normally (120 attempts/0 failures/cleanup0 pending), and a new
+independent TLS-fault long observation session75560 started10:22UTC holding the SAME heavy.lock,
+expected around11:22UTC. Author did not inspect/interrupt either session. Do not acquire another
+lock, bypass it or loop build retries. Expected elapsed time is not proof lock was released and not
+approval to start a build. This PR remains light preparation; root coordinates the single final
+heavy APK build only after actual release AND PR109 integration. No phone/ADB actions.
