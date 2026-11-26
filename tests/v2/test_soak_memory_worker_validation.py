@@ -20,6 +20,9 @@ def worker_fixture(args,samples=2,cleanup_confirmed=True):
     full=dict(attempts=[dict(index=i,scenario='fixture',injected='normal',status='delivered',observed=dict(frames=1,game_mode='chat')) for i in range(count)],
               resource_samples=[dict(phase='fixture',elapsed=i*.1) for i in range(samples)],
               sampling=dict(observations=samples,evicted=0),cleanup=cleanup,model_stage_calls=calls,cloud_enabled=False,device_executed=False)
+    if arm!='idle':
+        full['sampling'].update(retained=samples,errors=0,active_observed=True,continuous_peaks_known=False,valid=True,missing_metrics=[])
+        full['resource_collection_valid']=True
     artifact=Path(value('--artifact'));raw=json.dumps(full,sort_keys=True).encode();artifact.write_bytes(raw)
     inputs,outputs=m.schedule_hashes(full)
     phases=[]

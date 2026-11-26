@@ -1,3 +1,5 @@
+MEM111-03更新：非idle完整采集有效性门与idle独立分支见`mem111-03/report.md`，尚无实际测量执行。
+
 MEM111-01/02更新：worker format2监督校验及workload/memory条件分离以`mem111-fix/report.md`为准。下文保留初版准备背景；本批仍无实际profile执行。
 
 本批仅轻量准备。未运行tracemalloc、VoicePeer对照、profile或新长测，未打开/争抢heavy.lock，未观察/控制session75560/PID3943853，不改PR108分支或在途源码。PR108 root修复f5b38d4及QA23PASS仅作为背景，不重复改动。没有已证生产泄漏。

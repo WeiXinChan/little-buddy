@@ -237,6 +237,32 @@ def schedule_hashes(report):
     outputs=sha256(json.dumps([(r.get('status'),(r.get('observed') or {}).get('frames'),(r.get('observed') or {}).get('game_mode')) for r in ledger]).encode()).hexdigest()
     return inputs,outputs
 
+SAMPLE_CAP=4096
+OBSERVATION_CAP=100000
+
+def validate_measurement(full,arm):
+    """Verify the preserved report's measurement status, never fill success flags."""
+    sampling=full['sampling']
+    ensure(type(sampling) is dict)
+    if arm=='idle':
+        # Idle intentionally has no resource collection claim or production samples.
+        ensure(sampling.keys()=={'observations','evicted'})
+        ensure(all(type(sampling[key]) is int and sampling[key]==0 for key in sampling))
+        ensure(full['attempts']==[] and full['resource_samples']==[])
+        ensure('resource_collection_valid' not in full or full['resource_collection_valid'] is None)
+        return
+    ensure(full['resource_collection_valid'] is True)
+    ensure(sampling.keys()=={'observations','retained','evicted','errors','active_observed','continuous_peaks_known','valid','missing_metrics'})
+    ensure(sampling['valid'] is True and type(sampling['errors']) is int and sampling['errors']==0)
+    ensure(type(sampling['missing_metrics']) is list and sampling['missing_metrics']==[])
+    ensure(sampling['active_observed'] is True and sampling['continuous_peaks_known'] is False)
+    ensure(integer(sampling['observations'],OBSERVATION_CAP) and sampling['observations']>0)
+    ensure(integer(sampling['retained'],SAMPLE_CAP) and sampling['retained']>0)
+    ensure(integer(sampling['evicted'],OBSERVATION_CAP))
+    ensure(sampling['retained']==len(full['resource_samples'])==min(sampling['observations'],SAMPLE_CAP))
+    ensure(sampling['observations']==sampling['retained']+sampling['evicted'])
+
+
 def validate_worker(result,arm,attempts,worker_id,artifact):
     """Only a fully bound, typed result may enter completed. No success defaults."""
     if (type(result) is not dict or result.get('format')!=2 or type(result.get('format')) is not int or
@@ -295,6 +321,7 @@ def validate_worker(result,arm,attempts,worker_id,artifact):
         ensure(stat.S_ISREG(info.st_mode) and info.st_nlink==1 and info.st_size==structure['file_bytes']<=16*1024*1024)
         raw=artifact.read_bytes();ensure(sha256(raw).hexdigest()==result['full_report_sha256'])
         full=json.loads(raw);ensure(type(full) is dict and len(full)==structure['top_level_fields'])
+        validate_measurement(full,arm)
         ensure(type(full['attempts']) is list and len(full['attempts'])==result['attempted'])
         ensure(type(full['resource_samples']) is list and len(full['resource_samples'])==result['reported_sample_rows'])
         ensure(full['sampling']['observations']==structure['sample_observations'] and full['sampling']['evicted']==structure['sample_evicted'])
