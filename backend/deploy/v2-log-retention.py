@@ -88,7 +88,7 @@ def sweep():
               '--output=json','--output-fields=__REALTIME_TIMESTAMP']
     try:
         cutoff=now-7*DAY+margin
-        overdue=timestamp(execute(metadata+['--until=@'+format(cutoff,'.6f'),'--lines=1']))
+        overdue=timestamp(execute(metadata+['--until=@'+format(cutoff,'.6f'),'--reverse','--lines=1']))
         oldest=timestamp(execute(metadata+['--lines=+1']))
     except Exception:raise Rejected('metadata_invalid') from None
     completed=time.time()

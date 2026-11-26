@@ -66,7 +66,7 @@ class Retention(unittest.TestCase):
         commands=[c for c in self.fake.calls if c[0]=='/usr/bin/journalctl']
         self.assertEqual(len(commands),3)
         self.assertIn('--rotate',commands[0]);self.assertIn('--vacuum-time=6d',commands[0]);self.assertIn('--vacuum-size=32M',commands[0])
-        self.assertIn('--output-fields=__REALTIME_TIMESTAMP',commands[1]);self.assertIn('--lines=+1',commands[2])
+        self.assertIn('--reverse',commands[1]);self.assertIn('--output-fields=__REALTIME_TIMESTAMP',commands[1]);self.assertIn('--lines=+1',commands[2])
         self.assertIn('--until=@'+format(self.now-7*LOG.DAY+60,'.6f'),commands[1])
     def test_real_journal_sequence_metadata_is_accepted_but_message_is_rejected(self):
         row={'__REALTIME_TIMESTAMP':str(int((self.now-100)*1e6)),
