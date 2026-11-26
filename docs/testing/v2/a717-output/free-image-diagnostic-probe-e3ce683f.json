@@ -1,0 +1,30 @@
+{
+  "source": "e3ce683fd44b2083fe8e51f34726083fc4b85a23",
+  "synthetic_only": true,
+  "image_saved": false,
+  "production_configuration_modified": false,
+  "automatic_outer_retry": false,
+  "free_stop_basis": "User console screenshot; not independently queried",
+  "cost": "Actual bill not verified",
+  "full_acceptance": false,
+  "download_diagnostic": {
+    "host": "dashscope-a717.oss-accelerate.aliyuncs.com",
+    "png_path_suffix": true,
+    "url_validation": "reject",
+    "error_class": "DownloadRejected"
+  },
+  "result": "failed_closed",
+  "failure": "upstream",
+  "elapsed_ms": 3530,
+  "http": [
+    {
+      "status": 200,
+      "operation": "review"
+    },
+    {
+      "status": 200,
+      "operation": "generation",
+      "model": "qwen-image-2.1-turbo"
+    }
+  ]
+}
