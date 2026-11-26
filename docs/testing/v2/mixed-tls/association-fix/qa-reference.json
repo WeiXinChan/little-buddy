@@ -1,0 +1,11 @@
+{
+  "head": "4733add0fa2d92084e4ca3eb662776fe9a3b429a",
+  "verdict": "HOLD_NO_NATIVE90_ADMISSION",
+  "report_sha256": "43e8afa4be807429e64eef8852f9d3a09214bb291813c1a5ee39f32806ead256",
+  "findings": [
+    "M116-01",
+    "M116-02",
+    "M116-03",
+    "M116-04"
+  ]
+}

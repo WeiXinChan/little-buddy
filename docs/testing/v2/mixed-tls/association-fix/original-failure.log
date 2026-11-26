@@ -1,0 +1,51 @@
+test_active_shutdown_cannot_be_reported_confirmed (__main__.Independent.test_active_shutdown_cannot_be_reported_confirmed) ... ok
+test_connection_delivery_label_must_match_actual_fault_turn (__main__.Independent.test_connection_delivery_label_must_match_actual_fault_turn) ... FAIL
+test_cutoff_must_occur_at_actual_duration_not_earlier (__main__.Independent.test_cutoff_must_occur_at_actual_duration_not_earlier) ... FAIL
+test_delivered_turn_binding_must_match_own_connection (__main__.Independent.test_delivered_turn_binding_must_match_own_connection) ... FAIL
+test_sampling_must_include_active_and_confirmed_cleanup_events (__main__.Independent.test_sampling_must_include_active_and_confirmed_cleanup_events) ... FAIL
+test_short_media_and_zero_sent_bytes_cannot_pad_wall_success (__main__.Independent.test_short_media_and_zero_sent_bytes_cannot_pad_wall_success) ... FAIL
+
+======================================================================
+FAIL: test_connection_delivery_label_must_match_actual_fault_turn (__main__.Independent.test_connection_delivery_label_must_match_actual_fault_turn)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/mixed-tls/association-fix/independent-original.py", line 12, in test_connection_delivery_label_must_match_actual_fault_turn
+    with self.assertRaises(p.Rejected):m.validate_report(r,plan)
+AssertionError: Rejected not raised
+
+======================================================================
+FAIL: test_cutoff_must_occur_at_actual_duration_not_earlier (__main__.Independent.test_cutoff_must_occur_at_actual_duration_not_earlier)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/mixed-tls/association-fix/independent-original.py", line 24, in test_cutoff_must_occur_at_actual_duration_not_earlier
+    with self.assertRaises(p.Rejected):m.validate_report(r,plan)
+AssertionError: Rejected not raised
+
+======================================================================
+FAIL: test_delivered_turn_binding_must_match_own_connection (__main__.Independent.test_delivered_turn_binding_must_match_own_connection)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/mixed-tls/association-fix/independent-original.py", line 9, in test_delivered_turn_binding_must_match_own_connection
+    with self.assertRaises(p.Rejected):m.validate_report(r,plan)
+AssertionError: Rejected not raised
+
+======================================================================
+FAIL: test_sampling_must_include_active_and_confirmed_cleanup_events (__main__.Independent.test_sampling_must_include_active_and_confirmed_cleanup_events)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/mixed-tls/association-fix/independent-original.py", line 28, in test_sampling_must_include_active_and_confirmed_cleanup_events
+    with self.assertRaises(p.Rejected):m.validate_report(r,plan)
+AssertionError: Rejected not raised
+
+======================================================================
+FAIL: test_short_media_and_zero_sent_bytes_cannot_pad_wall_success (__main__.Independent.test_short_media_and_zero_sent_bytes_cannot_pad_wall_success)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/mixed-tls/association-fix/independent-original.py", line 21, in test_short_media_and_zero_sent_bytes_cannot_pad_wall_success
+    with self.assertRaises(p.Rejected):m.validate_report(r,plan)
+AssertionError: Rejected not raised
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.004s
+
+FAILED (failures=5)

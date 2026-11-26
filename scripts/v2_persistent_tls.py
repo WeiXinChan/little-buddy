@@ -198,6 +198,7 @@ class Wire:
         async with self.send_lock:
             if kind=='stop':self.epoch+=1;self.seq=0
             seq=self.seq;await self.ws.send(json.dumps(dict(v=2,type=kind,epoch=self.epoch,seq=seq,**fields)));self.seq+=1;return seq
+    async def on_audio(self,event):pass
     async def before_ack(self,event):pass
     async def after_ack(self,event):pass
     async def receive(self):
@@ -211,6 +212,7 @@ class Wire:
             elif kind=='open':await self.command('bind',player='synthetic-persistent-player')
             elif kind=='bound':self.identity=event['identity'];self.ack_seq=0
             elif kind=='audio':
+                await self.on_audio(event)
                 self.frames+=1;self.first_at=self.first_at or time.monotonic()
                 if self.fault in {'partial_rst','half_open','playback_stop'} and self.turn_acks>=1:continue
                 if self.old_ack is not None and self.old_checked is None:

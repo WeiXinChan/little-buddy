@@ -3,7 +3,7 @@
 Only the reviewed persistent topology, real production voice wire and relay;
 no cloud/device factory, forced GC, replacement server or peer history.
 """
-import argparse,asyncio,base64,json,os,secrets,signal,socket,ssl,subprocess,sys,tempfile,time
+import argparse,asyncio,base64,json,math,os,secrets,signal,socket,ssl,subprocess,sys,tempfile,time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass,asdict
 from pathlib import Path
@@ -96,7 +96,7 @@ class MixedService(p.Service):
     def state(self):
         r=super().state();peer=self.peer
         r.update(process=process_identity(),asr_active=self.speech.asr_active,tts_active=self.speech.tts_active,
-                 capture_bytes=len(peer.capture) if peer else 0,recognition_active=bool(peer and peer.recognition and not peer.recognition.done()),
+                 capture_bytes=len(peer.capture) if peer else 0,head=peer.session.head if peer else 0,recognition_active=bool(peer and peer.recognition and not peer.recognition.done()),
                  rules_hash=p.digest(peer.session.game.get('rules')) if peer else None,
                  roles_hash=p.digest(peer.session.game.get('roles')) if peer else None)
         return r
@@ -112,24 +112,34 @@ class MixedService(p.Service):
 
 class PacedWire(p.Wire):
     def __init__(self,*args,timeline,observe,**kw):
-        super().__init__(*args,**kw);self.timeline=timeline;self.observe=observe;self.input_end=None;self.first_latency=None
+        super().__init__(*args,**kw);self.timeline=timeline;self.observe=observe;self.input_end=None;self.first_latency=None;self.total_ack_samples=0;self.reset_media()
+    def reset_media(self):
+        self.sent=0;self.paced=0;self.accepted=None;self.received=0;self.ack_samples=0;self.ack_head=0
+        self.input_started=None;self.input_end=None;self.first_latency=None;self.first_at=None;self.segments=set()
+    async def on_audio(self,event):
+        pcm=base64.b64decode(event['pcm'],validate=True)
+        p.require(len(pcm)==4800 and type(event['start']) is int and type(event['end']) is int and event['end']-event['start']==2400)
+        p.require(event['segment'] not in self.segments and len(self.segments)<20 and event['start']==self.received)
+        self.segments.add(event['segment']);self.received+=len(pcm)//2
     async def input(self):
         self.endpoint.clear();self.done.clear();self.acked.clear();self.delivered=False;self.turn_acks=0;self.first_at=None;self.first_latency=None
         self.revision+=1;await self.command('advance',revision=self.revision)
-        await self.observe('input_started');self.timeline.enter('input');start=time.monotonic()
+        await self.observe('input_started');self.timeline.enter('input');start=time.monotonic();self.input_started=start
         for i in range(300):
-            await self.command('input',pcm=base64.b64encode(b'\x01\x00'*320).decode());self.timeline.sent_input_samples+=320
+            await self.command('input',pcm=base64.b64encode(b'\x01\x00'*320).decode());self.timeline.sent_input_samples+=320;self.sent+=320
             await asyncio.sleep(.02)
-            self.timeline.input_samples+=320
+            self.timeline.input_samples+=320;self.paced+=320
         self.input_end=time.monotonic();p.require(self.input_end-start>=6)
-        self.timeline.enter('processing');await self.observe('input_finished');await self.command('probe',revision=self.revision)
+        self.timeline.enter('processing');state=(await self.ipc.call('barrier',seq=self.seq-1))['state'];self.accepted=state['capture_bytes']//2;p.require(self.accepted==96000)
+        await self.observe('input_finished');await self.command('probe',revision=self.revision)
     async def before_ack(self,event):
         pcm=base64.b64decode(event['pcm'],validate=True);p.require(0<len(pcm)<=4800 and len(pcm)%2==0 and event['end']-event['start']==len(pcm)//2)
         if self.first_latency is None:
             self.first_latency=(self.first_at if self.first_at is not None else time.monotonic())-self.input_end;await self.observe('first_audio_transport')
         self.timeline.enter('playback');await asyncio.sleep(len(pcm)/48000)
     async def after_ack(self,event):
-        self.timeline.played_samples+=event['end']-event['start'];self.timeline.enter('processing')
+        p.require(event['start']==self.ack_head and event['end']==self.ack_samples+2400)
+        self.total_ack_samples+=event['end']-event['start'];self.ack_samples+=event['end']-event['start'];self.ack_head=event['end'];self.timeline.played_samples+=event['end']-event['start'];self.timeline.enter('processing')
 
 class MixedDriver:
     def __init__(self,ipc,tls,port,plan,report,save):
@@ -138,8 +148,10 @@ class MixedDriver:
     async def observe(self,event):
         p.require(len(self.report['samples'])<8192)
         state=(await self.ipc.call('state'))['state'];r=dict(event=event,connection_index=len(self.report['connections'])-1,turn_index=len(self.report['turns'])-1,elapsed=time.monotonic()-self.started,service_process=state['process'],client_process=process_identity(),
-            service_resources=state['resources'],client_resources=p.scalar_resources(),pending=state['pending'],retired=state['retired'],generation=state['generation'],asr_active=state['asr_active'],tts_active=state['tts_active'],capture_bytes=state['capture_bytes'],allowance=state['allowance'])
-        self.report['samples'].append(r)
+            service_resources=state['resources'],client_resources=p.scalar_resources(),pending=state['pending'],retired=state['retired'],generation=state['generation'],asr_active=state['asr_active'],tts_active=state['tts_active'],capture_bytes=state['capture_bytes'],active=state['active'],pending_audio=state['pending_audio'],binding=state['binding'],same_session=state['same_session'],played_count=state['played_count'],played_anchor=state['played_anchor'],head=state['head'],state_hash=state['state_hash'],game=state['game'],rules_hash=state['rules_hash'],roles_hash=state['roles_hash'],allowance=state['allowance'])
+        self.report['samples'].append(r);return r
+    def finish_turn(self,row,wire):
+        row.update(frames=wire.frames-row['frame_start'],acks=wire.ack_samples//2400,ack_attempts=wire.acks-row['ack_start'],media=dict(sent=wire.sent,paced=wire.paced,accepted=wire.accepted,received=wire.received,acked=wire.ack_samples,ack_head=wire.ack_head),input_started=None if wire.input_started is None else wire.input_started-self.started,input_finished=None if wire.input_end is None else wire.input_end-self.started,input_seconds=wire.paced/16000,playback_seconds=wire.ack_samples/24000,first_audio_seconds=wire.first_latency,completed=time.monotonic()-self.started)
     async def periodic(self):
         try:
             while True:await self.observe('periodic');self.save();await asyncio.sleep(self.plan.sample_seconds)
@@ -147,8 +159,10 @@ class MixedDriver:
         except Exception:self.sample_error=True;self.report['collection_errors']+=1
     async def turn(self,wire,step,fault='normal_close'):
         p.require(self.turn_count<self.plan.turns and not self.sample_error);self.turn_count+=1
-        row=dict(index=self.turn_count-1,step=step,fault=fault,status='attempted',elapsed=time.monotonic()-self.started,frame_start=wire.frames,ack_start=wire.acks)
+        wire.reset_media()
+        row=dict(index=self.turn_count-1,connection_index=len(self.report['connections'])-1,step=step,fault=fault,status='attempted',elapsed=time.monotonic()-self.started,frame_start=wire.frames,ack_start=wire.acks)
         self.report['turns'].append(row);input_before=self.timeline.input_samples;row['playback_start_samples']=self.timeline.played_samples;played_before=self.timeline.played_samples;before=(await self.ipc.call('state'))['state'];frames=wire.frames;acks=wire.acks
+        row['binding']=before['binding'];row['same_session']=before['same_session']
         await self.ipc.call('mixed_configure',step=step,fault=fault);wire.fault=fault
         try:
             async with asyncio.timeout(15):
@@ -164,12 +178,13 @@ class MixedDriver:
             if fault=='normal_close':
                 state=(await self.ipc.call('state'))['state'];p.require(state['same_session'] is True and state['binding']==before['binding'] and state['game']==MODES[step] and not state['pending_audio'])
                 if before['played_anchor']:p.require(state['played_anchor']==before['played_anchor'])
-                row.update(binding=state['binding'],played_anchor=state['played_anchor'],played_count=state['played_count'],state_hash=state['state_hash'],rules_hash=state['rules_hash'],roles_hash=state['roles_hash'])
+                row.update(binding=state['binding'],played_anchor=state['played_anchor'],played_count=state['played_count'],game=state['game'],server_head=state['head'],state_hash=state['state_hash'],rules_hash=state['rules_hash'],roles_hash=state['roles_hash'])
                 await self.observe('turn_delivered')
-        except BaseException:
+        except BaseException as error:
+            if isinstance(error,asyncio.CancelledError):row['cancelled_at']=time.monotonic()-self.started
             row['status']='incomplete';raise
         finally:
-            row.update(input_seconds=(self.timeline.input_samples-input_before)/16000,playback_seconds=(self.timeline.played_samples-played_before)/24000,completed=time.monotonic()-self.started)
+            self.finish_turn(row,wire)
             self.save()
     async def connection(self,index):
         p.require(index<self.plan.connections)
@@ -189,9 +204,9 @@ class MixedDriver:
             await self.turn(wire,7,'playback_stop');await wire.command('stop',intent='mixed-interrupt');await self.ipc.call('barrier',seq=wire.seq-1)
             await self.ipc.call('mixed_configure',step=7,fault='normal_close')
             stopped=(await self.ipc.call('state'))['state'];p.require(stopped['played_count']==before['played_count'] and stopped['pending_audio']==0 and stopped['binding']==row['binding'])
-            self.report['turns'][-1].update(status='interrupted',no_partial_commit=True)
+            self.finish_turn(self.report['turns'][-1],wire);self.report['turns'][-1].update(status='interrupted',no_partial_commit=True)
             wire.old_ack=wire.last_ack;wire.old_checked=None
-            await self.observe('stop_confirmed');await self.turn(wire,7);p.require(wire.old_checked is True)
+            await self.observe('stop_confirmed');self.finish_turn(self.report['turns'][-1],wire);await self.turn(wire,7);p.require(wire.old_checked is True)
             # The fixed real network matrix occurs after meaningful same-session work.
             before_fault=(await self.ipc.call('state'))['state'];await self.turn(wire,8,fault)
             self.timeline.enter('network');row.update(rst_applied=None,pause_observed=None)
@@ -202,20 +217,33 @@ class MixedDriver:
             elif fault=='pause_resume':
                 relay.pause('down');await self.ipc.call('unblock');await asyncio.wait_for(relay.blocked['down'].wait(),.5)
                 row['pause_observed']=True;await asyncio.sleep(.05);relay.resume('down');await wire.done.wait();p.require(wire.delivered)
-            elif fault=='playback_stop':await wire.command('stop',intent='mixed-network-stop');await self.ipc.call('barrier',seq=wire.seq-1)
+            elif fault=='playback_stop':
+                await wire.command('stop',intent='mixed-network-stop');await self.ipc.call('barrier',seq=wire.seq-1);await self.ipc.call('mixed_configure',step=8,fault='normal_close')
             self.timeline.enter('processing')
             final=(await self.ipc.call('state'))['state'];p.require(final['same_session'] is True and final['binding']==row['binding'])
-            last=self.report['turns'][-1];last.update(frames=wire.frames-last['frame_start'],acks=wire.acks-last['ack_start'],first_audio_seconds=wire.first_latency,playback_seconds=(self.timeline.played_samples-last['playback_start_samples'])/24000,completed=time.monotonic()-self.started)
+            last=self.report['turns'][-1];self.finish_turn(last,wire)
             self.report['turns'][-1]['status']='interrupted' if fault=='playback_stop' else 'fault_injected' if fault in {'asr_rst','plan_rst','partial_rst','half_open'} else 'delivered'
             if row['fault']=='playback_stop':
-                p.require(final['pending_audio']==0 and final['played_count']==before_fault['played_count']);last['no_partial_commit']=True
-            if last['status']=='delivered':last.update(binding=final['binding'],played_anchor=final['played_anchor'],played_count=final['played_count'],state_hash=final['state_hash'],rules_hash=final['rules_hash'],roles_hash=final['roles_hash'])
+                p.require(final['pending_audio']==0 and final['played_count']==before_fault['played_count']);last['no_partial_commit']=True;await self.observe('stop_confirmed');self.finish_turn(last,wire)
+            if last['status']=='delivered':last.update(binding=final['binding'],played_anchor=final['played_anchor'],played_count=final['played_count'],game=final['game'],server_head=final['head'],state_hash=final['state_hash'],rules_hash=final['rules_hash'],roles_hash=final['roles_hash'])
+            if fault=='pause_resume':await self.observe('turn_delivered');self.finish_turn(last,wire)
             row.update(status=self.report['turns'][-1]['status'],new_session=initial['new_session'],frames=wire.frames,acks=wire.acks,old_ack_checked=wire.old_checked,context_hash=final['state_hash'])
-        except BaseException:
+        except BaseException as error:
+            if isinstance(error,asyncio.CancelledError):
+                row['cancelled_at']=time.monotonic()-self.started
+                if self.report['turns'] and self.report['turns'][-1]['status']=='ready_fault':
+                    last=self.report['turns'][-1];last.update(status='incomplete',cancelled_at=row['cancelled_at']);self.finish_turn(last,wire)
             row['status']='incomplete';raise
         finally:
+            for task in tasks:
+                if not task.done():task.cancel()
+            if tasks:await asyncio.wait(tasks,timeout=.1)
+            if wire and self.report['turns'] and self.report['turns'][-1]['connection_index']==index:self.finish_turn(self.report['turns'][-1],wire)
+            if wire:row.update(frames=wire.frames,acks=wire.total_ack_samples//2400,ack_attempts=wire.acks)
             self.timeline.enter('cleanup')
-            try:await self.observe('before_cleanup')
+            try:
+                snapshot=await self.observe('before_cleanup')
+                if wire and self.report['turns'][-1]['media']['accepted'] is None:self.report['turns'][-1]['media']['accepted']=snapshot['capture_bytes']//2
             except Exception:self.sample_error=True;self.report['collection_errors']+=1
             if ws:
                 closer=asyncio.create_task(ws.close());tasks.add(closer);await asyncio.wait({closer},timeout=.3)
@@ -238,7 +266,7 @@ class MixedDriver:
 
 async def run_driver(args,plan,authority):
     output=args.output;report=dict(format=1,source_sha=args.source,authority=authority,layer='paced_synthetic_mixed_tls',duration=plan.duration,status='failed_or_unknown',
-        limits=asdict(plan),collection_errors=0,cloud=False,device=False,acoustic=False,acceptance=False,gc_forced=False,cleanup_confirmed=False,forced_exit=False,connections=[],turns=[],samples=[],rounds=[],timing=None)
+        limits=asdict(plan),collection_errors=0,cloud=False,device=False,acoustic=False,acceptance=False,gc_forced=False,cleanup_confirmed=False,forced_exit=False,connections=[],turns=[],samples=[],rounds=[],timing=None,cutoff=None)
     driver=None;ipc=None;process=None;sampler=None
     def save():
         if driver:report['timing']=driver.timeline.report()
@@ -258,7 +286,7 @@ async def run_driver(args,plan,authority):
             driver=MixedDriver(ipc,ssl.create_default_context(cafile=root/'cert'),hello['port'],plan,report,save);report.update(service_pid=process.pid,driver_pid=os.getpid())
             await driver.observe('before_warmup');sampler=asyncio.create_task(driver.periodic())
             try:
-                window=asyncio.timeout(plan.duration)
+                window=asyncio.timeout_at(driver.started+plan.duration)
                 async with window:
                     index=0
                     while True:
@@ -271,6 +299,7 @@ async def run_driver(args,plan,authority):
                         save()
             except TimeoutError:
                 p.require(window.expired() and time.monotonic()-driver.started>=plan.duration and not driver.sample_error)
+                report['cutoff']=dict(owner='outer_work_window',expired=window.expired(),deadline_elapsed=plan.duration,observed_elapsed=time.monotonic()-driver.started)
                 # Only the last in-flight attempt may be an explicit planned cutoff.
                 if report['turns'] and report['turns'][-1]['status']=='incomplete':report['turns'][-1]['status']='duration_cutoff'
                 if report['connections'] and report['connections'][-1]['status']=='incomplete':report['connections'][-1]['status']='duration_cutoff'
@@ -309,60 +338,125 @@ def validate_shutdown(state,rows,identity):
     p.require(type(state['constructed']) is int and state['constructed']==constructed and state['process']==identity)
 
 
+def finite(value):return type(value) in (int,float) and math.isfinite(value) and value>=0
+
+def integer(value,maximum):return type(value) is int and 0<=value<=maximum
+
 def _validate_report(report,plan):
-    p.require('failure_kind' not in report)
-    p.require(report['limits']==asdict(plan) and report['duration']==plan.duration and type(report['collection_errors']) is int and report['collection_errors']==0)
+    p.require('failure_kind' not in report and report['limits']==asdict(plan) and report['duration']==plan.duration)
+    p.require(type(report['collection_errors']) is int and report['collection_errors']==0)
     p.require(report['status']=='duration_collected_not_acceptance' and report['cleanup_confirmed'] is True and report['forced_exit'] is False and type(report['service_exit']) is int and report['service_exit']==0)
     p.require(all(report[k] is False for k in ('cloud','device','acoustic','acceptance','gc_forced')))
-    rows=report['connections'];turns=report['turns'];samples=report['samples'];p.require(0<len(rows)<=plan.connections and 0<len(turns)<=plan.turns and 0<len(samples)<=8192)
+    cutoff=report['cutoff'];deadline=plan.duration
+    p.require(cutoff['owner']=='outer_work_window' and cutoff['expired'] is True and cutoff['deadline_elapsed']==deadline)
+    p.require(finite(cutoff['observed_elapsed']) and deadline<=cutoff['observed_elapsed']<=deadline+15)
+    rows=report['connections'];turns=report['turns'];samples=report['samples']
+    p.require(0<len(rows)<=plan.connections and 0<len(turns)<=plan.turns and 0<len(samples)<=8192)
+    # Index actual observations once; no expected stages are inserted into reports.
+    events={};previous=0.;identity=None
+    allowed={'before_warmup','periodic','input_started','input_finished','first_audio_transport','turn_delivered','stop_confirmed','before_cleanup','after_cleanup','after_warmup','after_block','round_completed','final'}
+    for sample in samples:
+        p.require(sample['event'] in allowed and finite(sample['elapsed']) and previous<=sample['elapsed']<=deadline+15);previous=sample['elapsed']
+        for key,pid in (('service_process',report['service_pid']),('client_process',report['driver_pid'])):
+            p.require(sample[key].keys()=={'pid','start_ticks'} and all(type(v) is int and v>0 for v in sample[key].values()) and sample[key]['pid']==pid)
+        p.require(report['service_pid']!=report['driver_pid'])
+        if identity is None:identity=sample['service_process']
+        p.require(sample['service_process']==identity)
+        for key in ('service_resources','client_resources'):
+            p.require(sample[key].keys()=={'backend_rss_bytes','backend_fds','backend_threads','asyncio_tasks'} and all(type(v) is int and v>0 for v in sample[key].values()))
+        for key in ('pending','retired','asr_active','tts_active','capture_bytes','pending_audio','played_count','head'):p.require(integer(sample[key],1000000))
+        for key in ('generation','active','same_session'):p.require(type(sample[key]) is bool)
+        p.require(type(sample['connection_index']) is int and -1<=sample['connection_index']<len(rows) and type(sample['turn_index']) is int and -1<=sample['turn_index']<len(turns))
+        events.setdefault((sample['connection_index'],sample['turn_index'],sample['event']),[]).append(sample)
+    def one(connection,turn,event):
+        found=events.get((connection,turn,event),[]);p.require(len(found)==1);return found[0]
+    def cutoff_time(row):
+        p.require(finite(row['cancelled_at']) and deadline<=row['cancelled_at']<=deadline+1)
+        p.require(finite(row['completed']) and row['cancelled_at']<=row['completed']<=deadline+15)
     bindings=set();previous_end=0;previous_time=0.
     for index,row in enumerate(rows):
-        p.require(type(row['started']) in (int,float) and type(row['completed']) in (int,float) and previous_time<=row['started']<=row['completed']);previous_time=row['completed']
-        p.require(row['turn_start']==previous_end and row['turn_end']>previous_end and row['turn_end']<=len(turns));previous_end=row['turn_end']
-        p.require(p.hex_string(row.get('binding'),64) and row['binding'] not in bindings);bindings.add(row['binding'])
-        p.require(row['fault']==(p.MATRIX[(index//2+1)%7] if index%2==0 else 'normal_close'))
-        p.require(row['index']==index and row['cleanup_confirmed'] is True and row['client_cleanup'] is True and row['release']['cleanup_confirmed'] is True and row['release']['transport_closed'] is True and row['release']['active'] is False and row['release']['quarantined'] is False)
-        p.require(all(type(row['release'][k]) is int and row['release'][k]==0 for k in ('pending','retired','errors','heard','pending_audio')))
-        p.require(row['status'] in {'delivered','fault_injected','interrupted','duration_cutoff'})
-        if row['status']=='duration_cutoff':p.require(index==len(rows)-1)
+        p.require(finite(row['started']) and finite(row['completed']) and previous_time<=row['started']<=row['completed']<=deadline+15);previous_time=row['completed']
+        p.require(row['index']==index and row['turn_start']==previous_end and row['turn_start']<row['turn_end']<=len(turns));previous_end=row['turn_end']
+        binding=row['binding'];p.require(p.hex_string(binding,64) and binding not in bindings);bindings.add(binding)
+        fault=p.MATRIX[(index//2+1)%7] if index%2==0 else 'normal_close';p.require(row['fault']==fault and row['new_session'] is True)
+        p.require(row['cleanup_confirmed'] is True and row['client_cleanup'] is True)
+        release=row['release'];p.require(release['cleanup_confirmed'] is True and release['transport_closed'] is True and release['active'] is False and release['quarantined'] is False)
+        p.require(all(type(release[k]) is int and release[k]==0 for k in ('pending','retired','errors','heard','pending_audio')))
+        interrupted=row['status']=='duration_cutoff'
+        p.require(row['status'] in {'delivered','interrupted','fault_injected','duration_cutoff'})
+        if interrupted:p.require(index==len(rows)-1);cutoff_time(row)
         else:
-            p.require(row['cross_connection_old_ack_checked'] is True if index>0 else row['cross_connection_old_ack_checked'] is None)
             p.require(row['turn_end']-row['turn_start']==10)
-            last=turns[row['turn_end']-1]
-            if row['fault'] in {'asr_rst','plan_rst'}:p.require(last['frames']==last['acks']==0)
-            elif row['fault'] in {'partial_rst','half_open','playback_stop'}:p.require(last['frames']>=last['acks']==1)
-            else:p.require(last['frames']==last['acks'] and last['acks']>0)
-            p.require(row['new_session'] is True and row['frames']>=row['acks']>0 and row['old_ack_checked'] is True)
-            if row['fault'] in {'asr_rst','plan_rst','partial_rst','half_open'}:p.require(row['rst_applied'] is True)
-            if row['fault'] in {'pause_resume','half_open'}:p.require(row['pause_observed'] is True)
+            p.require(row['cross_connection_old_ack_checked'] is True if index>0 else row['cross_connection_old_ack_checked'] is None)
+        group=turns[row['turn_start']:row['turn_end']];p.require(1<=len(group)<=10)
+        played=0;anchor=None
+        for local,t in enumerate(group):
+            number=row['turn_start']+local
+            step=local if local<7 else 7 if local in (7,8) else 8
+            turn_fault='playback_stop' if local==7 else fault if local==9 else 'normal_close'
+            expected='interrupted' if turn_fault=='playback_stop' else 'fault_injected' if turn_fault in {'asr_rst','plan_rst','partial_rst','half_open'} else 'delivered'
+            p.require(t['index']==number and t['connection_index']==index and t['step']==step and t['fault']==turn_fault and t['binding']==binding and t['same_session'] is True)
+            p.require(finite(t['elapsed']) and finite(t['completed']) and row['started']<=t['elapsed']<=t['completed']<=row['completed'])
+            partial=t['status']=='duration_cutoff'
+            if partial:p.require(interrupted and number==len(turns)-1);cutoff_time(t)
+            else:p.require(t['status']==expected)
+            media=t['media'];p.require(media.keys()=={'sent','paced','accepted','received','acked','ack_head'})
+            p.require(all(integer(media[k],96000 if k in ('sent','paced','accepted') else 48000) for k in media))
+            p.require(media['paced']<=media['sent']<=media['paced']+320 and media['accepted']<=media['sent'])
+            p.require(media['paced']%320==media['sent']%320==0 and media['acked']<=media['received'] and media['acked']==media['ack_head'])
+            p.require(type(t['frames']) is int and type(t['acks']) is int and t['frames']*2400==media['received'] and t['acks']*2400==media['acked'])
+            p.require(t['input_seconds']==media['paced']/16000 and t['playback_seconds']==media['acked']/24000)
+            if not partial:p.require(media['sent']==media['paced']==media['accepted']==96000)
+            if t['input_started'] is not None:
+                first=one(index,number,'input_started');p.require(t['elapsed']<=first['elapsed']<=t['input_started']<=t['completed'] and first['active'] is True and first['binding']==binding)
+            else:p.require(partial and media['sent']==0)
+            if t['input_finished'] is not None:
+                end=one(index,number,'input_finished');p.require(t['input_finished']-t['input_started']>=6-1e-9 and t['input_finished']<=end['elapsed']<=t['completed'] and end['capture_bytes']==192000 and end['binding']==binding and end['active'] is True)
+            else:
+                p.require(partial and media['paced']<96000)
+                observed=one(index,row['turn_end']-1,'before_cleanup');p.require(media['accepted']==observed['capture_bytes']//2)
+            if media['acked']:
+                audio=one(index,number,'first_audio_transport');p.require(t['input_finished']<=audio['elapsed']<=t['completed'] and audio['binding']==binding and audio['generation'] is True and audio['pending_audio']>0)
+                p.require(finite(t['first_audio_seconds']) and t['first_audio_seconds']<=15)
+            if not partial:
+                if expected=='delivered':
+                    p.require(media['received']==media['acked']==48000 and t['server_head']==48000 and t['game']==MODES[step])
+                    delivered=one(index,number,'turn_delivered');played+=1
+                    if anchor is None:anchor=t['played_anchor']
+                    p.require(p.hex_string(anchor,64) and t['played_anchor']==anchor and t['played_count']==played)
+                    for k in ('binding','played_anchor','played_count','state_hash','rules_hash','roles_hash','game'):p.require(t[k]==delivered[k])
+                    p.require(delivered['elapsed']-audio['elapsed']>=media['acked']/24000-1e-9)
+                    p.require(delivered['pending_audio']==0 and delivered['same_session'] is True and delivered['head']==48000 and delivered['elapsed']<=t['completed'])
+                elif expected=='interrupted':
+                    stop=one(index,number,'stop_confirmed');p.require(stop['elapsed']-audio['elapsed']>=media['acked']/24000-1e-9);p.require(media['acked']==2400 and t['no_partial_commit'] is True and stop['pending_audio']==0 and stop['generation'] is False and stop['played_count']==played and stop['binding']==binding and t['input_finished']<=stop['elapsed']<=t['completed'])
+                elif turn_fault in {'asr_rst','plan_rst'}:p.require(media['received']==media['acked']==0)
+                else:p.require(media['acked']==2400)
+        p.require(row['frames']==sum(t['frames'] for t in group) and row['acks']==sum(t['acks'] for t in group))
+        if not interrupted:
+            p.require(row['status']==group[-1]['status'])
+            if fault in {'asr_rst','plan_rst','partial_rst','half_open'}:p.require(row['rst_applied'] is True)
+            if fault in {'pause_resume','half_open'}:p.require(row['pause_observed'] is True)
+        before=one(index,row['turn_end']-1,'before_cleanup');after=one(index,row['turn_end']-1,'after_cleanup')
+        p.require(group[-1]['completed']<=before['elapsed']<=row['completed']<=after['elapsed']<=row['completed']+3)
+        p.require(after['active'] is False and after['generation'] is False and after['binding'] is None)
+        p.require(all(after[k]==0 for k in ('pending','retired','capture_bytes','asr_active','tts_active','pending_audio','played_count')))
+    p.require(previous_end==len(turns))
+    if rows[-1]['status']!='duration_cutoff':p.require(rows[-1]['completed']>=deadline-3)
     completed=len(rows)-(rows[-1]['status']=='duration_cutoff');rounds=report['rounds'];p.require(len(rounds)==completed//14)
     for index,r in enumerate(rounds):
-        start=index*14;end=start+14
-        p.require(r==dict(index=index,connection_start=start,connection_end=end,turn_start=rows[start]['turn_start'],turn_end=rows[end-1]['turn_end']))
-    p.require(previous_end==len(turns))
-    for index,row in enumerate(turns):
-        p.require(row['index']==index and row['status'] in {'delivered','fault_injected','interrupted','duration_cutoff'})
-        if row['status']=='duration_cutoff':p.require(index==len(turns)-1)
-        if row['status']=='delivered':p.require(type(row['first_audio_seconds']) in (int,float) and 0<=row['first_audio_seconds']<=15);p.require(row['frames']==row['acks'] and row['acks']>0 and p.hex_string(row['binding'],64) and p.hex_string(row['played_anchor'],64))
-        if row['status']=='interrupted':p.require(row['no_partial_commit'] is True)
-        p.require(0<=row['input_seconds']<=6 and 0<=row['playback_seconds']<=2.01)
-    identities={json.dumps(row['service_process'],sort_keys=True) for row in samples};p.require(len(identities)==1)
-    previous=-1
-    for sample in samples:
-        p.require(sample['elapsed']>=previous);previous=sample['elapsed'];p.require(sample['service_process']['pid']==report['service_pid'] and sample['client_process']['pid']==report['driver_pid'] and report['service_pid']!=report['driver_pid'])
-        for key in ('service_process','client_process'):p.require(sample[key].keys()=={'pid','start_ticks'} and all(type(v) is int and v>0 for v in sample[key].values()))
-        for key in ('service_resources','client_resources'):p.require(sample[key].keys()=={'backend_rss_bytes','backend_fds','backend_threads','asyncio_tasks'} and all(type(v) is int and v>0 for v in sample[key].values()))
+        start=index*14;end=start+14;p.require(r==dict(index=index,connection_start=start,connection_end=end,turn_start=rows[start]['turn_start'],turn_end=rows[end-1]['turn_end']))
     periodic=[s['elapsed'] for s in samples if s['event']=='periodic']
-    p.require(len(periodic)>=3 and periodic[0]<=5 and periodic[-1]>=plan.duration-10 and all(b-a<=10 for a,b in zip(periodic,periodic[1:])))
-    p.require(samples[0]['event']=='before_warmup' and samples[-1]['event']=='final' and any(s['event']=='after_warmup' for s in samples))
+    p.require(len(periodic)>=3 and periodic[0]<=5 and periodic[-1]>=deadline-10 and all(b-a<=10 for a,b in zip(periodic,periodic[1:])))
+    p.require(samples[0]['event']=='before_warmup' and samples[-1]['event']=='final')
+    warmup=[s for s in samples if s['event']=='after_warmup'];p.require(len(warmup)==1 and warmup[0]['elapsed']>=rows[0]['completed'])
     final_allowance=report['shutdown']['allowance'];p.require(final_allowance['account_quota_known'] is False and final_allowance['bill_cny'] is None)
     for key,cap in (('model_calls',plan.model_calls),('tts_calls',plan.tts_calls),('tts_unicode_characters',plan.characters),('reserved_units',plan.units)):
-        values=[s['allowance'][key] for s in samples]+[final_allowance[key]]
-        p.require(all(type(v) is int and 0<=v<=cap for v in values) and values==sorted(values))
-    warmup=[s for s in samples if s['event']=='after_warmup'];p.require(len(warmup)==1 and warmup[0]['elapsed']>=rows[0]['completed'])
-    timing=report['timing'];p.require(timing['elapsed_seconds']>=plan.duration and abs(sum(timing['wall_seconds'].values())-timing['elapsed_seconds'])<.01)
-    p.require(timing['declared_input_seconds']>0 and timing['simulated_ack_playback_seconds']>0 and timing['wall_seconds']['input']>=timing['declared_input_seconds'] and timing['wall_seconds']['playback']>=timing['simulated_ack_playback_seconds'])
-    p.require(abs(sum(r['input_seconds'] for r in turns)-timing['declared_input_seconds'])<.001 and abs(sum(r['playback_seconds'] for r in turns)-timing['simulated_ack_playback_seconds'])<.001)
+        values=[s['allowance'][key] for s in samples]+[final_allowance[key]];p.require(all(integer(v,cap) for v in values) and values==sorted(values))
+    timing=report['timing'];p.require(finite(timing['elapsed_seconds']) and deadline<=timing['elapsed_seconds']<=deadline+15)
+    p.require(timing['wall_seconds'].keys()==set(PHASES) and all(finite(v) for v in timing['wall_seconds'].values()) and abs(sum(timing['wall_seconds'].values())-timing['elapsed_seconds'])<.01)
+    sent=sum(t['media']['sent'] for t in turns)/16000;paced=sum(t['media']['paced'] for t in turns)/16000;acked=sum(t['media']['acked'] for t in turns)/24000
+    p.require(timing['sent_input_seconds']==sent and timing['declared_input_seconds']==paced and timing['simulated_ack_playback_seconds']==acked and paced>0 and acked>0)
+    p.require(timing['wall_seconds']['input']>=paced and timing['wall_seconds']['playback']>=acked)
     validate_shutdown(report['shutdown'],rows,samples[-1]['service_process'])
 
 

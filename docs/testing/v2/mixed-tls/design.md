@@ -53,3 +53,5 @@ python3 -m scripts.v2_mixed_tls prepare --enable --duration 3600 --output ./mixe
 本轮只静态/轻量fixture：新增7方法+受影响PR115原21方法=28PASS/0FAIL/0SKIP，包含fake-clock字节节拍、空等不计媒体、真实上下文缺失拒绝、报告反例、共享额度及合成PCM精确尺寸。没有实际服务/TLS90/TLS3600/worker/锁/云/设备/部署。真实供应商网络/ASR/LLM质量/安全效果、声学/设备、账单与完整A36/P14继续OPEN。
 
 PR116终态增量：见shutdown-fix/review.md。父验证要求真实shutdown的active/quarantined/finished、所有在途及材料残留和Session绑定处于正确无peer终态；constructed绑定逐连接实际release顺序及绑定，不按尝试数补值。root两个原始输入保留并原样拒绝；本次12针对性方法通过（旧7+新增5），未执行原生服务或短/长测，原28项为前次准备证据，不重复扩大分母。
+
+M116关联/媒体/事件/截止增量见association-fix/review.md：生产者增加实际sent/paced/capture/received/ACK样本与头位置、活动/状态快照和取消首时刻，父逐连接逐轮关联及完整固定媒体量核验，不以旧fixture缺字段替代关闭证据。新完整正控先通过后做同类单变异；原五FAIL源码/输入/断言原样保留。最新51项轻量方法通过，无原生服务/90秒/长测，仍待QA/root批准。截止观察+1秒、有限清理+15秒只是元数据有效性门，不改原响应/TTL预算；不确定admission/退出保持失败unknown。
