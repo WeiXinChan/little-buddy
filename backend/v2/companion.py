@@ -34,7 +34,13 @@ facts是有来源的证据，不是自动成立的肯定断言；必须核对原
 """
 
 class ModelError(ValueError):
-    pass
+    def __init__(self,message):
+        super().__init__(message)
+        # Preserve exception messages; only known literal branch labels become
+        # metadata. PR97's count gate uses this same constructor when composed.
+        code={'anchors':'plan_anchors','tool schema':'plan_tool_schema',
+              'story turn sentence limit':'plan_sentence_limit'}.get(message)
+        if code:mark_contract(self,code)
 
 
 def object_json(raw):
@@ -218,29 +224,36 @@ description只用于generate_image，缺字段兼容目录名称生成；缺服�
         if isinstance(plan, dict):
             plan.setdefault('anchors', {})
             plan.setdefault('tools', [])
-        if (not isinstance(plan, dict) or set(plan) != {'action', 'mode', 'rules', 'roles', 'secrets', 'sentences', 'anchors', 'tools'} or
-                plan['action'] not in {'continue', 'change', 'leave', 'handoff', 'private','end'} or
-                plan['mode'] not in {'chat', 'guess', 'story', 'adventure', 'association'} or
-                not isinstance(plan['rules'], str) or len(plan['rules']) > 2000 or
-                not isinstance(plan['roles'], list) or len(plan['roles']) > 8 or
-                not all(isinstance(v, str) and len(v) <= 80 for v in plan['roles']) or
-                not isinstance(plan['secrets'], dict) or len(plan['secrets']) > 8 or
-                not all(isinstance(k, str) and isinstance(v, str) and len(k) < 80 and len(v) < 1000
-                        for k, v in plan['secrets'].items()) or
-                not isinstance(plan['sentences'], list) or not 1 <= len(plan['sentences']) <= 4 or
-                not all(isinstance(v, str) and 0 < len(v) <= 120 for v in plan['sentences'])):
-            raise ModelError('plan')
+        def require(condition,code):
+            if not condition:raise mark_contract(ModelError('plan'),code)
+        require(isinstance(plan,dict) and set(plan)=={'action','mode','rules','roles','secrets','sentences','anchors','tools'},'plan_structure')
+        try:valid=plan['action'] in {'continue','change','leave','handoff','private','end'}
+        except TypeError as error:raise mark_contract(error,'plan_action')
+        require(valid,'plan_action')
+        try:valid=plan['mode'] in {'chat','guess','story','adventure','association'}
+        except TypeError as error:raise mark_contract(error,'plan_mode')
+        require(valid,'plan_mode')
+        require(isinstance(plan['rules'],str) and len(plan['rules'])<=2000,'plan_rules')
+        require(isinstance(plan['roles'],list) and len(plan['roles'])<=8 and
+                all(isinstance(v,str) and len(v)<=80 for v in plan['roles']),'plan_roles')
+        require(isinstance(plan['secrets'],dict) and len(plan['secrets'])<=8 and
+                all(isinstance(k,str) and isinstance(v,str) and len(k)<80 and len(v)<1000
+                    for k,v in plan['secrets'].items()),'plan_secrets')
+        require(isinstance(plan['sentences'],list) and 1<=len(plan['sentences'])<=4 and
+                all(isinstance(v,str) and 0<len(v)<=120 for v in plan['sentences']),'plan_sentences')
         if (not isinstance(plan['anchors'], dict) or len(plan['anchors']) > 16 or
                 any(not isinstance(k, str) or not 1 <= len(k) <= 40 or type(v) is not int or
                     not 0 <= v < len(plan['sentences']) for k, v in plan['anchors'].items())):
             raise ModelError('anchors')
         tools=plan['tools']
-        if (not isinstance(tools,list) or len(tools)>1 or any(
-            not isinstance(t,dict) or set(t)-{'kind','asset_id','description'} or
-            t.get('kind') not in {'show_image','hide_image','generate_image','extend_image','reshow_image'} or
-            ('asset_id' in t and (t.get('kind') in {'extend_image','reshow_image'} or not isinstance(t['asset_id'],str) or len(t['asset_id'])>64))
-            for t in tools)):
-            raise ModelError('tool schema')
+        try:
+            if (not isinstance(tools,list) or len(tools)>1 or any(
+                not isinstance(t,dict) or set(t)-{'kind','asset_id','description'} or
+                t.get('kind') not in {'show_image','hide_image','generate_image','extend_image','reshow_image'} or
+                ('asset_id' in t and (t.get('kind') in {'extend_image','reshow_image'} or not isinstance(t['asset_id'],str) or len(t['asset_id'])>64))
+                for t in tools)):
+                raise ModelError('tool schema')
+        except TypeError as error:raise mark_contract(error,'plan_tool_schema')
         # Convert untrusted model fields to an owned, bounded visual receipt. No
         # extra semantic call or unbounded chat-to-prompt copy occurs here.
         validated=[]
