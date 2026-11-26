@@ -938,6 +938,14 @@ class VoicePeer:
                 plan = await self.read_request(operation, 'plan', text, context)
                 if epoch != self.epoch or not self.session._output_live():
                     return
+                shared_replanned = self.session.private_mode and plan['action'] in {'change', 'leave'}
+                if shared_replanned:
+                    # Project without changing scope: a failed/cancelled re-plan
+                    # must leave the current private session private. Only the
+                    # final plan may decide the action and publication scope.
+                    plan = await self.read_request(operation, 'plan', text,
+                        operation.session.context(shared=True, query=text or ''), allow_plan_repair=False)
+                    operation.ensure()
                 action = plan['action']
                 ending=action=='end'
                 if action == 'handoff' and any((self.session.recent, self.session.facts,
@@ -969,9 +977,8 @@ class VoicePeer:
                     return
                 elif action == 'private':
                     self.session.private_mode = True
-                elif action in {'change', 'leave'} and self.session.private_mode:
+                elif shared_replanned:
                     self.session.private_mode = False
-                    plan = await self.read_request(operation, 'plan', text, operation.session.context(shared=True,query=text or ''),allow_plan_repair=False)
                 if action == 'leave':
                     plan.update(mode='chat', rules='', roles=[], secrets={})
                 if epoch != self.epoch or not self.session._output_live():
