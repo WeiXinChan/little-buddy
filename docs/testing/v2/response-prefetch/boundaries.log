@@ -1,0 +1,25 @@
+test_actual_voicepeer_delay_dependency_contrast_and_identical_fact_inputs (tests.v2.test_fact_prefetch.Prefetch.test_actual_voicepeer_delay_dependency_contrast_and_identical_fact_inputs) ... ok
+test_cancel_stubborn_prefetch_is_bounded_retained_and_cannot_publish (tests.v2.test_fact_prefetch.Prefetch.test_cancel_stubborn_prefetch_is_bounded_retained_and_cannot_publish) ... ok
+test_capacity_rejection_preserves_old_evidence_and_reviews_fallback_before_tts (tests.v2.test_fact_prefetch.Prefetch.test_capacity_rejection_preserves_old_evidence_and_reviews_fallback_before_tts) ... ok
+test_end_discards_and_confirms_prefetch_before_goodbye_tts (tests.v2.test_fact_prefetch.Prefetch.test_end_discards_and_confirms_prefetch_before_goodbye_tts) ... ok
+test_epoch_revoke_discards_finished_prefetch (tests.v2.test_fact_prefetch.Prefetch.test_epoch_revoke_discards_finished_prefetch) ... ok
+test_existing_private_replan_does_not_prefetch_across_projection (tests.v2.test_fact_prefetch.Prefetch.test_existing_private_replan_does_not_prefetch_across_projection) ... ok
+test_facts_finishes_before_plan_but_cannot_commit_or_tts_until_original_gate (tests.v2.test_fact_prefetch.Prefetch.test_facts_finishes_before_plan_but_cannot_commit_or_tts_until_original_gate) ... ok
+test_handoff_cancels_prefetch_without_new_session_fact_or_audio (tests.v2.test_fact_prefetch.Prefetch.test_handoff_cancels_prefetch_without_new_session_fact_or_audio) ... ok
+test_invalid_fact_provenance_never_reaches_review_tts_or_storage (tests.v2.test_fact_prefetch.Prefetch.test_invalid_fact_provenance_never_reaches_review_tts_or_storage) ... ok
+test_invalid_plan_retires_pending_fact_read_without_publication (tests.v2.test_fact_prefetch.Prefetch.test_invalid_plan_retires_pending_fact_read_without_publication) ... ok
+test_parallel_read_failures_share_one_retry_reservation (tests.v2.test_fact_prefetch.Prefetch.test_parallel_read_failures_share_one_retry_reservation) ... ok
+test_private_transition_commits_only_private_current_input (tests.v2.test_fact_prefetch.Prefetch.test_private_transition_commits_only_private_current_input) ... ok
+test_revision_change_discards_finished_facts_without_commit (tests.v2.test_fact_prefetch.Prefetch.test_revision_change_discards_finished_facts_without_commit) ... ok
+test_already_running_stubborn_observer_is_retained_and_cannot_reuse_provider (tests.v2.test_probe_cleanup.Cleanup.test_already_running_stubborn_observer_is_retained_and_cannot_reuse_provider) ... ok
+test_cooperative_caller_cancel_confirms_exit_and_restores_provider (tests.v2.test_probe_cleanup.Cleanup.test_cooperative_caller_cancel_confirms_exit_and_restores_provider) ... ok
+test_normal_cleanup_restores_provider_and_allows_next_explicit_case (tests.v2.test_probe_cleanup.Cleanup.test_normal_cleanup_restores_provider_and_allows_next_explicit_case) ... ok
+test_outer_budget_does_not_wait_for_model_cancellation_ack (tests.v2.test_probe_cleanup.Cleanup.test_outer_budget_does_not_wait_for_model_cancellation_ack) ... ok
+test_rejected_future_cancelled_and_normal_wrappers_restored (tests.v2.test_probe_cleanup.Cleanup.test_rejected_future_cancelled_and_normal_wrappers_restored) ... ok
+test_repeated_caller_cancellation_preserves_unconfirmed_handle (tests.v2.test_probe_cleanup.Cleanup.test_repeated_caller_cancellation_preserves_unconfirmed_handle) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 1.813s
+
+OK
+{"synthetic_serial_dependency_first_audio_ms": 147.04, "synthetic_overlapped_first_audio_ms": 83.81, "not_cloud_latency": true}
