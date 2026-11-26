@@ -15,6 +15,7 @@ import time
 from backend.v2.companion import CompanionPolicy
 from backend.v2.voice import VoicePeer as ProductionVoicePeer
 from backend.v2.models import TEXT_MODELS
+from backend.v2.diagnostics import CONTRACT_FAILURES
 
 class ProbeLimit(RuntimeError):pass
 
@@ -86,8 +87,10 @@ FAILURE_KINDS=frozenset({'WireError','VoiceFault','TimeoutError','ModelError','S
 def peer_failure(peer):
     failure=getattr(peer,'last_failure',None)
     if not isinstance(failure,dict):return None
-    return {key:failure.get(key) if failure.get(key) in choices else 'unknown'
-            for key,choices in (('stage',FAILURE_STAGES),('kind',FAILURE_KINDS))}
+    choices=[('stage',FAILURE_STAGES),('kind',FAILURE_KINDS)]
+    if 'contract' in failure:choices.append(('contract',CONTRACT_FAILURES))
+    return {key:failure.get(key) if isinstance(failure.get(key),str) and failure.get(key) in allowed else 'unknown'
+            for key,allowed in choices}
 
 class VoicePeer(ProductionVoicePeer):
     """Diagnostic subclass only; delegates all production resource/ACK behavior."""

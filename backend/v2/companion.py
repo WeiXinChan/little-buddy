@@ -14,6 +14,7 @@ from backend.v2.images import DefaultImages
 from backend.v2.dynamic_images import ImageFailure
 from backend.v2.image_descriptions import MinimalDescription, compile_description, ImageAllowance, ExplicitImageRequest, explicit_request, VOCAB
 from backend.v2.models import TEXT_MODELS, SCHEMA_MODELS, UnsupportedTextModel
+from backend.v2.diagnostics import mark_contract
 from contextlib import asynccontextmanager
 
 SYSTEM = """你是瓦力，面向5–8岁儿童的AI语音玩伴。自然、简短、不过度夸奖或连续追问。
@@ -41,12 +42,18 @@ def object_json(raw):
         out = {}
         for k, v in items:
             if k in out:
-                raise ModelError('duplicate field')
+                raise mark_contract(ModelError('duplicate field'),'json_duplicate')
             out[k] = v
         return out
-    if not isinstance(raw, str) or len(raw.encode()) > 24000:
-        raise ModelError('model capacity')
-    return json.loads(raw, object_pairs_hook=pairs)
+    if not isinstance(raw,str):
+        raise mark_contract(ModelError('model capacity'),'json_type')
+    try:size=len(raw.encode())
+    except UnicodeEncodeError as error:
+        raise mark_contract(error,'json_encoding')
+    if size>24000:raise mark_contract(ModelError('model capacity'),'json_capacity')
+    try:return json.loads(raw,object_pairs_hook=pairs)
+    except json.JSONDecodeError as error:
+        raise mark_contract(error,'json_syntax')
 
 
 class CompanionPolicy:
@@ -250,23 +257,33 @@ value必须完整逐字出现在本轮text中，不能总结改写或补词，�
 dimension仅分类线索，不能改变主语/否定或断言旧来源撤回；无法区分用unspecified。
 最多8项，每项最多256字。昵称、偏好、角色、规则、线索、剧情、约定分别用对应key；
 value优先复制完整命题，例如我不喜欢猫必须保留否定，不改写为喜欢猫。程序还会保留完整来源供核对。没有明确事实就空数组。""", dict(text=text), schemas.FACTS)
-        if (not isinstance(result, dict) or set(result) != {'facts'} or
-                not isinstance(result['facts'], list) or len(result['facts']) > 8):
-            raise ModelError('facts')
-        facts = []
+        if not isinstance(result,dict) or set(result)!={'facts'}:
+            raise mark_contract(ModelError('facts'),'facts_structure')
+        if not isinstance(result['facts'],list):
+            raise mark_contract(ModelError('facts'),'facts_list_type')
+        if len(result['facts'])>8:
+            raise mark_contract(ModelError('facts'),'facts_count')
+        facts=[]
         for fact in result['facts']:
-            if (not isinstance(fact, dict) or set(fact) not in ({'key', 'value'}, {'key', 'value', 'dimension'}) or
-                    fact['key'] not in {'nickname', 'preference', 'role', 'rule', 'clue', 'plot', 'promise'} or
-                    not isinstance(fact['value'], str) or not 0 < len(fact['value']) <= 256 or
-                    fact['value'] not in text):
-                raise ModelError('fact provenance')
-            dimension = fact.get('dimension', 'unspecified')
-            if dimension not in {'unspecified', 'animal', 'color', 'food', 'sport', 'activity',
-                                  'music', 'place', 'person', 'object', 'other'}:
-                raise ModelError('fact dimension')
-            start = text.index(fact['value'])
-            facts.append(dict(key=fact['key'], value=fact['value'], start=start,
-                              end=start + len(fact['value']), dimension=dimension))
+            if not isinstance(fact,dict) or set(fact) not in ({'key','value'},{'key','value','dimension'}):
+                raise mark_contract(ModelError('fact provenance'),'fact_structure')
+            try:valid_key=fact['key'] in {'nickname','preference','role','rule','clue','plot','promise'}
+            except TypeError as error:raise mark_contract(error,'fact_key_type')
+            if not valid_key:raise mark_contract(ModelError('fact provenance'),'fact_key')
+            if not isinstance(fact['value'],str):
+                raise mark_contract(ModelError('fact provenance'),'fact_value_type')
+            if not 0<len(fact['value'])<=256:
+                raise mark_contract(ModelError('fact provenance'),'fact_value_length')
+            if fact['value'] not in text:
+                raise mark_contract(ModelError('fact provenance'),'fact_source_mismatch')
+            dimension=fact.get('dimension','unspecified')
+            try:valid_dimension=dimension in {'unspecified','animal','color','food','sport','activity',
+                                               'music','place','person','object','other'}
+            except TypeError as error:raise mark_contract(error,'fact_dimension_type')
+            if not valid_dimension:raise mark_contract(ModelError('fact dimension'),'fact_dimension')
+            start=text.index(fact['value'])
+            facts.append(dict(key=fact['key'],value=fact['value'],start=start,
+                              end=start+len(fact['value']),dimension=dimension))
         return facts
 
     async def compact(self, facts):
@@ -319,6 +336,7 @@ class DashScopeModel:
         self.usage['requests'] += 1
         started=time.perf_counter()
         usage_recorded=False
+        contract_stage='upstream_unknown'
         try:
             response = await self.speech.http.post(
                 self.speech.chat_url, headers=self.speech.headers,
@@ -342,9 +360,12 @@ class DashScopeModel:
                 if self.last_code in {'insufficient_quota', 'AllocationQuota.FreeTierOnly'}:
                     raise VoiceFault('quota')
                 raise VoiceFault('voice')
+            contract_stage='upstream_capacity'
             if len(response.content) > 64000:
                 raise ModelError('upstream capacity')
+            contract_stage='upstream_json'
             result = response.json()
+            contract_stage='upstream_structure'
             usage = result.get('usage', {})
             if not isinstance(usage,dict):usage={}
             for name in ('prompt_tokens', 'completion_tokens'):
@@ -370,7 +391,7 @@ class DashScopeModel:
             raise VoiceFault('network') from None
         except Exception:
             self.usage['failures'] += 1
-            raise ModelError('model unavailable') from None
+            raise mark_contract(ModelError('model unavailable'),contract_stage) from None
         finally:
             if not usage_recorded:
                 for name in ('prompt_tokens','completion_tokens'):self.usage_missing[name]+=1

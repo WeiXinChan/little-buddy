@@ -1,0 +1,54 @@
+{
+  "synthetic_only": true,
+  "requests_limit": 1,
+  "original_failure_root_cause_confirmed": false,
+  "shape": "str",
+  "accepted_count": 1,
+  "accepted": true,
+  "metrics": {
+    "model": "deepseek-v4.1-flash-1017",
+    "usage": {
+      "requests": 1,
+      "failures": 0,
+      "prompt_tokens": 549,
+      "completion_tokens": 31
+    },
+    "usage_observed": {
+      "prompt_tokens": 1,
+      "completion_tokens": 1
+    },
+    "usage_missing": {
+      "prompt_tokens": 0,
+      "completion_tokens": 0
+    },
+    "cancelled": 0,
+    "latency": {
+      "count": 1,
+      "total_ms": 743.3701420668513,
+      "max_ms": 743.3701420668513,
+      "buckets": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "upper_bounds_ms": [
+        250,
+        500,
+        1000,
+        3000,
+        10000,
+        null
+      ]
+    },
+    "cost": {
+      "monetary": null,
+      "currency": null,
+      "status": "rates_and_bill_not_verified",
+      "scope": "llm_only",
+      "asr_tts": "not_metered_here"
+    }
+  }
+}
