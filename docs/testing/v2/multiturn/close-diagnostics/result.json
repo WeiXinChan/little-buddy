@@ -1,0 +1,19 @@
+{
+  "base": "de7b43819bbbaa0a059a33d50a28fd3be2b5ca15",
+  "original_live_failure_sha256": "f9d2b6baec00c0562f2a952799bfd444f9a31adf2d88faac935cf3a6ab33cc58",
+  "checks": {
+    "original_harness": 13,
+    "cleanup": 6,
+    "new_diagnostics": 3,
+    "original_qa_falsifiers": 2,
+    "unique_executed": 24,
+    "passed": 24,
+    "failed": 0,
+    "skipped": 0
+  },
+  "cloud_calls": 0,
+  "production_code_changed": false,
+  "causality": "Controlled slow resource close reproduces accepted ACK/partial heard/no final game/quarantine; real incident requires resource-exit telemetry, not yet confirmed.",
+  "p12_verified": false,
+  "p15_verified": false
+}

@@ -1,0 +1,88 @@
+{
+  "source": "de7b43819bbbaa0a059a33d50a28fd3be2b5ca15",
+  "supervisor_deadline_seconds": 60,
+  "automatic_retry": false,
+  "full_acceptance": false,
+  "synthetic_only": true,
+  "supervisor_timeout": false,
+  "worker_exit": 0,
+  "probe": {
+    "format": 1,
+    "cleanup": {
+      "confirmed": false,
+      "pending_tasks": 0,
+      "provider_reusable": false
+    },
+    "usage_final": false,
+    "usage": {
+      "requests": 4,
+      "failures": 0,
+      "prompt_tokens": 4226,
+      "completion_tokens": 232
+    },
+    "case": "guess-animal",
+    "fixture_sha256": "050f9a5b9c436bd90e5954197a26382f9ddb61f2fed04677c7c215f623f22b16",
+    "layer": "synthetic_text_real_voicepeer_simulated_playback",
+    "turns": [
+      {
+        "label": "guess-animal-1",
+        "checks": {
+          "mode": false,
+          "rule_role_terms": false,
+          "played_context": true,
+          "delivery": false
+        },
+        "first_audio_after_text_ms": 9939.21,
+        "completed_ms": 11117.54,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 3386.38,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 2951.25,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 1492.94,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 1120.97,
+            "ok": true
+          }
+        ]
+      },
+      {
+        "label": "batch-stop",
+        "failure": "ProviderQuarantined"
+      }
+    ],
+    "model_requests": 4,
+    "tts_requests": 1,
+    "tts_unicode_characters": 12,
+    "full_acceptance": false,
+    "semantic_review_required": true,
+    "p12_verified": false,
+    "p15_verified": false,
+    "source": "de7b43819bbbaa0a059a33d50a28fd3be2b5ca15",
+    "synthetic_only": true,
+    "case_selection": "guess-animal-only",
+    "root_actual_model_requests": 4,
+    "root_planning_denials": 0,
+    "root_model_planning_allowance_cny": 5.0,
+    "uncached_rate_estimate_cny": 0.04922,
+    "usage_unknown_requests": 0,
+    "actual_bill_verified": false,
+    "currency_bound_is_supplier_guarantee": false,
+    "asr_calls": 0,
+    "image_calls": 0,
+    "model_rate_source": "https://help.aliyun.com/zh/model-studio/qwen4-max"
+  },
+  "supervisor_elapsed_ms": 11429,
+  "complete_result_received": true
+}
