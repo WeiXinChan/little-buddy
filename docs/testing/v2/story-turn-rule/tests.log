@@ -1,0 +1,9 @@
+test_actual_voicepeer_multisentence_rule_violation_never_tts_or_commits (tests.v2.test_story_turn_rule.StoryTurn.test_actual_voicepeer_multisentence_rule_violation_never_tts_or_commits) ... ok
+test_existing_rule_cannot_be_silently_removed_on_continuation (tests.v2.test_story_turn_rule.StoryTurn.test_existing_rule_cannot_be_silently_removed_on_continuation) ... ok
+test_explicit_new_rule_and_leave_do_not_inherit_old_sentence_limit (tests.v2.test_story_turn_rule.StoryTurn.test_explicit_new_rule_and_leave_do_not_inherit_old_sentence_limit) ... ok
+test_one_sentence_continues_three_ack_committed_turns (tests.v2.test_story_turn_rule.StoryTurn.test_one_sentence_continues_three_ack_committed_turns) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.046s
+
+OK

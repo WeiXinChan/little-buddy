@@ -15,6 +15,7 @@ import time
 from backend.v2.companion import CompanionPolicy
 from backend.v2.voice import VoicePeer as ProductionVoicePeer
 from backend.v2.models import TEXT_MODELS
+from backend.v2.budget import ResponseBudget
 from backend.v2.diagnostics import CONTRACT_FAILURES
 
 class ProbeLimit(RuntimeError):pass
@@ -207,6 +208,10 @@ async def run_case(case,providers,*,ack=True,observer=None):
         async with asyncio.timeout(45):
             for turn in case['turns']:
                 previous=peer.session.context().get('heard',())
+                # A distinct synthetic expression boundary, equivalent to the
+                # real client's first speech frame, never a retry renewal.
+                peer.input_budget=ResponseBudget(peer.session.clock)
+                peer.input_budget.speech(0)
                 peer.session.begin_turn();await peer.commands()
                 start=time.monotonic();sink.first=None;sink.events.clear();sink.frames=sink.audio_bytes=sink.max_audio_bytes=sink.acks=sink.game_commits=0;peer.probe_resources.clear();offset=len(meter.calls)
                 peer.generation=asyncio.create_task(peer.respond(turn['input'],peer.epoch))

@@ -1,0 +1,12 @@
+test_ascii_sentence_periods_cannot_hide_multiple_sentences (__main__.Independent.test_ascii_sentence_periods_cannot_hide_multiple_sentences) ... ok
+test_explicit_negation_and_new_two_sentence_rule_must_be_accepted (__main__.Independent.test_explicit_negation_and_new_two_sentence_rule_must_be_accepted) ... ok
+test_natural_explicit_one_sentence_rule_must_block_multiple_sentences (__main__.Independent.test_natural_explicit_one_sentence_rule_must_block_multiple_sentences) ... ok
+test_unrestricted_story_and_private_transition_remain_accepted (__main__.Independent.test_unrestricted_story_and_private_transition_remain_accepted) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.090s
+
+OK
+ASCII_PERIODS 0 False
+NEGATED_OLD_RULE 6 True
+EXPLICIT_VARIANT 0 False

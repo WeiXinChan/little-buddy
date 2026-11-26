@@ -1,0 +1,115 @@
+{
+  "source": "c130bfdf9c1387891104d8e079dc401049d959e6",
+  "supervisor_deadline_seconds": 60,
+  "automatic_retry": false,
+  "full_acceptance": false,
+  "synthetic_only": true,
+  "supervisor_timeout": false,
+  "worker_exit": 0,
+  "probe": {
+    "format": 1,
+    "client_heartbeats": 1,
+    "client_heartbeat_failed": false,
+    "peer_failure": {
+      "stage": "plan",
+      "kind": "ModelError",
+      "contract": "plan_sentence_limit"
+    },
+    "cleanup": {
+      "confirmed": true,
+      "pending_tasks": 0,
+      "provider_reusable": true
+    },
+    "usage_final": true,
+    "usage": {
+      "requests": 2,
+      "failures": 0,
+      "prompt_tokens": 2045,
+      "completion_tokens": 125
+    },
+    "case": "story-moon",
+    "fixture_sha256": "9ce5dd0e4988dc36fd38174c6fce771ae8954a0ebce9b4401a24d5e990c6d20e",
+    "layer": "synthetic_text_real_voicepeer_simulated_playback",
+    "turns": [
+      {
+        "label": "story-moon-1",
+        "checks": {
+          "mode": false,
+          "rule_role_terms": false,
+          "played_context": false,
+          "delivery": false
+        },
+        "quality_assessable": false,
+        "peer_failure": {
+          "stage": "plan",
+          "kind": "ModelError",
+          "contract": "plan_sentence_limit"
+        },
+        "resource_diagnostics": [],
+        "control_failures": [
+          "voice"
+        ],
+        "delivery_metadata": {
+          "audio_chunks": 0,
+          "audio_bytes": 0,
+          "max_audio_bytes": 0,
+          "acks_accepted": 0,
+          "game_committed": false,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": null,
+        "completed_ms": 1504.32,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 1502.77,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 738.45,
+            "ok": true
+          }
+        ]
+      }
+    ],
+    "model_requests": 2,
+    "tts_requests": 0,
+    "tts_unicode_characters": 0,
+    "full_acceptance": false,
+    "semantic_review_required": true,
+    "p12_verified": false,
+    "p15_verified": false,
+    "source": "c130bfdf9c1387891104d8e079dc401049d959e6",
+    "candidate": "deepseek-v4.1-flash-1017",
+    "rate_estimate_is_qwen4_proxy": true,
+    "synthetic_only": true,
+    "case_selection": "story-moon",
+    "root_actual_model_requests": 2,
+    "root_planning_denials": 0,
+    "root_model_planning_allowance_cny": 5.0,
+    "uncached_rate_estimate_cny": 0.03066,
+    "usage_unknown_requests": 0,
+    "actual_bill_verified": false,
+    "currency_bound_is_supplier_guarantee": false,
+    "asr_calls": 0,
+    "image_calls": 0,
+    "model_rate_source": "https://help.aliyun.com/zh/model-studio/qwen4-max"
+  },
+  "supervisor_elapsed_ms": 1828,
+  "complete_result_received": true,
+  "synthetic_semantic_observations": [
+    {
+      "label": "story-moon-1",
+      "mode": null,
+      "roles": [],
+      "typed_turn_limit_present": false,
+      "typed_turn_limit": null,
+      "synthetic_rules": "",
+      "synthetic_played": [],
+      "rules_characters": 0,
+      "heard_items": 0,
+      "heard_characters": 0
+    }
+  ]
+}
