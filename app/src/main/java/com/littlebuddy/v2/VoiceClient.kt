@@ -38,6 +38,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val actualOutput: (Boolean)->Unit = {}) {
     fun nativeProof() = player.nativeProof()
     private var controlQuarantined=false
+    private var deliveringSafety=false // handler-owned: an accepted safety event must still show text if stop fails
     val quarantined get() = player.quarantined || controlQuarantined
     private val childVolume=ChildVolume(playbackSettings.volume)
     private val managementState = ManagementState(SystemClock::elapsedRealtime)
@@ -311,7 +312,9 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                         else helpScope.accept(event.getString("session"), event.getLong("turn"), epoch, gate.revision,
                             value.getInt("v"), value.getString("prompt_id"), value.getString("reason"))
                     }.getOrNull() ?: return // stale/malformed help must not close or lend authority to a newer turn
-                    interrupt(); status("failure"); localHelp(help)
+                    deliveringSafety=true
+                    try { interrupt(); status("failure"); localHelp(help) }
+                    finally { deliveringSafety=false }
                 } else { interrupt(); status("failure"); failed() }
             }
             else -> error("unknown event")
@@ -416,7 +419,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         })
         val pending=childBlocked
         if (pending && code!="expired") controlQuarantined=true
-        close(); if (pending) managed(ManagementState.Phase.DEAD); status(code); failed()
+        close(); if (pending) managed(ManagementState.Phase.DEAD); status(code)
+        if (!deliveringSafety) failed()
     }
     fun close() {
         managementState.close(); entryGate.clear(); childVolume.clear(); childBlocked=true; managementPending=false
