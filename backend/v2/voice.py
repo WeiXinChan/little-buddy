@@ -129,6 +129,7 @@ class VoicePeer:
         self.management_scope=None
         self.waiting_wake=False
         self.last_volume_scope=None
+        self.settling_stop=None
 
     @asynccontextmanager
     async def resource(self, manager):
@@ -502,6 +503,9 @@ class VoicePeer:
 
     async def cancel_generation(self):
         task, self.generation = self.generation, None
+        await self.cancel_generation_task(task)
+
+    async def cancel_generation_task(self,task):
         if task is not None:
             scope = self.generation_scopes.get(task)
             if scope is not None:
@@ -594,24 +598,34 @@ class VoicePeer:
         elif kind == 'heartbeat':
             self.session.heartbeat()
         elif kind == 'stop':
+            session=self.session;old_generation=self.generation;prepared=self.prepared
             self.session.interrupt()
             self.capture.clear()
-            self.suspended = False
-            await self.commands()  # Local client already stopped before sending.
-            await self.cancel_generation()
-            prepared, self.prepared = self.prepared, None
-            if prepared is not None and event['intent'] == prepared[2]:
-                text, deadline, _, revision = prepared
-                if revision != self.revision:
-                    return
-                if self.session.clock() >= deadline:
-                    raise WireError("response budget exhausted")
-                self.session.begin_turn()
-                self.session.deadline = deadline
-                self.awaiting_input = False
+            self.suspended=False
+            scope=(session,self.epoch,self.revision,session.connection,session.turn,session.output)
+            token=(scope,old_generation);self.settling_stop=token
+            try:
                 await self.commands()
-                await self.send('open', revision=self.revision)
-                self.generation = asyncio.create_task(self.respond(text, self.epoch))
+                if self.generation is old_generation:await self.cancel_generation()
+                else:await self.cancel_generation_task(old_generation)
+                current=(self.session,self.epoch,self.revision,self.session.connection,self.session.turn,self.session.output)
+                if (current!=scope or self.prepared is not prepared or self.generation is not None or
+                    self.closed or self.quarantined or any(not t.done() for t in self.retired_tasks) or not session._live()):return
+                self.prepared=None
+                if prepared is not None and event['intent']==prepared[2]:
+                    text,deadline,_,revision=prepared
+                    if revision!=self.revision:return
+                    if session.clock()>=deadline:raise WireError('response budget exhausted')
+                    session.begin_turn();session.deadline=deadline
+                    self.awaiting_input=False
+                    await self.commands();await self.send('open',revision=self.revision)
+                    self.generation=asyncio.create_task(self.respond(text,self.epoch))
+                else:
+                    # Confirmed stopped old reply, not a session/lease renewal.
+                    session.deadline=session.progress_deadline=0
+                    session.response_confirmed=session.response_expired=False
+            finally:
+                if self.settling_stop is token:self.settling_stop=None
         elif kind == 'end':
             self.management_receipt=None;self.management_ready=False;self.management_scope=None;self.waiting_wake=False
             self.prepared = None
@@ -1139,7 +1153,11 @@ class VoicePeer:
                     await self.cancel_recognition()
                     await self.send('failure', code='timeout')
                     return
-            self.session.poll()
+            token=self.settling_stop
+            current=(self.session,self.epoch,self.revision,self.session.connection,self.session.turn,self.session.output)
+            settling=token is not None and token[0]==current and (self.generation is None or self.generation is token[1])
+            if settling:self.session._live() # TTL/heartbeat still expire during bounded cancellation
+            else:self.session.poll()
             await self.commands()
             await self.poll_visual()
             if not self.session.active or self.session.response_expired:
