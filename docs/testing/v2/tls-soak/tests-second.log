@@ -1,0 +1,45 @@
+test_attempt_deadline_stops_failure_in_denominator_and_cleans (tests.v2.test_tls_soak.TlsSoak.test_attempt_deadline_stops_failure_in_denominator_and_cleans) ... Executing <Task pending name='Task-2' coro=<TlsSoak.test_attempt_deadline_stops_failure_in_denominator_and_cleans() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:75> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.172 seconds
+Error on transport creation for incoming connection
+handle_traceback: Handle created at (most recent call last):
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 1979, in _run_once
+    handle._run()
+  File "/usr/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/usr/lib/python3.12/asyncio/selector_events.py", line 970, in _read_ready
+    self._read_ready_cb()
+  File "/usr/lib/python3.12/asyncio/selector_events.py", line 998, in _read_ready__get_buffer
+    self._read_ready__on_eof()
+  File "/usr/lib/python3.12/asyncio/selector_events.py", line 1039, in _read_ready__on_eof
+    keep_open = self._protocol.eof_received()
+  File "/usr/lib/python3.12/asyncio/sslproto.py", line 464, in eof_received
+    self._on_handshake_complete(ConnectionResetError)
+  File "/usr/lib/python3.12/asyncio/sslproto.py", line 589, in _on_handshake_complete
+    self._wakeup_waiter(exc)
+  File "/usr/lib/python3.12/asyncio/sslproto.py", line 369, in _wakeup_waiter
+    self._waiter.set_exception(exc)
+protocol: <websockets.asyncio.server.ServerConnection object at 0x7ad6a17e0890>
+transport: <asyncio.sslproto._SSLProtocolTransport object at 0x7ad69fe7bbf0>
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/asyncio/selector_events.py", line 235, in _accept_connection2
+    await waiter
+  File "/usr/lib/python3.12/asyncio/sslproto.py", line 578, in _on_handshake_complete
+    raise handshake_exc
+ConnectionResetError
+ok
+test_cancelled_schedule_cleans_heartbeat_relay_and_server (tests.v2.test_tls_soak.TlsSoak.test_cancelled_schedule_cleans_heartbeat_relay_and_server) ... Executing <Task pending name='Task-20' coro=<TlsSoak.test_cancelled_schedule_cleans_heartbeat_relay_and_server() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:97> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.119 seconds
+ok
+test_dynamic_final_drain_observes_done_error_and_retains_stubborn (tests.v2.test_tls_soak.TlsSoak.test_dynamic_final_drain_observes_done_error_and_retains_stubborn) ... ok
+test_global_allowance_is_not_reset_by_reconnect_and_attempt_cap_does_not_idle (tests.v2.test_tls_soak.TlsSoak.test_global_allowance_is_not_reset_by_reconnect_and_attempt_cap_does_not_idle) ... Executing <Task pending name='Task-72' coro=<TlsSoak.test_global_allowance_is_not_reset_by_reconnect_and_attempt_cap_does_not_idle() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:86> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.320 seconds
+Executing <Task pending name='Task-72' coro=<TlsSoak.test_global_allowance_is_not_reset_by_reconnect_and_attempt_cap_does_not_idle() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:90> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.370 seconds
+ok
+test_plan_late_result_cannot_publish_after_rst (tests.v2.test_tls_soak.TlsSoak.test_plan_late_result_cannot_publish_after_rst) ... Executing <Task pending name='Task-184' coro=<TlsSoak.test_plan_late_result_cannot_publish_after_rst() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:63> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.169 seconds
+ok
+test_six_fault_triggers_and_new_session_recovery_have_global_accounting (tests.v2.test_tls_soak.TlsSoak.test_six_fault_triggers_and_new_session_recovery_have_global_accounting) ... Executing <Task pending name='Task-253' coro=<TlsSoak.test_six_fault_triggers_and_new_session_recovery_have_global_accounting() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:14> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.219 seconds
+ok
+test_unconfirmed_exit_stops_and_preserves_real_pending_handles_no_reconnect (tests.v2.test_tls_soak.TlsSoak.test_unconfirmed_exit_stops_and_preserves_real_pending_handles_no_reconnect) ... Executing <Task pending name='Task-674' coro=<TlsSoak.test_unconfirmed_exit_stops_and_preserves_real_pending_handles_no_reconnect() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_tls_soak.py:38> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.319 seconds
+ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 6.511s
+
+OK

@@ -371,8 +371,12 @@ async def run_soak(limits=Limits(),*,providers=None,allow_cloud=False,allow_devi
 
 def main():
     import argparse
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--offline-seconds',type=float,default=3600);parser.add_argument('--output',type=Path,required=True)
-    args=parser.parse_args();limits=Limits(duration=args.offline_seconds)
-    args.output.write_text(json.dumps(asyncio.run(run_soak(limits)),indent=2)+'\n')
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--offline-seconds',type=float,default=3600);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--transport',choices=('duplex','loopback-tls'),default='duplex');parser.add_argument('--seed',type=int,default=17);parser.add_argument('--interval',type=float,default=None);parser.add_argument('--max-attempts',type=int,default=120)
+    args=parser.parse_args();limits=Limits(duration=args.offline_seconds,interval=args.interval if args.interval is not None else 30,max_attempts=args.max_attempts)
+    if args.transport=='loopback-tls':
+        from scripts.v2_tls_soak import run_tls_soak
+        report=asyncio.run(run_tls_soak(limits,seed=args.seed))
+    else:report=asyncio.run(run_soak(limits))
+    args.output.write_text(json.dumps(report,indent=2)+'\n')
 
 if __name__=='__main__':main()
