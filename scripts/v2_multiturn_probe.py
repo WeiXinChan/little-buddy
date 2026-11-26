@@ -32,6 +32,30 @@ class BatchState:
         tasks=self.tasks | (set(self.peer.retired_tasks) if self.peer else set())
         return tuple(task for task in tasks if not task.done())
 
+class ProbeClient:
+    """One simulated client command sequence; no direct Session heartbeat calls."""
+    def __init__(self,peer,state):
+        self.peer=peer;self.state=state;self.epoch=peer.epoch;self.sequence=0
+        self.session=peer.session;self.lock=asyncio.Lock();self.heartbeats=0;self.failed=False
+    async def send(self,kind,**fields):
+        async with self.lock:
+            self.state.ensure()
+            if self.peer.closed or self.peer.epoch!=self.epoch or self.peer.session is not self.session:
+                raise ProbeLimit('client_scope_changed')
+            sequence=self.sequence;self.sequence+=1
+            await self.peer.handle(json.dumps(dict(v=2,type=kind,epoch=self.epoch,seq=sequence,**fields)))
+            if kind=='heartbeat':self.heartbeats+=1
+
+async def client_heartbeat(client):
+    # VoiceClient.kt: immediate heartbeat, then handler.postDelayed(...,5000).
+    try:
+        while client.state.open:
+            await client.send('heartbeat')
+            await asyncio.sleep(5)
+    except Exception:
+        client.failed=True;client.state.open=False
+        if client.peer.generation:client.peer.generation.cancel()
+
 class ModelMeter:
     def __init__(self,model,state=None):self.inner=model;self.calls=[];self.started=time.monotonic();self.state=state or BatchState()
     async def complete(self,instruction,data,*,schema=None):
@@ -168,6 +192,8 @@ async def run_case(case,providers,*,ack=True,observer=None):
     providers.model=meter;providers.speech=speech
     sink=Sink(ack);peer=VoicePeer(sink,providers,CompanionPolicy());sink.peer=peer
     state.peer=peer
+    client=ProbeClient(peer,state)
+    heartbeat=asyncio.create_task(client_heartbeat(client));state.track(heartbeat)
     rows=[]
     try:
         async with asyncio.timeout(45):
@@ -176,8 +202,12 @@ async def run_case(case,providers,*,ack=True,observer=None):
                 peer.session.begin_turn();await peer.commands()
                 start=time.monotonic();sink.first=None;sink.events.clear();sink.frames=sink.audio_bytes=sink.max_audio_bytes=sink.acks=sink.game_commits=0;peer.probe_resources.clear();offset=len(meter.calls)
                 peer.generation=asyncio.create_task(peer.respond(turn['input'],peer.epoch))
-                await peer.handle(json.dumps(dict(v=2,type='bind',epoch=peer.epoch,seq=peer.sequence+1,player='probe-'+str(peer.session.turn))))
-                await asyncio.shield(peer.generation)
+                await client.send('bind',player='probe-'+str(peer.session.turn))
+                try:await asyncio.shield(peer.generation)
+                except asyncio.CancelledError:
+                    if client.failed:raise ProbeLimit('client_heartbeat_failed') from None
+                    raise
+                if client.failed:raise ProbeLimit('client_heartbeat_failed')
                 context=peer.session.context()
                 ok=any(e['type']=='reply_end' for e in sink.events) and not any(e['type']=='failure' for e in sink.events)
                 checks=judge(turn['expect'],context,previous_heard=previous,transport_ok=ok)
@@ -229,7 +259,7 @@ async def run_case(case,providers,*,ack=True,observer=None):
             providers.probe_cleanup_handle=None
     metrics=original_model.metrics() if hasattr(original_model,'metrics') else {}
     usage=usage_delta(before,metrics)
-    return dict(format=1,peer_failure=peer_failure(peer),cleanup={'confirmed':not state.quarantined,'pending_tasks':len(state.pending()),'provider_reusable':not state.quarantined},usage_final=not state.quarantined,usage=usage,case=case['id'],fixture_sha256=sha256(json.dumps(case,ensure_ascii=False,sort_keys=True).encode()).hexdigest(),
+    return dict(format=1,client_heartbeats=client.heartbeats,client_heartbeat_failed=client.failed,peer_failure=peer_failure(peer),cleanup={'confirmed':not state.quarantined,'pending_tasks':len(state.pending()),'provider_reusable':not state.quarantined},usage_final=not state.quarantined,usage=usage,case=case['id'],fixture_sha256=sha256(json.dumps(case,ensure_ascii=False,sort_keys=True).encode()).hexdigest(),
                 layer='synthetic_text_real_voicepeer_simulated_playback',turns=rows,model_requests=len(meter.calls),
                 tts_requests=speech.calls,tts_unicode_characters=speech.characters,
                 full_acceptance=False,semantic_review_required=True,p12_verified=False,p15_verified=False)

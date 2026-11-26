@@ -1,0 +1,20 @@
+{
+  "parent": "9fc7d4ad93f5a8b256f911748981bede53ce53a5",
+  "checks": {
+    "new_methods": 4,
+    "affected_harness": 25,
+    "qa_metadata": 3,
+    "qa_cleanup": 2,
+    "unique_passed": 34,
+    "failed": 0,
+    "skipped": 0
+  },
+  "realtime_contrast_ms": 16126,
+  "lease": 15,
+  "budget": 15,
+  "fakeclock": false,
+  "cloud_calls": 0,
+  "original_failure_sha256": "f1729be9a9d5adff7c94aa569eeacb79268919c55f463630a0e402cde0fcb93c",
+  "p12_verified": false,
+  "p15_verified": false
+}
