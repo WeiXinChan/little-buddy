@@ -60,10 +60,16 @@ class Descriptions(unittest.IsolatedAsyncioTestCase):
         socket=Socket();socket.acknowledge=False
         peer=VoicePeer(socket,provider,CompanionPolicy());socket.peer=peer
         self.last_peer,self.last_socket=peer,socket
+        peer._test_wire_tasks=set();peer._test_observed_tasks=set()
+        original_track=peer.track_retired
+        def tracked(task):
+            peer._test_wire_tasks.add(task);original_track(task)
+        peer.track_retired=tracked
         self.addAsyncCleanup(self.cleanup,peer)
         peer.input_budget.speech()
         peer.session.begin_turn();peer.session.drain_commands()
         peer.generation=asyncio.create_task(peer.respond(text,0))
+        peer._test_wire_tasks.add(peer.generation)
         bind=dict(v=2,type='bind',epoch=0,seq=0,player='p',features=[feature])
         if feature=='images_v2':bind['image_contract']=CONTRACT
         await peer.handle(json.dumps(bind))
@@ -75,8 +81,6 @@ class Descriptions(unittest.IsolatedAsyncioTestCase):
         await peer.commands()
         if full:
             seen={final['segment']}
-            peer._test_wire_tasks={peer.generation}
-            peer._test_observed_tasks=set()
             async def help_done():
                 while True:
                     if peer.visual_task:peer._test_wire_tasks.add(peer.visual_task)
@@ -97,17 +101,53 @@ class Descriptions(unittest.IsolatedAsyncioTestCase):
         return peer,socket
 
     async def cleanup(self,peer):
-        tasks=set(getattr(peer,'_test_wire_tasks',()))|set(peer.retired_tasks)
-        if peer.generation:tasks.add(peer.generation)
-        if peer.visual_task:tasks.add(peer.visual_task)
-        peer.invalidate_visual()
-        for task in tasks:
-            if not task.done():task.cancel()
-        if tasks:
-            done,pending=await asyncio.wait(tasks,timeout=2)
-            self.assertFalse(pending,'test client cleanup must confirm task completion')
-            for task in done:
-                if task not in getattr(peer,'_test_observed_tasks',()) and not task.cancelled():task.result()
+        # One total observation budget, including tasks created by cancellation.
+        deadline=getattr(peer,'_test_cleanup_deadline',asyncio.get_running_loop().time()+2)
+        peer._test_cleanup_deadline=deadline
+        tasks=set(getattr(peer,'_test_wire_tasks',()))|set(getattr(peer,'_test_cleanup_tasks',()))
+        observed=set(getattr(peer,'_test_observed_tasks',()))
+        failure=getattr(peer,'_test_cleanup_failure',None);quarantined_before=peer.quarantined;peer.closed=True
+        def collect():
+            tasks.update(getattr(peer,'_test_wire_tasks',()))
+            tasks.update(peer.retired_tasks)
+            if peer.generation:tasks.add(peer.generation)
+            if peer.visual_task:tasks.add(peer.visual_task)
+        collect();peer.invalidate_visual()
+        if (peer.generation and not peer.generation.done() and not peer.generation.cancelling() and
+            not any(not task.done() for task in peer.retired_tasks)):
+            peer.generation.cancel()
+        # A generation already waiting on registered resource exit must not get
+        # a second cancellation that invalidates its healthy release confirmation.
+        # New retired tasks may be resource __aexit__ confirmations. Observe
+        # them under the same deadline; do not prematurely cancel safe release.
+        while True:
+            collect()
+            for task in tasks:
+                if task.done() and task not in observed:
+                    observed.add(task)
+                    if not task.cancelled():
+                        try:task.result()
+                        except BaseException as error:
+                            if failure is None:failure=error
+            pending={task for task in tasks if not task.done()}
+            if not pending:
+                await asyncio.sleep(0);collect()
+                pending={task for task in tasks if not task.done()}
+                if not pending:break
+            remaining=deadline-asyncio.get_running_loop().time()
+            if remaining<=0:break
+            await asyncio.wait(pending,timeout=remaining,return_when=asyncio.FIRST_COMPLETED)
+        collect();pending={task for task in tasks if not task.done()}
+        peer._test_cleanup_tasks=tasks;peer._test_cleanup_pending=pending;peer._test_observed_tasks=observed
+        peer._test_cleanup_failure=failure
+        peer._test_cleanup_resource_confirmed=not pending and not peer.quarantined
+        peer._test_cleanup_confirmed=not pending and not peer.quarantined and failure is None
+        self.assertFalse(pending,'test client cleanup deadline: retained unconfirmed task handles')
+        if failure is not None:raise failure
+        # A prior fail-closed quarantine can be reaped, never reset/reused. New
+        # unconfirmed release during this cleanup must fail the fixture.
+        self.assertFalse(peer.quarantined and not quarantined_before,'test client resource release was not confirmed')
+        peer.session.clear()
 
     async def early_help(self,*,ack_help):
         provider,_,_,_=await self.make(prompt_ok=False)

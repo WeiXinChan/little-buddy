@@ -1,0 +1,7 @@
+test_cleanup_must_include_new_retired_exit_tasks_created_during_cancel (__main__.Independent.test_cleanup_must_include_new_retired_exit_tasks_created_during_cancel) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 2.016s
+
+OK
+CLEANUP_NEW_RETIRED {'cleanup_error': 'AssertionError', 'pending_after_cleanup': 1}

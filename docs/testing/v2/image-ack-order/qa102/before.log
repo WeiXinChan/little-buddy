@@ -1,0 +1,27 @@
+test_cleanup_must_include_new_retired_exit_tasks_created_during_cancel (__main__.Independent.test_cleanup_must_include_new_retired_exit_tasks_created_during_cancel) ... FAIL
+
+======================================================================
+FAIL: test_cleanup_must_include_new_retired_exit_tasks_created_during_cancel (__main__.Independent.test_cleanup_must_include_new_retired_exit_tasks_created_during_cancel)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/image-ack-order/qa102/independent.py", line 27, in test_cleanup_must_include_new_retired_exit_tasks_created_during_cancel
+    self.assertTrue(error is not None or not pending,'cleanup must not return success with unconfirmed new retired tasks; explicit failure is valid when a stubborn task cannot be stopped')
+AssertionError: False is not true : cleanup must not return success with unconfirmed new retired tasks; explicit failure is valid when a stubborn task cannot be stopped
+
+----------------------------------------------------------------------
+Ran 1 test in 0.518s
+
+FAILED (failures=1)
+CLEANUP_NEW_RETIRED {'cleanup_error': None, 'pending_after_cleanup': 1}

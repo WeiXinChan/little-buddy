@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "previous_head": "8cc050da9f130d4e2ceed0f3586a60e03d1f4077",
+  "unchanged_existing_methods": 27,
+  "new_methods": 3,
+  "module_passed": 30,
+  "qa_original_passed": 1,
+  "unique_passed": 31,
+  "failed": 0,
+  "skipped": 0,
+  "stubborn_resource_confirmed": false,
+  "negative_fixture_resources_reaped_in_finally": true,
+  "product_changes": false,
+  "cloud_calls": 0,
+  "files": {
+    "after.log": "0e750b973b0b56d8847b850043d4e5efedd5b69fa2e0c5e4a6820f7099015a41",
+    "before.log": "12fc5797f7deda38660aad4f8eb29eaacb97d5ff4f268a209dabfd0c5135a58b",
+    "independent.py": "37dcb9d96f1c71e7848fe47c00419ce2f3186dc457677355841479293431a93d",
+    "initial-module-failure.log": "e3391b0395e7bdec6b30173e641b5f44ab2d8b1880ccd600a0c7e292221372d7",
+    "module.log": "aeca75e88869326e3855d37687d937a5f6b5a77a46fcd33be24486decbce1276",
+    "original-independent.log": "e57d5e0f586d2cba00c751a31d09c62a966ae1fb40cc28eaec4324fdb55cd594",
+    "original-review.json": "d01151eb3279b675efaec438bb4e5ca4576203bcbadd356d84b11c5ec1850b37",
+    "report.md": "b1556520d194b05a3311618d9781af1b92faa04c0ca30785873c1bcddeb52d2c"
+  }
+}
