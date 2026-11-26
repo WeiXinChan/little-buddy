@@ -228,3 +228,22 @@ Filtered artifact packaging also explicitly stores resources.arsc and native .so
 zipalign (entry bytes unchanged). This preserves the root's RC8 packaging correction for the
 original [-124] install failure; final artifact checks must verify resource storage/alignment and
 retained-entry bytes, not just signer/hash. Use zipalign -P 16 -f 4 for this test-only artifact.
+
+### LONG-01: witnessed failures outrank later revocation
+
+Window deadline-crossing, clock regression, sample-cap and completion invariants now throw the
+closed test-only ProbeInvariantFailure/ProbeInvariant type. The worker uses the shared classifier:
+(1) retain this witnessed failure WITHOUT even reading later cancellation/focus state; (2) ordinary
+foreground/cancellation dependency; (3) native permission/policy dependency; (4) original error.
+Classification never recognizes invariants by arbitrary native error.message text. safeReason uses
+the closed invariant enum. Original short-method untyped-error/cancellation/security classification
+is unchanged; clean pre-existing dependencies still skip, never PASS. Cleanup exceptions, failed stop
+or unconfirmed resource proofs remain higher priority in decideProbeResult/enforce than either a
+window failure or dependency. There is no deadline/cancellation case that is converted to PASS.
+
+Host regressions exercise cancellation during the API, after the violation and during the return's
+clock read, focus loss, all closed invariants, forged matching error text, unconsulted dependency
+callbacks, clean dependency skips and cleanup precedence using the actual window/classifier/result
+chain. QA's original independent assertion source is retained; only its automatically extracted
+Android catch wiring is refreshed when replaying the fixed source. The original 6PASS/1FAIL and old
+APK remain separate evidence; no device was executed or old FAIL rewritten.

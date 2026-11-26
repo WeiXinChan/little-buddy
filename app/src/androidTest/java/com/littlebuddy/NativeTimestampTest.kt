@@ -212,6 +212,7 @@ class NativeTimestampTest {
     private fun emit(meta:ProbeMetadata){instrumentation.sendStatus(7,meta.snapshot())}
     private fun safeReason(error:Throwable):String {
         if(error is NativeDependency)return error.code
+        if(error is ProbeInvariantFailure)return error.invariant.safeReason
         // Production ledger reasons contain no material. Never output arbitrary native exception text.
         val reasons=setOf("capture clock regressed","capture clock regressed during timestamp","capture timebase changed",
             "invalid capture timestamp","capture timestamp regressed","incoherent capture time","capture rate outside bound",
@@ -364,11 +365,8 @@ class NativeTimestampTest {
                     check(meta.positiveReads>=100 && meta.samplesRead>=32000){"insufficient continuous reads"}
                 }catch(error:Throwable){
                     meta.failurePhase=meta.phase;meta.nativeExceptionClass=probeFailureClass(error)
-                    val classified=when {
-                        cancellation.cancelled.get() || !allowed(front)->NativeDependency("DEPENDENCY_FOREGROUND_LOST")
-                        error is SecurityException->NativeDependency("DEPENDENCY_NATIVE_PERMISSION_OR_POLICY")
-                        else->error
-                    }
+                    val classified=classifyNativeProbeFailure(error,
+                        {cancellation.cancelled.get() || !allowed(front)},::NativeDependency)
                     workerFailure.set(classified)
                 }
                 finally{
