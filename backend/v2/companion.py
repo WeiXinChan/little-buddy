@@ -307,8 +307,8 @@ description只用于generate_image，缺字段兼容目录名称生成；缺服�
         if plan['action'] == 'continue' and context.get('unrevealed'):
             plan['secrets'] = dict(context['unrevealed'])
         present,limit=constraint_proposal(text,context,plan)
-        if present:plan['_story_turn_limit']=limit
-        elif bounded_repair:plan['_story_turn_limit']=_repair_limit
+        if bounded_repair:plan['_story_turn_limit']=_repair_limit
+        elif present:plan['_story_turn_limit']=limit
         return plan
 
     async def facts(self, text):

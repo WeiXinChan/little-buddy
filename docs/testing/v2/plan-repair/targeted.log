@@ -74,7 +74,7 @@ test_rejected_future_cancelled_and_normal_wrappers_restored (tests.v2.test_probe
 test_repeated_caller_cancellation_preserves_unconfirmed_handle (tests.v2.test_probe_cleanup.Cleanup.test_repeated_caller_cancellation_preserves_unconfirmed_handle) ... ok
 
 ----------------------------------------------------------------------
-Ran 74 tests in 2.774s
+Ran 74 tests in 2.733s
 
 OK
-{"synthetic_serial_dependency_first_audio_ms": 146.7, "synthetic_overlapped_first_audio_ms": 84.04, "not_cloud_latency": true}
+{"synthetic_serial_dependency_first_audio_ms": 145.75, "synthetic_overlapped_first_audio_ms": 84.34, "not_cloud_latency": true}

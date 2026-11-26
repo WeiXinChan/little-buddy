@@ -24,7 +24,7 @@ class RepairModel(fixture.Model):
                 if self.release:await self.release.wait()
             value=fixture.plan();value.update(mode='story',rules='模型改写过的故事规则',anchors={})
             value['sentences']=['CANDIDATE_ONLY。','不得发回模型的无效句。'] if self.always_bad or self.plan_calls==1 else ['小猫慢慢飞向蓝色星星。']
-            if self.promise and self.plan_calls==1:value['rules']='轮流编故事，一人接一句'
+            if self.promise:value['rules']='轮流编故事，一人接一句' if self.plan_calls==1 else '模型擅自改写每人两句'
             if self.mutate:data['context']['game']={'rules':'POISON'}
             return json.dumps(value,ensure_ascii=False)
         return await super().complete(instruction,data,schema=schema)
