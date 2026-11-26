@@ -9,9 +9,9 @@ import java.util.concurrent.TimeUnit
 
 class OwnerTickRegressionTest {
     private class Rig(val failWrite: Boolean = false, val consume: Boolean = true,
-                      val stopAt: String? = null) {
+                      val stopAt: String? = null, val owned: Boolean = false) {
         var time = 100L
-        var stored: ParentRecord? = null
+        var stored: ParentRecord? = if (owned) ParentRecord(ByteArray(16), ByteArray(32)) else null
         val entered = CountDownLatch(1); val resume = CountDownLatch(1)
         val work = ConcurrentLinkedQueue<() -> Unit>(); val ui = ConcurrentLinkedQueue<() -> Unit>()
         fun block(at: String) { if (at == stopAt) { entered.countDown(); check(resume.await(5, TimeUnit.SECONDS)) } }
@@ -26,14 +26,14 @@ class OwnerTickRegressionTest {
                 if (!transaction.claim()) throw ParentCommitRejected()
                 stored = record
             }
-        }, { time }, {}, object : OwnerProof { override fun consume(challenge: OwnerChallenge) = consume },
+        }, { time }, {}, object : OwnerProof { override fun consume(challenge: OwnerChallenge): Boolean { block("consume"); return consume } },
             "test-only-binding", object : PinHasher() {
                 override fun derive(pin: CharArray, salt: ByteArray): ByteArray { block("hash"); return ByteArray(32) }
             })
         val model = ParentPanelModel({ domain }, { work.offer(it) }, { ui.offer(it) }, {}, {})
         fun drain() { while (work.isNotEmpty() || ui.isNotEmpty()) { work.poll()?.invoke(); ui.poll()?.invoke() } }
         fun owner() {
-            model.open(); drain(); model.prepareOwner(OwnerOperation.INITIALIZE_PIN) { true }; drain()
+            model.open(); drain(); model.prepareOwner(if (owned) OwnerOperation.RESET_PIN else OwnerOperation.INITIALIZE_PIN) { true }; drain()
             assertEquals(PanelMode.OWNER_PIN, model.state.mode)
         }
         fun save() { model.setOwnerPin("123456".toCharArray(), "123456".toCharArray()) }
@@ -71,6 +71,38 @@ class OwnerTickRegressionTest {
     @Test fun committedRecordSurvivesTickBeforeUiCallback() {
         val r=Rig();r.owner();r.save();r.work.poll()!!();r.model.tick();r.drain()
         assertNotNull(r.stored);assertEquals(ParentDomain.State.LOCKED,r.domain.state())
+    }
+
+    @Test fun consumeFailureAfterTicksNeverDerivesOrCommits() {
+        val r=Rig(consume=false,stopAt="consume");r.race {
+            repeat(3) { r.model.tick(); assertEquals(PanelMode.OWNER_PIN,r.model.state.mode) }
+        };assertNull(r.stored);assertEquals(ParentDomain.State.UNOWNED,r.domain.state())
+    }
+    @Test fun exactExpiryDuringHashLocksBeforeWorkerResumes() {
+        val r=Rig(stopAt="hash");r.race {
+            r.time+=59_999;r.model.tick();assertEquals(PanelMode.OWNER_PIN,r.model.state.mode)
+            r.time++;r.model.tick();assertEquals(PanelMode.UNAVAILABLE,r.model.state.mode)
+            assertFalse(r.model.state.busy)
+        };assertNull(r.stored)
+    }
+    @Test fun pageReplacementDuringHashCannotBorrowNewPage() {
+        val r=Rig(stopAt="hash");r.race {
+            r.domain.enterPage();r.model.tick();assertEquals(PanelMode.UNAVAILABLE,r.model.state.mode)
+        };assertNull(r.stored)
+    }
+    @Test fun writeFailureAfterFreshTicksStaysQuarantined() {
+        val r=Rig(failWrite=true,stopAt="commit");r.race { r.model.tick() }
+        assertNull(r.stored);assertEquals(ParentDomain.State.QUARANTINED,r.domain.state())
+    }
+    @Test fun recoverySaveSurvivesTicksWithoutRestoringGrant() {
+        val r=Rig(stopAt="hash",owned=true);val before=r.stored
+        r.race { repeat(3) { r.model.tick();assertEquals(PanelMode.OWNER_PIN,r.model.state.mode) } }
+        assertNotSame(before,r.stored);assertEquals(ParentDomain.State.LOCKED,r.domain.state())
+    }
+    @Test fun recoveryFailureKeepsPriorRecordAndNeverBecomesUnowned() {
+        val r=Rig(failWrite=true,stopAt="commit",owned=true);val before=r.stored
+        r.race { r.model.tick() };assertSame(before,r.stored)
+        assertEquals(ParentDomain.State.QUARANTINED,r.domain.state())
     }
 
 }

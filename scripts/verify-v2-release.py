@@ -23,7 +23,7 @@ def compatible(apk, backend):
     if entry.get('sha256')!=apk['resources_manifest_sha256']:
         raise ValueError('release_resources_mismatch')
 
-def inspect(apk):
+def inspect(apk, pin_init_diagnostics=False):
     with zipfile.ZipFile(apk) as z:
         meta=json.loads(z.read('assets/v2-build.json'))
         raw=z.read('assets/v2-source-inventory.json').rstrip(b'\n')
@@ -39,13 +39,15 @@ def inspect(apk):
             raise ValueError('apk_resources_mismatch')
         if any(value in json.dumps(meta) for value in ['/home/','/tmp/','Bearer ','PRIVATE KEY','password']):
             raise ValueError('private_build_metadata')
-        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=22 or meta['version_name']!='2.0.0-rc8':
+        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=22 or meta['version_name']!=('2.0.0-rc8.pin.fix1' if pin_init_diagnostics else '2.0.0-rc8'):
             raise ValueError('candidate_version_mismatch')
+        if pin_init_diagnostics and meta.get("distribution")!="pin_init_fix_candidate": raise ValueError("diagnostic_identity_mismatch")
         return meta
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--apk',required=True);p.add_argument('--backend-manifest',required=True)
-    args=p.parse_args();meta=inspect(args.apk);backend=json.loads(Path(args.backend_manifest).read_text())
+    p.add_argument("--pin-init-diagnostics",action="store_true")
+    args=p.parse_args();meta=inspect(args.apk,args.pin_init_diagnostics);backend=json.loads(Path(args.backend_manifest).read_text())
     compatible(meta,backend)
     print(json.dumps(dict(pairing='static_compatible',build_id=meta['build_id'],backend_source=backend['source_sha'],
         protocol_contract=CONTRACT,apk_sha256=hashlib.sha256(Path(args.apk).read_bytes()).hexdigest()),sort_keys=True))

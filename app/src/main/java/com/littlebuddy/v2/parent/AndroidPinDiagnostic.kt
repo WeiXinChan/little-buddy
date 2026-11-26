@@ -1,0 +1,34 @@
+package com.littlebuddy.v2.parent
+
+import android.util.Log
+import com.littlebuddy.BuildConfig
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.LockSupport
+
+/** Diagnostic-build-only, process-local, hard capped 256 events. No log IO on auth/UI workers. */
+internal object AndroidPinDiagnostic {
+    private val started = java.util.concurrent.atomic.AtomicBoolean()
+    fun enable() {
+        if (!BuildConfig.PIN_INIT_DIAGNOSTICS || !started.compareAndSet(false, true)) return
+        try {
+            val queue = ConcurrentLinkedQueue<String>()
+            val remaining = AtomicInteger(256)
+            val writer = Thread({
+                // Finite lifetime; dropped events after expiry never accumulate.
+                val until = System.nanoTime() + 15L * 60 * 1_000_000_000
+                while (System.nanoTime() < until) {
+                    val item = queue.poll()
+                    if (item == null) LockSupport.parkNanos(100_000_000)
+                    else try { Log.i("V2PinInitDiag", item) } catch (_: Throwable) { }
+                }
+                PinDiagnostic.install(null); queue.clear()
+            }, "v2-pin-diag").apply { isDaemon = true }
+            writer.start()
+            PinDiagnostic.install { seq, ms, stage, reason ->
+                if (remaining.getAndDecrement() > 0)
+                    queue.offer("flow=$seq mono_ms=$ms stage=${stage.name} reason=${reason.name}")
+            }
+        } catch (_: Throwable) { PinDiagnostic.install(null) }
+    }
+}
