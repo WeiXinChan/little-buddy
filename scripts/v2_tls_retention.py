@@ -11,6 +11,7 @@ import gc
 from hashlib import sha256
 import io
 import json
+import math
 import os
 from pathlib import Path
 import secrets
@@ -164,6 +165,31 @@ def heavy_lock(fd=None):
     finally:
         if close:os.close(fd)
 
+DIAGNOSTIC_PHASES={'before_report','report_ready','report_saved','closed_history_confirmed','history_control','report_released','owner_released'}
+DIAGNOSTIC_CLEANUP={'unknown','reported_confirmed','confirmed','failed'}
+
+def safe_diagnostics(raw):
+    """Only enum-valued structured evidence; never raw stdout/stderr or exceptions."""
+    if isinstance(raw,str):raw=raw.encode('utf-8',errors='replace')
+    if not isinstance(raw,bytes):return dict(total_bytes=None,truncated=False,records=[])
+    result=dict(total_bytes=len(raw),truncated=len(raw)>65536,records=[])
+    for line in raw[-65536:].decode('utf-8',errors='replace').splitlines()[-128:]:
+        if len(result['records'])>=32:break
+        try:value=json.loads(line)
+        except Exception:continue
+        if type(value) is not dict:continue
+        record={}
+        if type(value.get('phase')) is str and value['phase'] in DIAGNOSTIC_PHASES:record['phase']=value['phase']
+        if type(value.get('cleanup')) is str and value['cleanup'] in DIAGNOSTIC_CLEANUP:record['cleanup']=value['cleanup']
+        if value.get('tls_retention')=='rejected_no_attribution':record['terminal']='rejected_no_attribution'
+        if record:result['records'].append(record)
+    return result
+
+def progress(phase,cleanup='unknown'):
+    require(phase in DIAGNOSTIC_PHASES and cleanup in DIAGNOSTIC_CLEANUP)
+    print(json.dumps(dict(phase=phase,cleanup=cleanup)),file=sys.stderr,flush=True)
+
+
 async def worker(arm,nonce,artifact):
     # Imported only inside the opt-in, isolated child exported from SOURCE.
     sys.path.insert(0,str(Path.cwd()))
@@ -203,12 +229,12 @@ async def worker(arm,nonce,artifact):
             row['python_current'],row['python_peak']=tracemalloc.get_traced_memory();row['tracer_metadata']=tracemalloc.get_tracemalloc_memory()
             snap=tracemalloc.take_snapshot();row['python_allocation_groups']=python_allocations(snap);del snap
         points.append(row)
-    point('baseline_after_import_gc')
+    point('baseline_after_import_gc');progress('before_report')
     with patch.multiple(net,LoopbackTlsTransport=ObservedTransport,TcpRelay=ObservedRelay):
         report=await net.run_tls_soak(net.Limits(duration=12,interval=.05,sample_interval=.05,attempt_timeout=2,max_attempts=14),seed=17)
-    point('report_held_owner_held')
+    point('report_held_owner_held');progress('report_ready','reported_confirmed' if report['cleanup']['confirmed'] is True else 'unknown')
     with open(artifact,'x') as out:json.dump(report,out,sort_keys=True)
-    full_hash=sha256(Path(artifact).read_bytes()).hexdigest()
+    full_hash=sha256(Path(artifact).read_bytes()).hexdigest();progress('report_saved')
     # Snapshot accounting before any controlled dropping of diagnostic histories.
     counters=[dict(index=i,**accounts[id(relay)].metadata(relay.network_errors)) for i,relay in enumerate(state['owner'].relays)]
     await asyncio.sleep(0);gc.collect();point('report_saved_loop_gc_owner_held')
@@ -216,16 +242,16 @@ async def worker(arm,nonce,artifact):
     require(report['attempted']==report['connections_attempted']==report['peers_constructed']==14 and report['failures']==0)
     require(report['resource_collection_valid'] is True and type(report['collection_errors']) is int and report['collection_errors']==0)
     require(report['observations']>=len(report['resource_samples'])>0)
-    confirm_closed_history(state['owner'])
+    confirm_closed_history(state['owner']);progress('closed_history_confirmed','confirmed')
     control=None
     if arm=='release_plain':control=release_closed_history(state['owner'])
-    point('confirmed_history_control' if control else 'history_retained_control')
+    point('confirmed_history_control' if control else 'history_retained_control');progress('history_control','confirmed')
     outcome=dict(attempted=report['attempted'],full_report_sha256=full_hash,full_report_bytes=Path(artifact).stat().st_size,
                  observations=report['observations'],retained_samples=len(report['resource_samples']),
                  model_stage_calls=report['model_stage_calls'],allowance=report['allowance'],cleanup=report['cleanup'])
-    del report;await asyncio.sleep(0);gc.collect();point('report_released_owner_held')
+    del report;await asyncio.sleep(0);gc.collect();point('report_released_owner_held');progress('report_released','confirmed')
     confirm_closed_history(state['owner'])
-    state['owner']=None;await asyncio.sleep(0);gc.collect();point('observer_owner_released_loop_gc')
+    state['owner']=None;await asyncio.sleep(0);gc.collect();point('observer_owner_released_loop_gc');progress('owner_released','confirmed')
     if traced:tracemalloc.stop()
     return dict(format=1,source_sha=SOURCE,arm=arm,nonce=nonce,**outcome,points=points,connection_boundaries=boundaries,
                 lifetime_connections=state['connections_seen'],release_control=control,relay_accounting=counters,
@@ -250,7 +276,96 @@ def strong_metadata(value):
     weak_metadata({k:value[k] for k in ('live','weak_slots','unsupported_observations')})
     require(value['done_tasks']+value['pending_tasks']==value['all_unique_task_handles'])
 
-def validate_child(result,arm,nonce,artifact):
+ROW_FIELDS={'index','fault','status','frames','acks','cleanup_confirmed','pending_after_cleanup','failure','session_cleared',
+    'old_heard_count','new_session','old_ack_checked','control','heard_before_close','pending_before_close','game_mode',
+    'started_seconds','completed_seconds','rst_applied','relay_network_errors','pause_observed','close_handshake_confirmed',
+    'first_transport_ms','relay_bytes','relay_buffer_observed_max','injected_half_open_seconds','injected_pause_seconds'}
+METRICS=('backend_rss_bytes','backend_fds','backend_threads','asyncio_tasks','retired_pending','active_operations','generation_pending',
+    'transport_tasks_pending','active_sessions','visual_pending','capture_bytes','asr_active','tts_active','recognition_operations',
+    'server_handlers_pending','relay_buffer_observed_max')
+INACTIVE=('active_sessions','active_operations','retired_pending','generation_pending','visual_pending','capture_bytes',
+    'recognition_operations','server_handlers_pending','asr_active','tts_active')
+SAMPLE_PHASES={'initial','periodic','operation_started','operation_finished','retired_added','retired_removed','attempt_started',
+    'attempt_finished','before_attempt_cancel','after_attempt_cancel','before_transport_cleanup','after_transport_cleanup',
+    'after_owner_cleanup','final','before_network_fault','after_network_fault'}
+
+def finite(value):return type(value) in (float,int) and math.isfinite(value) and value>=0
+
+def validate_connections(attempts,ledger):
+    require(type(attempts) is list and type(ledger) is list and len(attempts)==len(ledger))
+    previous_end=0.
+    for index,(row,final) in enumerate(zip(attempts,ledger)):
+        require(type(row) is dict and type(final) is dict and row.keys()==final.keys()==ROW_FIELDS)
+        # The frozen producer changes only this legacy counter during global close.
+        require(all(json.dumps(row[k],sort_keys=True)==json.dumps(final[k],sort_keys=True) for k in ROW_FIELDS-{'relay_network_errors'}))
+        require(integer(row['relay_network_errors']) and integer(final['relay_network_errors']) and final['relay_network_errors']>=row['relay_network_errors'])
+        fault=FAULTS[(index//2)%len(FAULTS)] if index%2==0 else 'normal_close'
+        status='interrupted' if fault=='playback_stop' else 'fault_injected' if fault in {'asr_rst','plan_rst','partial_rst','half_open'} else 'delivered'
+        require(type(row['index']) is int and row['index']==index and row['fault']==fault and row['status']==status)
+        require(row['cleanup_confirmed'] is True and row['session_cleared'] is True and row['new_session'] is True)
+        for key in ('pending_after_cleanup','old_heard_count'):require(type(row[key]) is int and row[key]==0)
+        require(row['failure'] is None and row['control'] is None)
+        require(all(integer(row[k]) for k in ('frames','acks','heard_before_close','pending_before_close')))
+        require(0<=row['acks']<=row['frames']<=4096 and row['pending_before_close']<=2)
+        require(type(row['close_handshake_confirmed']) is bool)
+        require(finite(row['started_seconds']) and finite(row['completed_seconds']) and row['completed_seconds']>=row['started_seconds']>=previous_end)
+        previous_end=row['completed_seconds']
+        require(type(row['relay_bytes']) is dict and row['relay_bytes'].keys()=={'up','down'} and all(integer(v) and v>0 for v in row['relay_bytes'].values()))
+        require(integer(row['relay_buffer_observed_max']) and 0<row['relay_buffer_observed_max']<=16384)
+        require(row['rst_applied'] is True if status=='fault_injected' else row['rst_applied'] is None)
+        require(row['pause_observed'] is True if fault in {'pause_resume','half_open'} else row['pause_observed'] is None)
+        for key,expected in (('injected_pause_seconds',fault=='pause_resume'),('injected_half_open_seconds',fault=='half_open')):
+            require(finite(row[key]) and row[key]==.05 if expected else row[key] is None)
+        if status=='delivered':
+            require(row['frames']>0 and row['acks']==row['frames'] and row['heard_before_close']>0 and row['pending_before_close']==0)
+            require(row['close_handshake_confirmed'] is True and row['game_mode'] in {'chat','guess','story','adventure','association'})
+        else:
+            require(row['heard_before_close']==0 and row['game_mode'] is None)
+            require(row['close_handshake_confirmed'] is (fault=='playback_stop'))
+            if fault=='playback_stop':require(row['pending_before_close']==0)
+        if fault in {'asr_rst','plan_rst'}:
+            require(row['frames']==row['acks']==0 and row['first_transport_ms'] is None and row['old_ack_checked'] is None and row['pending_before_close']==0)
+        else:
+            require(row['frames']>0 and finite(row['first_transport_ms']))
+            require(row['old_ack_checked'] is True if index>0 else row['old_ack_checked'] is None)
+            if status!='delivered':require(row['acks']==1)
+
+def validate_samples(report):
+    rows=report['resource_samples'];attempts=report['attempts'];trends=report['resource_trends']
+    require(type(rows) is list and 0<len(rows)<=4096 and type(report['observations']) is int and report['observations']==len(rows))
+    require(type(report['collection_errors']) is int and report['collection_errors']==0 and report['resource_collection_valid'] is True)
+    require(finite(report['elapsed_seconds']) and report['elapsed_seconds']>0)
+    require(type(trends) is dict and trends.keys()==set(METRICS))
+    previous=0.;window=None;windows=[]
+    for row in rows:
+        require(type(row) is dict and row.keys()==set(METRICS)|{'elapsed','phase','device_rss_bytes'})
+        require(finite(row['elapsed']) and previous<=row['elapsed']<=report['elapsed_seconds']+.02)
+        previous=row['elapsed'];require(row['phase'] in SAMPLE_PHASES and row['device_rss_bytes'] is None)
+        require(all(integer(row[key]) for key in METRICS))
+        require(all(row[key]>0 for key in ('backend_rss_bytes','backend_threads','backend_fds','asyncio_tasks')))
+        if row['phase']=='attempt_started':
+            require(window is None);window=[]
+        if window is not None:window.append(row)
+        if row['phase']=='attempt_finished':
+            require(window is not None);windows.append(window);window=None
+    require(window is None and len(windows)==len(attempts) and rows[-1]['phase']=='final')
+    require(all(rows[-1][key]==0 for key in INACTIVE+('transport_tasks_pending',)))
+    for attempt,window in zip(attempts,windows):
+        phases={row['phase'] for row in window}
+        require({'attempt_started','initial','before_network_fault','after_network_fault','before_transport_cleanup','after_transport_cleanup','attempt_finished'}<=phases)
+        require(window[0]['elapsed']>=attempt['started_seconds']-.02 and window[-1]['elapsed']>=attempt['completed_seconds']-.02)
+        if attempt['fault']=='asr_rst':require(any(row['asr_active']>0 and row['recognition_operations']>0 for row in window))
+        else:require('operation_started' in phases and any(row['active_operations']>0 for row in window))
+        cleanup=[row for row in window if row['phase']=='after_transport_cleanup'][-1]
+        require(all(cleanup[key]==0 for key in INACTIVE) and cleanup['transport_tasks_pending']<=1)
+    for key in METRICS:
+        trend=trends[key];values=[row[key] for row in rows]
+        require(type(trend) is dict and trend.keys()=={'first','last','maximum','maximum_kind'})
+        require(all(integer(trend[k]) for k in ('first','last','maximum')) and trend['maximum_kind']=='observed_sample_maximum')
+        require((trend['first'],trend['last'],trend['maximum'])==(values[0],values[-1],max(values)))
+
+
+def _validate_child(result,arm,nonce,artifact):
     require(type(result) is dict and result.keys()=={'format','source_sha','arm','nonce','attempted','full_report_sha256','retained_samples',
         'full_report_bytes','observations','model_stage_calls','allowance','cleanup','points','connection_boundaries','lifetime_connections','release_control',
         'relay_accounting','tracer_frames','attribution','native_tls_allocations_measured'})
@@ -292,13 +407,10 @@ def validate_child(result,arm,nonce,artifact):
     cleanup=r['cleanup'];require(type(cleanup) is dict and cleanup.keys()=={'confirmed','pending_tasks','errors','isolated'})
     require(cleanup['confirmed'] is True and cleanup['isolated'] is False and all(type(cleanup[k]) is int and cleanup[k]==0 for k in ('pending_tasks','errors')))
     require(cleanup==result['cleanup'] and r['resource_collection_valid'] is True and type(r['collection_errors']) is int and r['collection_errors']==0)
-    require(type(r['resource_samples']) is list and type(r['observations']) is int and r['observations']>=len(r['resource_samples'])==result['retained_samples']>0)
-    require(all(type(row) is dict and integer(row.get('backend_rss_bytes')) for row in r['resource_samples']))
-    for index,row in enumerate(r['attempts']):
-        fault=FAULTS[index//2] if index%2==0 else 'normal_close'
-        status='interrupted' if fault=='playback_stop' else 'fault_injected' if fault in {'asr_rst','plan_rst','partial_rst','half_open'} else 'delivered'
-        require(type(row['index']) is int and row['index']==index and row['fault']==fault and row['status']==status)
-        require(row['cleanup_confirmed'] is True and row['session_cleared'] is True and type(row['pending_after_cleanup']) is int and row['pending_after_cleanup']==0 and row['new_session'] is True)
+    require(type(r['observations']) is int and r['observations']==result['observations'] and len(r['resource_samples'])==result['retained_samples'])
+    require(r['seed']==17 and r['requested_seconds']==12 and r['stop_reason']=='attempt_cap')
+    validate_connections(r['attempts'],r['connection_ledger'])
+    validate_samples(r)
     allowance=result['allowance']
     require(type(allowance) is dict and allowance.keys()=={'model_calls','tts_calls','tts_unicode_characters','reserved_units','account_quota_known','bill_cny'})
     require(all(integer(allowance[k]) for k in ('model_calls','tts_calls','tts_unicode_characters','reserved_units')))
@@ -314,10 +426,17 @@ def validate_child(result,arm,nonce,artifact):
         require(row['legacy_total']==r['connection_ledger'][index]['relay_network_errors'])
 
 
+def validate_child(result,arm,nonce,artifact):
+    # Malformed or missing child fields are supervision failures, never success.
+    try:return _validate_child(result,arm,nonce,artifact)
+    except (KeyError,TypeError,ValueError,IndexError,OverflowError):
+        raise Rejected('child_contract_invalid') from None
+
+
 def run(output,arm='retain_plain'):
     require(arm in ARMS)
     with heavy_lock() as fd:
-        output=Path(output);output.mkdir(exist_ok=False);results=[]
+        output=Path(output);output.mkdir(exist_ok=False);results=[];evidence=None;category='archive_or_supervisor_failed';artifact=None
         try:
             with tempfile.TemporaryDirectory(prefix='tls14-frozen-') as folder:
                 export=Path(folder)
@@ -327,15 +446,28 @@ def run(output,arm='retain_plain'):
                 for arm in (arm,):
                     nonce=secrets.token_hex(16);artifact=output.resolve()/(arm+'-full-report.json')
                     args=[sys.executable,'-I','-B',str(Path(__file__).resolve()),'_child','--enable','--lock-fd',str(fd),'--arm',arm,'--nonce',nonce,'--artifact',str(artifact)]
-                    child=subprocess.run(args,cwd=export,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
+                    category='child_validation_failed'
+                    child=subprocess.run(args,cwd=export,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
                                          timeout=45,check=True,pass_fds=(fd,),env={'PATH':'/usr/bin:/bin','LANG':'C.UTF-8'})
-                    require(len(child.stdout)<=1024*1024);result=json.loads(child.stdout)
+                    evidence=dict(category='child_returned',exit_code=getattr(child,'returncode',None),timeout=False,
+                        stdout=safe_diagnostics(child.stdout),stderr=safe_diagnostics(getattr(child,'stderr',None)))
+                    (output/'child-evidence.json').write_text(json.dumps(evidence,indent=2)+'\n')
+                    require(type(getattr(child,'returncode',None)) is int and child.returncode==0)
+                    require(isinstance(child.stdout,bytes) and len(child.stdout)<=1024*1024);result=json.loads(child.stdout)
                     validate_child(result,arm,nonce,artifact);results.append(result)
                     (output/(arm+'-diagnostic.json')).write_text(json.dumps(result,indent=2)+'\n')
                 summary=dict(status='controls_collected_not_attribution',source_sha=SOURCE,completed=results,attribution='unknown')
                 (output/'result.json').write_text(json.dumps(summary,indent=2)+'\n');return summary
-        except Exception:
-            (output/'result.json').write_text(json.dumps(dict(status='failed_or_unknown_stopped',completed=results,attribution='unknown'))+'\n')
+        except Exception as error:
+            if category=='child_validation_failed' and isinstance(error,subprocess.TimeoutExpired):
+                category='child_timeout';evidence=dict(category=category,exit_code=None,timeout=True,stdout=safe_diagnostics(error.output),stderr=safe_diagnostics(error.stderr))
+            elif category=='child_validation_failed' and isinstance(error,subprocess.CalledProcessError):
+                category='child_nonzero_exit';evidence=dict(category=category,exit_code=error.returncode if type(error.returncode) is int else None,timeout=False,
+                    stdout=safe_diagnostics(error.output),stderr=safe_diagnostics(error.stderr))
+            elif evidence is not None:evidence['category']=category
+            if evidence is not None:(output/'child-evidence.json').write_text(json.dumps(evidence,indent=2)+'\n')
+            (output/'result.json').write_text(json.dumps(dict(status='failed_or_unknown_stopped',failure_category=category,child_evidence=evidence,
+                artifact_preserved=artifact is not None and artifact.exists(),completed=results,attribution='unknown'))+'\n')
             raise Rejected('diagnostic_stopped') from None
 
 def cli(argv=None):

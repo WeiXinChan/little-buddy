@@ -34,3 +34,5 @@ python3 -m scripts.v2_tls_retention short14 --enable --arm retain_plain --output
 ```
 
 工具自己拿原heavy.lock，不嵌套with-build-lock。先审核这一臂实际14/nonce/source、完整artifact与阶段/关闭确认，再决定是否另行批准retain_traced或release_plain；没有自动后续臂或重试。需使用预期依赖可用的固定解释器、从本PR固定不可变源码运行；root的RC9/生产/签名不变。本批未执行新长测/真实profile、无云/设备/部署/新agent。A36/P14/内存稳定性仍OPEN，旧117连接生命周期正证据与其恢复尾部缺口保持原结论。
+
+PR114增量修复见tls14-fix/review.md：原四FAIL保留，父验证实际交付/故障/ledger/采样覆盖及白名单失败诊断；最新18轻量方法通过，替代此前8项准备检查的分母。未执行TLS14；14连接为七种模式及恢复的一轮。

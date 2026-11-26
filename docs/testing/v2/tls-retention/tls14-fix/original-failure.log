@@ -1,0 +1,41 @@
+test_fault_labels_without_real_rst_or_pause_evidence_must_reject (__main__.Independent.test_fault_labels_without_real_rst_or_pause_evidence_must_reject) ... FAIL
+test_ledger_contradicts_confirmed_attempt_cleanup_must_reject (__main__.Independent.test_ledger_contradicts_confirmed_attempt_cleanup_must_reject) ... FAIL
+test_sampling_claim_without_any_phase_time_cleanup_metrics_must_reject (__main__.Independent.test_sampling_claim_without_any_phase_time_cleanup_metrics_must_reject) ... FAIL
+test_timeout_keeps_bounded_child_metadata_output_evidence (__main__.Independent.test_timeout_keeps_bounded_child_metadata_output_evidence) ... FAIL
+
+======================================================================
+FAIL: test_fault_labels_without_real_rst_or_pause_evidence_must_reject (__main__.Independent.test_fault_labels_without_real_rst_or_pause_evidence_must_reject)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/tls-retention/tls14-fix/independent-original.py", line 30, in test_fault_labels_without_real_rst_or_pause_evidence_must_reject
+    with self.assertRaises(m.Rejected):self.validate(result,arm,nonce,full)
+AssertionError: Rejected not raised
+
+======================================================================
+FAIL: test_ledger_contradicts_confirmed_attempt_cleanup_must_reject (__main__.Independent.test_ledger_contradicts_confirmed_attempt_cleanup_must_reject)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/tls-retention/tls14-fix/independent-original.py", line 39, in test_ledger_contradicts_confirmed_attempt_cleanup_must_reject
+    with self.assertRaises(m.Rejected):self.validate(result,arm,nonce,full)
+AssertionError: Rejected not raised
+
+======================================================================
+FAIL: test_sampling_claim_without_any_phase_time_cleanup_metrics_must_reject (__main__.Independent.test_sampling_claim_without_any_phase_time_cleanup_metrics_must_reject)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/tls-retention/tls14-fix/independent-original.py", line 35, in test_sampling_claim_without_any_phase_time_cleanup_metrics_must_reject
+    with self.assertRaises(m.Rejected):self.validate(result,arm,nonce,full)
+AssertionError: Rejected not raised
+
+======================================================================
+FAIL: test_timeout_keeps_bounded_child_metadata_output_evidence (__main__.Independent.test_timeout_keeps_bounded_child_metadata_output_evidence)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/tls-retention/tls14-fix/independent-original.py", line 53, in test_timeout_keeps_bounded_child_metadata_output_evidence
+    self.assertIn('before_report',text,'bounded child progress discarded on timeout')
+AssertionError: 'before_report' not found in '{"status": "failed_or_unknown_stopped", "completed": [], "attribution": "unknown"}\n' : bounded child progress discarded on timeout
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.026s
+
+FAILED (failures=4)
