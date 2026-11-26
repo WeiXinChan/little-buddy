@@ -67,6 +67,6 @@ internal class LocalHelpOutput(private val activity: Activity, private val exit:
     fun stop() { active = false; serial++; pending = null; label = null; speech?.stop() }
     fun close() { stop(); speech?.shutdown(); speech = null }
     companion object {
-        const val TEXT = "我们先停一下。我现在不能安全地继续这个回答。你可以找信任、愿意帮助你的成年人；如果你正感到害怕或可能受伤，先到安全的地方。"
+        const val TEXT = "如果你正有危险，先别做危险动作，马上呼叫能安全帮助你的可信任大人；必要时，用安全可行的方式寻求当地紧急帮助。不要自行攀爬、跨越或为求助冒险移动；只有安全可行时才远离危险。我现在不能安全地继续这个回答。"
     }
 }

@@ -1124,7 +1124,13 @@ class VoicePeer:
             await self.commands()
             if self.session is not operation.session or epoch != self.epoch or self.session.turn != operation.turn:
                 return
-            if isinstance(failure, SafetyFault) or isinstance(failure, VoiceFault) and failure.code == 'safety':
+            # Required facts/context failed closed: no candidate or fabricated
+            # evidence may be spoken. Preserve the original last_failure above,
+            # but keep fixed local support reachable without another model call.
+            # Explicit quota/safety signals retain their existing classifications.
+            context_failure = stage in {'facts','fact_commit'} and not (
+                isinstance(failure, VoiceFault) and failure.code in {'quota','safety'})
+            if context_failure or isinstance(failure, SafetyFault) or isinstance(failure, VoiceFault) and failure.code == 'safety':
                 # Stop/revoke first. A newer input/connection cannot borrow this help notification.
                 if self.revision != response_revision or self.closed or not self.session._live():
                     return
@@ -1134,7 +1140,7 @@ class VoicePeer:
                 self.analysis = self.prepared = self.next_probe = None
                 self.input_budget = ResponseBudget(self.session.clock)
                 self.session.deadline = 0
-                reason = failure.reason if isinstance(failure, SafetyFault) else 'content_blocked'
+                reason = failure.reason if isinstance(failure, SafetyFault) else 'review_unavailable' if context_failure else 'content_blocked'
                 await self.send('failure', code='safety', session=operation.session_id,
                                 turn=operation.turn, revision=response_revision, local_help=local_help(reason))
             else:
