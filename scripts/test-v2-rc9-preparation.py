@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Small offline release-guard fixtures, NOT installable APKs or PR109 QA evidence."""
-import hashlib,importlib.util,json,subprocess,tempfile,unittest,zipfile
+import shutil,warnings,struct,hashlib,importlib.util,json,subprocess,tempfile,unittest,zipfile
 from pathlib import Path
 from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
@@ -30,20 +30,28 @@ class RC9Preparation(unittest.TestCase):
   self.root=Path(self.temp.name);subprocess.run(['git','init','-q',str(self.root)],check=True)
   files={'app/v2-release.json':(ROOT/'app/v2-release.json').read_bytes(),
    'assets/v2-default/manifest.json':self.resource,'app/src/main/Sentinel.kt':b'// OFFLINE UNIT FIXTURE ONLY\n',
-   'scripts/v2-build-metadata.py':(ROOT/'scripts/v2-build-metadata.py').read_bytes()}
+   'scripts/v2-build-metadata.py':(ROOT/'scripts/v2-build-metadata.py').read_bytes(),
+   'scripts/v2-release-snapshot.py':(ROOT/'scripts/v2-release-snapshot.py').read_bytes()}
   for name,data in files.items():
    p=self.root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data)
+  shutil.copytree(ROOT/'assets/v2-default',self.root/'assets/v2-default',dirs_exist_ok=True)
+  (self.root/'assets/v2-default/manifest.json').write_bytes(self.resource)
   subprocess.run(['git','add','.'],cwd=self.root,check=True)
   self.output=self.root/'generated'
  def generate(self):
   with patch.object(gen,'ROOT',self.root):return gen.generate(self.output)
- def inspect(self,metadata=None,inventory=None,resource=None):
+ def inspect(self,metadata=None,inventory=None,resource=None,images=None,duplicate=None):
   meta=self.generate() if metadata is None else metadata
   raw=(self.output/'v2-source-inventory.json').read_bytes() if inventory is None else inventory
   archive=self.root/'NOT_AN_INSTALLABLE_APK.zip'
   with zipfile.ZipFile(archive,'w') as z:
    z.writestr('assets/v2-build.json',json.dumps(meta));z.writestr('assets/v2-source-inventory.json',raw)
    z.writestr('assets/v2-default/manifest.json',self.resource if resource is None else resource)
+   pngs=self.pngs() if images is None else images
+   for name,payload in pngs.items():z.writestr(name,payload)
+   if duplicate:
+    with warnings.catch_warnings():
+     warnings.simplefilter('ignore',UserWarning);z.writestr(duplicate,b'DUPLICATE UNIT FIXTURE')
   with patch.object(verify,'__file__',str(self.root/'scripts/verify-v2-release.py')):return verify.inspect(archive)
  def test_strict_rc9_identity_with_corrected_resources(self):
   meta=self.inspect();self.assertEqual((23,'2.0.0-rc9','com.littlebuddy.sim.v2'),(meta['version_code'],meta['version_name'],meta['application_id']))
@@ -61,10 +69,11 @@ class RC9Preparation(unittest.TestCase):
   for code,name in [(22,'2.0.0-rc8'),(23,'2.0.0-rc8'),(24,'2.0.0-rc10')]:
    with self.assertRaisesRegex(ValueError,'candidate_version_mismatch'):self.inspect(dict(meta,version_code=code,version_name=name))
  def test_inspector_refuses_old_images_relabelled_rc9(self):
-  old=self.old_resource;(self.root/'assets/v2-default/manifest.json').write_bytes(old)
-  # Build a self-consistent old-resource inventory to ensure the new resource pin itself rejects it.
-  with patch.object(gen,'ROOT',self.root),patch.object(gen,'RC9_RESOURCES_MANIFEST',hashlib.sha256(old).hexdigest()):meta=gen.generate(self.output)
-  with self.assertRaisesRegex(ValueError,'candidate_resources_mismatch'):self.inspect(meta,resource=old)
+  meta=self.generate();old=self.old_resource;(self.root/'assets/v2-default/manifest.json').write_bytes(old)
+  # Negative fixture only: coherent receipts cannot override the independent RC9 resource pin.
+  raw=gen._snapshot.canonical(gen.source_inventory(self.root));digest=hashlib.sha256(raw).hexdigest()
+  meta.update(resources_manifest_sha256=hashlib.sha256(old).hexdigest(),source_content_sha256=digest,build_id='v2-23-'+digest[:16])
+  with self.assertRaisesRegex(ValueError,'candidate_resources_mismatch'):self.inspect(meta,inventory=raw,resource=old)
  def test_inventory_tampering_and_local_source_drift_still_rejected(self):
   meta=self.generate();raw=(self.output/'v2-source-inventory.json').read_bytes()
   with self.assertRaisesRegex(ValueError,'source_inventory_mismatch'):self.inspect(meta,inventory=raw+b' ')
@@ -78,4 +87,61 @@ class RC9Preparation(unittest.TestCase):
   backend={'format':1,'protocol_contract':verify.CONTRACT,'source_sha':'a'*40,'assets_manifest_sha256':old,
    'files':{'assets/v2-default/manifest.json':{'sha256':old}}}
   with self.assertRaisesRegex(ValueError,'release_resources_mismatch'):verify.compatible(meta,backend)
+ def pngs(self):return {'assets/v2-default/png/'+p.name:p.read_bytes() for p in (self.root/'assets/v2-default/png').glob('*.png')}
+ def test_strict_inventory_receipt_size_fields_and_build_id(self):
+  meta=self.generate();original=json.loads((self.output/'v2-source-inventory.json').read_bytes())
+  for mutation in ['size','extra_key','bool_size']:
+   inventory=json.loads(json.dumps(original));receipt=inventory['app/src/main/Sentinel.kt']
+   if mutation=='size':receipt['size']+=1
+   elif mutation=='extra_key':receipt['trusted']=True
+   else:receipt['size']=True
+   raw=gen._snapshot.canonical(inventory);digest=hashlib.sha256(raw).hexdigest()
+   changed=dict(meta,source_content_sha256=digest,build_id='v2-23-'+digest[:16])
+   with self.assertRaises(ValueError):self.inspect(changed,inventory=raw)
+  with self.assertRaisesRegex(ValueError,'source_build_id_mismatch'):self.inspect(dict(meta,build_id='v2-23-'+('0'*16)))
+ def test_inspector_rejects_added_tracked_selected_source(self):
+  meta=self.generate();(self.root/'app/src/main/Added.kt').write_text('// ADDED\n')
+  subprocess.run(['git','add','app/src/main/Added.kt'],cwd=self.root,check=True)
+  with self.assertRaises(ValueError):self.inspect(meta)
+ def test_ignored_physical_selected_file_is_not_ignored_by_inspector(self):
+  meta=self.generate();(self.root/'.git/info/exclude').write_text('/app/src/main/Hidden.kt\n')
+  (self.root/'app/src/main/Hidden.kt').write_text('// HIDDEN\n')
+  with self.assertRaises(ValueError):self.inspect(meta)
+ def test_generator_rejects_wrong_staged_png_and_svg(self):
+  for relative in ['png/star-bunny.png','source/star-bunny.svg']:
+   path=self.root/'assets/v2-default'/relative;original=path.read_bytes()
+   try:
+    path.write_bytes(original+b'CHANGED');subprocess.run(['git','add','assets'],cwd=self.root,check=True)
+    with self.assertRaisesRegex(AssertionError,'resource_payload_hash'):self.generate()
+   finally:path.write_bytes(original)
+ def test_actual_png_svg_dimensions_even_with_updated_row_hash(self):
+  manifest=self.root/'assets/v2-default/manifest.json';original=manifest.read_bytes()
+  for folder,key in [('png','png_sha256'),('source','source_sha256')]:
+   path=self.root/'assets/v2-default'/folder/('star-bunny.png' if folder=='png' else 'star-bunny.svg');before=path.read_bytes()
+   try:
+    data=before[:16]+struct.pack('>I',513)+before[20:] if folder=='png' else before.replace(b'width="512"',b'width="513"',1)
+    path.write_bytes(data);rows=json.loads(original);next(r for r in rows if r['id']=='star-bunny')[key]=hashlib.sha256(data).hexdigest()
+    manifest.write_text(json.dumps(rows,ensure_ascii=False,indent=2)+'\n')
+    with self.assertRaisesRegex(AssertionError,'resource_'+('svg' if folder=='source' else folder)+'_dimensions'):gen._snapshot.resource_files(self.root)
+   finally:path.write_bytes(before);manifest.write_bytes(original)
+ def test_apk_exact_png_bytes_and_set_and_duplicate_entries(self):
+  meta=self.generate();pngs=self.pngs();star='assets/v2-default/png/star-bunny.png';cat='assets/v2-default/png/cat.png'
+  self.assertNotEqual(pngs[star],pngs[cat])
+  missing=dict(pngs);del missing[star]
+  extra=dict(pngs);extra['assets/v2-default/png/extra.png']=pngs[cat]
+  changed=dict(pngs);changed[star]=pngs[cat]
+  for images in [missing,extra,changed]:
+   with self.assertRaises(ValueError):self.inspect(meta,images=images)
+  for duplicate in [star,'assets/v2-default/manifest.json','assets/v2-build.json']:
+   with self.assertRaisesRegex(ValueError,'duplicate_zip_entry'):self.inspect(meta,duplicate=duplicate)
+ def test_missing_extra_local_resources_and_metadata_origin(self):
+  meta=self.generate();extra=self.root/'assets/v2-default/png/extra.png';extra.write_bytes(b'EXTRA')
+  try:
+   with self.assertRaises(AssertionError):self.generate()
+  finally:extra.unlink()
+  star=self.root/'assets/v2-default/png/star-bunny.png';data=star.read_bytes();star.unlink()
+  try:
+   with self.assertRaises(AssertionError):self.generate()
+  finally:star.write_bytes(data)
+  with self.assertRaisesRegex(ValueError,'candidate_config_mismatch'):self.inspect(dict(meta,source_base='f'*40))
 if __name__=='__main__':unittest.main(verbosity=2)

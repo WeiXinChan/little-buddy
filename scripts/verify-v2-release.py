@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline APK/backend release pairing; never connects or reads runtime credentials."""
 import argparse
+import importlib.util
 import hashlib
 import json
 from pathlib import Path
@@ -10,6 +11,9 @@ import zipfile
 CONTRACT='v2-voice2-safety1-images2-volume1-management1-end1'
 # RC9 is bound to the star-bunny correction; QA changes require an explicit reviewed pin update.
 RC9_RESOURCES_MANIFEST='d649ac79bc5203373ff44ebdd547bdd16772663467a22115fa75f589bef91ea1'
+
+_spec=importlib.util.spec_from_file_location('v2_release_snapshot',Path(__file__).with_name('v2-release-snapshot.py'))
+_snapshot=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(_snapshot)
 
 def compatible(apk, backend):
     if (type(apk.get('format')) is not int or type(backend.get('format')) is not int or
@@ -27,24 +31,41 @@ def compatible(apk, backend):
 
 def inspect(apk):
     with zipfile.ZipFile(apk) as z:
+        names=z.namelist()
+        if len(names)!=len(set(names)):raise ValueError('duplicate_zip_entry')
         meta=json.loads(z.read('assets/v2-build.json'))
-        raw=z.read('assets/v2-source-inventory.json').rstrip(b'\n')
-        if hashlib.sha256(raw).hexdigest()!=meta['source_content_sha256']:raise ValueError('source_inventory_mismatch')
-        root=Path(__file__).resolve().parents[1]
-        for path,receipt in json.loads(raw).items():
-            candidate=Path(path)
-            if candidate.is_absolute() or '..' in candidate.parts:raise ValueError('source_inventory_path')
-            target=root/candidate
-            if not target.resolve().is_relative_to(root.resolve()) or target.is_symlink() or not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest()!=receipt['sha256']:
-                raise ValueError('source_snapshot_mismatch')
-        if hashlib.sha256(z.read('assets/v2-default/manifest.json')).hexdigest()!=meta['resources_manifest_sha256']:
-            raise ValueError('apk_resources_mismatch')
         if any(value in json.dumps(meta) for value in ['/home/','/tmp/','Bearer ','PRIVATE KEY','password']):
             raise ValueError('private_build_metadata')
         if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=23 or meta['version_name']!='2.0.0-rc9':
             raise ValueError('candidate_version_mismatch')
         if meta['resources_manifest_sha256']!=RC9_RESOURCES_MANIFEST:
             raise ValueError('candidate_resources_mismatch')
+        raw=z.read('assets/v2-source-inventory.json').rstrip(b'\n')
+        if hashlib.sha256(raw).hexdigest()!=meta['source_content_sha256']:raise ValueError('source_inventory_mismatch')
+        claimed=json.loads(raw)
+        root=Path(__file__).resolve().parents[1]
+        try:
+            trusted=_snapshot.source_inventory(root)
+            resource_raw,pngs=_snapshot.resource_files(root)
+            _snapshot.bind_resources(trusted,resource_raw,pngs)
+        except (AssertionError,OSError,ValueError) as error:raise ValueError('source_snapshot_mismatch') from error
+        config=json.loads((root/'app/v2-release.json').read_bytes())
+        if any(meta.get(key)!=value for key,value in config.items()):raise ValueError('candidate_config_mismatch')
+        if not isinstance(claimed,dict) or set(claimed)!=set(trusted):raise ValueError('source_inventory_set_mismatch')
+        for path,receipt in claimed.items():
+            if (not isinstance(receipt,dict) or set(receipt)!={'sha256','size'} or
+                type(receipt['size']) is not int or receipt!=trusted[path]):
+                raise ValueError('source_snapshot_mismatch')
+        canonical=_snapshot.canonical(trusted);digest=hashlib.sha256(canonical).hexdigest()
+        if raw!=canonical or digest!=meta['source_content_sha256']:raise ValueError('source_inventory_mismatch')
+        if meta['build_id']!='v2-23-'+digest[:16]:raise ValueError('source_build_id_mismatch')
+        if hashlib.sha256(resource_raw).hexdigest()!=RC9_RESOURCES_MANIFEST:raise ValueError('candidate_resources_mismatch')
+        if z.read('assets/v2-default/manifest.json')!=resource_raw:raise ValueError('apk_resources_mismatch')
+        expected=set(pngs)|{'assets/v2-default/manifest.json'}
+        actual={name for name in names if name.startswith('assets/v2-default/') and not name.endswith('/')}
+        if actual!=expected:raise ValueError('apk_resource_set_mismatch')
+        for name,data in pngs.items():
+            if z.read(name)!=data:raise ValueError('apk_resource_payload_mismatch')
         return meta
 
 if __name__=='__main__':

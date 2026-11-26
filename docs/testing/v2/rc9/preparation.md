@@ -13,10 +13,11 @@ protocol. They also pin RC9 to PR109 f0185497b2df1347a70f494df774a6fdbd1623f3's 
 d649ac79bc5203373ff44ebdd547bdd16772663467a22115fa75f589bef91ea1
 
 Root later reported independent visual QA PASS for PR109; this author did not perform that QA.
-The pin still does not claim merge/freeze. If QA changes the image or manifest,
+The repair includes PR109 through normal main60d83a50 integration; the pin alone is not freeze evidence. If QA changes the image or manifest,
 update the pin/test projection only against root's reviewed fixed head. No bypass flag, fallback
-library, accepting code22/unknown future version, or renaming RC8. The prep branch still has old
-resources; metadata generation deliberately refuses it. Do not make a final APK from this tree.
+library, accepting code22/unknown future version, or renaming RC8. The initial prep tree had old resources and was deliberately refused. The RC110 repair now
+normally merges reviewed main60d83a50, so corrected source/resource metadata can be checked without
+an APK build. This is still Draft and final APK construction remains gated on root approval/lock.
 Tests reconstruct only small manifest metadata in temporary unit fixtures (no PNG copied into the
 app, no installable APK). They need no unmerged git object in a clean CI checkout. Negative fixtures
 include a fully self-consistent RC9-labelled old library, which the inspector must still reject.
@@ -93,3 +94,30 @@ expected around11:22UTC. Author did not inspect/interrupt either session. Do not
 lock, bypass it or loop build retries. Expected elapsed time is not proof lock was released and not
 approval to start a build. This PR remains light preparation; root coordinates the single final
 heavy APK build only after actual release AND PR109 integration. No phone/ADB actions.
+
+## RC110-01 / RC110-02 repair
+
+This branch normally merged main60d83a50b5d8cd54ff78bcda30460907265488aa (106/107/109); source_base now
+records that integration baseline. PR108 f5b38d4 is still pending CI and is NOT claimed included or
+deployed. Root's stated deployed backend is050b9a93 compatible with RC8; no deployment was performed.
+
+The shared trusted scripts/v2-release-snapshot.py defines selected membership and independently
+uses current git ls-files PLUS physical selected directories/exact files. Untracked/ignored selected
+files and symlinks refuse; private extensions are refused before reading. Generator AND inspector
+use it. Incoming self-reported inventory must have exact complete keyset and exact sha256/size
+receipts with integer sizes; canonical digest/build ID and all release config fields must match the
+independent current snapshot. Removing an entry and recomputing self-digest cannot authorize omission.
+Gradle metadata task inputs and source inventory include the new helper so changes invalidate output.
+
+Before generating anything, validate actual60 SVG and60 PNG against pinned manifest source/png SHA,
+SVG512/viewBox and real PNG IHDR512/size/signature; require exact local source/png file sets. APK
+inspection requires exact61-entry v2-default namespace (manifest plus60PNG), exact bytes against
+trusted validated local resources and globally unique ZIP names. Missing/extra/wrong payload or
+repeated entries fail, even if all self-reported digests are recomputed. No image/version pin relaxed.
+
+Offline checks now:5 existing protocol methods,15 candidate guards (8 previous+7 closure/payload
+methods) and QA's3 ORIGINAL independent inputs/assertions replayed unchanged. Those QA cases are
+separate, not counted as newly authored method coverage. Mini git/ZIP fixtures now include the full
+reviewed60-resource library; they remain explicitly NOT installable APKs. Original3FAIL is retained.
+The final local positive path generates metadata/inventory for the merged real tree and inspects a
+synthetic metadata/resources ZIP only; no final APK, heavy build, phone or server deployment.
