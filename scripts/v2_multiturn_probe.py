@@ -5,6 +5,7 @@ are never passed to it. Automatic ACK is transport simulation, never acoustic pr
 """
 import asyncio
 from copy import deepcopy
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from hashlib import sha256
 import json
@@ -12,7 +13,7 @@ import inspect
 from types import MappingProxyType
 import time
 from backend.v2.companion import CompanionPolicy
-from backend.v2.voice import VoicePeer
+from backend.v2.voice import VoicePeer as ProductionVoicePeer
 from backend.v2.models import TEXT_MODEL
 
 class ProbeLimit(RuntimeError):pass
@@ -54,19 +55,69 @@ class SpeechMeter:
         self.calls+=1;self.characters+=len(text)
         return self.inner.synthesize(text,rate)
 
+FAILURE_CODES=frozenset({'voice','timeout','network','quota','safety'})
+FAILURE_STAGES=frozenset({'bind','input_policy','plan','facts','fact_commit','safety','synthesis'})
+FAILURE_KINDS=frozenset({'WireError','VoiceFault','TimeoutError','ModelError','SafetyFault','ProbeLimit','CancelledError'})
+
+def peer_failure(peer):
+    failure=getattr(peer,'last_failure',None)
+    if not isinstance(failure,dict):return None
+    return {key:failure.get(key) if failure.get(key) in choices else 'unknown'
+            for key,choices in (('stage',FAILURE_STAGES),('kind',FAILURE_KINDS))}
+
+class VoicePeer(ProductionVoicePeer):
+    """Diagnostic subclass only; delegates all production resource/ACK behavior."""
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs);self.probe_resources=[]
+    @asynccontextmanager
+    async def resource(self,manager):
+        name=getattr(getattr(manager,'func',None),'__name__',None)
+        row={'resource':name if name in {'synthesize','planned'} else 'other',
+             'exit_outcome':'not_started','exit_ms':None,'failure_kind':None}
+        self.probe_resources.append(row)
+        class Tracked:
+            async def __aenter__(self):return await manager.__aenter__()
+            async def __aexit__(self,*args):
+                row['exit_outcome']='started';start=time.monotonic()
+                try:
+                    value=await manager.__aexit__(*args);row['exit_outcome']='confirmed';return value
+                except BaseException as error:
+                    row['exit_outcome']='cancelled' if isinstance(error,asyncio.CancelledError) else 'failed'
+                    raise
+                finally:row['exit_ms']=round((time.monotonic()-start)*1000,2)
+        try:
+            async with super().resource(Tracked()) as source:yield source
+        except BaseException as error:
+            row['failure_kind']=type(error).__name__ if type(error).__name__ in FAILURE_KINDS else 'unknown'
+            raise
+
 class Sink:
-    def __init__(self,ack=True):self.peer=None;self.ack=ack;self.events=[];self.first=None;self.stopped=False
+    def __init__(self,ack=True):self.peer=None;self.ack=ack;self.events=[];self.first=None;self.stopped=False;self.frames=0;self.audio_bytes=0;self.max_audio_bytes=0;self.acks=0;self.game_commits=0
     async def send(self,raw):
         if self.stopped:raise ProbeLimit('sink_closed')
         event=json.loads(raw);kind=event['type']
         # Store metadata only. PCM and all response text remain transient.
-        self.events.append({'type':kind})
+        row={'type':kind}
+        if kind=='failure':row['code']=event.get('code') if event.get('code') in FAILURE_CODES else 'unknown'
+        self.events.append(row)
         if kind=='audio':
+            size=2*(event['end']-event['start'])
+            self.frames+=1;self.audio_bytes+=size;self.max_audio_bytes=max(self.max_audio_bytes,size)
             if self.first is None:self.first=time.monotonic()
             if self.ack:
                 p=self.peer;i=replace(p.ack_identity,sequence=p.ack_sequence);p.ack_sequence+=1
+                candidate=p.session.pending[0] if p.session.pending else None
+                topic=p.session.topic;turn=p.session.turn
                 if not p.session.ack(i,player=event['player'],stream=event['stream'],segment=event['segment'],head=event['end']):raise ProbeLimit('ack_rejected')
-                p.changed.set()
+                # Observe the exact production commit branch, not game presence
+                # or value inequality. A same-value state is still a real commit.
+                if (candidate is not None and candidate.name==event['segment'] and
+                    candidate.state is not None and not candidate.private and
+                    event['end']>=candidate.end and p.session.turn==turn and
+                    p.session.topic==topic+1 and
+                    all(item is not candidate for item in p.session.pending)):
+                    self.game_commits+=1
+                self.acks+=1;p.changed.set()
     async def close(self,*args):pass
 
 def judge(expect,context,*,previous_heard=(),transport_ok=True):
@@ -123,7 +174,7 @@ async def run_case(case,providers,*,ack=True,observer=None):
             for turn in case['turns']:
                 previous=peer.session.context().get('heard',())
                 peer.session.begin_turn();await peer.commands()
-                start=time.monotonic();sink.first=None;sink.events.clear();offset=len(meter.calls)
+                start=time.monotonic();sink.first=None;sink.events.clear();sink.frames=sink.audio_bytes=sink.max_audio_bytes=sink.acks=sink.game_commits=0;peer.probe_resources.clear();offset=len(meter.calls)
                 peer.generation=asyncio.create_task(peer.respond(turn['input'],peer.epoch))
                 await peer.handle(json.dumps(dict(v=2,type='bind',epoch=peer.epoch,seq=peer.sequence+1,player='probe-'+str(peer.session.turn))))
                 await asyncio.shield(peer.generation)
@@ -139,7 +190,9 @@ async def run_case(case,providers,*,ack=True,observer=None):
                         else:
                             rejected=asyncio.ensure_future(result);state.track(rejected);rejected.cancel()
                         raise ProbeLimit('observer_must_be_sync')
-                rows.append(dict(label=turn['label'],checks=checks,
+                rows.append(dict(label=turn['label'],checks=checks,quality_assessable=ok,
+                    peer_failure=peer_failure(peer),resource_diagnostics=deepcopy(peer.probe_resources),control_failures=[e['code'] for e in sink.events if e['type']=='failure'],
+                    delivery_metadata=dict(audio_chunks=sink.frames,audio_bytes=sink.audio_bytes,max_audio_bytes=sink.max_audio_bytes,acks_accepted=sink.acks,game_committed=sink.game_commits>0,resource_quarantined=peer.quarantined),
                     first_audio_after_text_ms=None if sink.first is None else round((sink.first-start)*1000,2),
                     completed_ms=round((time.monotonic()-start)*1000,2),stages=deepcopy(meter.calls[offset:])))
                 if not all(checks.values()):break # stop the batch; no quality retry
@@ -176,7 +229,7 @@ async def run_case(case,providers,*,ack=True,observer=None):
             providers.probe_cleanup_handle=None
     metrics=original_model.metrics() if hasattr(original_model,'metrics') else {}
     usage=usage_delta(before,metrics)
-    return dict(format=1,cleanup={'confirmed':not state.quarantined,'pending_tasks':len(state.pending()),'provider_reusable':not state.quarantined},usage_final=not state.quarantined,usage=usage,case=case['id'],fixture_sha256=sha256(json.dumps(case,ensure_ascii=False,sort_keys=True).encode()).hexdigest(),
+    return dict(format=1,peer_failure=peer_failure(peer),cleanup={'confirmed':not state.quarantined,'pending_tasks':len(state.pending()),'provider_reusable':not state.quarantined},usage_final=not state.quarantined,usage=usage,case=case['id'],fixture_sha256=sha256(json.dumps(case,ensure_ascii=False,sort_keys=True).encode()).hexdigest(),
                 layer='synthetic_text_real_voicepeer_simulated_playback',turns=rows,model_requests=len(meter.calls),
                 tts_requests=speech.calls,tts_unicode_characters=speech.characters,
                 full_acceptance=False,semantic_review_required=True,p12_verified=False,p15_verified=False)

@@ -1,0 +1,8 @@
+test_failure_metadata_allowlists_never_emit_arbitrary_exception_or_code (tests.v2.test_probe_close_diagnostics.CloseDiagnostics.test_failure_metadata_allowlists_never_emit_arbitrary_exception_or_code) ... ok
+test_fast_close_same_ack_and_large_frame_commits_final_game (tests.v2.test_probe_close_diagnostics.CloseDiagnostics.test_fast_close_same_ack_and_large_frame_commits_final_game) ... ok
+test_slow_actual_resource_exit_causes_partial_heard_no_final_game_not_ack_loss (tests.v2.test_probe_close_diagnostics.CloseDiagnostics.test_slow_actual_resource_exit_causes_partial_heard_no_final_game_not_ack_loss) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.545s
+
+OK

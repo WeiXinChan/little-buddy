@@ -1,0 +1,9 @@
+test_audio_byte_count_is_transport_coordinate_only_not_playback (__main__.Metadata.test_audio_byte_count_is_transport_coordinate_only_not_playback) ... ok
+test_old_game_must_not_be_reported_as_current_turn_commit (__main__.Metadata.test_old_game_must_not_be_reported_as_current_turn_commit) ... ok
+test_telemetry_does_not_suppress_body_cancel_or_exit_failure (__main__.Metadata.test_telemetry_does_not_suppress_body_cancel_or_exit_failure) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.537s
+
+OK
+CROSS_TURN game_still_old=true new_rule_not_committed=true reported_game_committed=False

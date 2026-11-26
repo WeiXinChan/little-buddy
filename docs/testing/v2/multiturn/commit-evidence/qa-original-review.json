@@ -1,0 +1,29 @@
+{
+  "head": "f76c1c3b1d623e3106017498ac6f78f40f69375e",
+  "tree": "05f537f3d80bbab3922b2122e32c6eef832a1700",
+  "base": "de7b43819bbbaa0a059a33d50a28fd3be2b5ca15",
+  "script_sha256": "b5b74d3800c2ababe862328e5030e4ebe66a7342a58cced72d1da66c92313e8a",
+  "verdict": "HOLD D92-01 current-turn commit metadata actually reports prior game presence",
+  "finding": {
+    "location": "scripts/v2_multiturn_probe.py delivery_metadata.game_committed",
+    "actual": "first turn commits old rules; second turn proposes changed rules but first sentence resource closes0.65s>production0.5s, current proposal not committed; old game remains, field true",
+    "impact": "misleading per-turn causal diagnostic, not a change to production or overall quality PASS",
+    "fix": "Rename to explicit game-present/prior-state-presence, or record actual ACK state-commit provenance for current turn without changing Session; do not infer from bool(game) or equality alone"
+  },
+  "independent_execution": {
+    "affected_original_cleanup_diagnostic_methods": 22,
+    "original_QA_falsifiers_unchanged": 2,
+    "additional_metadata_methods": 3,
+    "unique_total": 27,
+    "passed": 26,
+    "failed": 1,
+    "skip": 0,
+    "scope": "actual production+diagnostic VoicePeer resource/Session/ACK; fake model/TTS and synthetic bytes, no cloud"
+  },
+  "original_live_failure_sha256": "f9d2b6baec00c0562f2a952799bfd444f9a31adf2d88faac935cf3a6ab33cc58",
+  "original_cleanup_falsifiers_still_pass": true,
+  "production_business_model_config_changed": false,
+  "root_cause_real_incident_confirmed": false,
+  "P12_P15_quality_bill_fullV2_verified": false,
+  "device_cloud_secret_config_deployment_merge": false
+}

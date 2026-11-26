@@ -1,0 +1,9 @@
+test_outer_timeout_cleanup_of_stubborn_actual_provider_exit_is_bounded (__main__.Independent.test_outer_timeout_cleanup_of_stubborn_actual_provider_exit_is_bounded) ... ok
+test_rejected_async_observer_task_does_not_remain_running (__main__.Independent.test_rejected_async_observer_task_does_not_remain_running) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.262s
+
+OK
+STUBBORN_CLEANUP {"finished": true, "retired_tasks": 2, "generation_done": false, "provider_wrappers_restored": false}
+ASYNC_OBSERVER {"stopped": "ProbeLimit", "returned_task_done": true, "body_ran": false}

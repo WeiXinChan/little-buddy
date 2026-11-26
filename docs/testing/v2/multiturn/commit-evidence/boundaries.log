@@ -1,0 +1,8 @@
+test_changed_proposal_without_ack_then_cancel_does_not_inherit_old_commit (tests.v2.test_probe_commit_evidence.CommitEvidence.test_changed_proposal_without_ack_then_cancel_does_not_inherit_old_commit) ... ok
+test_private_final_state_ack_does_not_count_as_public_game_commit (tests.v2.test_probe_commit_evidence.CommitEvidence.test_private_final_state_ack_does_not_count_as_public_game_commit) ... ok
+test_same_value_game_recommits_each_turn_not_value_change (tests.v2.test_probe_commit_evidence.CommitEvidence.test_same_value_game_recommits_each_turn_not_value_change) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.090s
+
+OK

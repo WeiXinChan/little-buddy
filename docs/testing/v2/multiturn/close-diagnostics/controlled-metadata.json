@@ -1,0 +1,327 @@
+{
+  "fast": {
+    "format": 1,
+    "peer_failure": null,
+    "cleanup": {
+      "confirmed": true,
+      "pending_tasks": 0,
+      "provider_reusable": true
+    },
+    "usage_final": true,
+    "usage": {
+      "requests": null,
+      "failures": null,
+      "prompt_tokens": null,
+      "completion_tokens": null
+    },
+    "case": "synthetic-harness",
+    "fixture_sha256": "29e5f56ae676fa50b45f63affb625a01337b23ceda0f4d2913ba5bf539d2fd8b",
+    "layer": "synthetic_text_real_voicepeer_simulated_playback",
+    "turns": [
+      {
+        "label": "0",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.02,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.01,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 4,
+          "audio_bytes": 19200,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 4,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 1.15,
+        "completed_ms": 2.7,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 0.02,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          }
+        ]
+      },
+      {
+        "label": "1",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.01,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.01,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 4,
+          "audio_bytes": 19200,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 4,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 1.02,
+        "completed_ms": 2.36,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          }
+        ]
+      },
+      {
+        "label": "2",
+        "checks": {
+          "mode": true,
+          "rule_role_terms": true,
+          "played_context": true,
+          "delivery": true
+        },
+        "quality_assessable": true,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.0,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.01,
+            "failure_kind": null
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.02,
+            "failure_kind": null
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 4,
+          "audio_bytes": 19200,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 4,
+          "game_committed": true,
+          "resource_quarantined": false
+        },
+        "first_audio_after_text_ms": 1.09,
+        "completed_ms": 2.48,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          }
+        ]
+      }
+    ],
+    "model_requests": 15,
+    "tts_requests": 6,
+    "tts_unicode_characters": 24,
+    "full_acceptance": false,
+    "semantic_review_required": true,
+    "p12_verified": false,
+    "p15_verified": false
+  },
+  "slow": {
+    "format": 1,
+    "peer_failure": null,
+    "cleanup": {
+      "confirmed": false,
+      "pending_tasks": 0,
+      "provider_reusable": false
+    },
+    "usage_final": false,
+    "usage": {
+      "requests": null,
+      "failures": null,
+      "prompt_tokens": null,
+      "completion_tokens": null
+    },
+    "case": "synthetic-harness",
+    "fixture_sha256": "29e5f56ae676fa50b45f63affb625a01337b23ceda0f4d2913ba5bf539d2fd8b",
+    "layer": "synthetic_text_real_voicepeer_simulated_playback",
+    "turns": [
+      {
+        "label": "0",
+        "checks": {
+          "mode": false,
+          "rule_role_terms": false,
+          "played_context": true,
+          "delivery": false
+        },
+        "quality_assessable": false,
+        "peer_failure": null,
+        "resource_diagnostics": [
+          {
+            "resource": "planned",
+            "exit_outcome": "confirmed",
+            "exit_ms": 0.01,
+            "failure_kind": "WireError"
+          },
+          {
+            "resource": "synthesize",
+            "exit_outcome": "cancelled",
+            "exit_ms": 500.86,
+            "failure_kind": "WireError"
+          }
+        ],
+        "control_failures": [],
+        "delivery_metadata": {
+          "audio_chunks": 2,
+          "audio_bytes": 9600,
+          "max_audio_bytes": 4800,
+          "acks_accepted": 2,
+          "game_committed": false,
+          "resource_quarantined": true
+        },
+        "first_audio_after_text_ms": 0.89,
+        "completed_ms": 502.41,
+        "stages": [
+          {
+            "stage": "plan",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "facts",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          },
+          {
+            "stage": "safe",
+            "ms": 0.01,
+            "ok": true
+          }
+        ]
+      },
+      {
+        "label": "batch-stop",
+        "failure": "ProviderQuarantined"
+      }
+    ],
+    "model_requests": 4,
+    "tts_requests": 1,
+    "tts_unicode_characters": 4,
+    "full_acceptance": false,
+    "semantic_review_required": true,
+    "p12_verified": false,
+    "p15_verified": false
+  }
+}

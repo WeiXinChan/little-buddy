@@ -1,0 +1,29 @@
+test_audio_byte_count_is_transport_coordinate_only_not_playback (__main__.Metadata.test_audio_byte_count_is_transport_coordinate_only_not_playback) ... ok
+test_old_game_must_not_be_reported_as_current_turn_commit (__main__.Metadata.test_old_game_must_not_be_reported_as_current_turn_commit) ... FAIL
+test_telemetry_does_not_suppress_body_cancel_or_exit_failure (__main__.Metadata.test_telemetry_does_not_suppress_body_cancel_or_exit_failure) ... ok
+
+======================================================================
+FAIL: test_old_game_must_not_be_reported_as_current_turn_commit (__main__.Metadata.test_old_game_must_not_be_reported_as_current_turn_commit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/multiturn/commit-evidence/metadata_checks.py", line 30, in test_old_game_must_not_be_reported_as_current_turn_commit
+    self.assertFalse(second['delivery_metadata']['game_committed'],'old committed game is not this failed turn proposal commit')
+AssertionError: True is not false : old committed game is not this failed turn proposal commit
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.535s
+
+FAILED (failures=1)
+CROSS_TURN game_still_old=true new_rule_not_committed=true reported_game_committed=True
