@@ -1,4 +1,4 @@
-"""Isolated, pinned public-network retrieval for one documented supplier output host.
+"""Isolated, pinned public-network retrieval for two explicitly approved supplier output hosts.
 
 No shared HTTP client, ambient proxy, bearer, cookies, arbitrary OSS or redirects.
 Lease checks cover async I/O; the owning adapter sanitizes all external failures.
@@ -14,6 +14,7 @@ import httpcore
 from backend.v2.image_bytes import MAX_PNG
 
 OUTPUT_HOST='dashscope-result-sz.oss-cn-shenzhen.aliyuncs.com'
+OUTPUT_HOSTS=frozenset({OUTPUT_HOST,'dashscope-a717.oss-accelerate.aliyuncs.com'})
 
 
 class DownloadRejected(ValueError):
@@ -25,8 +26,8 @@ def validated_url(value):
         any(ord(c)<=32 or ord(c)==127 for c in value) or '#' in value):raise DownloadRejected()
     try:
         parsed=urlsplit(value)
-        if (parsed.scheme!='https' or parsed.netloc not in {OUTPUT_HOST,OUTPUT_HOST+':443'} or
-            parsed.hostname!=OUTPUT_HOST or parsed.port not in (None,443) or parsed.username is not None or
+        if (parsed.scheme!='https' or parsed.netloc not in {authority for host in OUTPUT_HOSTS for authority in (host,host+':443')} or
+            parsed.hostname not in OUTPUT_HOSTS or parsed.port not in (None,443) or parsed.username is not None or
             parsed.password is not None or parsed.fragment or
             not re.fullmatch(r'/[A-Za-z0-9_./-]+\.png',parsed.path) or
             any(p in {'','..','.'} for p in parsed.path.split('/')[1:])):raise DownloadRejected()
@@ -56,27 +57,31 @@ def public_addresses(records):
 
 
 class GuardedStream(httpcore.AsyncNetworkStream):
-    def __init__(self,stream,check):self.stream=stream;self.check=check
+    def __init__(self,stream,check,host=OUTPUT_HOST):
+        if host not in OUTPUT_HOSTS:raise DownloadRejected()
+        self.stream=stream;self.check=check;self.host=host
     async def read(self,max_bytes,timeout=None):
         self.check();value=await self.stream.read(max_bytes,timeout);self.check();return value
     async def write(self,buffer,timeout=None):
         self.check();await self.stream.write(buffer,timeout);self.check()
     async def aclose(self):await self.stream.aclose()
     async def start_tls(self,ssl_context,server_hostname=None,timeout=None):
-        if (server_hostname!=OUTPUT_HOST or ssl_context.verify_mode!=ssl.CERT_REQUIRED or
+        if (server_hostname!=self.host or ssl_context.verify_mode!=ssl.CERT_REQUIRED or
             not ssl_context.check_hostname):raise DownloadRejected()
         self.check();stream=await self.stream.start_tls(ssl_context,server_hostname,timeout)
         try:self.check()
         except BaseException:
             await stream.aclose();raise
-        return GuardedStream(stream,self.check)
+        return GuardedStream(stream,self.check,self.host)
     def get_extra_info(self,info):return self.stream.get_extra_info(info)
 
 
 class PublicOutputBackend(httpcore.AsyncNetworkBackend):
-    def __init__(self,check):self.check=check;self.backend=httpcore.AnyIOBackend()
+    def __init__(self,check,host=OUTPUT_HOST):
+        if host not in OUTPUT_HOSTS:raise DownloadRejected()
+        self.check=check;self.host=host;self.backend=httpcore.AnyIOBackend()
     async def connect_tcp(self,host,port,timeout=None,local_address=None,socket_options=None):
-        if host!=OUTPUT_HOST or port!=443 or local_address is not None:raise DownloadRejected()
+        if host!=self.host or port!=443 or local_address is not None:raise DownloadRejected()
         self.check();records=await resolve_output(host);self.check()
         addresses=public_addresses(records);self.check()
         # Connect once to a checked literal IP. DNS cannot change the target
@@ -85,16 +90,16 @@ class PublicOutputBackend(httpcore.AsyncNetworkBackend):
         try:self.check()
         except BaseException:
             await stream.aclose();raise
-        return GuardedStream(stream,self.check)
+        return GuardedStream(stream,self.check,self.host)
 
 
 async def download_png(url,check):
-    url=validated_url(url);body=bytearray()
+    url=validated_url(url);host=urlsplit(url).hostname;body=bytearray()
     try:
         check()
         async with httpcore.AsyncConnectionPool(ssl_context=ssl.create_default_context(),proxy=None,
             max_connections=1,max_keepalive_connections=0,retries=0,http1=True,http2=False,
-            network_backend=PublicOutputBackend(check)) as pool:
+            network_backend=PublicOutputBackend(check,host)) as pool:
             check()
             async with pool.stream('GET',url,headers=[(b'Accept',b'image/png'),
                 (b'Accept-Encoding',b'identity'),(b'Connection',b'close')],
