@@ -1,0 +1,18 @@
+{
+  "default_text": "deepseek-v4.1-flash-1017",
+  "allowed_text": [
+    "deepseek-v4.1-flash",
+    "deepseek-v4.1-flash-1017",
+    "qwen4-max"
+  ],
+  "image_review": "qwen4-max",
+  "thinking": false,
+  "automatic_fallback": false,
+  "response_formats": {
+    "deepseek-v4.1-flash": "json_object",
+    "deepseek-v4.1-flash-1017": "json_object",
+    "qwen4-max": "json_schema"
+  },
+  "validation": "strict_local_for_all_models",
+  "account_quota": "not_proven_by_configuration"
+}

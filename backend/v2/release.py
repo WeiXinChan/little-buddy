@@ -9,6 +9,7 @@ import re
 import subprocess
 import tarfile
 from backend.v2.preflight import CONTRACT,MODELS
+from backend.v2.models import model_policy
 
 
 def selected(path):
@@ -30,7 +31,9 @@ def package(ref,output):
     inventory={p:dict(sha256=sha256(raw).hexdigest(),size=len(raw)) for p,raw in files.items()}
     if 'backend/v2/live.py' not in files or 'backend/requirements-v2.lock' not in files:
         raise ValueError('release_source_incomplete')
-    metadata=dict(format=1,source_sha=ref,protocol_contract=CONTRACT,models=MODELS,region='cn-beijing',
+    if files.get('backend/v2/models.py')!=Path(__file__).with_name('models.py').read_bytes():
+        raise ValueError('release_source_model_mismatch')
+    metadata=dict(format=1,source_sha=ref,protocol_contract=CONTRACT,models=MODELS,model_policy=model_policy(),region='cn-beijing',
                   assets_manifest_sha256=sha256(files['assets/v2-default/manifest.json']).hexdigest(),
                   python='>=3.11',bind='127.0.0.1',path='/v2/voice',files=inventory,
                   ownership_issuer='not_included',credentials='external_only')
@@ -54,6 +57,8 @@ def verify(root,expected):
     metadata=json.loads(manifest.read_text())
     if (metadata.get('format')!=1 or metadata.get('source_sha')!=expected or
         metadata.get('protocol_contract')!=CONTRACT):raise ValueError('release_version_mismatch')
+    if metadata.get('models')!=MODELS or metadata.get('model_policy')!=model_policy():
+        raise ValueError('release_model_policy_mismatch')
     inventory=metadata['files']
     if not isinstance(inventory,dict) or len(inventory)>1000:raise ValueError('release_inventory_invalid')
     if (not isinstance(metadata.get('assets_manifest_sha256'),str) or

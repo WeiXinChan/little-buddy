@@ -12,7 +12,7 @@ from backend.v2.voice import VoiceFault
 class Metrics(unittest.IsolatedAsyncioTestCase):
     def model(self,http):
         return DashScopeModel(DashScope(http,workspace='private-workspace',region='cn-beijing',
-            key='PRIVATE_KEY',asr='fun-asr-realtime',llm='qwen3.8-flash',tts='cosyvoice-v3-flash',voice='longanyang'))
+            key='PRIVATE_KEY',asr='fun-asr-realtime',llm='deepseek-v4.1-flash-1017',tts='cosyvoice-v3-flash',voice='longanyang'))
 
     async def test_known_and_missing_usage_are_distinct_from_zero_with_bounded_latency(self):
         usages=[dict(prompt_tokens=12,completion_tokens=3),{},dict(prompt_tokens=True,completion_tokens=-1),[],
@@ -48,11 +48,12 @@ class Metrics(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(metrics['usage']['failures'],1);self.assertEqual(metrics['cancelled'],1)
         self.assertEqual(metrics['latency']['count'],2)
         self.assertEqual(metrics['usage_observed']['prompt_tokens'],0)
+        self.assertEqual(metrics['usage_missing'],dict(prompt_tokens=2,completion_tokens=2))
         self.assertNotIn('PRIVATE_',json.dumps(metrics))
 
     async def test_manifest_has_actual_runtime_and_parameters_without_credential_scope(self):
         output=manifest(dict(workspace='PRIVATE_WORKSPACE',region='cn-beijing',asr='fun-asr-realtime',
-            llm='qwen3.8-flash',tts='cosyvoice-v3-flash',voice='longanyang'))
+            llm='deepseek-v4.1-flash-1017',tts='cosyvoice-v3-flash',voice='longanyang'))
         self.assertEqual(output['deployment']['context_bytes'],65536)
         self.assertIn('python',output['runtime']);self.assertEqual(output['prices'],'not_verified')
         self.assertNotIn('PRIVATE_',json.dumps(output))

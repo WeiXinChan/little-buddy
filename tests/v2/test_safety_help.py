@@ -28,7 +28,7 @@ finally:
         os.environ['M10_REQUIRE_HELP'] = _previous
 
 CONFIG = dict(DASHSCOPE_WORKSPACE='synthetic', DASHSCOPE_REGION='cn-beijing',
-              DASHSCOPE_ASR_MODEL='fun-asr-realtime', DASHSCOPE_LLM_MODEL='qwen3.8-flash',
+              DASHSCOPE_ASR_MODEL='fun-asr-realtime', DASHSCOPE_LLM_MODEL='deepseek-v4.1-flash-1017',
               DASHSCOPE_TTS_MODEL='cosyvoice-v3-flash', DASHSCOPE_TTS_VOICE='longanyang')
 
 
@@ -228,7 +228,12 @@ class SafetyHelp(unittest.IsolatedAsyncioTestCase):
         async def generic(peer,kind,**fields):
             if kind=='failure' and fields.get('code')=='safety':fields['code']='voice'
             await original(peer,kind,**fields)
-        with patch.object(VoicePeer,'send',generic):
+        # Frozen R88 source deliberately used llm='fake'. Select an allowed
+        # synthetic model at its fixture port; leave its oracle/source intact.
+        from backend.v2.companion import DashScopeModel
+        from backend.v2.models import TEXT_MODEL
+        with patch.object(VoicePeer,'send',generic), patch.object(_qa,'DashScopeModel',
+                side_effect=lambda speech:DashScopeModel(speech,model=TEXT_MODEL)):
             case=_qa.SafetyHelpAcceptance('test_r8801_safety_outage_preserves_independent_help')
             with self.assertRaises(AssertionError):await case.test_r8801_safety_outage_preserves_independent_help()
 
@@ -240,7 +245,7 @@ class RuntimeSettings(unittest.TestCase):
             path.write_text('\n'.join(f'{k}="{v}"' for k,v in CONFIG.items())+'\nAPI_KEY=UNREAD_SECRET\n')
             path.chmod(0o600)
             config=settings(environment={},service_env=path)
-            self.assertEqual(config['llm'],'qwen3.8-flash')
+            self.assertEqual(config['llm'],'deepseek-v4.1-flash-1017')
             public=json.dumps(manifest(config))
             self.assertNotIn('UNREAD_SECRET',public);self.assertNotIn('synthetic',public)
             self.assertEqual(manifest(config)['new_cloud_samples'],0)

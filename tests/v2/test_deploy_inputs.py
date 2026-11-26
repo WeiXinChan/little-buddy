@@ -16,7 +16,8 @@ import unittest
 from unittest.mock import patch
 
 from backend.v2.live import cli,parser
-from backend.v2.preflight import prepare,CONTRACT
+from backend.v2.preflight import prepare,CONTRACT,MODELS
+from backend.v2.models import model_policy
 from backend.v2.image_runtime import PROMPT_POLICY,IMAGE_POLICY
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -44,7 +45,7 @@ class DeployInputs(unittest.TestCase):
         assets=self.release/'assets/v2-default/manifest.json';assets.parent.mkdir(parents=True);assets.write_text('[]')
         inventory={p.relative_to(self.release).as_posix():dict(size=p.stat().st_size,sha256=sha256(p.read_bytes()).hexdigest())
                    for p in self.release.rglob('*') if p.is_file() and '.venv' not in p.parts}
-        (self.release/'release-manifest.json').write_text(json.dumps(dict(format=1,source_sha=self.sha,
+        (self.release/'release-manifest.json').write_text(json.dumps(dict(format=1,source_sha=self.sha,models=MODELS,model_policy=model_policy(),
             protocol_contract=CONTRACT,assets_manifest_sha256=sha256(assets.read_bytes()).hexdigest(),files=inventory)))
         subprocess.run(['openssl','req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:P-256',
             '-nodes','-days','1','-subj','/CN=localhost','-addext','subjectAltName=IP:127.0.0.1',

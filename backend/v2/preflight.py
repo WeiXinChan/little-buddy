@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 
 from backend.v2.files import ConfigurationError,checked_file,read_checked,disable_core_dumps
 from backend.v2.protocol import CONTRACT
-from backend.v2.models import TEXT_MODEL
+from backend.v2.models import TEXT_MODEL, TEXT_MODELS, UnsupportedTextModel
 
 MODELS=dict(asr='fun-asr-realtime',llm=TEXT_MODEL,tts='cosyvoice-v3-flash',voice='longanyang')
 LOCK=Path(__file__).resolve().parents[1]/'requirements-v2.lock'
@@ -61,8 +61,9 @@ def prepare(args,*,now=time.time):
     dependencies()
     from backend.v2.runtime import settings,manifest
     try:config=settings(environment={},service_env=args.service_env)
+    except UnsupportedTextModel:raise ConfigurationError('provider_model_contract_mismatch') from None
     except ValueError:raise ConfigurationError('service_env_invalid') from None
-    if any(config[k]!=v for k,v in MODELS.items()):raise ConfigurationError('provider_model_contract_mismatch')
+    if config['llm'] not in TEXT_MODELS or any(config[k]!=v for k,v in MODELS.items() if k!='llm'):raise ConfigurationError('provider_model_contract_mismatch')
     if config['region']!='cn-beijing':raise ConfigurationError('provider_region_contract_mismatch')
     directory=Path(args.credential_directory)
     provider_key=read_checked(directory/'dashscope-api-key','provider_key',limit=4097).rstrip('\r\n')

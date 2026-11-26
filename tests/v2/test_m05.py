@@ -202,7 +202,7 @@ class Integration(unittest.IsolatedAsyncioTestCase):
                 return httpx.Response(status,json=dict(error=dict(code=code,message='sensitive body')))
             async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as http:
                 speech=DashScope(http,workspace='synthetic',region='cn-beijing',key='fake',
-                    asr='fake',llm='fake',tts='fake',voice='fake')
+                    asr='fake',llm='deepseek-v4.1-flash-1017',tts='fake',voice='fake')
                 model=DashScopeModel(speech)
                 with self.assertRaises(VoiceFault) as error:
                     await model.complete('JSON',{})
@@ -220,7 +220,7 @@ class Integration(unittest.IsolatedAsyncioTestCase):
                 dict(completion='complete',meaning='new_turn'))))],usage=dict(prompt_tokens=12,completion_tokens=9)))
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
             speech=DashScope(http,workspace='synthetic',region='cn-beijing',key='fake',
-                asr='fake',llm='fake',tts='fake',voice='fake')
+                asr='fake',llm='deepseek-v4.1-flash-1017',tts='fake',voice='fake')
             model=DashScopeModel(speech);provider=UnifiedProviders(speech,model)
             result=await provider.endpoint('嗯',dict(heard=['你选小猫吗？']))
         self.assertEqual(result['meaning'],'new_turn')
