@@ -14,6 +14,10 @@ with zipfile.ZipFile(a.input) as src,zipfile.ZipFile(a.output,'w') as dst:
   signature=name.startswith('META-INF/') and (name.endswith(('.RSA','.DSA','.EC','.SF')) or name=='META-INF/MANIFEST.MF')
   if legacy or signature:removed.append(name);continue
   assert not name.lower().endswith(('.pcm','.wav','.mp3','.m4a','.ogg')),'unexpected audio entry: '+name
+  # extractNativeLibs=false and Android's resource loader require stored/aligned entries.
+  # Preserve entry CONTENT exactly; zipalign supplies alignment after this filtering step.
+  if name=='resources.arsc' or (name.startswith('lib/') and name.endswith('.so')):
+   item.compress_type=zipfile.ZIP_STORED
   data=src.read(name);dst.writestr(item,data);kept[name]=hashlib.sha256(data).hexdigest()
 assert removed and any(x.endswith('.pcm') for x in removed)
 print(json.dumps({'removed':removed,'retained_entries':len(kept),'classes_and_manifest_sha256':{k:v for k,v in kept.items() if k.endswith('.dex') or k=='AndroidManifest.xml'}},sort_keys=True,indent=2))

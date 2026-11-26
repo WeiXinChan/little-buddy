@@ -37,7 +37,8 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class NativeTimestampRunner : AndroidJUnitRunner() {
     companion object {
-        const val METHOD="com.littlebuddy.NativeTimestampTest#nativeTimestampAndProductionLedger"
+        const val METHOD=NativeProbeSelection.SHORT
+        const val LONG_METHOD=NativeProbeSelection.LONG
         const val STARTUP_METHOD="com.littlebuddy.NativeTimestampStartupTest#compareTimestampStartup"
         const val CADENCE_METHOD="com.littlebuddy.NativeTimestampCadenceTest#observeOneBoundedCadence"
         const val TARGET="com.littlebuddy.V2VoiceActivity"
@@ -47,10 +48,11 @@ class NativeTimestampRunner : AndroidJUnitRunner() {
     override fun onCreate(arguments:Bundle?) {
         val selected=Bundle(arguments ?: Bundle())
         val selectedClass=selected.getString("class")
-        require(selectedClass in setOf(METHOD,STARTUP_METHOD,CADENCE_METHOD) &&
-            (selectedClass!=CADENCE_METHOD || selected.getString("nativeTimestampCadenceDiagnostic")=="true") &&
-            (selectedClass!=STARTUP_METHOD || selected.getString("nativeTimestampStartupDiagnostic")=="true") && selected.getString("nativeTimestampProbe")=="true" &&
-            selected.getString("businessIdlePreflight")=="true") { "native probe requires exact class and host idle preflight" }
+        require(NativeProbeSelection.permits(selectedClass,selected.getString("nativeTimestampProbe"),
+            selected.getString("businessIdlePreflight"),selected.getString("nativeTimestampLongProbe"),
+            selected.getString("nativeTimestampStartupDiagnostic"),selected.getString("nativeTimestampCadenceDiagnostic"))) {
+            "native probe requires exact class and host idle preflight"
+        }
         selected.putString("disableAnalytics","true")
         super.onCreate(selected)
     }
@@ -100,6 +102,11 @@ internal class ProbeMetadata {
     @Volatile var startDurationMs=-1L
     @Volatile var firstApiSuccessMs=-1L
     @Volatile var firstLedgerReadyMs=-1L
+    @Volatile var observationKind="short_3000ms"
+    @Volatile var observationLimitMs=3000L
+    @Volatile var observationEnded=false
+    @Volatile var continuousSamples=0L
+    @Volatile var continuousRawSamples=0L
     @Volatile var runMs=0L
     @Volatile var timestampCalls=0L
     @Volatile var timestampSuccess=0L
@@ -138,6 +145,8 @@ internal class ProbeMetadata {
         putInt("sdk",Build.VERSION.SDK_INT);putInt("minimum_bytes",minimumBytes);putInt("native_bytes",nativeBytes)
         putInt("actual_buffer_frames",actualBufferFrames);putLong("start_duration_ms",startDurationMs)
         putLong("first_api_success_ms",firstApiSuccessMs);putLong("first_ledger_ready_ms",firstLedgerReadyMs)
+        putString("observation_kind",observationKind);putLong("observation_limit_ms",observationLimitMs)
+        putBoolean("observation_window_ended",observationEnded);putLong("continuous_samples",continuousSamples);putLong("continuous_raw_samples",continuousRawSamples)
         putLong("continuous_run_ms",runMs);putLong("timestamp_calls",timestampCalls)
         putLong("timestamp_success",timestampSuccess);putLong("timestamp_unavailable",timestampUnavailable)
         putInt("last_api_code",lastApiCode);putLong("max_api_ns",maxApiNs)
@@ -203,6 +212,7 @@ class NativeTimestampTest {
     private fun emit(meta:ProbeMetadata){instrumentation.sendStatus(7,meta.snapshot())}
     private fun safeReason(error:Throwable):String {
         if(error is NativeDependency)return error.code
+        if(error is ProbeInvariantFailure)return error.invariant.safeReason
         // Production ledger reasons contain no material. Never output arbitrary native exception text.
         val reasons=setOf("capture clock regressed","capture clock regressed during timestamp","capture timebase changed",
             "invalid capture timestamp","capture timestamp regressed","incoherent capture time","capture rate outside bound",
@@ -213,12 +223,22 @@ class NativeTimestampTest {
             "native probe worker did not finish","native buffer smaller than requested","native format mismatch","capture startup deadline","startup native continuity exhausted",
             "startup native room exhausted","startup samples outside bound","capture startup counter outside bound",
             "capture startup origin unproven","capture startup anchor unconfirmed","capture startup cache exhausted",
-            "capture startup cancelled","invalid startup read")
+            "capture startup cancelled","invalid startup read","probe observation clock regressed","probe observation sample cap","probe observation API crossed deadline")
         return error.message?.takeIf{it in reasons} ?: "NATIVE_PROBE_FAILED"
     }
     @SuppressLint("MissingPermission")
-    @Test fun nativeTimestampAndProductionLedger(){
+    @Test fun nativeTimestampAndProductionLedger()=runProductionProbe(longRun=false)
+
+    @Test fun nativeTimestampAndProductionLedger60Seconds(){
+        if(InstrumentationRegistry.getArguments().getString("nativeTimestampLongProbe")!="true")
+            dependency("DEPENDENCY_EXPLICIT_LONG_PROBE_OPT_IN_REQUIRED")
+        runProductionProbe(longRun=true)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun runProductionProbe(longRun:Boolean){
         val meta=ProbeMetadata()
+        if(longRun){meta.observationKind="long_60000ms";meta.observationLimitMs=NativeProbeWindow.DURATION_MS}
         var failure:Throwable?=null
         var cleanupClass=""
         var verdict:ProbeDecision?=null
@@ -251,6 +271,7 @@ class NativeTimestampTest {
             meta.foreground=true;front.cancelNative=cancellation::cancel
             val task=Thread({
                 val samples=ShortArray(320)
+                var continuousBeganMs=-1L
                 try {
                     meta.phase="native_create"
                     val minimum=AudioRecord.getMinBufferSize(16000,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT)
@@ -265,8 +286,10 @@ class NativeTimestampTest {
                     meta.actualBufferFrames=native.bufferSizeInFrames
                     check(meta.actualBufferFrames>=bytes/2){"native buffer smaller than requested"}
                     check(native.sampleRate==16000 && native.channelCount==1 && native.audioFormat==AudioFormat.ENCODING_PCM_16BIT){"native format mismatch"}
+                    var window:NativeProbeWindow?=null
                     val timestamp=AudioTimestamp()
                     val ledger=NativeReadLedger(bytes/2,CaptureMonotonic::nowMs,SystemClock::elapsedRealtime){
+                        window?.beforeApi(meta.continuousRawSamples)
                         val began=System.nanoTime()
                         val result=native.getTimestamp(timestamp,AudioTimestamp.TIMEBASE_MONOTONIC)
                         val ended=System.nanoTime()
@@ -280,8 +303,9 @@ class NativeTimestampTest {
                                 meta.lastPairDeltaNs=timestamp.nanoTime-meta.lastStampNs
                             }
                             meta.lastStampFrames=timestamp.framePosition;meta.lastStampNs=timestamp.nanoTime
+                            window?.afterApi(meta.continuousRawSamples)
                             CaptureStamp(timestamp.framePosition,timestamp.nanoTime)
-                        }else{meta.timestampUnavailable++;null}
+                        }else{meta.timestampUnavailable++;window?.afterApi(meta.continuousRawSamples);null}
                     }
                     meta.captureClockModel=ledger.clockModel()
                     val prefix=CaptureBootstrap(ledger)
@@ -299,9 +323,13 @@ class NativeTimestampTest {
                         },{!cancellation.cancelled.get() && allowed(front)}, {Thread.sleep(5)})
                         meta.samplesRead=ledger.readSamples
                     }finally{meta.samplesRead=ledger.readSamples;prefix.clear()} // No KWS or retained PCM in this instrumentation.
+                    val startupSamples=ledger.readSamples
+                    val startupPositive=meta.positiveReads
+                    if(longRun){continuousBeganMs=SystemClock.elapsedRealtime();window=NativeProbeWindow(SystemClock::elapsedRealtime)}
                     var beganReading=-1L;var lastReport=SystemClock.elapsedRealtime()
                     meta.phase="timestamp_startup"
-                    while(true){
+                    try { while(true){
+                        window?.beforeApi(meta.continuousRawSamples)
                         if(cancellation.cancelled.get() || !allowed(front))dependency("DEPENDENCY_FOREGROUND_LOST")
                         if(Build.VERSION.SDK_INT>=29 && native.activeRecordingConfiguration?.isClientSilenced==true)dependency("DEPENDENCY_NATIVE_CLIENT_SILENCED")
                         val room=ledger.remainingMs();meta.minRoomMs=minOf(meta.minRoomMs,room);meta.lastRoomMs=room
@@ -309,36 +337,46 @@ class NativeTimestampTest {
                         ledger.check()
                         var empty=false
                         try {
+                            window?.beforeApi(meta.continuousRawSamples)
                             val count=native.read(samples,0,samples.size,AudioRecord.READ_NON_BLOCKING)
+                            samples.fill(0) // No consumer needs PCM; clear before any subsequent JNI/ledger work.
                             meta.lastReadCode=count
+                            if(count>0)meta.continuousRawSamples+=count
+                            window?.afterApi(meta.continuousRawSamples)
                             if(cancellation.cancelled.get() || !allowed(front))dependency("DEPENDENCY_FOREGROUND_LOST")
                             check(count in 0..samples.size)
                             meta.lastSampleBootMs=ledger.read(count);meta.samplesRead=ledger.readSamples
+                            meta.continuousSamples=ledger.readSamples-startupSamples
                             if(count==0)meta.emptyReads++ else meta.positiveReads++
                             empty=count==0
                             check(native.recordingState==AudioRecord.RECORDSTATE_RECORDING)
                             meta.runMs=SystemClock.elapsedRealtime()-beganReading
                         }finally{samples.fill(0)}
-                        if(meta.runMs>=3000)break
+                        if(!longRun && meta.runMs>=3000)break
                         if(SystemClock.elapsedRealtime()-lastReport>=1000){emit(meta);lastReport=SystemClock.elapsedRealtime()}
                         if(empty)Thread.sleep(5)
+                    }
+                    } catch(end:ProbeWindowEnded){check(longRun)}
+                    if(longRun){
+                        if(cancellation.cancelled.get() || !allowed(front))dependency("DEPENDENCY_FOREGROUND_LOST")
+                        meta.runMs=checkNotNull(window).elapsedMs();meta.observationEnded=window.ended
+                        window.requireComplete(meta.continuousSamples,meta.positiveReads-startupPositive)
                     }
                     check(meta.positiveReads>=100 && meta.samplesRead>=32000){"insufficient continuous reads"}
                 }catch(error:Throwable){
                     meta.failurePhase=meta.phase;meta.nativeExceptionClass=probeFailureClass(error)
-                    val classified=when {
-                        cancellation.cancelled.get() || !allowed(front)->NativeDependency("DEPENDENCY_FOREGROUND_LOST")
-                        error is SecurityException->NativeDependency("DEPENDENCY_NATIVE_PERMISSION_OR_POLICY")
-                        else->error
-                    }
+                    val classified=classifyNativeProbeFailure(error,
+                        {cancellation.cancelled.get() || !allowed(front)},::NativeDependency)
                     workerFailure.set(classified)
                 }
                 finally{
-                    samples.fill(0);meta.phase="native_cleanup"
+                    samples.fill(0)
+                    if(longRun && continuousBeganMs>=0)meta.runMs=SystemClock.elapsedRealtime()-continuousBeganMs
+                    meta.phase="native_cleanup"
                     try{cancellation.release()}catch(error:Throwable){workerCleanupFailure.set(probeFailureClass(error));workerFailure.compareAndSet(null,error)}
                 }
             },"native-timestamp-probe")
-            worker=task;task.start();task.join(10000)
+            worker=task;task.start();task.join(if(longRun)67_000 else 10_000)
             if(task.isAlive){cancellation.cancel();throw AssertionError("native probe worker did not finish")}
             meta.workerJoined=true;hold.workerFinished()
             workerFailure.get()?.let{throw it}

@@ -168,3 +168,82 @@ only the explicitly selected native probe and its existing runner contract are t
 
 Require final JSON junit_failure=false, owned_lease_complete=true plus all cleanup flags for PASS;
 any FAIL JSON must correspond to real JUnit FAIL even if dependency_reason is also populated.
+
+## Fixed 60-second opt-in production-ledger observation (RC8 follow-up)
+
+The existing `nativeTimestampAndProductionLedger` remains the default 3-second method. The new
+`nativeTimestampAndProductionLedger60Seconds` shares its real CaptureBootstrap/NativeReadLedger,
+AudioRecord source/format/native buffer, 500us phase model, long-rate/age/clock bridge/continuity
+checks, process lease, foreground cancellation, sanitized result policy and native/worker/stop
+release proof. Only instrumentation sources and this procedure change; no app version or production
+code changes. It must run alongside a target APK built with these production classes (RC8 code22
+already contains them); replacing the test APK never replaces classes loaded from the target.
+
+After the original bounded startup (500ms/8000 samples), a single fixed 60000ms **continuous
+observation** window starts. Startup and bounded cleanup are separate from that window; this is
+not a promise that the entire instrumentation command returns within 60 seconds. No arbitrary
+host duration, loop count or retry is supported. Before each timestamp/read API, a fresh elapsed
+clock checks the deadline. An API returning at/after the deadline fails explicitly; a call cannot
+be physically interrupted by Java. Reaching the deadline between API calls ends observation and
+starts cleanup; no API is started at/after it. API blocking/worker timeout is never PASS.
+The outer worker join is fixed at 67000ms (includes startup/native construction/cleanup), then
+requests stop and joins worker/stop tasks for the original 1500ms limits. An unconfirmed worker,
+stop task, native release or lease remains FAIL/failclosed; never start a second session.
+
+The window also caps raw continuous samples at 968000 (60.5s of nominal 16k samples; conservative
+finite instrumentation ceiling including initial native backlog, not a replacement for the much
+stricter unchanged production ledger). PASS additionally needs at least 944000 continuous accepted
+samples and 2900 positive continuous reads, the full window reached, all original checks and all
+release proofs. No restart resets the cumulative ledger origin or budgets. Results distinguish
+`continuous_raw_samples` (read return counts, including an eventual rejected tail) from accepted
+`continuous_samples` and `samples_read` (production ledger total including startup). Sample arrays
+are cleared immediately after each continuous read, as well as in all finally paths. Startup
+prefix cancellation/clearing remains the production path. Only aggregate metadata is emitted;
+no trace, PCM file, amplitude/content analysis, KWS, uploads or network operations.
+
+Root must first perform and record the **same actual idle preflight described above**, reserve the
+single device and verify exact target/test identity/signature. Unknown/active business is still a
+dependency, not permission to force-stop. Use the dedicated runner and **all three flags**, exactly
+one method and exactly one invocation after QA approval (author does not execute this):
+
+```sh
+adb -s "$SERIAL" shell am instrument --no-logcat -w -r \
+  -e class com.littlebuddy.NativeTimestampTest#nativeTimestampAndProductionLedger60Seconds \
+  -e nativeTimestampProbe true -e businessIdlePreflight true \
+  -e nativeTimestampLongProbe true \
+  com.littlebuddy.sim.v2.test/com.littlebuddy.NativeTimestampRunner
+```
+
+Require final unique `finished` bundle, `observation_kind=long_60000ms`,
+`observation_limit_ms=60000`, `observation_window_ended=true`, actual `continuous_run_ms>=60000`,
+accepted/raw sample counts, all original cleanup proofs, JSON `junit_failure=false`, PASS and
+JUnit OK1. Missing final result, host command timeout, dependency skip or cleanup uncertainty is
+not success. Retain actual elapsed/any overrun; do not relabel a timeout as completion. The command
+needs a host observation timeout greater than the fixed worker/cleanup limits, not a modified
+sampling budget. Default 3-second command, startup/cadence guards and build/strip/sign procedure
+remain unchanged. This advances only 60-second native continuity on the tested device/session;
+it does not replace 60-minute complete V2, wake/KWS/child speech/acoustic or functional acceptance.
+
+Filtered artifact packaging also explicitly stores resources.arsc and native .so entries before
+zipalign (entry bytes unchanged). This preserves the root's RC8 packaging correction for the
+original [-124] install failure; final artifact checks must verify resource storage/alignment and
+retained-entry bytes, not just signer/hash. Use zipalign -P 16 -f 4 for this test-only artifact.
+
+### LONG-01: witnessed failures outrank later revocation
+
+Window deadline-crossing, clock regression, sample-cap and completion invariants now throw the
+closed test-only ProbeInvariantFailure/ProbeInvariant type. The worker uses the shared classifier:
+(1) retain this witnessed failure WITHOUT even reading later cancellation/focus state; (2) ordinary
+foreground/cancellation dependency; (3) native permission/policy dependency; (4) original error.
+Classification never recognizes invariants by arbitrary native error.message text. safeReason uses
+the closed invariant enum. Original short-method untyped-error/cancellation/security classification
+is unchanged; clean pre-existing dependencies still skip, never PASS. Cleanup exceptions, failed stop
+or unconfirmed resource proofs remain higher priority in decideProbeResult/enforce than either a
+window failure or dependency. There is no deadline/cancellation case that is converted to PASS.
+
+Host regressions exercise cancellation during the API, after the violation and during the return's
+clock read, focus loss, all closed invariants, forged matching error text, unconsulted dependency
+callbacks, clean dependency skips and cleanup precedence using the actual window/classifier/result
+chain. QA's original independent assertion source is retained; only its automatically extracted
+Android catch wiring is refreshed when replaying the fixed source. The original 6PASS/1FAIL and old
+APK remain separate evidence; no device was executed or old FAIL rewritten.
