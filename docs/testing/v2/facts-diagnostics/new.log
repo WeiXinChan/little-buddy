@@ -1,0 +1,12 @@
+test_accepted_sources_keep_exact_spans_dimensions_and_no_partial_return (tests.v2.test_facts_diagnostics.Diagnostics.test_accepted_sources_keep_exact_spans_dimensions_and_no_partial_return) ... ok
+test_actual_peer_reports_fixed_code_zero_tts_no_retry_or_commit_no_body (tests.v2.test_facts_diagnostics.Diagnostics.test_actual_peer_reports_fixed_code_zero_tts_no_retry_or_commit_no_body) ... ok
+test_json_parse_failures_keep_original_classes_and_safe_codes (tests.v2.test_facts_diagnostics.Diagnostics.test_json_parse_failures_keep_original_classes_and_safe_codes) ... ok
+test_structure_type_count_and_source_are_distinct_without_relaxing_contract (tests.v2.test_facts_diagnostics.Diagnostics.test_structure_type_count_and_source_are_distinct_without_relaxing_contract) ... ok
+test_unhashable_types_preserve_original_typeerror_not_blanket_modelerror (tests.v2.test_facts_diagnostics.Diagnostics.test_unhashable_types_preserve_original_typeerror_not_blanket_modelerror) ... ok
+test_unknown_or_forged_diagnostic_never_serializes_arbitrary_text (tests.v2.test_facts_diagnostics.Diagnostics.test_unknown_or_forged_diagnostic_never_serializes_arbitrary_text) ... ok
+test_upstream_envelope_parse_stages_preserve_model_unavailable (tests.v2.test_facts_diagnostics.Diagnostics.test_upstream_envelope_parse_stages_preserve_model_unavailable) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.040s
+
+OK

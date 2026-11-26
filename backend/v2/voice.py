@@ -3,6 +3,7 @@
 Providers are injected AFTER their privacy gate; the local fixture uses this exact
 adapter. All Session mutations occur on the websocket event loop, never a worker.
 """
+from backend.v2.diagnostics import contract_code
 import asyncio
 import base64
 import json
@@ -1065,7 +1066,7 @@ class VoicePeer:
         except Exception as failure:
             if not operation.valid():
                 return
-            self.last_failure = dict(stage=stage, kind=type(failure).__name__)
+            self.last_failure = dict(stage=stage, kind=type(failure).__name__, contract=contract_code(failure))
             # Exception messages may contain provider content/credentials: never emit.
             self.session.interrupt()
             await self.commands()

@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "normal_methods": 58,
+  "passed": 58,
+  "failed": 0,
+  "skipped": 0,
+  "new_methods": 7,
+  "cloud_calls": 0,
+  "original_root_cause_confirmed": false,
+  "files": {
+    "initial-compatibility-failure.log": "c1a460fbf4eddfa1dd208eb25f2c49cf1423cbf412cc2ba33cf26b48c12e5eda",
+    "isolated-original-success.json": "9c28dadb3794d2361749740f5f49862b000c580a26fc14e8575d211750189489",
+    "live-original-failure.json": "a2611e98b98e84e373b7542ac5539667d44aaa89761e750bf5750a5981f3b6bf",
+    "new.log": "4cc3e59c55386103889b9332d50c950862dc8af507800bba3f46277e67ec4352",
+    "report.md": "b3fd59d8cdcee15c6fdc6b372ced0cf029ac65c821d8c103d80d4ca0a57234fc",
+    "targeted.log": "308e10d1570e1c04d15e15dcc2f8c8363f09c44ae8cd1ea085903d52af4dca2f"
+  }
+}

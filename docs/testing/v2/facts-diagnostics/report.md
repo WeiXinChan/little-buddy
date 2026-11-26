@@ -1,0 +1,13 @@
+# FACTS契约诊断：已证事实与候选
+
+基线75dfeecc0c6a608b8432012e6f0f3584abce4a05。独立于PR97/98，不混改其产品功能。原真实整链路失败和隔离成功JSON逐字保存，probe-facts-contract.py仅只读审阅，未执行/复制真实凭据路径配置。
+
+已证：exchange-question第一轮peer_failure=facts/ModelError；PLAN、FACTS的ModelMeter.complete行均ok=true，事实契约尚未被该标志验证；0TTS/0ACK/无game提交。另一次同合成输入隔离FACTS成功count1、743.37ms，没有复现原失败。成功样本不能证明原模型结果/并发/来源契约正常，也不能证明原错误已修复。
+
+候选：模型content类型或24000字节上限、重复JSON字段、facts根结构/list/数量、单fact字段、key、value类型/长度/原文子串来源或dimension不符。原件无模型原文，不可能追溯确定是哪一项。普通JSON语法错在当前源码直接抛JSONDecodeError；上游envelope错误会在complete中失败，不符合原complete ok=true/ModelError组合，所以不能无依据把它们认作本次已证根因。没有以HTTP200代替契约通过，未因隔离成功盲重试。
+
+最小实现：diagnostics.py集中固定码；object_json及facts校验在原失败分支给同一个异常附contract_diagnostic；保留ModelError原固定消息、JSONDecodeError/UnicodeEncodeError/不可hash类型的TypeError传播。DashScopeModel原generic model unavailable也保留，附上upstream_capacity/json/structure阶段，不泄漏response、动态key或异常message。VoicePeer.last_failure只记录白名单contract，probe再次白名单过滤；旧无contract的failure快照仍保持原字段集合。未知码unknown，不输出原始异常。无provider全局last_error槽，异步FACTS/PLAN各自携带异常，避免诊断被并发覆盖。
+
+FACTS逐字来源验证、数量/长度/dimension边界、原子返回、原read retry策略/操作scope/关闭预算未放松；没有修正模型结果或自动重试。异常对象依旧遵循原调用方异常语义，不能作为原文日志输出；新诊断导出只用固定枚举，不导出异常对象/str/repr。客户端failure wire不加正文或新协议字段。
+
+7新增方法＋受影响51方法共58唯一PASS/0FAIL/0SKIP，编译/diff通过。原首次兼容检查57PASS/1FAIL也保留：旧测试要求无contract的历史快照仍仅stage/kind；实现改为可选字段兼容，原断言未改。新测试覆盖结构/类型/count/来源/dimension分码、JSON重复/容量/语法/encoding、精确来源span/defaultdimension、畸形envelope、伪造诊断拒绝及实际VoicePeer 0TTS/0提交/无新retry、报告无合成正文/供应商canary。合成故障不是原真实失败的重演，不据58绿关闭真实偶发问题。root下次必要有界运行可通过peer_failure.contract定位真实分支；作者0云/手机/部署/真实配置。
