@@ -1,0 +1,23 @@
+test_actual_unified_port_returns_png_never_vendor_url (tests.v2.test_free_image_routing.FreeImages.test_actual_unified_port_returns_png_never_vendor_url) ... ok
+test_download_stall_and_fallback_share_original_deadline_without_reset (tests.v2.test_free_image_routing.FreeImages.test_download_stall_and_fallback_share_original_deadline_without_reset) ... ok
+test_first_model_timeout_or_transport_error_never_tries_pro (tests.v2.test_free_image_routing.FreeImages.test_first_model_timeout_or_transport_error_never_tries_pro) ... ok
+test_flat_official_error_envelope_and_both_exhausted_stop_future_calls (tests.v2.test_free_image_routing.FreeImages.test_flat_official_error_envelope_and_both_exhausted_stop_future_calls) ... ok
+test_free_config_explicit_512_only_no_paid_or_translation_model_fallback (tests.v2.test_free_image_routing.FreeImages.test_free_config_explicit_512_only_no_paid_or_translation_model_fallback) ... ok
+test_only_explicit_quota_error_switches_once_to_pro_shared_one_review (tests.v2.test_free_image_routing.FreeImages.test_only_explicit_quota_error_switches_once_to_pro_shared_one_review) ... ok
+test_png_dimension_or_hash_review_failure_is_terminal_after_output (tests.v2.test_free_image_routing.FreeImages.test_png_dimension_or_hash_review_failure_is_terminal_after_output) ... ok
+test_prompt_or_image_rejection_does_not_generate_a_replacement (tests.v2.test_free_image_routing.FreeImages.test_prompt_or_image_rejection_does_not_generate_a_replacement) ... ok
+test_redirect_mime_encoding_body_size_or_wrong_png_never_retries_model (tests.v2.test_free_image_routing.FreeImages.test_redirect_mime_encoding_body_size_or_wrong_png_never_retries_model) ... ok
+test_revoked_or_cancelled_download_closes_and_cannot_publish_or_fallback (tests.v2.test_free_image_routing.FreeImages.test_revoked_or_cancelled_download_closes_and_cannot_publish_or_fallback) ... ok
+test_runtime_and_example_require_explicit_free_only_routing_config (tests.v2.test_free_image_routing.FreeImages.test_runtime_and_example_require_explicit_free_only_routing_config) ... ok
+test_scope_revocation_after_quota_close_blocks_pro_and_leaked_result (tests.v2.test_free_image_routing.FreeImages.test_scope_revocation_after_quota_close_blocks_pro_and_leaked_result) ... ok
+test_turbo_uses_url_specific_isolated_download_then_original_png_review (tests.v2.test_free_image_routing.FreeImages.test_turbo_uses_url_specific_isolated_download_then_original_png_review) ... ok
+test_unknown_403_balance_429_produced_data_and_malformed_errors_never_fallback (tests.v2.test_free_image_routing.FreeImages.test_unknown_403_balance_429_produced_data_and_malformed_errors_never_fallback) ... ok
+test_url_security_rejections_happen_without_any_get_or_fallback (tests.v2.test_free_image_routing.FreeImages.test_url_security_rejections_happen_without_any_get_or_fallback) ... ok
+test_dns_all_addresses_must_be_public_before_literal_connect (tests.v2.test_free_image_routing.PublicPin.test_dns_all_addresses_must_be_public_before_literal_connect) ... ok
+test_ip_pinned_once_and_tls_verifies_original_supplier_name (tests.v2.test_free_image_routing.PublicPin.test_ip_pinned_once_and_tls_verifies_original_supplier_name) ... ok
+test_scope_rechecked_after_dns_and_before_stream_io (tests.v2.test_free_image_routing.PublicPin.test_scope_rechecked_after_dns_and_before_stream_io) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 0.750s
+
+OK
