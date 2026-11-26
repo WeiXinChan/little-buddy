@@ -22,6 +22,7 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
         override fun run() { if (!closed) { model.tick(); main.postDelayed(this, 500) } }
     }
     init {
+        AndroidPinDiagnostic.enable()
         page = ParentPanelView(activity, model, connectionNotice = connectionNotice)
         prompt = AndroidOwnerPrompt(activity, { task -> worker.execute(task) }, { if (!closed && activity.hasWindowFocus()) open(force = true) })
     }
@@ -33,7 +34,7 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
         main.removeCallbacks(tick); main.post(tick)
     }
     fun localTouch() { model.localTouch() }
-    fun focusLost() { viewFocused = false; model.pause { page.pause() }; main.removeCallbacks(tick) }
+    fun focusLost() { PinDiagnostic.event(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.NO_FOCUS); viewFocused = false; model.pause { page.pause() }; main.removeCallbacks(tick) }
     fun pause() { focusLost(); prompt.cancel() }
     fun exit() { model.exit(); prompt.cancel(); page.close(); main.removeCallbacks(tick) }
     fun close() {

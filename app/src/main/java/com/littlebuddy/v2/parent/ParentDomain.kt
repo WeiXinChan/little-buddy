@@ -170,25 +170,41 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     fun replacePin(pin: CharArray, proof: OwnerChallenge, page: Long): Boolean {
         try {
             requireWorker()
-            if (!asciiPin(pin) || worker.isHeldByCurrentThread || !worker.tryLock()) return false
+            if (!asciiPin(pin) || worker.isHeldByCurrentThread || !worker.tryLock()) {
+                PinDiagnostic.event(PinDiagnostic.Stage.SAVE, PinDiagnostic.Reason.EARLY_REJECT); return false
+            }
             try {
                 val ticket = synchronized(lock) {
                     if (quarantined || page != epoch.current() || challenge !== proof ||
                         now() >= proof.expiresAt || proof.deviceBinding != binding ||
-                        proof.operation != (if (record == null) OwnerOperation.INITIALIZE_PIN else OwnerOperation.RESET_PIN)) return false
+                        proof.operation != (if (record == null) OwnerOperation.INITIALIZE_PIN else OwnerOperation.RESET_PIN)) {
+                        PinDiagnostic.event(PinDiagnostic.Stage.SAVE, if (now() >= proof.expiresAt) PinDiagnostic.Reason.EXPIRED else PinDiagnostic.Reason.CHALLENGE_REJECT); return false
+                    }
                     challenge = null; generation
                 }
-                if (!owner.consume(proof)) return false
+                if (!owner.consume(proof)) { PinDiagnostic.event(PinDiagnostic.Stage.CONSUME, PinDiagnostic.Reason.REJECTED); return false }
+                PinDiagnostic.event(PinDiagnostic.Stage.CONSUME, PinDiagnostic.Reason.SUCCESS)
                 val salt = ByteArray(16).also(SecureRandom()::nextBytes)
-                val hash = hasher.derive(pin, salt)
+                PinDiagnostic.event(PinDiagnostic.Stage.DERIVE, PinDiagnostic.Reason.BEGIN)
+                val hash = try { hasher.derive(pin, salt) }
+                catch (error: Exception) { PinDiagnostic.error(PinDiagnostic.Stage.DERIVE, error); throw error }
+                PinDiagnostic.event(PinDiagnostic.Stage.DERIVE, PinDiagnostic.Reason.SUCCESS)
                 val next = synchronized(lock) { record?.withPin(salt, hash) ?: ParentRecord(salt, hash) }
                 val committed = persist(next, transaction(page, ticket, { proof.expiresAt }) { now() < proof.expiresAt })
                 if (committed) synchronized(lock) {
                     cooldownUntil = 0; generation++; grant = null; challenge = null
                     epoch.revokeIf(page)
                 }
+                PinDiagnostic.event(PinDiagnostic.Stage.RESULT, when (state()) {
+                    State.UNOWNED -> PinDiagnostic.Reason.UNOWNED
+                    State.LOCKED -> PinDiagnostic.Reason.LOCKED
+                    State.AUTHORIZED -> PinDiagnostic.Reason.AUTHORIZED
+                    State.COOLDOWN -> PinDiagnostic.Reason.COOLDOWN
+                    State.QUARANTINED -> PinDiagnostic.Reason.QUARANTINED
+                })
                 return committed
-            } finally { worker.unlock() }
+            } catch (error: Exception) { PinDiagnostic.error(PinDiagnostic.Stage.SAVE, error); throw error }
+            finally { worker.unlock() }
         } finally { pin.fill('\u0000') }
     }
 
@@ -320,12 +336,15 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
         } finally { worker.unlock() }
     }
     private fun persist(next: ParentRecord, transaction: ParentCommit): Boolean = try {
+        PinDiagnostic.event(PinDiagnostic.Stage.COMMIT, PinDiagnostic.Reason.BEGIN)
         store.commit(next, transaction)
         check(transaction.committed) { "parent store omitted final decision" }
         synchronized(lock) { record = next }
+        PinDiagnostic.event(PinDiagnostic.Stage.COMMIT, PinDiagnostic.Reason.SUCCESS)
         true
-    } catch (_: ParentCommitRejected) { false }
-    catch (_: Exception) {
+    } catch (_: ParentCommitRejected) { PinDiagnostic.event(PinDiagnostic.Stage.COMMIT, PinDiagnostic.Reason.REJECTED); false }
+    catch (error: Exception) {
+        PinDiagnostic.error(PinDiagnostic.Stage.COMMIT, error)
         synchronized(lock) { quarantined = true }
         revoke(); false
     }

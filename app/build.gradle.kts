@@ -26,7 +26,8 @@ require(releaseVersionCode.isPresent == releaseVersionName.isPresent) {
 }
 val v2Release = JsonSlurper().parse(file("v2-release.json")) as Map<*, *>
 val v2Code = (v2Release["version_code"] as Number).toInt()
-val v2Name = v2Release["version_name"] as String
+val pinDiagnostics = providers.gradleProperty("pinInitDiagnostics").orNull == "true"
+val v2Name = (v2Release["version_name"] as String) + if (pinDiagnostics) ".pin.diag1" else ""
 require(v2Code >= 15 && v2Name.matches(Regex("[0-9]+[.][0-9]+[.][0-9]+(?:-[a-zA-Z0-9.]+)?")))
 androidComponents {
     onVariants(selector().withBuildType("v2Debug")) { variant ->
@@ -50,8 +51,9 @@ val prepareV2Metadata by tasks.registering(Exec::class) {
         rootProject.fileTree("gradle/wrapper"),rootProject.file("app/v2-release.json"),
         rootProject.file("app/build.gradle.kts"),rootProject.file("scripts/v2-build-metadata.py"),
         rootProject.file("settings.gradle.kts"),rootProject.file("gradle.properties"))
+    inputs.property("pinInitDiagnostics", pinDiagnostics)
     outputs.dir(v2Metadata)
-    commandLine("python3","scripts/v2-build-metadata.py","--output",v2Metadata.get().asFile.absolutePath)
+    commandLine("python3","scripts/v2-build-metadata.py","--output",v2Metadata.get().asFile.absolutePath, *if (pinDiagnostics) arrayOf("--pin-init-diagnostics") else emptyArray<String>())
 }
 tasks.matching { it.name == "preV2DebugBuild" }.configureEach { dependsOn(prepareV2Metadata) }
 
@@ -189,6 +191,7 @@ android {
         targetSdk = 36
         versionCode = 13
         versionName = "0.1.12-animal-private"
+        buildConfigField("boolean", "PIN_INIT_DIAGNOSTICS", "false")
         buildConfigField("boolean", "BUDDY_SSH", "false")
         testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
@@ -200,6 +203,7 @@ android {
         }
         create("v2Debug") {
             initWith(getByName("debug"))
+            buildConfigField("boolean", "PIN_INIT_DIAGNOSTICS", pinDiagnostics.toString())
             applicationIdSuffix = ".v2"
             ndk.abiFilters += "arm64-v8a"
             matchingFallbacks += "debug"

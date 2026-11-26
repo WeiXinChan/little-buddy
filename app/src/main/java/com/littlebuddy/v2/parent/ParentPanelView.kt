@@ -31,6 +31,8 @@ internal class ParentPanelView(private val activity: Activity, private val model
     fun close() { clearInputs(); routes.close() }
     private fun clearInputs() { inputs.forEach { it.text?.clear() }; inputs.clear() }
     fun render(state: PanelState) {
+        if (state.mode == PanelMode.OWNER_PIN) PinDiagnostic.event(PinDiagnostic.Stage.RENDER,
+            if (state.busy) PinDiagnostic.Reason.SAVE_IN_PROGRESS else PinDiagnostic.Reason.SUCCESS)
         clearInputs()
         val route = if (state.mode == PanelMode.FEEDBACK) model.currentRoute() else null
         if (route != null) {

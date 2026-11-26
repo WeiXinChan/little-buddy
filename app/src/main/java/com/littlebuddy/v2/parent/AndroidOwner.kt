@@ -31,8 +31,11 @@ internal class AndroidOwner private constructor(val binding: String, private val
         return Signature.getInstance("SHA256withECDSA").apply { initSign(key) }
     }
     fun approve(challenge: OwnerChallenge, signature: Signature): Boolean {
+        PinDiagnostic.event(PinDiagnostic.Stage.RECEIPT, PinDiagnostic.Reason.BEGIN)
         AndroidParentStore.worker()
-        return receipt.approve(challenge) { signature.update(it); signature.sign() }
+        return receipt.approve(challenge) { signature.update(it); signature.sign() }.also {
+            PinDiagnostic.event(PinDiagnostic.Stage.RECEIPT, if (it) PinDiagnostic.Reason.SUCCESS else PinDiagnostic.Reason.REJECTED)
+        }
     }
     companion object {
         private const val ALIAS = "little-buddy-v2-system-owner-v1"
@@ -85,12 +88,15 @@ internal class AndroidOwnerPrompt(private val activity: Activity, private val wo
     private var pending: Pair<OwnerOperation, Signature>? = null
     private var begun = 0L
     fun begin(operation: OwnerOperation) {
-        cancel(); val ticket = serial; begun = SystemClock.elapsedRealtime()
+        cancel(); PinDiagnostic.begin(); val ticket = serial; begun = SystemClock.elapsedRealtime()
         work {
             val result = runCatching { AndroidOwner.open(activity).signature() }
             activity.runOnUiThread {
                 if (serial != ticket || activity.isFinishing || !activity.hasWindowFocus()) return@runOnUiThread
-                val signature = result.getOrNull() ?: run { changed(); return@runOnUiThread }
+                val signature = result.getOrNull() ?: run {
+                    (result.exceptionOrNull() as? Exception)?.let { PinDiagnostic.error(PinDiagnostic.Stage.PROMPT, it) }
+                    changed(); return@runOnUiThread
+                }
                 if (Build.VERSION.SDK_INT < 30) { legacy(operation,signature,ticket); return@runOnUiThread }
                 val cancellation = CancellationSignal(); signal = cancellation
                 val title = when (operation) {
@@ -106,15 +112,17 @@ internal class AndroidOwnerPrompt(private val activity: Activity, private val wo
                     prompt.authenticate(BiometricPrompt.CryptoObject(signature), cancellation, activity.mainExecutor,
                         object : BiometricPrompt.AuthenticationCallback() {
                             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    PinDiagnostic.event(PinDiagnostic.Stage.PROMPT, PinDiagnostic.Reason.SUCCESS)
                                 if (serial != ticket || result.cryptoObject?.signature !== signature) return
                                 signal = null; pending = operation to signature; changed()
                             }
                             override fun onAuthenticationError(code: Int, text: CharSequence) {
                                 if (serial != ticket) return
+                                PinDiagnostic.event(PinDiagnostic.Stage.PROMPT, PinDiagnostic.Reason.REJECTED)
                                 signal = null; pending = null; changed()
                             }
                         })
-                } catch (_: Exception) { if (serial == ticket) { signal = null; changed() } }
+                } catch (error: Exception) { PinDiagnostic.error(PinDiagnostic.Stage.PROMPT, error); if (serial == ticket) { signal = null; changed() } }
             }
         }
     }
@@ -145,13 +153,19 @@ internal class AndroidOwnerPrompt(private val activity: Activity, private val wo
         }
     }
     fun take(): Pair<OwnerOperation, (OwnerChallenge) -> Boolean>? {
-        if (!activity.hasWindowFocus() || SystemClock.elapsedRealtime() - begun >= 60_000) { pending = null; return null }
-        val value = pending ?: return null; pending = null
+        if (!activity.hasWindowFocus() || SystemClock.elapsedRealtime() - begun >= 60_000) {
+            PinDiagnostic.event(PinDiagnostic.Stage.TAKE, if (!activity.hasWindowFocus()) PinDiagnostic.Reason.NO_FOCUS else PinDiagnostic.Reason.EXPIRED)
+            pending = null; return null
+        }
+        val value = pending ?: run { PinDiagnostic.event(PinDiagnostic.Stage.TAKE, PinDiagnostic.Reason.MISSING); return null }; pending = null
+        PinDiagnostic.event(PinDiagnostic.Stage.TAKE, PinDiagnostic.Reason.SUCCESS)
         val once = AtomicBoolean(false); val expires = begun + 60_000
         return value.first to { challenge -> challenge.operation == value.first &&
             SystemClock.elapsedRealtime() < expires && once.compareAndSet(false, true) &&
             AndroidOwner.open(activity).approve(challenge, value.second) }
     }
-    fun cancel() { serial++; pending = null; val old = signal; signal = null; old?.cancel()
+    fun cancel() {
+        PinDiagnostic.event(PinDiagnostic.Stage.PROMPT, PinDiagnostic.Reason.CANCEL)
+        serial++; pending = null; val old = signal; signal = null; old?.cancel()
         val dialog=legacyDialog; legacyDialog=null; dialog?.dismiss() }
 }

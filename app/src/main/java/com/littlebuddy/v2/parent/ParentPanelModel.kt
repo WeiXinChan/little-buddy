@@ -61,6 +61,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     }
     /** Synchronous lifecycle first step: revoke before any worker, page callback or IO cleanup. */
     private fun invalidate() {
+        PinDiagnostic.event(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.INVALIDATED)
         active = false; revision.incrementAndGet()
         if (page >= 0) domain.get()?.invalidatePage(page)
         page = -1L
@@ -98,10 +99,17 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
             ParentDomain.State.QUARANTINED -> PanelNotice.STORAGE
             else -> notice ?: PanelNotice.NONE
         }
+        PinDiagnostic.event(PinDiagnostic.Stage.RESULT, when (reason) {
+            PanelNotice.UNOWNED -> PinDiagnostic.Reason.UNOWNED
+            PanelNotice.STORAGE -> PinDiagnostic.Reason.QUARANTINED
+            PanelNotice.COOLDOWN -> PinDiagnostic.Reason.COOLDOWN
+            else -> PinDiagnostic.Reason.LOCKED
+        })
         show(PanelState(if (reason == PanelNotice.UNOWNED || reason == PanelNotice.STORAGE)
             PanelMode.UNAVAILABLE else PanelMode.VERIFY, reason))
     }
     private fun lock(d: ParentDomain) {
+        PinDiagnostic.event(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.INVALIDATED)
         securityRevoked()
         revision.incrementAndGet(); if (page >= 0) d.invalidatePage(page); grant = null
         pending.forEach { it.fill('\u0000') }; pending.clear()
@@ -117,7 +125,11 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         if (!active) return
         val d = domain.get() ?: return
         val proof = ownerChallenge
-        if (proof != null && !d.ownerChallengeCurrent(proof, page)) { ownerChallenge = null; lock(d); return }
+        if (proof != null && !d.ownerChallengeCurrent(proof, page)) {
+            if (state.busy) PinDiagnostic.event(PinDiagnostic.Stage.TICK, PinDiagnostic.Reason.SAVE_IN_PROGRESS)
+            PinDiagnostic.event(PinDiagnostic.Stage.TICK, PinDiagnostic.Reason.TICK_OWNER_INVALID)
+            ownerChallenge = null; lock(d); return
+        }
         val current = grant
         if (current != null && !d.isAuthorized(current)) lock(d)
         else if (current == null && !state.busy && state.notice == PanelNotice.COOLDOWN &&
@@ -221,12 +233,13 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         show(PanelState(PanelMode.VERIFY, PanelNotice.LOADING, true))
         work {
             val proof = if (live(ticket)) d.beginOwnerOperation(operation, epoch) else null
-            val accepted = proof != null && live(ticket) && runCatching { approve(proof) }.getOrDefault(false) &&
+            val accepted = proof != null && live(ticket) && runCatching { approve(proof) }.onFailure { (it as? Exception)?.let { error -> PinDiagnostic.error(PinDiagnostic.Stage.APPROVE, error) } }.getOrDefault(false) &&
                 d.ownerChallengeCurrent(proof, epoch)
             ui {
                 if (!live(ticket)) { d.invalidatePage(epoch); proof?.let(ownerDiscard); return@ui }
-                if (!accepted || proof == null) locked(d, PanelNotice.OWNER_UNAVAILABLE)
+                if (!accepted || proof == null) { PinDiagnostic.event(PinDiagnostic.Stage.APPROVE, PinDiagnostic.Reason.REJECTED); locked(d, PanelNotice.OWNER_UNAVAILABLE) }
                 else {
+                    PinDiagnostic.event(PinDiagnostic.Stage.APPROVE, PinDiagnostic.Reason.SUCCESS)
                     ownerChallenge = proof
                     show(PanelState(if (operation == OwnerOperation.PROVISION_ENDPOINT) PanelMode.CONNECTION else PanelMode.OWNER_PIN,
                         PanelNotice.OWNER_READY))
@@ -235,8 +248,10 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         }
     }
     fun setOwnerPin(pin: CharArray, repeated: CharArray) {
+        PinDiagnostic.event(PinDiagnostic.Stage.SAVE, PinDiagnostic.Reason.BEGIN)
         val d = domain.get(); val proof = ownerChallenge
         if (!active || state.busy || state.mode != PanelMode.OWNER_PIN || d == null || proof == null) {
+            PinDiagnostic.event(PinDiagnostic.Stage.SAVE, PinDiagnostic.Reason.EARLY_REJECT)
             pin.fill('\u0000'); repeated.fill('\u0000'); return
         }
         if (!validPin(pin) || !pin.contentEquals(repeated)) {
@@ -247,7 +262,11 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         work {
             val saved = try { live(ticket) && d.replacePin(pin, proof, epoch) }
                 catch (_: Exception) { false } finally { pin.fill('\u0000'); pending.remove(pin) }
-            ui { if (live(ticket)) { ownerChallenge = null; page = -1L
+            ui {
+                if (!live(ticket)) PinDiagnostic.event(PinDiagnostic.Stage.RESULT, PinDiagnostic.Reason.STALE_CALLBACK)
+                if (live(ticket)) {
+                PinDiagnostic.event(PinDiagnostic.Stage.RESULT, if (saved) PinDiagnostic.Reason.SUCCESS else PinDiagnostic.Reason.REJECTED)
+                ownerChallenge = null; page = -1L
                 locked(d, if (saved) PanelNotice.PIN_CHANGED else PanelNotice.OWNER_UNAVAILABLE) } }
         }
     }
