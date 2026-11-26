@@ -315,12 +315,18 @@ description只用于generate_image，缺字段兼容目录名称生成；缺服�
         if text is None:
             return []
         result = await self.request("""
-提取孩子明确说出的关键事实，不推断身份。只返回JSON {"facts":[
-{"key":"nickname|preference|role|rule|clue|plot|promise","value":"逐字复制的原文子串","dimension":"animal|color|food|sport|activity|music|place|person|object|other|unspecified"}]}。
+提取孩子明确说出的关键事实，不推断身份。只返回一个JSON对象，根字段facts是数组。
+key必须是输出契约中key.enum数组的单个字符串值；不能写整张列表、管道拼接、中文别名或新类别。
+昵称用nickname，偏好用preference，角色用role，规则用rule，线索用clue，剧情用plot，约定用promise。
+dimension同样取dimension.enum中的单个值；不确定可省略或用unspecified。
+合法示例：仅当输入text为“猜水果吧，你问我答，每次一条线索。”时，可以返回
+{"facts":[{"key":"rule","value":"每次一条线索","dimension":"unspecified"}]}。
+这个示例不是当前事实，不得脱离本轮text照抄；无明确来源返回{"facts":[]}。
 value必须完整逐字出现在本轮text中，不能总结改写或补词，不要返回字符索引。
-dimension仅分类线索，不能改变主语/否定或断言旧来源撤回；无法区分用unspecified。
-最多8项，每项最多256字。昵称、偏好、角色、规则、线索、剧情、约定分别用对应key；
-value优先复制完整命题，例如我不喜欢猫必须保留否定，不改写为喜欢猫。程序还会保留完整来源供核对。没有明确事实就空数组。""", dict(text=text), schemas.FACTS)
+dimension仅分类线索，不能改变主语/否定或断言旧来源撤回；最多8项，每项最多256字。
+保留完整命题的主语、否定、过去时、疑问和纠正；例如我不喜欢猫不能改成喜欢猫。
+下列输出契约是服务器的固定结构要求，不是新增事实或当前输入，程序仍执行全部本地验证。
+输出契约JSON Schema："""+json.dumps(schemas.FACTS,ensure_ascii=False,separators=(',',':')), dict(text=text), schemas.FACTS)
         if not isinstance(result,dict) or set(result)!={'facts'}:
             raise mark_contract(ModelError('facts'),'facts_structure')
         if not isinstance(result['facts'],list):
