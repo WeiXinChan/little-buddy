@@ -17,9 +17,24 @@ from backend.v2.models import TEXT_MODEL
 
 class ProbeLimit(RuntimeError):pass
 
+class BatchState:
+    """In-memory cleanup ownership; quarantined instances are never reset/reused."""
+    def __init__(self):
+        self.open=True;self.tasks=set();self.peer=None;self.quarantined=False
+    def ensure(self):
+        if not self.open:raise ProbeLimit('batch_closed')
+    def track(self,task):
+        if task not in self.tasks:
+            self.tasks.add(task)
+            task.add_done_callback(lambda done:None if done.cancelled() else done.exception())
+    def pending(self):
+        tasks=self.tasks | (set(self.peer.retired_tasks) if self.peer else set())
+        return tuple(task for task in tasks if not task.done())
+
 class ModelMeter:
-    def __init__(self,model):self.inner=model;self.calls=[];self.started=time.monotonic()
+    def __init__(self,model,state=None):self.inner=model;self.calls=[];self.started=time.monotonic();self.state=state or BatchState()
     async def complete(self,instruction,data,*,schema=None):
+        self.state.ensure()
         # Applies before provider I/O, including VoicePeer read retry and summary.
         if len(self.calls)>=24 or time.monotonic()-self.started>=45:raise ProbeLimit('batch_limit')
         encoded=json.dumps(data,ensure_ascii=False).encode()
@@ -27,20 +42,22 @@ class ModelMeter:
         stage='plan' if schema and 'mode' in schema.get('properties',{}) else 'facts' if schema and 'facts' in schema.get('properties',{}) else 'safe' if schema and 'allow' in schema.get('properties',{}) else 'compact'
         row={'stage':stage,'ms':None,'ok':False};self.calls.append(row);start=time.monotonic()
         try:
-            value=await self.inner.complete(instruction,data,schema=schema);row['ok']=True;return value
+            value=await self.inner.complete(instruction,data,schema=schema);self.state.ensure();row['ok']=True;return value
         finally:row['ms']=round((time.monotonic()-start)*1000,2)
 
 class SpeechMeter:
-    def __init__(self,speech):self.inner=speech;self.calls=0;self.characters=0
+    def __init__(self,speech,state=None):self.inner=speech;self.calls=0;self.characters=0;self.state=state or BatchState()
     def synthesize(self,text,rate):
+        self.state.ensure()
         # Conservative fixed text volume bound; does not claim billing equivalence.
         if self.calls>=12 or self.characters+len(text)>1440:raise ProbeLimit('speech_limit')
         self.calls+=1;self.characters+=len(text)
         return self.inner.synthesize(text,rate)
 
 class Sink:
-    def __init__(self,ack=True):self.peer=None;self.ack=ack;self.events=[];self.first=None
+    def __init__(self,ack=True):self.peer=None;self.ack=ack;self.events=[];self.first=None;self.stopped=False
     async def send(self,raw):
+        if self.stopped:raise ProbeLimit('sink_closed')
         event=json.loads(raw);kind=event['type']
         # Store metadata only. PCM and all response text remain transient.
         self.events.append({'type':kind})
@@ -89,14 +106,17 @@ async def run_case(case,providers,*,ack=True,observer=None):
     This adapter accepts synthetic input only; ASR/endpoint and actual playback
     are bypassed, while plan/facts/safe/TTS/Session/VoicePeer run unmodified.
     """
+    if getattr(providers,'probe_cleanup_handle',None) is not None:raise ProbeLimit('provider_not_reusable')
     if len(case['turns'])!=3:raise ProbeLimit('case_limit')
     if providers.dynamic_images is not None:raise ProbeLimit('images_not_permitted')
     if hasattr(providers.model,'model') and providers.model.model!=TEXT_MODEL:raise ProbeLimit('model_mismatch')
     original_model,original_speech=providers.model,providers.speech
     before=deepcopy(original_model.metrics()) if hasattr(original_model,'metrics') else {}
-    meter=ModelMeter(original_model);speech=SpeechMeter(original_speech)
+    state=BatchState();providers.probe_cleanup_handle=state
+    meter=ModelMeter(original_model,state);speech=SpeechMeter(original_speech,state)
     providers.model=meter;providers.speech=speech
     sink=Sink(ack);peer=VoicePeer(sink,providers,CompanionPolicy());sink.peer=peer
+    state.peer=peer
     rows=[]
     try:
         async with asyncio.timeout(45):
@@ -106,7 +126,7 @@ async def run_case(case,providers,*,ack=True,observer=None):
                 start=time.monotonic();sink.first=None;sink.events.clear();offset=len(meter.calls)
                 peer.generation=asyncio.create_task(peer.respond(turn['input'],peer.epoch))
                 await peer.handle(json.dumps(dict(v=2,type='bind',epoch=peer.epoch,seq=peer.sequence+1,player='probe-'+str(peer.session.turn))))
-                await peer.generation
+                await asyncio.shield(peer.generation)
                 context=peer.session.context()
                 ok=any(e['type']=='reply_end' for e in sink.events) and not any(e['type']=='failure' for e in sink.events)
                 checks=judge(turn['expect'],context,previous_heard=previous,transport_ok=ok)
@@ -116,6 +136,8 @@ async def run_case(case,providers,*,ack=True,observer=None):
                     result=observer(turn['label'],observation)
                     if inspect.isawaitable(result):
                         if inspect.iscoroutine(result):result.close()
+                        else:
+                            rejected=asyncio.ensure_future(result);state.track(rejected);rejected.cancel()
                         raise ProbeLimit('observer_must_be_sync')
                 rows.append(dict(label=turn['label'],checks=checks,
                     first_audio_after_text_ms=None if sink.first is None else round((sink.first-start)*1000,2),
@@ -124,13 +146,37 @@ async def run_case(case,providers,*,ack=True,observer=None):
     except Exception as error:
         rows.append({'label':'batch-stop','failure':type(error).__name__}) # no messages/provider payload
     finally:
-        if peer.generation and not peer.generation.done():peer.generation.cancel()
-        await asyncio.gather(*([peer.generation] if peer.generation else []),*peer.retired_tasks,return_exceptions=True)
+        # Revoke before cleanup, including meter/sink: no late task may issue a
+        # new unmetered request or publish after the batch has returned.
+        state.open=False;sink.stopped=True;peer.closed=True
         peer.invalidate_visual();peer.session.clear()
-        providers.model=original_model;providers.speech=original_speech
+        if peer.generation:state.track(peer.generation)
+        cleanup_deadline=asyncio.get_running_loop().time()+.2
+        while True:
+            for task in peer.retired_tasks:state.track(task)
+            pending=state.pending()
+            for task in pending:task.cancel()
+            remaining=cleanup_deadline-asyncio.get_running_loop().time()
+            if not pending or remaining<=0:break
+            try:
+                # asyncio.wait observes a deadline without waiting for cancel
+                # acknowledgement from tasks that may swallow cancellation.
+                await asyncio.wait(pending,timeout=remaining)
+            except asyncio.CancelledError:
+                break # repeated caller cancellation never grants more cleanup time
+        for task in state.tasks:
+            if task.done() and not task.cancelled():task.exception()
+        state.quarantined=bool(state.pending()) or peer.quarantined
+        if state.quarantined:
+            rows.append({'label':'batch-stop','failure':'ProviderQuarantined'})
+            # Keep closed meters + handle attached; never silently restore raw
+            # provider access while exit/lifetime cannot be confirmed.
+        else:
+            providers.model=original_model;providers.speech=original_speech
+            providers.probe_cleanup_handle=None
     metrics=original_model.metrics() if hasattr(original_model,'metrics') else {}
     usage=usage_delta(before,metrics)
-    return dict(format=1,usage=usage,case=case['id'],fixture_sha256=sha256(json.dumps(case,ensure_ascii=False,sort_keys=True).encode()).hexdigest(),
+    return dict(format=1,cleanup={'confirmed':not state.quarantined,'pending_tasks':len(state.pending()),'provider_reusable':not state.quarantined},usage_final=not state.quarantined,usage=usage,case=case['id'],fixture_sha256=sha256(json.dumps(case,ensure_ascii=False,sort_keys=True).encode()).hexdigest(),
                 layer='synthetic_text_real_voicepeer_simulated_playback',turns=rows,model_requests=len(meter.calls),
                 tts_requests=speech.calls,tts_unicode_characters=speech.characters,
                 full_acceptance=False,semantic_review_required=True,p12_verified=False,p15_verified=False)

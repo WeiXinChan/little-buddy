@@ -29,7 +29,7 @@ cases.json为12案例/36轮：四玩法各2主题及不同措辞，每例3轮；
 
 ### 请求及费用上界
 
-单例硬门限：总45秒；最多24个底层model.complete（含plan/facts/safe/compact和生产读重试），每次发出前data及instruction各≤32768 UTF8 bytes；生产单次max_tokens仍1400，故输出token请求上限33600。最多12次TTS、总1440 Unicode字符（汉字计2时最多2880计费字符的参考量；不能当真实账单）。这些是安全天花板，不是建议用尽的额度；无图/无ASR。
+单例执行预算：45秒（合作式事件循环计时；清理另有最多0.2秒观察窗口，不承诺物理中断任意协程）；最多24个底层model.complete（含plan/facts/safe/compact和生产读重试），每次发出前data及instruction各≤32768 UTF8 bytes；生产单次max_tokens仍1400，故输出token请求上限33600。最多12次TTS、总1440 Unicode字符（汉字计2时最多2880计费字符的参考量；不能当真实账单）。这些是安全天花板，不是建议用尽的额度；无图/无ASR。
 
 通常每轮1 PLAN+1 FACTS+1整段审核+0或2–4逐句审核，三轮约9–21模型调用、3–12 TTS；compact/retry占剩余24门限，超限即停。最大输入token不能从字符简单等同，需root使用当前供应商tokenizer/账单计量；本入口没有完整HTTP费用拦截或可信货币上限，root已有现有服务必要验证授权，将按当前qwen4-max单价及单例usage差值选择有限支出；请求前保守预留/剩余额度可由root外围受控provider拦截，不需重复向用户索取抽象云调用许可。不拿旧qwen3.8价估qwen4-max。预算目标约3元/有效互动小时继续OPEN。
 
@@ -38,3 +38,14 @@ cases.json为12案例/36轮：四玩法各2主题及不同措辞，每例3轮；
 输出只有合成标签、case hash、布尔判定、阶段耗时、调用数、单例执行前后usage差值白名单（含missingusage时该token量为null，未知不当0）、字符量及固定错误类；不落输入/模型正文、PCM、scope身份、secret、signed URL。Stage计时区分plan/facts/safe/compact；整轮first_audio_after_text_ms仅**合成文本边界→第一传输音频**，不是有效音频或完整表达结束→真实播出。严禁占位语/固定降级句当有效音频。P12字段固定false；后续需root真实TLS/ASR/TTS/播放链路标记完整表达结束与首个语义有效可听音频，汇总median≤2s/P95≤4s及样本数/失败/超时/被取消分母，思考时间单列，保留不达标原结果。
 
 P15字段固定false：现报告只含模型usage与TTS文本量，不含真实ASR重复probe上传、图片两道审核/生成、长会话摘要/取消/重试的完整成本。有效互动时长、当前真实价格与供应商账单须集中最终验证；免费图片20张不能证明长期3元/小时。不改设备、供应商、生产配置/部署，不调用云，不重跑旧全集。Android ONNX probe与锁屏/owner延期仍各自独立。
+
+
+### QA MT-01/02：取消与隔离收敛
+
+旧head dafa9150的原13PASS、独立2FAIL均保留于cleanup目录（脚本逐字原样，旧日志不覆盖）。复跑命令：`PYTHONPATH=. python3 docs/testing/v2/multiturn/cleanup/independent_checks.py`，该脚本只运行Independent的两个原断言；缺省相对source目录不存在时从本仓库PYTHONPATH导入当前代码。原QA线程位于TITA88，非本issue；本次使用授权本机原件，不改原反例。
+
+修复：等待generation使用shield，使45s调用方预算退出不等待下游取消确认；finally先关闭BatchState门禁及Sink、关闭peer并清Session/图片，再取消generation、退休任务与被拒observer Task/Future。使用共享0.2秒deadline的asyncio.wait观察任务，不使用wait_for/gather等待吞取消任务。裸未调度coroutine关闭；已调度Task/Future取消并纳入同一观察窗口。caller再次取消时停止观察并按仍pending判隔离，不再增加等待窗口。
+
+返回metadata增加cleanup.confirmed/pending_tasks/provider_reusable、usage_final。若有pending或VoicePeer资源健康已隔离，追加ProviderQuarantined失败，保留关闭的model/speech包装器，provider.probe_cleanup_handle保有BatchState及peer/任务所有权；handle.pending()可在内存查看仍需回收的句柄。gate关闭后模型/TTS新调用均拒绝，不能恢复原provider导致遗留任务无计量调用。usage_final=false意味着在途供应商usage可能仍更新，不能作为最终账单。run_case对active或隔离的provider一律拒绝，新case不能借此继续。即使句柄后来退出，也不自动授权复用。正常全部确认退出且资源健康时恢复原model/speech、清handle，正常完成与合作式取消都如此。
+
+root后续真实单例必须使用可由父进程监督的独立worker进程：handle未确认/资源不健康时，停止整个worker的后续case，父进程保留PID/退出状态并限时终止worker及其网络资源，不在主服务/可继续复用provider的进程内执行此诊断；不得把asyncio.run的自动取消收尾当硬退出保证。此PR提供内存句柄与failclosed契约，不新增真实服务或执行进程部署。无法从Python协程取消物理打断任意stubborn协程/已发出的云请求，也无法追回供应商已经计费的操作。恶意同步observer阻塞事件循环、任意自行派生隐藏任务或绕过wrapper属于受信观察者/供应商进程隔离边界；observer必须短、同步、仅检查合成快照，不调用模型。报告不承诺无残留：pending明确保留并待父进程隔离；所有本地stubborn fixture均在断言后显式释放、回收。
