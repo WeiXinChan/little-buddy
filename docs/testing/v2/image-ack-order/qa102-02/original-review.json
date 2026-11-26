@@ -1,0 +1,54 @@
+{
+  "head": "81237569e3f622159f867a5ee95e634d776d4e01",
+  "tree": "85491f796908c5127227b9bbe44b6953d57ee733",
+  "verdict": "HOLD_NEW_ACK102_02",
+  "closed_findings": [
+    "ACK102-01"
+  ],
+  "tests": {
+    "unique": 33,
+    "passed": 32,
+    "failed": 1,
+    "skipped": 0,
+    "descriptions_module": 27,
+    "new_cleanup_module": 3,
+    "original_unchangedQA": 1,
+    "independent_adjacent": 2
+  },
+  "source_sha256": "e268ecf0c4c6e5f0f47bb24a3a9f95ae33ee64daa902a243a6de0a12e9d257c0",
+  "originalQA_sha256": "37dcb9d96f1c71e7848fe47c00419ce2f3186dc457677355841479293431a93d",
+  "existing27_methods_AST_identical": true,
+  "product_changes": false,
+  "ACK102_01_replay": {
+    "input_assertions_unchanged": true,
+    "old_cleanup_returned_success_with_pending1": true,
+    "new_cleanup_explicit_assertion_and_retained_pending1": true,
+    "resource_physically_stopped_by_cleanup": false,
+    "fixture_finally_released_and_gathered": true
+  },
+  "findings": [
+    {
+      "id": "ACK102-02",
+      "location": "tests/v2/test_image_descriptions.py:133-144",
+      "trigger": "Completed failed real Task.add_done_callback(peer.track_retired), callback executes on cleanup quiescence sleep(0)",
+      "observed": {
+        "raised": null,
+        "late_in_retained": true,
+        "late_in_test_observed": false,
+        "cleanup_confirmed": true
+      },
+      "meaning": "Production done callback can retrieve exception to suppress warning, but test cleanup never classifies/propagates it; false test resource confirmation.",
+      "suggestion": "After quiescence/final collect observe all newly completed results before declaring no pending/failure; loop until both new tasks/results drained under same original deadline, retain all handles and first failure."
+    }
+  ],
+  "positive_quarantine_checks": [
+    "old quarantine remains flagged and closed, resource/test confirmed false even if teardown returns",
+    "new quarantine during cleanup causes assertion",
+    "old quarantine plus known task exception still raises original exception"
+  ],
+  "PR104_status": "STOP104-01 HOLD already delivered, root185s7attempt/5delivery/2interrupt/0fail covers old stop idle only, not replacement-prepared invariant",
+  "CI": "no PR workflow run expected per user path-filter check; NOT_RUN, no CI PASS claim",
+  "cloud_calls": 0,
+  "device_operations": 0,
+  "deployment_or_author_modified": false
+}

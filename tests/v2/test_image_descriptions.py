@@ -120,8 +120,8 @@ class Descriptions(unittest.IsolatedAsyncioTestCase):
         # a second cancellation that invalidates its healthy release confirmation.
         # New retired tasks may be resource __aexit__ confirmations. Observe
         # them under the same deadline; do not prematurely cancel safe release.
-        while True:
-            collect()
+        def observe_done():
+            nonlocal failure
             for task in tasks:
                 if task.done() and task not in observed:
                     observed.add(task)
@@ -129,21 +129,28 @@ class Descriptions(unittest.IsolatedAsyncioTestCase):
                         try:task.result()
                         except BaseException as error:
                             if failure is None:failure=error
+        quiescent=False
+        while True:
+            collect();observe_done()
             pending={task for task in tasks if not task.done()}
             if not pending:
-                await asyncio.sleep(0);collect()
+                previous=(len(tasks),len(observed))
+                await asyncio.sleep(0);collect();observe_done()
                 pending={task for task in tasks if not task.done()}
-                if not pending:break
+                if not pending and previous==(len(tasks),len(observed)):
+                    quiescent=True;break
             remaining=deadline-asyncio.get_running_loop().time()
             if remaining<=0:break
-            await asyncio.wait(pending,timeout=remaining,return_when=asyncio.FIRST_COMPLETED)
-        collect();pending={task for task in tasks if not task.done()}
+            if pending:await asyncio.wait(pending,timeout=remaining,return_when=asyncio.FIRST_COMPLETED)
+        collect();observe_done();pending={task for task in tasks if not task.done()}
         peer._test_cleanup_tasks=tasks;peer._test_cleanup_pending=pending;peer._test_observed_tasks=observed
         peer._test_cleanup_failure=failure
-        peer._test_cleanup_resource_confirmed=not pending and not peer.quarantined
-        peer._test_cleanup_confirmed=not pending and not peer.quarantined and failure is None
+        peer._test_cleanup_quiescent=quiescent
+        peer._test_cleanup_resource_confirmed=not pending and not peer.quarantined and failure is None and quiescent
+        peer._test_cleanup_confirmed=peer._test_cleanup_resource_confirmed
         self.assertFalse(pending,'test client cleanup deadline: retained unconfirmed task handles')
         if failure is not None:raise failure
+        self.assertTrue(quiescent,'test client cleanup deadline: final callbacks not drained')
         # A prior fail-closed quarantine can be reaped, never reset/reused. New
         # unconfirmed release during this cleanup must fail the fixture.
         self.assertFalse(peer.quarantined and not quarantined_before,'test client resource release was not confirmed')

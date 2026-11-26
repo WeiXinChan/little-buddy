@@ -77,3 +77,19 @@ class Cleanup(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(added);self.assertIn(added[0],p._test_observed_tasks)
             self.assertFalse(p._test_cleanup_pending)
         finally:release.set();await confirmation;await self.finish(h,p,release,block)
+
+    async def test_completed_healthy_task_registered_at_final_yield_is_observed_and_confirmed(self):
+        h=images.Descriptions();p=None;late=None
+        try:
+            provider,*_=await h.make();p,_=await h.run_wire(provider)
+            async def completed():return 'synthetic closed'
+            late=asyncio.create_task(completed());await asyncio.sleep(0)
+            late.add_done_callback(p.track_retired)
+            deadline=asyncio.get_running_loop().time()+2;p._test_cleanup_deadline=deadline
+            await h.cleanup(p)
+            self.assertIn(late,p._test_observed_tasks)
+            self.assertIn(late,p._test_cleanup_tasks)
+            self.assertTrue(p._test_cleanup_confirmed and p._test_cleanup_quiescent)
+            self.assertEqual(p._test_cleanup_deadline,deadline)
+        finally:
+            if p:await self.finish(h,p,asyncio.Event(),asyncio.Event())
