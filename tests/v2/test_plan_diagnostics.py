@@ -43,7 +43,7 @@ class PlanDiagnostics(unittest.IsolatedAsyncioTestCase):
         case={'id':'plan-fail','turns':[{'label':str(i),'input':text,'expect':{'mode':'story','terms':[]}} for i,text in enumerate(('第一轮','第二轮','第三轮'))]}
         report=await run_case(case,UnifiedProviders(fixtures.Speech(),model),observer=lambda label,snapshot:seen.append(snapshot))
         self.assertEqual(len(report['turns']),2);self.assertEqual(report['tts_requests'],1)
-        self.assertEqual(report['peer_failure'],{'stage':'plan','kind':'ModelError','contract':'plan_anchors'})
+        self.assertEqual(report['peer_failure'],{'stage':'plan','kind':'ModelError','contract':'plan_anchors','detail':'anchor_index_range'})
         self.assertEqual(report['turns'][1]['delivery_metadata']['audio_chunks'],0)
         self.assertFalse(report['turns'][1]['delivery_metadata']['game_committed'])
         self.assertEqual(seen[0]['heard'],seen[1]['heard']);self.assertEqual(seen[0]['game'],seen[1]['game'])
