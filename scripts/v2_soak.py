@@ -4,6 +4,7 @@ No credentials, device launcher, or default cloud provider. Wall time is monoton
 short fixture runs cannot satisfy 3600s. External providers require -- API consent.
 """
 import asyncio
+from collections import deque
 from copy import deepcopy
 from contextlib import asynccontextmanager
 from dataclasses import asdict,dataclass,replace
@@ -151,7 +152,9 @@ class BackendTransport:
                     first_transport_at=self.first_at,interrupted=mode in {'interrupt','drop'} and self.peer.epoch==self.epoch)
     def sample(self):
         return dict(active_sessions=int(self.peer.session.active),active_operations=len(self.peer.generation_scopes),
-                    retired_pending=sum(not t.done() for t in self.peer.retired_tasks))
+                    retired_pending=sum(not t.done() for t in self.peer.retired_tasks),
+                    generation_pending=int(self.peer.generation is not None and not self.peer.generation.done()),
+                    transport_tasks_pending=sum(not t.done() for t in self.tasks))
     async def close(self):
         self.peer.closed=True;self.socket.closed=True;self.peer.session.clear();self.peer.invalidate_visual()
         tasks=self.tasks|set(self.peer.retired_tasks)
@@ -186,6 +189,43 @@ def resources():
                     backend_fds=len(list(Path('/proc/self/fd').iterdir())),asyncio_tasks=len(asyncio.all_tasks()),device_rss_bytes=None)
     except (OSError,StopIteration,ValueError):return dict(backend_rss_bytes=None,backend_threads=None,backend_fds=None,asyncio_tasks=len(asyncio.all_tasks()),device_rss_bytes=None)
 
+class ObservedScopes(dict):
+    """Same mapping semantics; snapshot AFTER the real production mutation."""
+    def __init__(self,values,capture):super().__init__(values);self.capture=capture
+    def __setitem__(self,key,value):
+        super().__setitem__(key,value);self.capture('operation_started')
+    def pop(self,key,*default):
+        result=super().pop(key,*default);self.capture('operation_finished');return result
+
+class ObservedRetired(set):
+    def __init__(self,values,capture):super().__init__(values);self.capture=capture
+    def add(self,value):super().add(value);self.capture('retired_added')
+    def discard(self,value):super().discard(value);self.capture('retired_removed')
+
+class ResourceCollector:
+    PHASES=frozenset({'initial','periodic','operation_started','operation_finished','retired_added','retired_removed','attempt_started','attempt_finished','before_attempt_cancel','after_attempt_cancel','before_transport_cleanup','after_transport_cleanup','after_owner_cleanup','final'})
+    KEYS=('backend_rss_bytes','backend_fds','backend_threads','asyncio_tasks','retired_pending','active_operations','generation_pending','transport_tasks_pending')
+    def __init__(self,transport,allowance,started,capacity=4096):
+        self.transport=transport;self.allowance=allowance;self.started=started
+        self.rows=deque(maxlen=capacity);self.seen=0;self.errors=0;self.closed=False
+        self.trends={key:dict(first=None,last=None,maximum=None) for key in self.KEYS}
+    def record(self,phase):
+        if self.closed:return
+        try:
+            row=dict(elapsed=round(time.monotonic()-self.started,3),phase=phase if phase in self.PHASES else 'unknown',
+                     **resources(),**self.transport.sample())
+            self.rows.append(row);self.seen+=1
+            for key,trend in self.trends.items():
+                value=row.get(key)
+                if self.seen==1:trend['first']=value
+                trend['last']=value
+                if type(value) is int:trend['maximum']=value if trend['maximum'] is None else max(value,trend['maximum'])
+        except Exception:
+            # Do not interfere with production dict/set mutation or log content.
+            # Close future I/O and mark invalid collection instead of fake PASS.
+            self.errors+=1;self.allowance.open=False
+    def summary(self):return {key:dict(value,maximum_kind='observed_sample_maximum') for key,value in self.trends.items()}
+
 async def run_soak(limits=Limits(),*,providers=None,allow_cloud=False,allow_device=False,stop=None,cloud_budget=None):
     limits.validate()
     if type(allow_cloud) is not bool or type(allow_device) is not bool:raise ProbeLimit('execution_flags')
@@ -208,11 +248,14 @@ async def run_soak(limits=Limits(),*,providers=None,allow_cloud=False,allow_devi
     ownership=BatchState();bundle.probe_cleanup_handle=ownership
     transport=BackendTransport(bundle);transport.start()
     started=time.monotonic();deadline=started+limits.duration;stop=stop or asyncio.Event()
-    attempts=[];samples=[];active_seconds=0.;interrupted=False;reason='duration';sampler=None;pending=set();confirmed=False
+    attempts=[];active_seconds=0.;interrupted=False;reason='duration';sampler=None;pending=set();confirmed=False
+    collector=ResourceCollector(transport,allowance,started)
+    transport.peer.generation_scopes=ObservedScopes(transport.peer.generation_scopes,collector.record)
+    transport.peer.retired_tasks=ObservedRetired(transport.peer.retired_tasks,collector.record)
+    collector.record('initial')
     async def sample():
         while True:
-            samples.append(dict(elapsed=round(time.monotonic()-started,3),**resources(),**transport.sample()))
-            if len(samples)>=4095:return
+            collector.record('periodic')
             await asyncio.sleep(limits.sample_interval)
     sampler=asyncio.create_task(sample());ownership.track(sampler)
     async def wait_until(target):
@@ -227,12 +270,15 @@ async def run_soak(limits=Limits(),*,providers=None,allow_cloud=False,allow_devi
             label,text,mode=SCENARIOS[index%len(SCENARIOS)]
             row=dict(index=index,scenario=label,injected=mode,started=round(time.monotonic()-started,3),status='failed',observed=None)
             attempts.append(row);index+=1;begin=time.monotonic()
+            collector.record('attempt_started')
             task=asyncio.create_task(transport.attempt(text,mode));ownership.track(task)
             stopper=asyncio.create_task(stop.wait());ownership.track(stopper)
             done,_=await asyncio.wait({task,stopper},timeout=min(limits.attempt_timeout,max(0,deadline-time.monotonic())),return_when=asyncio.FIRST_COMPLETED)
             stopper.cancel()
             if task not in done:
-                row['status']='cancelled' if stop.is_set() else 'timeout';task.cancel();reason=row['status'];break
+                row['status']='cancelled' if stop.is_set() else 'timeout'
+                collector.record('before_attempt_cancel');task.cancel();collector.record('after_attempt_cancel')
+                reason=row['status'];break
             try:
                 observed=task.result()
                 row['observed']=dict(frames=observed['frames'],game_mode=observed['game_mode'],interrupted=observed['interrupted'],
@@ -240,7 +286,9 @@ async def run_soak(limits=Limits(),*,providers=None,allow_cloud=False,allow_devi
                      acoustic_reply_ms=None,interruption_to_speaker_silence_ms=None)
                 row['status']='interrupted' if observed['interrupted'] else 'delivered' if observed['delivered'] else 'failed'
             except Exception:row['status']='failed' # never error text or arbitrary class/name
-            finally:active_seconds+=time.monotonic()-begin;row['completed']=round(time.monotonic()-started,3)
+            finally:
+                active_seconds+=time.monotonic()-begin;row['completed']=round(time.monotonic()-started,3)
+                collector.record('attempt_finished')
             if not allowance.open or row['status']=='failed':reason='failure_or_allowance';break
         if stop.is_set():reason='cancelled'
     except asyncio.CancelledError:interrupted=True;reason='caller_cancelled'
@@ -251,26 +299,36 @@ async def run_soak(limits=Limits(),*,providers=None,allow_cloud=False,allow_devi
                 if row['status']=='failed':row['status']='cancelled'
         observation_seconds=time.monotonic()-started
         cleanup_started=time.monotonic()
-        allowance.open=False;sampler.cancel()
+        collector.record('before_transport_cleanup')
+        allowance.open=False
         confirmed,transport_pending=await transport.close();pending|=transport_pending
+        collector.record('after_transport_cleanup')
+        sampler.cancel()
         for task in ownership.pending():task.cancel()
         if ownership.pending():
             try:await asyncio.wait(ownership.pending(),timeout=.2)
             except asyncio.CancelledError:pass
         pending|=set(ownership.pending());ownership.tasks|=pending
         ownership.open=False;ownership.quarantined=bool(pending) or not confirmed
+        collector.record('after_owner_cleanup')
         if not ownership.quarantined:
             bundle.model=original_model;bundle.speech=original_speech;bundle.probe_cleanup_handle=None
     elapsed=time.monotonic()-started
     cleanup_seconds=time.monotonic()-cleanup_started
     active_seconds=sum(max(0,row['completed']-row['started']) for row in attempts)
-    samples.append(dict(elapsed=round(elapsed,3),**resources(),**transport.sample()))
-    trends={key:dict(first=samples[0].get(key),last=samples[-1].get(key),maximum=max((s[key] for s in samples if type(s.get(key)) is int),default=None)) for key in ('backend_rss_bytes','backend_fds','backend_threads','asyncio_tasks','retired_pending','active_operations')}
+    collector.record('final');collector.closed=True
+    samples=list(collector.rows);trends=collector.summary()
     report=dict(format=1,layer='synthetic_text_real_voicepeer_json_duplex_simulated_ack',cloud_enabled=cloud,device_executed=False,device_events=None,resource_scope='runner_owned_sessions_and_current_process',
                 elapsed_seconds=round(elapsed,3),active_attempt_seconds=round(active_seconds,3),effective_interaction_seconds=None,standby_seconds=round(max(0,elapsed-active_seconds-cleanup_seconds),3),cleanup_seconds=round(cleanup_seconds,3),
                 requested_seconds=limits.duration,observation_seconds=round(observation_seconds,3),wall_60_minutes_observed=observation_seconds>=3600 and limits.duration==3600,
                 limits=asdict(limits),stop_reason=reason,attempted=len(attempts),delivered=sum(r['status']=='delivered' for r in attempts),
                 failures=sum(r['status'] in {'failed','timeout','cancelled'} for r in attempts),attempts=attempts,resource_samples=samples,resource_trends=trends,
+                sampling=dict(observations=collector.seen,retained=len(samples),evicted=collector.seen-len(samples),errors=collector.errors,
+                    active_observed=(trends['active_operations']['maximum'] or 0)>0,continuous_peaks_known=False,
+                    valid=collector.errors==0,missing_metrics=[k for k,v in trends.items() if v['maximum'] is None]),
+                resource_collection_valid=collector.errors==0 and not ownership.quarantined and bool(attempts) and
+                    (trends['active_operations']['maximum'] or 0)>0 and all(v['maximum'] is not None for v in trends.values()) and
+                    all(r['status'] in {'delivered','interrupted'} for r in attempts),
                 model_stage_calls=meter.stages,model_failed_or_cancelled=meter.failures,usage_delta=usage_delta(usage_before,original_model.metrics() if hasattr(original_model,'metrics') else {}),
                 interrupted_attempts=sum(r['status']=='interrupted' for r in attempts),delivery_rate_all_attempts=None if not attempts else sum(r['status']=='delivered' for r in attempts)/len(attempts),
                 planned_attempts=limits.max_attempts,not_started=max(0,limits.max_attempts-len(attempts)),

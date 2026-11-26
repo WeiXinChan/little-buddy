@@ -1,0 +1,57 @@
+{
+  "head": "0bc3c57e04f90cc59e42884a30824e40e4e976dd",
+  "tree": "5caa64083922ea7abfc2a1452cd348aad9444824",
+  "verdict": "HOLD_RESOURCE_COVERAGE",
+  "tests": {
+    "unique": 24,
+    "passed": 23,
+    "failed": 1,
+    "skipped": 0,
+    "author_affected": 21,
+    "independent": 3
+  },
+  "source_sha256": "aae91f0e4f0031761160f45c44d747b9e11cb68ce39fcb38b379c5d7877a1009",
+  "findings": [
+    {
+      "id": "SOAK101-01",
+      "severity": "blocks resource-peak / long-soak evidence approval",
+      "locations": [
+        "scripts/v2_soak.py:212-217",
+        "scripts/v2_soak.py:254-268"
+      ],
+      "observed": {
+        "real_active_operation_witness": 1,
+        "reported_active_operations_maximum": 0,
+        "sample_values": [
+          0,
+          0
+        ],
+        "real_monotonic_test_duration_seconds": 0.18
+      },
+      "cause": "Only periodic samples and final post-cleanup sample; no guaranteed active-generation observation; sampler is cancelled before cleanup begins. Maximum is only observed periodic-sample maximum, can miss all work.",
+      "suggestion": "Record bounded lifecycle samples at actual active operation/generation and cleanup start/end, retain observed peaks across phases and sample eviction. Keep periodic sampling for drift; explicitly label RSS/Fd sampled maxima, not guaranteed physical peaks. Do not treat idle-only trace as active resource evidence."
+    }
+  ],
+  "positive_boundaries": [
+    "Real monotonic clock used, cleanup excluded from wall observation",
+    "Attempt cap waits rest but stop_reason attempt_cap, standby/effective unknown and P14/full false; waiting not mixed acceptance",
+    "Attempts inserted before work; failure/timeout/cancel included; interrupt remains denominator",
+    "Admission calls/characters/units reserve before underlying provider IO, quota closes gate; cloud/defaultdevice denied",
+    "Unconfirmed cleanup keeps closed meter/ownership and refuses provider reuse",
+    "JSON delay/drop+stop is simulated ACK disturbance, no TLS/network/acoustic claim"
+  ],
+  "cost_limit": "Conditional runner-side pre-reservation under operator-reviewed worst-case microCNY/request. Not independent guarantee of provider billing/account total; billing_bound_verified false, no actual bill verified.",
+  "usefulness": "Useful short/long backend protocol orchestration and failure cleanup collector after active/cleanup sampling corrected; insufficient A36/P14 actual product validation",
+  "missing_real_paths": [
+    "realASR/semantic endpoint input",
+    "TLS/TCP/reconnect/actual network perturbation",
+    "Android business UI and AudioTrack played proof",
+    "microphone/echo/KWS/firstword acoustic chain",
+    "actualspeaker interruption timings",
+    "60min mixed interaction coverage + semantic/contextlongterm evaluation",
+    "billing reconciliation"
+  ],
+  "cloud_calls": 0,
+  "device_operations": 0,
+  "product_or_author_source_modified": false
+}

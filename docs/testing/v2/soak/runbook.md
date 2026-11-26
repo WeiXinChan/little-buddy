@@ -39,3 +39,7 @@ stop事件/调用方取消/超时关闭meters，再取消与有限观察transpor
 ## 离线证据
 
 8新增+13现有共享harness=21唯一方法PASS/0FAIL/0SKIP；真实1.3秒6步混合（4交付/2打断、分母6）、真实0.22秒调度等待、超时/quota失败、全局额度、默认云/设备禁、外部stop/调用方取消、stubborn取消有限返回/关闭meter/禁止复用、脱敏与资源不可读unknown。反例资源在测试finally显式释放回收。无60分钟运行/云/设备/部署；short-fixture仅0.2秒，不声称长稳成功。重型构建未运行，无占heavy锁。
+
+## QA101采样修正
+
+详见qa101/report.md：operation及retired实际容器变化后同步采样、attempt/取消/有限清理生命周期采样与周期采样并存。ring满后在线first/last/maximum保留历史观测，不用存活样本重算峰值。maximum字段仅观测样本最大值，非连续物理峰值；采样错误/unknown资源/未确认清理/失败不会resource_collection_valid=true，仍不改变P14/full=false边界。最终29唯一方法通过（26作者/受影响＋QA原3），原HOLD失败保留。
