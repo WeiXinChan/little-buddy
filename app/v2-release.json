@@ -1,8 +1,8 @@
 {
   "format": 1,
-  "version_code": 21,
-  "version_name": "2.0.0-rc7",
+  "version_code": 22,
+  "version_name": "2.0.0-rc8",
   "application_id": "com.littlebuddy.sim.v2",
   "protocol_contract": "v2-voice2-safety1-images2-volume1-management1-end1",
-  "source_base": "f7833c218c5e591b443292160220a3c93fde6e55"
+  "source_base": "a1684741168b6ed940a6c23aef935bea4ffccbad"
 }
