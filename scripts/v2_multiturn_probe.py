@@ -8,6 +8,8 @@ from copy import deepcopy
 from dataclasses import replace
 from hashlib import sha256
 import json
+import inspect
+from types import MappingProxyType
 import time
 from backend.v2.companion import CompanionPolicy
 from backend.v2.voice import VoicePeer
@@ -63,7 +65,24 @@ def judge(expect,context,*,previous_heard=(),transport_ok=True):
             'played_context':bool(context.get('heard')) and tuple(context['heard'])!=tuple(previous_heard),
             'delivery':transport_ok}
 
-async def run_case(case,providers,*,ack=True):
+def frozen(value):
+    if isinstance(value,dict):return MappingProxyType({key:frozen(item) for key,item in value.items()})
+    if isinstance(value,(list,tuple)):return tuple(frozen(item) for item in value)
+    return value
+
+def usage_delta(before,after):
+    result={}
+    for key in ('requests','failures','prompt_tokens','completion_tokens'):
+        a=before.get('usage',{}).get(key);b=after.get('usage',{}).get(key)
+        missing_before=before.get('usage_missing',{}).get(key)
+        missing_after=after.get('usage_missing',{}).get(key)
+        known=type(a) is int and type(b) is int and b>=a
+        if key.endswith('_tokens'):
+            known=known and type(missing_before) is int and type(missing_after) is int and missing_after==missing_before
+        result[key]=b-a if known else None
+    return result
+
+async def run_case(case,providers,*,ack=True,observer=None):
     """One explicitly selected 3-turn case. NEVER loops over the whole catalogue.
 
     Caller owns credentials/network billing authorization and provider cleanup.
@@ -74,6 +93,7 @@ async def run_case(case,providers,*,ack=True):
     if providers.dynamic_images is not None:raise ProbeLimit('images_not_permitted')
     if hasattr(providers.model,'model') and providers.model.model!=TEXT_MODEL:raise ProbeLimit('model_mismatch')
     original_model,original_speech=providers.model,providers.speech
+    before=deepcopy(original_model.metrics()) if hasattr(original_model,'metrics') else {}
     meter=ModelMeter(original_model);speech=SpeechMeter(original_speech)
     providers.model=meter;providers.speech=speech
     sink=Sink(ack);peer=VoicePeer(sink,providers,CompanionPolicy());sink.peer=peer
@@ -90,6 +110,13 @@ async def run_case(case,providers,*,ack=True):
                 context=peer.session.context()
                 ok=any(e['type']=='reply_end' for e in sink.events) and not any(e['type']=='failure' for e in sink.events)
                 checks=judge(turn['expect'],context,previous_heard=previous,transport_ok=ok)
+                if observer is not None:
+                    # Detached immutable snapshot only: no Session/provider/PCM/expect.
+                    observation=frozen(deepcopy(context))
+                    result=observer(turn['label'],observation)
+                    if inspect.isawaitable(result):
+                        if inspect.iscoroutine(result):result.close()
+                        raise ProbeLimit('observer_must_be_sync')
                 rows.append(dict(label=turn['label'],checks=checks,
                     first_audio_after_text_ms=None if sink.first is None else round((sink.first-start)*1000,2),
                     completed_ms=round((time.monotonic()-start)*1000,2),stages=deepcopy(meter.calls[offset:])))
@@ -102,7 +129,7 @@ async def run_case(case,providers,*,ack=True):
         peer.invalidate_visual();peer.session.clear()
         providers.model=original_model;providers.speech=original_speech
     metrics=original_model.metrics() if hasattr(original_model,'metrics') else {}
-    usage={key:metrics.get('usage',{}).get(key) for key in ('requests','failures','prompt_tokens','completion_tokens')}
+    usage=usage_delta(before,metrics)
     return dict(format=1,usage=usage,case=case['id'],fixture_sha256=sha256(json.dumps(case,ensure_ascii=False,sort_keys=True).encode()).hexdigest(),
                 layer='synthetic_text_real_voicepeer_simulated_playback',turns=rows,model_requests=len(meter.calls),
                 tts_requests=speech.calls,tts_unicode_characters=speech.characters,

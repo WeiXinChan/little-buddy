@@ -23,16 +23,18 @@ cases.json为12案例/36轮：四玩法各2主题及不同措辞，每例3轮；
 
 判定来自真实Session提交后的game、规则/角色关键词、实际heard变化、reply_end与failure状态。错mode、丢规则/角色关键词、放弃仍留原玩法、审核拒绝、丢失已播上下文均可标红并立即停止该case，不重试刷结果。它们是必要条件，不是充分语义评分；角色关键词同时出现不证明角色归属/交换正确，heard变化不证明回答相关，轮流规则存在不证明实际轮换正确。root首批须在内存中检查实际响应的角色归属、轮换/不重复、改规则生效及谜底/私事隔离；结果只落判定/标签，不存响应正文。不把仅结构PASS扩大为A03/A04通过。当前准备未提供自动语义裁判，未增加第二模型评分或预设玩法逻辑。
 
+可用 `await run_case(case, providers, observer=observe)` 同步观察：`observe(label, snapshot)` 接收该轮实际交付后context的深拷贝只读快照（dict递归MappingProxyType，序列tuple），含必要game/heard/事实/私事/未播谜底供固定合成案例的内存语义检查；不含Session/provider/PCM/expected，不修改真实Session或ACK。默认observer=None，不落正文或secret。观察者禁止调用模型、持久化材料或更改ACK；入口不给其provider引用。异常会停止并追加batch-stop failure、finally清理，不吞作PASS；async回调被拒绝。root可在同步回调内检查角色归属/轮换后仅保存布尔结果；不必修改harness。
+
 建议执行顺序：先guess-animal单例3轮，检查角色互换、未播谜底与交付上下文；再story-moon；再按root结果逐例批准剩余，不一口气跑36轮。任一质量/供应商/预算失败立即停批，不自动重试整批。生产read_request的原有有界retry仍计入同一模型请求门限，不放宽安全审核。
 
 ### 请求及费用上界
 
 单例硬门限：总45秒；最多24个底层model.complete（含plan/facts/safe/compact和生产读重试），每次发出前data及instruction各≤32768 UTF8 bytes；生产单次max_tokens仍1400，故输出token请求上限33600。最多12次TTS、总1440 Unicode字符（汉字计2时最多2880计费字符的参考量；不能当真实账单）。这些是安全天花板，不是建议用尽的额度；无图/无ASR。
 
-通常每轮1 PLAN+1 FACTS+1整段审核+0或2–4逐句审核，三轮约9–21模型调用、3–12 TTS；compact/retry占剩余24门限，超限即停。最大输入token不能从字符简单等同，需root使用当前供应商tokenizer/账单计量；本入口没有完整HTTP费用拦截或可信货币上限，**真实运行前root还需明确单例人民币批准上限并以其受控计量/传输层拦截**。未获该批准不启动live；不拿旧qwen3.8价估qwen4-max。预算目标约3元/有效互动小时继续OPEN。
+通常每轮1 PLAN+1 FACTS+1整段审核+0或2–4逐句审核，三轮约9–21模型调用、3–12 TTS；compact/retry占剩余24门限，超限即停。最大输入token不能从字符简单等同，需root使用当前供应商tokenizer/账单计量；本入口没有完整HTTP费用拦截或可信货币上限，root已有现有服务必要验证授权，将按当前qwen4-max单价及单例usage差值选择有限支出；请求前保守预留/剩余额度可由root外围受控provider拦截，不需重复向用户索取抽象云调用许可。不拿旧qwen3.8价估qwen4-max。预算目标约3元/有效互动小时继续OPEN。
 
 ### P12/P15输出与剩余证明
 
-输出只有合成标签、case hash、布尔判定、阶段耗时、调用数、模型累计usage白名单、字符量及固定错误类；不落输入/模型正文、PCM、scope身份、secret、signed URL。Stage计时区分plan/facts/safe/compact；整轮first_audio_after_text_ms仅**合成文本边界→第一传输音频**，不是有效音频或完整表达结束→真实播出。严禁占位语/固定降级句当有效音频。P12字段固定false；后续需root真实TLS/ASR/TTS/播放链路标记完整表达结束与首个语义有效可听音频，汇总median≤2s/P95≤4s及样本数/失败/超时/被取消分母，思考时间单列，保留不达标原结果。
+输出只有合成标签、case hash、布尔判定、阶段耗时、调用数、单例执行前后usage差值白名单（含missingusage时该token量为null，未知不当0）、字符量及固定错误类；不落输入/模型正文、PCM、scope身份、secret、signed URL。Stage计时区分plan/facts/safe/compact；整轮first_audio_after_text_ms仅**合成文本边界→第一传输音频**，不是有效音频或完整表达结束→真实播出。严禁占位语/固定降级句当有效音频。P12字段固定false；后续需root真实TLS/ASR/TTS/播放链路标记完整表达结束与首个语义有效可听音频，汇总median≤2s/P95≤4s及样本数/失败/超时/被取消分母，思考时间单列，保留不达标原结果。
 
 P15字段固定false：现报告只含模型usage与TTS文本量，不含真实ASR重复probe上传、图片两道审核/生成、长会话摘要/取消/重试的完整成本。有效互动时长、当前真实价格与供应商账单须集中最终验证；免费图片20张不能证明长期3元/小时。不改设备、供应商、生产配置/部署，不调用云，不重跑旧全集。Android ONNX probe与锁屏/owner延期仍各自独立。

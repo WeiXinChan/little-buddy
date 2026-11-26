@@ -62,3 +62,39 @@ class Probe(unittest.IsolatedAsyncioTestCase):
         for mode in ('guess','story','adventure','association'):
             self.assertGreaterEqual(sum(all(t['expect']['mode']==mode for t in c['turns']) for c in data['cases']),2)
         self.assertTrue({'cross-game','exchange-question','change-rules','abandon'}<={c['id'] for c in data['cases']})
+    async def test_observer_receives_detached_immutable_actual_context_without_expected(self):
+        p=self.providers();observations=[]
+        def observer(label,snapshot):
+            observations.append((label,snapshot))
+            with self.assertRaises(TypeError):snapshot['game']['mode']='guess'
+            self.assertNotIn('expect',snapshot)
+        report=await run_case(CASE,p,observer=observer)
+        self.assertEqual(len(observations),3);self.assertEqual(observations[0][1]['game']['mode'],'story')
+        self.assertTrue(observations[0][1]['heard']) # snapshot survives Session.clear
+        self.assertTrue(all(all(t['checks'].values()) for t in report['turns']))
+        self.assertNotIn('我们一起玩吧',json.dumps(report,ensure_ascii=False))
+    async def test_observer_exception_stops_before_next_turn_and_is_not_pass(self):
+        p=self.providers()
+        def observer(*args):raise RuntimeError('PRIVATE_OBSERVER_TEXT')
+        report=await run_case(CASE,p,observer=observer)
+        self.assertEqual(report['turns'],[{'label':'batch-stop','failure':'RuntimeError'}])
+        self.assertEqual(len([d for i,d in p.model.requests if '严格字段' in i]),1)
+        self.assertNotIn('PRIVATE_OBSERVER_TEXT',json.dumps(report))
+    async def test_async_observer_is_rejected_without_running_its_body(self):
+        ran=[]
+        async def observer(*args):ran.append(True)
+        report=await run_case(CASE,self.providers(),observer=observer)
+        self.assertEqual(report['turns'][-1]['failure'],'ProbeLimit');self.assertEqual(ran,[])
+    async def test_usage_is_batch_delta_with_missing_unknown_not_zero(self):
+        from scripts.v2_multiturn_probe import usage_delta
+        before={'usage':{'requests':100,'failures':2,'prompt_tokens':1000,'completion_tokens':100},'usage_missing':{'prompt_tokens':3,'completion_tokens':1}}
+        after={'usage':{'requests':105,'failures':2,'prompt_tokens':1200,'completion_tokens':150},'usage_missing':{'prompt_tokens':3,'completion_tokens':2}}
+        self.assertEqual(usage_delta(before,after),{'requests':5,'failures':0,'prompt_tokens':200,'completion_tokens':None})
+        self.assertTrue(all(x is None for x in usage_delta({},{}).values()))
+    async def test_run_report_excludes_provider_previous_usage(self):
+        p=self.providers();model=p.model
+        model.metrics=lambda:{'usage':{'requests':100+len(model.requests),'failures':7,'prompt_tokens':500+10*len(model.requests),'completion_tokens':200+len(model.requests)},'usage_missing':{'prompt_tokens':0,'completion_tokens':0}}
+        report=await run_case(CASE,p)
+        self.assertEqual(report['usage']['requests'],report['model_requests'])
+        self.assertEqual(report['usage']['prompt_tokens'],10*report['model_requests'])
+        self.assertEqual(report['usage']['failures'],0)
