@@ -1,0 +1,6 @@
+test_batch_closes_and_reaps_heartbeat_no_late_command (tests.v2.test_probe_heartbeat.Heartbeat.test_batch_closes_and_reaps_heartbeat_no_late_command) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.024s
+
+OK
