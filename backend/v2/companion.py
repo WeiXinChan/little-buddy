@@ -3,6 +3,7 @@
 Model JSON is untrusted. Only complete played segments can commit proposed game
 state; memory compaction can select existing heard facts, never invent new ones.
 """
+from copy import deepcopy
 import asyncio
 import json
 import httpx
@@ -15,7 +16,7 @@ from backend.v2.dynamic_images import ImageFailure
 from backend.v2.image_descriptions import MinimalDescription, compile_description, ImageAllowance, ExplicitImageRequest, explicit_request, VOCAB
 from backend.v2.models import TEXT_MODELS, SCHEMA_MODELS, UnsupportedTextModel
 from backend.v2.diagnostics import mark_contract
-from backend.v2.story_rules import obeys_turn_limit,constraint_proposal
+from backend.v2.story_rules import obeys_turn_limit,constraint_proposal,turn_limit,sentence_count
 from contextlib import asynccontextmanager
 
 SYSTEM = """你是瓦力，面向5–8岁儿童的AI语音玩伴。自然、简短、不过度夸奖或连续追问。
@@ -187,9 +188,24 @@ class UnifiedProviders:
             raise SafetyFault('review_unavailable')
         return result['allow']
 
-    async def plan(self, text, context):
+    async def repair_plan(self,text,context,*,sentence_limit):
+        # VoicePeer owns admission/one shared retry; this port never loops.
+        return await self.plan(text,context,_repair=True,_repair_limit=sentence_limit)
+
+    async def plan(self, text, context, *, _repair=False, _repair_limit=None):
+        known,limit=constraint_proposal(text,context,dict(mode='story',action='continue',rules=''))
+        if _repair:
+            if (type(_repair_limit) is not int or not 1<=_repair_limit<=4 or context.get('private') or
+                known and limit!=_repair_limit):raise ModelError('story turn sentence limit')
+            limit=_repair_limit;known=True
+        control=dict(story_sentences_max=limit if known else None,
+                     correction='plan_sentence_limit' if _repair else None)
         plan = await self.request("""
 只返回JSON，严格字段：
+server_constraints是服务器提供的约束，只在本轮仍为story的continue/change时适用，不阻止离开或私事。
+story_sentences_max非null时，整个本轮输出（含提示/追问）不得超过该句数，单个数组项内也不能塞多句。
+correction=plan_sentence_limit表示仅有一次完整重规划机会：重新组织合法简短句及一致state/anchors，
+不要复述错误、不追加道歉或解释句、不猜未提供的旧候选、不截取一份无效草稿。
 {"action":"continue|change|leave|handoff|private|end",
 "mode":"chat|guess|story|adventure|association",
 "rules":"当前完整规则","roles":["角色"],"secrets":{"answer":"未揭晓谜底，可为空对象"},
@@ -228,7 +244,7 @@ memory.capacity_limited时坦诚记忆范围有限，围绕当前输入继续，
 description只用于generate_image，缺字段兼容目录名称生成；缺服务/审核/预算时不可用，不声称工具执行成功。
 图只会在最后一句完整播放后揭晓；猜谜未公开答案时不显示答案图，只有明确说出答案后才可揭图。
 轮流猜描述要保留答案直到明确结束该题；不是每一轮都换答案。""",
-                                  dict(text=text or '只叫了瓦力，请提出一次自然邀请。', context=context), schemas.PLAN)
+                                  dict(text=text or '只叫了瓦力，请提出一次自然邀请。', context=deepcopy(context),server_constraints=control), schemas.PLAN)
         if isinstance(plan, dict):
             plan.setdefault('anchors', {})
             plan.setdefault('tools', [])
@@ -255,8 +271,13 @@ description只用于generate_image，缺字段兼容目录名称生成；缺服�
             raise ModelError('anchors')
         # Reject the whole proposal before review/TTS/state publication. Never
         # truncate: anchors and final-segment state must describe the same output.
-        if not obeys_turn_limit(text,context,plan):
-            raise ModelError('story turn sentence limit')
+        current_limit=turn_limit(text,context,plan)
+        bounded_repair=(_repair and plan['mode']=='story' and plan['action'] in {'continue','change'})
+        if (not obeys_turn_limit(text,context,plan) or
+            bounded_repair and sum(sentence_count(s) for s in plan['sentences'])>_repair_limit):
+            failure=ModelError('story turn sentence limit')
+            failure.repair_sentence_limit=_repair_limit if bounded_repair else current_limit
+            raise failure
         tools=plan['tools']
         try:
             if (not isinstance(tools,list) or len(tools)>1 or any(
@@ -287,6 +308,7 @@ description只用于generate_image，缺字段兼容目录名称生成；缺服�
             plan['secrets'] = dict(context['unrevealed'])
         present,limit=constraint_proposal(text,context,plan)
         if present:plan['_story_turn_limit']=limit
+        elif bounded_repair:plan['_story_turn_limit']=_repair_limit
         return plan
 
     async def facts(self, text):

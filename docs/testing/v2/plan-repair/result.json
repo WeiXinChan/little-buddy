@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "main_base": "7f3bd941d4af8a7c283f68ceda16fa41bfff532d",
+  "dependency_pr97": "fc48e3078db42bcdc35f5e3de459a9d75608d070",
+  "integration_base": "e43806488ce744219ca1043d87a2b85dcf5095a1",
+  "new_methods": 10,
+  "normal_methods": 74,
+  "passed": 74,
+  "failed": 0,
+  "skipped": 0,
+  "cloud_calls": 0,
+  "real_story_revalidated": false,
+  "old_233_root_cause_confirmed": false,
+  "files": {
+    "initial-failures.log": "5bd8fa39e6af95ceaa4c17cb82c1d4c13e053fa34900f355ccc5e36556e57195",
+    "live-original-sentence-failure.json": "6b6aab297a05a2b6add5312ed6f615954365b7cd20905f922cc3f28118531729",
+    "new.log": "fea7331c85d13d3e5d0d6b59f914c18e970f602e10487ae2904db431e9a27208",
+    "old-no-repair-failure.log": "b0bcbef3aefbf9fb1ea8284d41b9c8fef2a46cfcd87736a7390cd0cf0a33cb91",
+    "report.md": "18e8b2d06a21061cc11e1c1e58235b0887d47948231002c8394fa46590ef3371",
+    "targeted.log": "35a47fe16c5735ebbc3eddb05a8e77a2544ea25e44c0b2a1ff661de9a90b1082"
+  }
+}

@@ -1,0 +1,66 @@
+test_cancel_or_new_revision_during_correction_cannot_publish_late_response (tests.v2.test_plan_repair.Repair.test_cancel_or_new_revision_during_correction_cannot_publish_late_response) ... ok
+test_consumed_retry_private_transition_and_pending_output_do_not_repair (tests.v2.test_plan_repair.Repair.test_consumed_retry_private_transition_and_pending_output_do_not_repair) ... ok
+test_fact_retry_and_correction_share_atomic_single_reservation (tests.v2.test_plan_repair.Repair.test_fact_retry_and_correction_share_atomic_single_reservation) ... ok
+test_probe_anchors_each_synthetic_expression_and_repair_is_metered (tests.v2.test_plan_repair.Repair.test_probe_anchors_each_synthetic_expression_and_repair_is_metered) ... ok
+test_repaired_plan_still_needs_safety_and_full_ack (tests.v2.test_plan_repair.Repair.test_repaired_plan_still_needs_safety_and_full_ack) ... ok
+test_second_bad_plan_is_terminal_no_tts_and_facts_not_duplicated (tests.v2.test_plan_repair.Repair.test_second_bad_plan_is_terminal_no_tts_and_facts_not_duplicated) ... FAIL
+test_success_sends_first_bound_once_replans_same_snapshot_without_bad_candidate (tests.v2.test_plan_repair.Repair.test_success_sends_first_bound_once_replans_same_snapshot_without_bad_candidate) ... FAIL
+test_unknown_plan_error_quota_and_expired_original_budget_do_not_expand_calls (tests.v2.test_plan_repair.Repair.test_unknown_plan_error_quota_and_expired_original_budget_do_not_expand_calls) ... ok
+
+======================================================================
+FAIL: test_second_bad_plan_is_terminal_no_tts_and_facts_not_duplicated (tests.v2.test_plan_repair.Repair.test_second_bad_plan_is_terminal_no_tts_and_facts_not_duplicated)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_plan_repair.py", line 58, in test_second_bad_plan_is_terminal_no_tts_and_facts_not_duplicated
+    self.assertEqual((m.plan_calls,m.fact_calls),(2,1));self.assertEqual(self.peer.session.game,before)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Tuples differ: (2, 0) != (2, 1)
+
+First differing element 1:
+0
+1
+
+- (2, 0)
+?     ^
+
++ (2, 1)
+?     ^
+
+
+======================================================================
+FAIL: test_success_sends_first_bound_once_replans_same_snapshot_without_bad_candidate (tests.v2.test_plan_repair.Repair.test_success_sends_first_bound_once_replans_same_snapshot_without_bad_candidate)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_plan_repair.py", line 45, in test_success_sends_first_bound_once_replans_same_snapshot_without_bad_candidate
+    self.assertEqual(m.plan_calls,2);self.assertEqual(m.fact_calls,1)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 2
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.088s
+
+FAILED (failures=2)

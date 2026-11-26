@@ -11,6 +11,7 @@ import time
 import sys
 from contextlib import asynccontextmanager
 from dataclasses import asdict, replace
+from copy import deepcopy
 from uuid import uuid4
 
 from backend.v2.session import Identity, Session
@@ -173,7 +174,7 @@ class VoicePeer:
         operation.ensure()
         return result
 
-    async def read_request(self, operation, kind, *args):
+    async def read_request(self, operation, kind, *args, allow_plan_repair=True):
         """One transient retry for proposal-only reads, never media or safety.
 
         Only the explicit endpoint/plan/facts call sites use this port. No
@@ -184,8 +185,10 @@ class VoicePeer:
             raise ValueError('read request stage')
         function = getattr(self.providers, kind)
         revision = self.revision
+        snapshot=deepcopy(args) if kind=='plan' else args
+        initial_args=deepcopy(snapshot) if kind=='plan' else args
         try:
-            result = await self.owned(operation, function, *args)
+            result = await self.owned(operation, function, *initial_args)
             if revision != self.revision:
                 raise StaleOperation()
             return result
@@ -193,8 +196,14 @@ class VoicePeer:
             operation.ensure()
             if revision != self.revision:
                 raise StaleOperation()
-            if not isinstance(failure, VoiceFault) or failure.code not in {'network', 'timeout'}:
-                raise
+            from backend.v2.companion import ModelError
+            repair_limit=getattr(failure,'repair_sentence_limit',None)
+            repair=(type(repair_limit) is int and 1<=repair_limit<=4 and isinstance(failure,ModelError) and allow_plan_repair and kind=='plan' and contract_code(failure)=='plan_sentence_limit' and
+                    len(snapshot)==2 and isinstance(snapshot[1],dict) and not self.session.private_mode and not snapshot[1].get('private') and
+                    self.prepared is None and not self.waiting_wake and
+                    operation.budget is self.input_budget and callable(getattr(self.providers,'repair_plan',None)))
+            transient=isinstance(failure,VoiceFault) and failure.code in {'network','timeout'}
+            if not repair and not transient:raise
             budget = operation.budget
             if (budget.read_retry_revision == revision or
                     (kind != 'endpoint' and (self.session.response_confirmed or self.session.pending))):
@@ -202,7 +211,10 @@ class VoicePeer:
             remaining = budget.remaining()
             budget.read_retry_revision = revision  # reserve before the next await
             async with asyncio.timeout(remaining):
-                result = await self.owned(operation, function, *args)
+                retry_function=self.providers.repair_plan if repair else function
+                retry_args=deepcopy(snapshot) if kind=='plan' else args
+                if repair:result=await self.owned(operation,retry_function,*retry_args,sentence_limit=repair_limit)
+                else:result=await self.owned(operation,retry_function,*retry_args)
             if revision != self.revision:
                 raise StaleOperation()
             # An adapter swallowing cancellation or a changed clock cannot
@@ -933,7 +945,7 @@ class VoicePeer:
                     self.session.private_mode = True
                 elif action in {'change', 'leave'} and self.session.private_mode:
                     self.session.private_mode = False
-                    plan = await self.read_request(operation, 'plan', text, operation.session.context(shared=True,query=text or ''))
+                    plan = await self.read_request(operation, 'plan', text, operation.session.context(shared=True,query=text or ''),allow_plan_repair=False)
                 if action == 'leave':
                     plan.update(mode='chat', rules='', roles=[], secrets={})
                 if epoch != self.epoch or not self.session._output_live():
