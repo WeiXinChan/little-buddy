@@ -10,7 +10,7 @@
 
 观察器保留累计 read 数；有限窗口内按原 3200-320 frame 空间和 16016 Hz 上界估算未读预算，计入 start、read、timestamp API 耗时。该软件观测保护依赖有限窗口采样率上界假设，不是物理连续性证明或生产授权。超预算真实失败，不重标音频或增加 buffer。没有任何 PCM 进入生产消费者。
 
-每个变化的 frame/ns 保留 API 前后 mono/boot 时间、累计读取量、相邻 delta、相对首个有效对 delta、至少 500ms 间隔 delta、旧 rate oracle 结果及异常标记。首对仅用于比较，不重置 native origin 或 read 计数。迟到 API 原返回保留并标 late；下一 API 前重新检查边界。原生产 gate 不执行，旧 oracle 拒绝只作为诊断元数据；观察结束只能为 ONE_SESSION_OBSERVATION_ONLY。JSON 仅 worker 真正 join 后读取；输出明确实际 preflight/native/cleanup 字段，不混入旧 production probe 默认字段。
+每个变化的 frame/ns 保留 API 前后 mono/boot 时间、累计读取量、相邻 delta、相对首个有效对 delta、至少 500ms 间隔 delta、旧 rate oracle 结果及异常标记。首对仅用于比较，不重置 native origin 或 read 计数。迟到 API 原返回保留并标 late；下一 API 发起前以 fresh mono/boot checkpoint 重新检查取消、timebase、时间/样本/API/trace 上限，并扣除 read 返回后调度间隙占用的 native room。已知到期不增加 API 计数；窗口内发起但迟到返回仍保留原数据。原生产 gate 不执行，旧 oracle 拒绝只作为诊断元数据；观察结束只能为 ONE_SESSION_OBSERVATION_ONLY。JSON 仅 worker 真正 join 后读取；输出明确实际 preflight/native/cleanup 字段，不混入旧 production probe 默认字段。
 
 ## 构建与执行（root 审查后统一执行）
 
@@ -28,4 +28,6 @@ scripts/with-build-lock ./gradlew -Pv2Test -I app/src/androidTest/native-timesta
 adb shell am instrument --no-logcat -w -r -e class com.littlebuddy.NativeTimestampCadenceTest#observeOneBoundedCadence -e nativeTimestampProbe true -e nativeTimestampCadenceDiagnostic true -e businessIdlePreflight true com.littlebuddy.sim.v2.test/com.littlebuddy.NativeTimestampRunner
 ```
 
-本地 21 JVM tests 通过，含原 pair 拒绝、有限抖动与持续 drift 的受控区分、deadline/取消/清零/API cap。它们不证明硬件抖动、声学效果或生产 PASS。root 旧 8-test snapshot 的 cap 为 1024，不计入本 head 的通过分母；本 head cap 为 2048。设备未执行，原硬件 FAIL 不改变。
+本地 25 JVM tests 通过（原21项、QA原样2项、临发API边界2项），含原 pair 拒绝、有限抖动与持续 drift 的受控区分、deadline/取消/清零/API cap。它们不证明硬件抖动、声学效果或生产 PASS。root 旧 8-test snapshot 的 cap 为 1024，不计入本 head 的通过分母；本 head cap 为 2048。设备未执行，原硬件 FAIL 不改变。
+
+PR83旧head6a1c221的QA反例实际2项/1失败保留：deadline前检查通过后，API前fresh时钟已到3500ms仍调用1次。修复后原源码2/2通过，calls=0；新边界覆盖deadline-1ns发起/迟到raw保留、等值不发起，以及198ms/199ms调度间隙剩余room正/耗尽。旧173e8758 testAPK保持HOLD，不能以新证据替换旧包身份。

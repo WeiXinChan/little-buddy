@@ -76,7 +76,12 @@ internal object CadenceDiagnostic {
                 val readEnd=checkpoint();r.maxReadNs=maxOf(r.maxReadNs,readEnd-start)
                 room(readEnd,previousRead) // Charge read delay before returned data can renew room.
                 if(limit())break
-                val bootBefore=p.bootNs();val before=p.monoNs();r.apiCalls++
+                // Sampling metadata may itself follow a scheduling gap after readEnd.
+                // Re-admit the API using fresh clocks/cancellation and charge that gap.
+                val bootBefore=p.bootNs();val before=checkpoint()
+                if(limit())break
+                room(before,r.samples)
+                r.apiCalls++
                 val value=p.timestamp();val after=p.monoNs();val bootAfter=p.bootNs()
                 r.maxApiNs=maxOf(r.maxApiNs,after-before);r.codes[value.code]=(r.codes[value.code] ?: 0)+1
                 val late=after-o.mono>=WINDOW_NS;if(late)r.lateCalls++

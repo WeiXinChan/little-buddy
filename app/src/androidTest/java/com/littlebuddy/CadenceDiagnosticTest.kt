@@ -79,4 +79,47 @@ class CadenceDiagnosticTest {
         assertTrue(r.rows.zipWithNext().all{(a,b)->a.frames!=b.frames || a.stampNs!=b.stampNs})
         assertTrue(r.rows.all{it.readSamples<=r.samples})
     }
+    // The read-return checkpoint sees time inside the window; only the next clock sample jumps.
+    private class SchedulingPort(val atRead:Int,val apiBefore:Long):CadencePort {
+        var now=0L;var reads=0;var afterReadClocks=0;var calls=0;var cancelAfterApi=false
+        var scratch:ShortArray?=null
+        override fun monoNs():Long {
+            if(reads>0 && ++afterReadClocks==2 && reads==atRead)now=apiBefore
+            return now
+        }
+        override fun bootNs()=now
+        override fun allowed()=!cancelAfterApi
+        override fun read(samples:ShortArray,count:Int):Int {
+            now+=20_000_000;reads++;afterReadClocks=0;scratch=samples;samples.fill(3);return count
+        }
+        override fun timestamp():StartupApiSample {
+            calls++
+            if(reads==atRead){now++;cancelAfterApi=apiBefore<CadenceDiagnostic.WINDOW_NS-1}
+            return StartupApiSample(0,reads*320L,now)
+        }
+        override fun pause(){}
+    }
+    @Test fun finalAdmissionJustBeforeDeadlinePreservesLateReturnButAtDeadlineStartsNoApi(){
+        val before=SchedulingPort(174,CadenceDiagnostic.WINDOW_NS-1);val br=CadenceObservation()
+        CadenceDiagnostic.run(before,br)
+        assertEquals(174,before.calls);assertEquals(1,br.lateCalls);assertTrue(br.rows.last().late)
+        assertEquals(CadenceDiagnostic.WINDOW_NS,br.rows.last().apiAfterNs)
+        val equal=SchedulingPort(174,CadenceDiagnostic.WINDOW_NS);val er=CadenceObservation()
+        CadenceDiagnostic.run(equal,er)
+        assertEquals(173,equal.calls);assertEquals(173,er.apiCalls);assertEquals(0,er.lateCalls)
+        assertEquals("WINDOW_LIMIT",er.terminal);assertEquals(174*320L,er.samples)
+        assertTrue(before.scratch!!.all{it==0.toShort()});assertTrue(equal.scratch!!.all{it==0.toShort()})
+        println("PRE_API_BOUNDARY before_calls=${before.calls} late=${br.lateCalls}; equal_calls=${equal.calls} late=${er.lateCalls}")
+    }
+    @Test fun finalAdmissionChargesSchedulingGapAgainstRemainingNativeRoom(){
+        val within=SchedulingPort(1,198_000_000);val wr=CadenceObservation()
+        assertEquals("CADENCE_CANCELLED",runCatching{CadenceDiagnostic.run(within,wr)}.exceptionOrNull()?.message)
+        assertEquals(1,within.calls)
+        val exhausted=SchedulingPort(1,199_000_000);val er=CadenceObservation()
+        assertEquals("CADENCE_READ_ROOM_EXHAUSTED",runCatching{CadenceDiagnostic.run(exhausted,er)}.exceptionOrNull()?.message)
+        assertEquals(0,exhausted.calls);assertEquals(0,er.apiCalls);assertEquals(320L,er.samples)
+        assertTrue(within.scratch!!.all{it==0.toShort()});assertTrue(exhausted.scratch!!.all{it==0.toShort()})
+        println("PRE_API_ROOM within_calls=${within.calls} exhausted_calls=${exhausted.calls}; samples=${er.samples}")
+    }
+
 }
