@@ -2,10 +2,16 @@
 Description=Little Buddy V2 isolated voice service
 After=network-online.target
 Wants=network-online.target
+Requires=little-buddy-v2-log-retention.service little-buddy-v2-log-retention.timer
+After=little-buddy-v2-log-retention.service
 StartLimitBurst=3
 StartLimitIntervalSec=60
 
 [Service]
+LogNamespace=little-buddy-v2
+SyslogIdentifier=little-buddy-v2
+StandardOutput=journal
+StandardError=journal
 Type=notify
 NotifyAccess=main
 TimeoutStartSec=15

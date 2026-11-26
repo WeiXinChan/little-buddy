@@ -12,12 +12,14 @@ from backend.v2.preflight import CONTRACT,MODELS
 from backend.v2.models import model_policy
 
 
+LOG_POLICY_FILES=frozenset('backend/deploy/'+name for name in ('v2-journald.conf','v2-log-retention.py','v2-log-retention.service','v2-log-retention.timer','v2-log-retention.dropin.conf'))
+
 def selected(path):
     return (path in {'backend/dashscope.py','backend/voice.py','backend/timing.py','backend/requirements-v2.lock'} or
             path.startswith('backend/v2/') and path.endswith('.py') or
             path.startswith('backend/deploy/v2-') or
             path in {'docs/testing/v2/release-ready/runbook.md','docs/testing/v2/release-ready/resources.md',
-                     'docs/testing/v2/release-ready/handshake.md',
+                     'docs/testing/v2/release-ready/handshake.md','docs/testing/v2/log-retention/README.md',
                      'docs/testing/v2/management-v1.md','docs/testing/v2/images-v1/protocol.md',
                      'docs/testing/v2/r88-01/protocol.md'} or
             path in {'assets/v2-default/manifest.json','assets/v2-default/character-identities.json'} or
@@ -29,6 +31,7 @@ def package(ref,output):
     paths=subprocess.check_output(['git','ls-tree','-r','--name-only',ref],text=True).splitlines()
     files={p:subprocess.check_output(['git','show',ref+':'+p]) for p in paths if selected(p)}
     inventory={p:dict(sha256=sha256(raw).hexdigest(),size=len(raw)) for p,raw in files.items()}
+    if not LOG_POLICY_FILES<=files.keys():raise ValueError('release_log_policy_missing')
     if 'backend/v2/live.py' not in files or 'backend/requirements-v2.lock' not in files:
         raise ValueError('release_source_incomplete')
     if files.get('backend/v2/models.py')!=Path(__file__).with_name('models.py').read_bytes():
@@ -61,6 +64,7 @@ def verify(root,expected):
         raise ValueError('release_model_policy_mismatch')
     inventory=metadata['files']
     if not isinstance(inventory,dict) or len(inventory)>1000:raise ValueError('release_inventory_invalid')
+    if not LOG_POLICY_FILES<=inventory.keys():raise ValueError('release_log_policy_missing')
     if (not isinstance(metadata.get('assets_manifest_sha256'),str) or
         not re.fullmatch('[a-f0-9]{64}',metadata['assets_manifest_sha256']) or
         metadata['assets_manifest_sha256']!=inventory.get('assets/v2-default/manifest.json',{}).get('sha256')):
