@@ -1,7 +1,7 @@
 package com.littlebuddy
 
 import com.littlebuddy.v2.CaptureStamp
-import com.littlebuddy.v2.NativeReadLedger
+import com.littlebuddy.v2.LegacyNativeReadLedger as NativeReadLedger
 import org.junit.Assert.*
 import org.junit.Test
 
