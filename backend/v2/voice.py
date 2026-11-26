@@ -603,14 +603,26 @@ class VoicePeer:
             self.capture.clear()
             self.suspended=False
             scope=(session,self.epoch,self.revision,session.connection,session.turn,session.output)
-            token=(scope,old_generation);self.settling_stop=token
+            timing=(session.deadline,session.progress_deadline,session.response_confirmed,session.response_expired)
+            budget=self.input_budget;budget_deadline=budget.deadline
+            token=dict(scope=scope,generation=old_generation,prepared=prepared,budget=budget,
+                       budget_deadline=budget_deadline,timing=timing)
+            self.settling_stop=token
             try:
                 await self.commands()
                 if self.generation is old_generation:await self.cancel_generation()
                 else:await self.cancel_generation_task(old_generation)
                 current=(self.session,self.epoch,self.revision,self.session.connection,self.session.turn,self.session.output)
-                if (current!=scope or self.prepared is not prepared or self.generation is not None or
+                current_timing=(session.deadline,session.progress_deadline,session.response_confirmed,session.response_expired)
+                if (current!=scope or current_timing!=timing or self.generation is not None or
                     self.closed or self.quarantined or any(not t.done() for t in self.retired_tasks) or not session._live()):return
+                # Retire only fields still owned by the captured revoked reply.
+                # A replacement prepared/input budget is preserved, not consumed.
+                replaced=(self.prepared is not prepared or self.input_budget is not budget or budget.deadline!=budget_deadline)
+                if replaced:
+                    session.deadline=session.progress_deadline=0
+                    session.response_confirmed=session.response_expired=False
+                    return
                 self.prepared=None
                 if prepared is not None and event['intent']==prepared[2]:
                     text,deadline,_,revision=prepared
@@ -1155,8 +1167,17 @@ class VoicePeer:
                     return
             token=self.settling_stop
             current=(self.session,self.epoch,self.revision,self.session.connection,self.session.turn,self.session.output)
-            settling=token is not None and token[0]==current and (self.generation is None or self.generation is token[1])
-            if settling:self.session._live() # TTL/heartbeat still expire during bounded cancellation
+            timing=(self.session.deadline,self.session.progress_deadline,self.session.response_confirmed,self.session.response_expired)
+            settling=(token is not None and token['scope']==current and token['prepared'] is self.prepared and
+                      token['budget'] is self.input_budget and token['budget_deadline']==self.input_budget.deadline and
+                      token['timing']==timing and (self.generation is None or self.generation is token['generation']))
+            # A live incoming expression/prepared owns its original ingress
+            # budget. Never poll the revoked previous reply's deadline for it.
+            incoming=(self.awaiting_input and self.input_budget.deadline is not None and
+                      self.session.player is None and not self.session.pending and
+                      (self.generation is None or token is not None and self.generation is token['generation']) and
+                      (self.prepared is None or self.prepared[3]==self.revision and self.prepared[1]==self.input_budget.deadline))
+            if settling or incoming:self.session._live() # TTL/heartbeat still expire
             else:self.session.poll()
             await self.commands()
             await self.poll_visual()

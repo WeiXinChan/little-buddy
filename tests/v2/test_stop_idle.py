@@ -110,3 +110,58 @@ class StopIdle(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result['peer_closed'])
         result=soak.failure_metadata(RuntimeError('PRIVATE_CANARY'))
         self.assertNotIn('PRIVATE_CANARY',json.dumps(result))
+
+    async def begin_blocked_stop(self,p):
+        gate=asyncio.Event();entered=asyncio.Event()
+        async def old():
+            try:await asyncio.Future()
+            except asyncio.CancelledError:entered.set();await gate.wait()
+        p.generation=asyncio.create_task(old());await asyncio.sleep(0)
+        stop=asyncio.create_task(p.handle(json.dumps(dict(v=2,type='stop',epoch=1,seq=0,intent='stop'))))
+        await entered.wait();return stop,gate
+
+    async def test_real_decision_replacement_retires_only_old_fields_and_expires_at_original_new_budget(self):
+        from backend.v2.budget import ResponseBudget
+        t,p=await self.make();p.session.begin_turn();await p.commands();stop,gate=await self.begin_blocked_stop(p)
+        ttl=(p.session.expires,p.session.heartbeat_deadline)
+        self.now[0]=104.;p.input_budget=ResponseBudget(p.session.clock);p.input_budget.speech();p.awaiting_input=True
+        await p.decision('new expression','new_turn',p.revision,p.input_budget.deadline)
+        prepared=p.prepared;budget=p.input_budget;self.now[0]=116.;gate.set();await stop
+        self.assertIs(p.prepared,prepared);self.assertIs(p.input_budget,budget)
+        self.assertEqual(p.session.deadline,0);self.assertEqual(budget.deadline,119.)
+        self.assertEqual((p.session.expires,p.session.heartbeat_deadline),ttl)
+        monitor=asyncio.create_task(p.monitor())
+        try:
+            await asyncio.sleep(.12);self.assertFalse(monitor.done());self.assertEqual(budget.remaining(),3.)
+            self.now[0]=119.01;done,_=await asyncio.wait({monitor},timeout=.3)
+            self.assertTrue(done);await monitor
+            events=[]
+            while not t.socket.outgoing.empty():events.append(json.loads(t.socket.outgoing.get_nowait()))
+            self.assertTrue(any(e['type']=='failure' and e['code']=='timeout' for e in events))
+        finally:monitor.cancel();await asyncio.gather(monitor,return_exceptions=True)
+
+    async def test_new_input_budget_without_prepared_is_not_hidden_or_extended(self):
+        from backend.v2.budget import ResponseBudget
+        t,p=await self.make();p.session.begin_turn();await p.commands();stop,gate=await self.begin_blocked_stop(p)
+        self.now[0]=104.;p.input_budget=ResponseBudget(p.session.clock);p.input_budget.speech();p.awaiting_input=True
+        budget=p.input_budget;self.now[0]=116.;monitor=asyncio.create_task(p.monitor())
+        try:
+            await asyncio.sleep(.12);self.assertFalse(monitor.done())
+            gate.set();await stop;self.assertEqual(p.session.deadline,0)
+            self.assertIs(p.input_budget,budget);self.assertEqual(budget.deadline,119.)
+        finally:gate.set();await stop;monitor.cancel();await asyncio.gather(monitor,return_exceptions=True)
+
+    async def test_new_generation_identity_alone_cannot_be_cleared_by_old_stop(self):
+        t,p=await self.make();p.session.begin_turn();await p.commands();stop,gate=await self.begin_blocked_stop(p)
+        new_gate=asyncio.Event();new=asyncio.create_task(new_gate.wait());p.generation=new;p.session.deadline=119.
+        self.now[0]=116.;gate.set();await stop
+        self.assertIs(p.generation,new);self.assertFalse(new.done());self.assertEqual(p.session.deadline,119.)
+        new.cancel();await asyncio.gather(new,return_exceptions=True)
+
+    async def test_new_reply_deadline_without_prepared_cannot_hide_behind_old_token(self):
+        t,p=await self.make();p.session.begin_turn();await p.commands();stop,gate=await self.begin_blocked_stop(p)
+        p.session.deadline=119.;self.now[0]=119.01;monitor=asyncio.create_task(p.monitor())
+        try:
+            done,_=await asyncio.wait({monitor},timeout=.3);self.assertTrue(done);await monitor
+            self.assertTrue(p.session.response_expired);self.assertFalse(stop.done())
+        finally:gate.set();await stop;monitor.cancel();await asyncio.gather(monitor,return_exceptions=True)
