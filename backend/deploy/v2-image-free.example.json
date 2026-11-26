@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "region": "cn-beijing",
+  "workspace": "replace-with-reviewed-workspace",
+  "model": "qwen-image-2.1-turbo",
+  "fallback_model": "qwen-image-2.1-pro",
+  "free_tier_only": true,
+  "review_model": "qwen4-max",
+  "resource_review_id": "replace-with-free-only-review-reference",
+  "prompt_policy": "wali-image-prompt-v1",
+  "image_policy": "wali-image-png-v1",
+  "width": 512,
+  "height": 512,
+  "timeout": 8,
+  "result_ttl": 15
+}

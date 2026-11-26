@@ -14,15 +14,19 @@ import httpx
 from uuid import uuid4
 
 from backend.v2.image_bytes import MAX_PNG,checked_png
+from backend.v2.image_download import download_png
 
 MAX_BODY=3*1024*1024
 CANCEL_SECONDS=.3
+ERROR_BODY=16384
+URL_MODELS={'qwen-image-2.1-turbo','qwen-image-2.1-pro'}
+FREE_TIER_CODE='AllocationQuota.FreeTierOnly'
 
 
 class ImageFailure(ValueError):
     def __init__(self,reason):
         if reason not in {'disabled','configuration','unreviewed','unavailable','busy','quarantined','prompt',
-                          'prompt_review','image_review','budget','payload','png','upstream','timeout','stale','released'}:
+                          'prompt_review','image_review','budget','quota','payload','png','upstream','timeout','stale','released'}:
             raise ValueError('image failure code')
         self.reason=reason;super().__init__(reason)
 
@@ -54,6 +58,8 @@ class ImageConfig:
     height:int=512
     timeout:float=8.
     result_ttl:float=15.
+    fallback_model:str=''
+    free_tier_only:bool=False
 
 
 @dataclass(frozen=True)
@@ -127,6 +133,7 @@ class QwenImages:
         self.http=http;self.config=config or ImageConfig();self._key=api_key
         self._prompt_reviewer=prompt_reviewer;self._image_reviewer=image_reviewer
         self._task=None;self._lease=None;self._serial=0;self._last=None;self.quarantined=False;self._closed=False
+        self._exhausted=set()
 
     def availability(self):
         c=self.config
@@ -134,17 +141,28 @@ class QwenImages:
         if type(c) is not ImageConfig:return 'configuration'
         if c.enabled is False:return 'disabled'
         if (c.enabled is not True or not isinstance(c.model,str) or not isinstance(c.workspace,str) or
-            c.region!='cn-beijing' or c.model not in {'qwen-image-3.0','qwen-image-3.0-pro'} or
+            c.region!='cn-beijing' or c.model not in {'qwen-image-3.0','qwen-image-3.0-pro'}|URL_MODELS or
             not re.fullmatch('[A-Za-z0-9][A-Za-z0-9-]{0,62}',c.workspace) or
             any(type(n) is not int or not 512<=n<=2048 for n in (c.width,c.height)) or
             type(c.timeout) not in (int,float) or not math.isfinite(c.timeout) or not 0<c.timeout<=15 or
             type(c.result_ttl) not in (int,float) or not math.isfinite(c.result_ttl) or not 0<c.result_ttl<=30):return 'configuration'
+        if (not isinstance(c.fallback_model,str) or type(c.free_tier_only) is not bool):return 'configuration'
+        if c.model in URL_MODELS:
+            if (c.free_tier_only is not True or c.width!=512 or c.height!=512 or
+                c.fallback_model not in ({'','qwen-image-2.1-pro'} if c.model=='qwen-image-2.1-turbo' else {''})):
+                return 'configuration'
+        elif c.fallback_model or c.free_tier_only:return 'configuration'
         if any(not isinstance(v,str) or not re.fullmatch('[A-Za-z0-9_.-]{1,80}',v)
                for v in (c.resource_review_id,c.prompt_policy,c.image_policy)):return 'unreviewed'
         if self._prompt_reviewer is None or self._image_reviewer is None:return 'unreviewed'
         if (self.http is None or not isinstance(self._key,str) or not 1<=len(self._key)<=4096 or
             not self._key.isascii() or any(ch.isspace() for ch in self._key)):return 'unavailable'
-        return 'quarantined' if self.quarantined else 'configured'
+        if self.quarantined:return 'quarantined'
+        if all(model in self._exhausted for model in self._route()):return 'quota'
+        return 'configured'
+
+    def _route(self):
+        return (self.config.model,)+( (self.config.fallback_model,) if self.config.fallback_model else ())
 
     def _check(self,lease,*,deadline=True):
         if lease.revoked or lease.serial!=self._serial:raise ImageFailure('stale')
@@ -223,47 +241,25 @@ class QwenImages:
             if task.done() and self._task is task:self._task=self._lease=None
 
     async def _generate(self,description,lease):
-        body=bytearray();candidate=None
         try:
             self._check(lease);nonce=uuid4().hex
             decision=await self._prompt_reviewer(description,nonce)
             self._check(lease)
             if not self._reviewed(decision,description.encode(),nonce,self.config.prompt_policy):raise ImageFailure('prompt_review')
-            endpoint=f'https://{self.config.workspace}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/images/generations'
-            payload=dict(model=self.config.model,prompt=description,size=f'{self.config.width}x{self.config.height}',
-                         n=1,response_format='b64_json',prompt_extend=False,enable_thinking=False)
-            self._check(lease)
-            # A standalone Request avoids inheriting chat cookies, default query
-            # params or identity-bearing client headers. No arbitrary response URL.
-            request=httpx.Request('POST',endpoint,json=payload,headers={'Authorization':'Bearer '+self._key,
-                'Accept-Encoding':'identity'},extensions={'timeout':{k:self.config.timeout for k in ('connect','read','write','pool')}})
-            response=await self.http.send(request,stream=True,auth=None,follow_redirects=False)
-            try:
+            png=None
+            for model in self._route():
                 self._check(lease)
-                if response.status_code!=200:raise ImageFailure('upstream')
-                if (response.headers.get('content-type','').split(';')[0]!='application/json' or
-                    response.headers.get('content-encoding','identity')!='identity'):raise ImageFailure('payload')
-                lengths=response.headers.get_list('content-length')
-                if lengths and (len(lengths)!=1 or not lengths[0].isdigit() or len(lengths[0])>10 or int(lengths[0])>MAX_BODY):
-                    raise ImageFailure('payload')
-                async for block in response.aiter_raw(chunk_size=16384):
-                    self._check(lease)
-                    if len(body)+len(block)>MAX_BODY:raise ImageFailure('payload')
-                    body.extend(block)
-            finally:await response.aclose()
-            self._check(lease)
-            data=json.loads(body,object_pairs_hook=_object,parse_constant=lambda _:(_ for _ in ()).throw(ValueError()))
-            if (not isinstance(data,dict) or set(data)-{'created','data','usage'} or not isinstance(data.get('data'),list) or
-                len(data['data'])!=1 or not isinstance(data['data'][0],dict) or set(data['data'][0])!={'b64_json'}):
-                raise ImageFailure('payload')
-            encoded=data['data'][0]['b64_json']
-            if not isinstance(encoded,str) or not encoded.isascii() or len(encoded)>4*((MAX_PNG+2)//3):raise ImageFailure('payload')
-            decoded=base64.b64decode(encoded,validate=True)
-            if base64.b64encode(decoded).decode()!=encoded:raise ImageFailure('payload')
-            try:png=checked_png(decoded,self.config.width,self.config.height)
-            except (ValueError,OverflowError):raise ImageFailure('png') from None
-            del data,encoded,decoded
-            body[:]=b'\0'*len(body);body.clear()
+                if model in self._exhausted:continue
+                try:decoded=await self._generate_once(description,lease,model)
+                except _FreeTierExhausted:
+                    self._exhausted.add(model)
+                    continue # sole fallback condition: verified 403, no image in strict error envelope
+                self._check(lease)
+                try:png=checked_png(decoded,self.config.width,self.config.height)
+                except (ValueError,OverflowError):raise ImageFailure('png') from None
+                del decoded
+                break # an already-produced image is never retried after URL/PNG/review failure
+            if png is None:raise ImageFailure('quota')
             self._check(lease);nonce=uuid4().hex
             decision=await self._image_reviewer(png,nonce)
             self._check(lease)
@@ -273,5 +269,69 @@ class QwenImages:
         except asyncio.CancelledError:raise
         except ImageFailure:raise
         except Exception:raise ImageFailure('upstream') from None
+
+    async def _generate_once(self,description,lease,model):
+        body=bytearray()
+        try:
+            self._check(lease)
+            endpoint=f'https://{self.config.workspace}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/images/generations'
+            payload=dict(model=model,prompt=description,size=f'{self.config.width}x{self.config.height}',n=1,
+                response_format='url' if model in URL_MODELS else 'b64_json',prompt_extend=False,enable_thinking=False)
+            request=httpx.Request('POST',endpoint,json=payload,headers={'Authorization':'Bearer '+self._key,
+                'Accept-Encoding':'identity'},extensions={'timeout':{k:self.config.timeout for k in ('connect','read','write','pool')}})
+            response=await self.http.send(request,stream=True,auth=None,follow_redirects=False)
+            try:
+                self._check(lease)
+                if (response.headers.get('content-type','').split(';')[0]!='application/json' or
+                    response.headers.get('content-encoding','identity')!='identity'):raise ImageFailure('payload')
+                limit=ERROR_BODY if response.status_code!=200 or model in URL_MODELS else MAX_BODY
+                lengths=response.headers.get_list('content-length')
+                if lengths and (len(lengths)!=1 or not lengths[0].isdigit() or len(lengths[0])>10 or int(lengths[0])>limit):
+                    raise ImageFailure('payload')
+                async for block in response.aiter_raw(chunk_size=16384):
+                    self._check(lease)
+                    if len(body)+len(block)>limit:raise ImageFailure('payload')
+                    body.extend(block)
+            finally:await response.aclose()
+            self._check(lease)
+            data=json.loads(body,object_pairs_hook=_object,parse_constant=lambda _:(_ for _ in ()).throw(ValueError()))
+            if response.status_code!=200:
+                if model in URL_MODELS and response.status_code==403 and _free_tier_error(data):raise _FreeTierExhausted()
+                raise ImageFailure('upstream')
+            if (not isinstance(data,dict) or set(data)-{'created','data','usage'} or not isinstance(data.get('data'),list) or
+                len(data['data'])!=1 or not isinstance(data['data'][0],dict)):
+                raise ImageFailure('payload')
+            if model in URL_MODELS:
+                if set(data['data'][0])!={'url'}:raise ImageFailure('payload')
+                url=data['data'][0]['url'];del data
+                body[:]=b'\0'*len(body);body.clear()
+                self._check(lease)
+                return await download_png(url,lambda:self._check(lease))
+            if set(data['data'][0])!={'b64_json'}:raise ImageFailure('payload')
+            encoded=data['data'][0]['b64_json']
+            if not isinstance(encoded,str) or not encoded.isascii() or len(encoded)>4*((MAX_PNG+2)//3):raise ImageFailure('payload')
+            decoded=base64.b64decode(encoded,validate=True)
+            if base64.b64encode(decoded).decode()!=encoded:raise ImageFailure('payload')
+            return decoded
         finally:
             body[:]=b'\0'*len(body);body.clear()
+
+
+class _FreeTierExhausted(Exception):
+    pass
+
+
+def _free_tier_error(data):
+    if type(data) is not dict:return False
+    if 'error' in data:
+        if set(data)-{'error','request_id'} or type(data['error']) is not dict:return False
+        error=data['error']
+        if set(error)-{'code','message','type','param'}:return False
+        if 'type' in error and not isinstance(error['type'],str):return False
+        if 'param' in error and error['param'] is not None and not isinstance(error['param'],str):return False
+    else:
+        if set(data)-{'code','message','request_id'}:return False
+        error=data
+    if 'request_id' in data and not isinstance(data['request_id'],str):return False
+    return (error.get('code')==FREE_TIER_CODE and
+            ('message' not in error or isinstance(error['message'],str)))

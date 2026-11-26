@@ -1,0 +1,25 @@
+{
+  "previous_head": "76be1a7fb789aef8d2cd16d3be955c4d202dab89",
+  "methods_executed": 103,
+  "methods_passed": 103,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "breakdown": {
+    "previous_new_boundary_methods": 18,
+    "site_local_incremental_methods": 4,
+    "original_image_suite_methods": 81,
+    "existing_negative_control_detections_in_original_suite": 4
+  },
+  "normal_methods": 99,
+  "negative_control_detection_methods": 4,
+  "original_failure_preserved": true,
+  "production_change": "explicit IPv6 is_site_local rejection only; no free-route/TLS/DNS pinning relaxation",
+  "model": "qwen4-max unchanged",
+  "real_dns_calls": 0,
+  "real_model_calls": 0,
+  "real_config_or_secret_access": false,
+  "deploy_or_device": false,
+  "compile": "pass",
+  "diff_check": "pass"
+}

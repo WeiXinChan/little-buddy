@@ -32,3 +32,6 @@ tests.log为新增10方法（正常9＋权限门槛负控1）和原配置/审核
 
 
 部署接线补充：默认unit与v2-control现同时传入image-config和feedback-database，详情与首装父目录步骤见`docs/testing/v2/deploy-inputs/README.md`。root源0700/0600与DynamicUser只读credential副本语义不变。反馈状态在`StateDirectory=little-buddy-v2`下真实0700的feedback子目录；离线root预检不建目录/数据库，首装先由root准备父目录。默认不声明single-store-no-exports-v1，all_copies_deleted不能由单库删除推断。此前版本发行包不包含此接线，须由root从最终已合SHA重打包再审定启动；本批没有部署。
+
+
+免费图片策略补充：root审查后可使用`backend/deploy/v2-image-free.example.json`切换2.1 Turbo优先/Pro后备（新增fallback_model、free_tier_only，专用key/政策ID与qwen4-max审核不变）。配置声明须对应两模型控制台用完即停，不是账户余额证明；不自动付费回退3.0。具体URL隔离、严格quota后备/双耗尽停止和有限真实单图验证步骤见`docs/testing/v2/free-image-routing/README.md`。旧实际image.json不会因部署代码自动改动；不据本地计数宣称免费，qwen-mt-image翻译额度不用于生图。按含适配的最终main核后端发行清单，RC8/APK版本无需为本后端改动变更。本批仅本地合成验证，未部署或真实推理。

@@ -1,0 +1,12 @@
+{
+  "source": "76be1a7fb789aef8d2cd16d3be955c4d202dab89",
+  "case": "fec0::1",
+  "expected": "rejected",
+  "actual": [
+    "fec0::1"
+  ],
+  "is_global": true,
+  "is_site_local": true,
+  "network_calls": 0,
+  "pass": false
+}

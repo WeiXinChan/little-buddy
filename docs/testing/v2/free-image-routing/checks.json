@@ -1,0 +1,40 @@
+{
+  "base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+  "new_methods": 18,
+  "new_passed": 18,
+  "original_modules": [
+    "tests.v2.test_dynamic_images",
+    "tests.v2.test_image_runtime",
+    "tests.v2.test_image_review",
+    "tests.v2.test_dynamic_wire",
+    "tests.v2.test_image_descriptions",
+    "tests.v2.test_images"
+  ],
+  "original_methods": 81,
+  "original_passed": 81,
+  "original_negative_control_detection_methods": [
+    "tests.v2.test_dynamic_images.Images.test_negative_control_bypassing_image_review_is_detected",
+    "tests.v2.test_dynamic_wire.Wire.test_negative_control_bypassing_played_gate_is_detected",
+    "tests.v2.test_image_descriptions.Descriptions.test_negative_control_ungrounded_details_are_detected",
+    "tests.v2.test_images.ImageRoutes.test_negative_control_removing_played_gate_is_detected"
+  ],
+  "total_methods": 99,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "original_normal_methods": 77,
+  "new_synthetic_requests": "offline API/DNS/stream fixtures only",
+  "actual_model_calls": 0,
+  "real_config_or_secrets_read": false,
+  "deployed": false,
+  "rc8_branch_or_android_changed": false,
+  "text_and_review_model": "qwen4-max unchanged",
+  "new_dependencies": false,
+  "compile": "pass",
+  "diff_check": "pass",
+  "cloud_limitations": [
+    "account quota/stop switches not verified by code",
+    "strict documented output host/path may require root review if actual response differs",
+    "no actual TLS/DNS/provider PNG512/latency validation performed"
+  ]
+}

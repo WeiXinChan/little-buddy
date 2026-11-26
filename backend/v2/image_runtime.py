@@ -29,7 +29,7 @@ def read_image_runtime(path, credential_directory, expected_workspace):
             return None
         names = {'enabled', 'region', 'workspace', 'model', 'review_model', 'resource_review_id',
                  'prompt_policy', 'image_policy', 'width', 'height', 'timeout', 'result_ttl'}
-        if (type(value) is not dict or set(value) != names or value['enabled'] is not True or
+        if (type(value) is not dict or set(value) not in (names,names|{'fallback_model','free_tier_only'}) or value['enabled'] is not True or
             value['workspace'] != expected_workspace or value['review_model'] != TEXT_MODEL or
             value['prompt_policy'] != PROMPT_POLICY or value['image_policy'] != IMAGE_POLICY):
             raise ValueError()
