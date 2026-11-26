@@ -11,7 +11,7 @@ from dataclasses import asdict,dataclass,replace
 import json
 from pathlib import Path
 import time
-from backend.v2.voice import VoicePeer
+from backend.v2.voice import VoicePeer,VoiceFault,WireError
 from backend.v2.companion import UnifiedProviders,CompanionPolicy
 from scripts.v2_multiturn_probe import BatchState,ProbeLimit,usage_delta
 
@@ -102,11 +102,24 @@ class Duplex:
         await self.outgoing.put(raw)
     async def close(self,*args):self.closed=True
 
+class AttemptFailure(ProbeLimit):
+    def __init__(self,stage,reason):super().__init__('attempt_failed');self.stage=stage;self.reason=reason
+
+FAILURE_STAGES=frozenset({'admission','bind','first_audio','stop','generation','delivery','attempt_wait'})
+FAILURE_REASONS=frozenset({'session_closed','transport_closed','timeout','cancelled','quota','wire','limit','provider','unknown'})
+def failure_metadata(error=None,*,stage='attempt_wait',reason='unknown',transport=None):
+    if isinstance(error,AttemptFailure):stage,reason=error.stage,error.reason
+    result=dict(stage=stage if stage in FAILURE_STAGES else 'attempt_wait',reason=reason if reason in FAILURE_REASONS else 'unknown')
+    if transport is not None:
+        result.update(peer_closed=bool(transport.peer.closed),session_active=bool(transport.peer.session.active),
+                      response_expired=bool(transport.peer.session.response_expired),control=transport.last_control)
+    return result
+
 class BackendTransport:
     def __init__(self,providers):
         self.socket=Duplex();self.peer=VoicePeer(self.socket,providers,CompanionPolicy())
         self.epoch=0;self.seq=0;self.lock=asyncio.Lock();self.tasks=set();self.failed=False;self.mode='normal'
-        self.first=asyncio.Event();self.completed=asyncio.Event();self.identity=None;self.ack_seq=0;self.frames=0;self.first_at=None
+        self.first=asyncio.Event();self.completed=asyncio.Event();self.identity=None;self.ack_seq=0;self.frames=0;self.first_at=None;self.last_control=None;self.failure_stage='admission'
     def start(self):
         self.tasks={asyncio.create_task(self.peer.run()),asyncio.create_task(self.receive()),asyncio.create_task(self.heartbeat())}
         for task in self.tasks:task.add_done_callback(lambda done:None if done.cancelled() else done.exception())
@@ -123,7 +136,9 @@ class BackendTransport:
             event=json.loads(await self.socket.outgoing.get());kind=event['type']
             if event.get('epoch')!=self.epoch:continue
             if kind=='bound':self.identity=event['identity'];self.ack_seq=0
-            if kind=='failure':self.failed=True;self.completed.set()
+            if kind=='failure':
+                self.last_control=event.get('code') if event.get('code') in {'voice','timeout','network','quota','safety'} else 'unknown'
+                self.failed=True;self.completed.set()
             if kind=='reply_end':self.completed.set()
             if kind=='audio':
                 self.frames+=1;self.first_at=self.first_at or time.monotonic();self.first.set()
@@ -132,21 +147,33 @@ class BackendTransport:
                 identity=dict(self.identity,sequence=self.ack_seq);self.ack_seq+=1
                 await self.command('ack',identity=identity,player=event['player'],stream=event['stream'],segment=event['segment'],head=event['end'])
     async def attempt(self,text,mode):
+        self.failure_stage='admission'
+        try:return await self._attempt(text,mode)
+        except Exception as error:
+            reason='session_closed' if isinstance(error,ProbeLimit) and error.args==('session_closed',) else 'timeout' if isinstance(error,TimeoutError) else 'wire' if isinstance(error,WireError) else 'quota' if isinstance(error,VoiceFault) and error.code=='quota' else 'limit' if isinstance(error,ProbeLimit) else 'provider'
+            raise AttemptFailure(self.failure_stage,reason) from None
+
+    async def _attempt(self,text,mode):
         if self.peer.closed or not self.peer.session.active:raise ProbeLimit('session_closed')
-        self.mode=mode;self.first.clear();self.completed.clear();self.failed=False;self.first_at=None;self.frames=0
+        self.mode=mode;self.first.clear();self.completed.clear();self.failed=False;self.first_at=None;self.frames=0;self.last_control=None
         self.peer.session.begin_turn();await self.peer.commands() # synthetic ASR/endpoint boundary
         generation=asyncio.create_task(self.peer.respond(text,self.peer.epoch));self.peer.generation=generation
+        self.failure_stage='bind'
         await self.command('bind',player='soak-'+str(self.peer.session.turn))
         if mode in {'interrupt','drop'}:
+            self.failure_stage='first_audio'
             await self.first.wait()
+            self.failure_stage='stop'
             await self.command('stop',intent='soak-stop') # real protocol revocation, no direct ACK/state edit
+        self.failure_stage='generation'
         try:await asyncio.shield(generation)
         except asyncio.CancelledError:
             if asyncio.current_task().cancelling() or mode not in {'interrupt','drop'} or not generation.cancelled():raise
         if mode in {'interrupt','drop'}:
             # Stop command must actually be processed, not just enqueued.
             while self.peer.epoch!=self.epoch:await asyncio.sleep(.001)
-        else:await self.completed.wait()
+        else:
+            self.failure_stage='delivery';await self.completed.wait()
         return dict(delivered=not self.failed and self.completed.is_set(),frames=self.frames,
                     game_mode=self.peer.session.game.get('mode') if self.peer.session.game.get('mode') in {'chat','guess','story','adventure','association'} else None,
                     first_transport_at=self.first_at,interrupted=mode in {'interrupt','drop'} and self.peer.epoch==self.epoch)
@@ -268,7 +295,7 @@ async def run_soak(limits=Limits(),*,providers=None,allow_cloud=False,allow_devi
             await wait_until(min(started+index*limits.interval,deadline))
             if stop.is_set() or time.monotonic()>=deadline:break
             label,text,mode=SCENARIOS[index%len(SCENARIOS)]
-            row=dict(index=index,scenario=label,injected=mode,started=round(time.monotonic()-started,3),status='failed',observed=None)
+            row=dict(index=index,scenario=label,injected=mode,started=round(time.monotonic()-started,3),status='failed',observed=None,failure=None)
             attempts.append(row);index+=1;begin=time.monotonic()
             collector.record('attempt_started')
             task=asyncio.create_task(transport.attempt(text,mode));ownership.track(task)
@@ -277,6 +304,7 @@ async def run_soak(limits=Limits(),*,providers=None,allow_cloud=False,allow_devi
             stopper.cancel()
             if task not in done:
                 row['status']='cancelled' if stop.is_set() else 'timeout'
+                row['failure']=failure_metadata(stage=transport.failure_stage,reason=row['status'],transport=transport)
                 collector.record('before_attempt_cancel');task.cancel();collector.record('after_attempt_cancel')
                 reason=row['status'];break
             try:
@@ -285,7 +313,9 @@ async def run_soak(limits=Limits(),*,providers=None,allow_cloud=False,allow_devi
                      first_text_to_transport_ms=None if observed['first_transport_at'] is None else round((observed['first_transport_at']-begin)*1000,2),
                      acoustic_reply_ms=None,interruption_to_speaker_silence_ms=None)
                 row['status']='interrupted' if observed['interrupted'] else 'delivered' if observed['delivered'] else 'failed'
-            except Exception:row['status']='failed' # never error text or arbitrary class/name
+                if row['status']=='failed':row['failure']=failure_metadata(stage='delivery',reason='provider',transport=transport)
+            except Exception as error:
+                row['status']='failed';row['failure']=failure_metadata(error,transport=transport)
             finally:
                 active_seconds+=time.monotonic()-begin;row['completed']=round(time.monotonic()-started,3)
                 collector.record('attempt_finished')
@@ -297,6 +327,7 @@ async def run_soak(limits=Limits(),*,providers=None,allow_cloud=False,allow_devi
             if 'completed' not in row:
                 row['completed']=round(time.monotonic()-started,3)
                 if row['status']=='failed':row['status']='cancelled'
+                if row['failure'] is None:row['failure']=failure_metadata(stage=transport.failure_stage,reason='cancelled',transport=transport)
         observation_seconds=time.monotonic()-started
         cleanup_started=time.monotonic()
         collector.record('before_transport_cleanup')

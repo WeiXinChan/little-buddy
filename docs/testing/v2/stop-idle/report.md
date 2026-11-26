@@ -1,0 +1,15 @@
+# stop后旧回复期限导致长测断连
+
+基线main7f3bd941d4af8a7c283f68ceda16fa41bfff532d。故事PR103先交付，本批独立长测恢复，不混其未审源码。原90.002s离线长测FAIL、deadline115反例及脚本逐字保存；不是60分钟完成。
+
+因果：实际handle(stop)原代码撤销output并等旧generation退出，但保留该回复deadline/progress。monitor随后Session.poll把旧回复标response_expired，run因monitor结束而退出连接。原controlled monitor证据明确；本批新增实际run反例在旧源码FAIL（old-run-failure.log），修后跨旧115.01仍连通并能交付下一轮。模型9/TTS3未用尽只是原报告事实，不把错误归给额度或延迟。
+
+最小修复：stop保存session/epoch/revision/connection/turn/撤销后output及prepared/旧generation身份，有限取消并确认旧task退出。取消期间若新generation替换，只取消捕获的旧task，不动新task。只有所有scope仍相同、prepared未替换、无新generation/未确认retired、非quarantine且session有效时，才清该旧回复deadline/progress和确认/过期标志。prepared合法新回复仍走原deadline，不重建预算。若中途新revision/新turn/新prepared则不动其状态。
+
+有限确认期间monitor仍检查TTL/heartbeat，但不以正在撤销的同一旧回复deadline制造超时；新scope或新generation不会借此暂停期限。释放.5秒边界不变，确认失败继续quarantine/失败，不把取消发出当释放。纯stop不调用valid_interaction，不延expires或heartbeat_deadline，不创建会话或复活旧session。
+
+runner新增固定AttemptFailure阶段/原因：admission/bind/first_audio/stop/generation/delivery/attempt_wait及session_closed/timeout/quota/wire/limit/provider等；无异常文本。已开始行含失败枚举及peer_closed/session_active/response_expired/白名单control，超时/取消也有原因，不再只有observed=null。未知正文不导出。
+
+8新增＋35受影响=43唯一PASS/0FAIL/0SKIP，编译/diff通过。受控Session时钟100→旧deadline115.01，预置有效TTL/heartbeat（后台自动heartbeat仅在该clock fixture阻塞，非生产lease修改）；实际run关联、六场景以30秒受控间隔推进、stop后跨原期限并仍用同session，四交付/两打断路径由实际VoicePeer/transport执行。另覆盖取消跨deadline仍先确认、新revision/turn/prepared不清、旧资源未确认/TTL到期不复活、prepared原deadline及固定诊断无正文。短时真实默认runner混合场景与原取消/资源采样测试也通过；并非真实30秒间隔重新90秒或60分钟执行。
+
+不改云/手机/生产服务/TTL/协议，不自动重跑失败长测。本批只修已证stop闲置期限和失败诊断；原90s FAIL永久保留，A36/P14仍OPEN，独立QA后由root安排下一必要有界离线长测。

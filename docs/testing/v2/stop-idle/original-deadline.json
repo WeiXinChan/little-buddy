@@ -1,0 +1,12 @@
+{
+  "source": "7f3bd941d4af8a7c283f68ceda16fa41bfff532d",
+  "controlled_clock": true,
+  "cloud_calls": 0,
+  "device": false,
+  "deadline_before_stop": 115.0,
+  "deadline_after_stop": 115.0,
+  "clock_after_original_deadline": 115.01,
+  "response_expired": true,
+  "timeout_sent": true,
+  "scope": "actual stop handler and monitor; no active TTS/resource; production run exits when monitor returns"
+}
