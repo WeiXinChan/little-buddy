@@ -60,10 +60,16 @@ class Descriptions(unittest.IsolatedAsyncioTestCase):
         socket=Socket();socket.acknowledge=False
         peer=VoicePeer(socket,provider,CompanionPolicy());socket.peer=peer
         self.last_peer,self.last_socket=peer,socket
+        peer._test_wire_tasks=set();peer._test_observed_tasks=set()
+        original_track=peer.track_retired
+        def tracked(task):
+            peer._test_wire_tasks.add(task);original_track(task)
+        peer.track_retired=tracked
         self.addAsyncCleanup(self.cleanup,peer)
         peer.input_budget.speech()
         peer.session.begin_turn();peer.session.drain_commands()
         peer.generation=asyncio.create_task(peer.respond(text,0))
+        peer._test_wire_tasks.add(peer.generation)
         bind=dict(v=2,type='bind',epoch=0,seq=0,player='p',features=[feature])
         if feature=='images_v2':bind['image_contract']=CONTRACT
         await peer.handle(json.dumps(bind))
@@ -74,25 +80,125 @@ class Descriptions(unittest.IsolatedAsyncioTestCase):
             head=final['end'] if full else final['end']-1)
         await peer.commands()
         if full:
-            await peer.generation
             seen={final['segment']}
             async def help_done():
-                while peer.visual_task and not peer.visual_task.done():
+                while True:
+                    if peer.visual_task:peer._test_wire_tasks.add(peer.visual_task)
                     for e in list(socket.events):
                         if e['type']=='audio' and e['segment'] not in seen:
-                            if not ack_help:return
+                            if not ack_help:return # preserve unplayed/late-ACK negative control
                             seen.add(e['segment'])
                             identity=replace(peer.ack_identity,sequence=peer.ack_sequence);peer.ack_sequence+=1
                             peer.session.ack(identity,player=e['player'],stream=e['stream'],segment=e['segment'],head=e['end'])
                             await peer.commands()
+                    for task in peer._test_wire_tasks:
+                        if task.done() and task not in peer._test_observed_tasks:
+                            peer._test_observed_tasks.add(task)
+                            task.result() # propagate unexpected task failure, never return_exceptions-as-PASS
+                    if all(task.done() for task in peer._test_wire_tasks):return
                     await asyncio.sleep(.001)
             await asyncio.wait_for(help_done(),2)
         return peer,socket
 
     async def cleanup(self,peer):
-        peer.invalidate_visual()
-        if peer.generation and not peer.generation.done():peer.generation.cancel()
-        await asyncio.gather(*([peer.generation] if peer.generation else []),*peer.retired_tasks,return_exceptions=True)
+        # One total observation budget, including tasks created by cancellation.
+        deadline=getattr(peer,'_test_cleanup_deadline',asyncio.get_running_loop().time()+2)
+        peer._test_cleanup_deadline=deadline
+        tasks=set(getattr(peer,'_test_wire_tasks',()))|set(getattr(peer,'_test_cleanup_tasks',()))
+        observed=set(getattr(peer,'_test_observed_tasks',()))
+        failure=getattr(peer,'_test_cleanup_failure',None);quarantined_before=peer.quarantined;peer.closed=True
+        def collect():
+            tasks.update(getattr(peer,'_test_wire_tasks',()))
+            tasks.update(peer.retired_tasks)
+            if peer.generation:tasks.add(peer.generation)
+            if peer.visual_task:tasks.add(peer.visual_task)
+        collect();peer.invalidate_visual()
+        if (peer.generation and not peer.generation.done() and not peer.generation.cancelling() and
+            not any(not task.done() for task in peer.retired_tasks)):
+            peer.generation.cancel()
+        # A generation already waiting on registered resource exit must not get
+        # a second cancellation that invalidates its healthy release confirmation.
+        # New retired tasks may be resource __aexit__ confirmations. Observe
+        # them under the same deadline; do not prematurely cancel safe release.
+        def observe_done():
+            nonlocal failure
+            for task in tasks:
+                if task.done() and task not in observed:
+                    observed.add(task)
+                    if not task.cancelled():
+                        try:task.result()
+                        except BaseException as error:
+                            if failure is None:failure=error
+        quiescent=False
+        while True:
+            collect();observe_done()
+            pending={task for task in tasks if not task.done()}
+            if not pending:
+                previous=(len(tasks),len(observed))
+                await asyncio.sleep(0);collect();observe_done()
+                pending={task for task in tasks if not task.done()}
+                if not pending and previous==(len(tasks),len(observed)):
+                    quiescent=True;break
+            remaining=deadline-asyncio.get_running_loop().time()
+            if remaining<=0:break
+            if pending:await asyncio.wait(pending,timeout=remaining,return_when=asyncio.FIRST_COMPLETED)
+        collect();observe_done();pending={task for task in tasks if not task.done()}
+        peer._test_cleanup_tasks=tasks;peer._test_cleanup_pending=pending;peer._test_observed_tasks=observed
+        peer._test_cleanup_failure=failure
+        peer._test_cleanup_quiescent=quiescent
+        peer._test_cleanup_resource_confirmed=not pending and not peer.quarantined and failure is None and quiescent
+        peer._test_cleanup_confirmed=peer._test_cleanup_resource_confirmed
+        self.assertFalse(pending,'test client cleanup deadline: retained unconfirmed task handles')
+        if failure is not None:raise failure
+        self.assertTrue(quiescent,'test client cleanup deadline: final callbacks not drained')
+        # A prior fail-closed quarantine can be reaped, never reset/reused. New
+        # unconfirmed release during this cleanup must fail the fixture.
+        self.assertFalse(peer.quarantined and not quarantined_before,'test client resource release was not confirmed')
+        peer.session.clear()
+
+    async def early_help(self,*,ack_help):
+        provider,_,_,_=await self.make(prompt_ok=False)
+        help_queued=asyncio.Event();original=provider.speech.synthesize
+        class EarlySocket(Socket):
+            async def send(self,raw):
+                await super().send(raw)
+                if len([e for e in self.events if e['type']=='audio'])>=2:help_queued.set()
+        @asynccontextmanager
+        async def hold_caption_exit(text,rate):
+            async with original(text,rate) as frames:yield frames
+            if not text.startswith('这张图'):
+                await help_queued.wait() # deterministic: help must queue before main respond finishes
+        provider.speech.synthesize=hold_caption_exit
+        with patch(__name__+'.Socket',EarlySocket):
+            return await self.run_wire(provider,ack_help=ack_help)
+
+    async def test_deterministic_early_help_is_acked_before_waiting_for_generation(self):
+        p,s=await asyncio.wait_for(self.early_help(ack_help=True),.5)
+        self.assertTrue(p.generation.done())
+        self.assertFalse(p.session.pending)
+        self.assertEqual(p.session.public.count('这张图暂时没生成好，我们先接着聊。'),1)
+        self.assertEqual(s.events[-1]['type'],'reply_end')
+
+    async def test_deterministic_early_help_without_ack_returns_unplayed_pending(self):
+        p,s=await asyncio.wait_for(self.early_help(ack_help=False),.5)
+        phrase='这张图暂时没生成好，我们先接着聊。'
+        self.assertTrue(p.session.pending)
+        self.assertNotIn(phrase,p.session.public)
+        self.assertTrue(any(e['type']=='audio' for e in s.events))
+        self.assertFalse(p.generation.done())
+        # Existing late/partial ACK and revocation tests keep their original oracles.
+
+    async def test_client_propagates_generation_and_visual_task_exceptions(self):
+        class FixtureFailure(RuntimeError):pass
+        original=VoicePeer.respond
+        async def failed_generation(peer,*args):
+            await original(peer,*args)
+            raise FixtureFailure('synthetic generation failure')
+        async def failed_visual(peer,*args):raise FixtureFailure('synthetic visual failure')
+        for method,replacement in (('respond',failed_generation),('prepare_visual',failed_visual)):
+            provider,_,_,_=await self.make(prompt_ok=False)
+            with patch.object(VoicePeer,method,replacement):
+                with self.assertRaises(FixtureFailure):await self.run_wire(provider)
 
     async def test_actual_plan_review_generation_wire_exports_only_minimal_blue_spacesuit(self):
         provider,calls,_,_=await self.make()

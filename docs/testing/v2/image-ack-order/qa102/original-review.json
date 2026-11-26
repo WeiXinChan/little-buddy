@@ -1,0 +1,53 @@
+{
+  "head": "8cc050da9f130d4e2ceed0f3586a60e03d1f4077",
+  "tree": "10509cad70c01834eb9090461552cf9c10e33cc6",
+  "verdict": "HOLD_TEST_CLEANUP_CONFIRMATION",
+  "tests": {
+    "current_unique": 28,
+    "passed": 27,
+    "failed": 1,
+    "skipped": 0,
+    "module": 27,
+    "independent_cleanup": 1,
+    "separate_old_helper_negative_versions": {
+      "executed": 2,
+      "expected_errors": 2,
+      "not_added_to_current_pass_denominator": true
+    }
+  },
+  "original24_AST_unchanged": true,
+  "product_diff": "none",
+  "source_sha256": "539eb0073074cf4d4a9c76fc43c9e731b05dd2cc9963054fa69efc7fb1297271",
+  "findings": [
+    {
+      "id": "ACK102-01",
+      "location": "tests/v2/test_image_descriptions.py:99-110",
+      "trigger": "run_wire(full=False); TTS context exit begins only when generation cancelled, its __aexit__ suppresses cancellation until explicit release",
+      "observed": {
+        "cleanup_returns_without_error": true,
+        "new_retired_pending_after_return": 1
+      },
+      "expected": "dynamically include retired/visual exit tasks created during cancellation; bounded cleanup must not silently succeed with unconfirmed tasks. If stubborn cannot stop, retain handles and explicitly fail, then fixture/supervisor releases",
+      "falsifier_cleanup": "finally releases exact synthetic manager, gathers all retained/generation/visual tasks; no leaked background work"
+    }
+  ],
+  "historical_full_evidence": {
+    "original": {
+      "source": "c130bfdf9c1387891104d8e079dc401049d959e6",
+      "tests": 394,
+      "errors": 2
+    },
+    "author_combined": {
+      "same_source_test_only_patch": true,
+      "tests": 397,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "independently_rerun_full": false,
+    "log_hashes_verified": true,
+    "author_combined_worktree_head_and_test_bytes_verified": true,
+    "generated_document_delta": "temporary-preflight.json test output, not production source change"
+  },
+  "scope": "Offline synthetic HTTP/PCM and actual VoicePeer ACK; no real cloud/device/deploy or product modifications"
+}

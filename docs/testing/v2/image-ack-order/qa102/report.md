@@ -1,0 +1,11 @@
+# ACK102-01：动态退出任务确认
+
+已读取TITA88 QA原线程01a2170a-7b0f-7e7a-a753-e61a20eb95e9。原脚本/最终报告/日志逐字保留，旧8cc050d原样复跑FAIL：cleanup正常返回却有1个新retired pending。修后同脚本PASS：2秒总观察期限后明确AssertionError并保留1个未确认句柄；反例finally释放/gather完毕，不把负控PASS说成该stubborn资源已被强停。
+
+仅测试fixture变更。run_wire从创建peer开始保留track_retired的全部实际任务引用，再委托原生产track_retired；防止任务完成后从生产集合移除而结果被遗漏。cleanup封住fixture输出，取消generation/visual，循环动态并入retired/visual/generation及历史退出句柄，共用一个固定deadline，重复cleanup不获新2秒。不提前取消已登记的正常退出确认，不因初始快照done就成功；同一deadline内观察新任务/结果及一次事件循环回收。异常显式result()观察，首错误及全部句柄保留；pending则失败，确认前不销毁句柄，不使用无界gather。
+
+新增测试验证：取消后新退出task正常确认无重复cancel；吞取消exit在有限deadline内明确失败并保留句柄；取消期间新retired任务异常明确抛出。每个负控finally释放并观察所有任务；不修改产品.5秒预算。
+
+中途模块发现原“旧failure终于退出不撤销新player”场景在cleanup之前可能已quarantined=true、generation done且无pending。其原断言仅验证新player未被旧任务伤害，不证明provider健康。fixture保留该既有隔离标志和resource_confirmed=false，不重置为健康；可以完成已隔离任务的teardown，但不据此宣称资源可复用。若本次cleanup新出现quarantine则失败。原产品其它竞态未因此排除，也未改原测试断言掩盖。初次新增过严全局quarantine断言造成模块失败日志保留，已改为明确区分历史隔离状态与本次新确认失败。
+
+原27个测试方法AST不变（含早先原24），新增独立3方法；模块合计30PASS，QA原1PASS，共31唯一PASS/0FAIL/0SKIP。旧397全绿仅历史证据，不替代此HOLD；本次按定向增量未重复全集。原QA反例输入/assertions不改。产品源码0改动、0云/手机/部署/子agent。等待独立QA增量确认/root审合。

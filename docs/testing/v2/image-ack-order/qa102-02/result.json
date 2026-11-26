@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "previous_head": "81237569e3f622159f867a5ee95e634d776d4e01",
+  "module_passed": 31,
+  "original_ACK102_01_passed": 1,
+  "qa_adjacent_passed": 2,
+  "unique_passed": 34,
+  "failed": 0,
+  "skipped": 0,
+  "old_adjacent_failed": 1,
+  "new_positive_methods": 1,
+  "product_changes": false,
+  "cloud_calls": 0,
+  "files": {
+    "adjacent.py": "28e715ec204c95829e2a1dc4a38372aaf4b72e8070f3551bc9d17ae0be6e1884",
+    "after.log": "d8cc0462df7ba61c0aad87e8c7e5e43d1e7205f609c99dbc26ea4aea2ef006f7",
+    "before.log": "e2aa676912f0843cb258388a0941d0d8a056585d17277743c2083004121c16d6",
+    "module.log": "ce4f91fad252bbf2de4667987471c0224e2a96f5a3a8e828746fc8947c60ca31",
+    "original-01-after.log": "5b3c0875e1f2ffa5e81fe3faa3b7efbefd504a4ef3d0fcd1582f0e1cd55dca71",
+    "original-adjacent.log": "cdeca3cbf39529dbabcfc7d4f6d87b74823b61d880ed0a5b1ffb8462d26ccc53",
+    "original-review.json": "2be4c159653a037e6548af341476a8f4e4c8691e58acde38d2fb35209df569db",
+    "report.md": "278960bd0686ee223e27d2b9cb687dfe05dd2ec29adca9b2003b136e49a1e5d7"
+  }
+}

@@ -1,0 +1,8 @@
+test_done_failure_registered_at_quiescent_yield_must_be_observed (__main__.Adjacent.test_done_failure_registered_at_quiescent_yield_must_be_observed) ... ok
+test_prior_and_new_quarantine_do_not_hide_errors_or_become_reusable (__main__.Adjacent.test_prior_and_new_quarantine_do_not_hide_errors_or_become_reusable) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.038s
+
+OK
+QUIESCENT_RETIRED_FAILURE {'raised': 'FixtureFailure', 'late_in_retained': True, 'late_observed': True, 'cleanup_confirmed': False}
