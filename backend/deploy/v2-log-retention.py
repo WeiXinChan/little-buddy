@@ -80,7 +80,7 @@ def sweep():
         if len(lines)>1:raise ValueError()
         if not lines:return None
         value=json.loads(lines[0])
-        if not set(value)<={'__REALTIME_TIMESTAMP','__CURSOR','__MONOTONIC_TIMESTAMP','_BOOT_ID'} or not isinstance(value['__REALTIME_TIMESTAMP'],str) or not value['__REALTIME_TIMESTAMP'].isdigit():raise ValueError()
+        if not set(value)<={'__REALTIME_TIMESTAMP','__CURSOR','__MONOTONIC_TIMESTAMP','_BOOT_ID','__SEQNUM','__SEQNUM_ID'} or not isinstance(value['__REALTIME_TIMESTAMP'],str) or not value['__REALTIME_TIMESTAMP'].isdigit():raise ValueError()
         result=int(value['__REALTIME_TIMESTAMP'])/1000000
         if result<=0 or result>now+60:raise ValueError()
         return result
