@@ -23,3 +23,5 @@ python3 -m scripts.v2_persistent_tls prepare --enable --rounds 3 --output ./pers
 ```
 
 未传--enable直接exit2；--rounds只接受1..3。先独立QA审查当前引用/有限监督与故障字段，再由root决定有限首跑。真实供应商/ASR/声学/手机、完整60min、账单、稳定平台与原48MiB精确归因均未覆盖。资源失败/超时不续跑，保留已有result/supervisor证据；不能以强制退出后对象消失来宣称正常释放。
+
+PR115独立QA后补强：见qa-fix/review.md及final-tests.log（21轻量方法通过，包含原四反例）。内部子进程必须隔离解释器+真实继承锁FD的FLOCK/PID/inode/角色/source/run核验，FD同时传给service，父验证摘要；正常connection_lost+transport关闭+原socket FD释放才放弃引用。成功终态封闭schema并要求非强制exit0及shutdown见证；同Session新增真实对象weakref与脱敏绑定、首个已播材料/计数延续见证。原11项仅为早期准备记录，不代表本次增加的原生/锁语义已实际执行。仍不运行服务或TLS42。

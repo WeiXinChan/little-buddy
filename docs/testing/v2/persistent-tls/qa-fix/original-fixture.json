@@ -1,0 +1,1930 @@
+{
+  "format": 1,
+  "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "seed": 17,
+  "protocol_contract": "v2-voice2-safety1-images2-volume1-management1-end1",
+  "rounds_requested": 3,
+  "status": "collected_not_stability_verdict",
+  "cleanup_confirmed": true,
+  "service_exit": 0,
+  "cloud_enabled": false,
+  "device_executed": false,
+  "gc_forced": false,
+  "service_pid": 20,
+  "driver_pid": 10,
+  "attempts": [
+    {
+      "index": 0,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 1,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": null,
+      "close_handshake_confirmed": true,
+      "continuous": {
+        "same_connection": true,
+        "stop_recovered": true,
+        "old_ack_rejected": true,
+        "stop_pending": 0,
+        "stop": {
+          "status": "interrupted",
+          "heard_before": 3,
+          "heard_after": 3,
+          "pending": 0
+        },
+        "recovery": {
+          "status": "delivered",
+          "mode": "association",
+          "constructed": 1
+        },
+        "turns": [
+          {
+            "mode": "story",
+            "status": "delivered",
+            "delivered": true,
+            "constructed": 1,
+            "state_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "mode": "adventure",
+            "status": "delivered",
+            "delivered": true,
+            "constructed": 1,
+            "state_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "final": {
+          "constructed": 1,
+          "game": "association",
+          "pending_audio": 0
+        }
+      }
+    },
+    {
+      "index": 1,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 2,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 2,
+      "fault": "asr_rst",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 3,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 0,
+      "acks": 0,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 3,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 4,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 4,
+      "fault": "plan_rst",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 5,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 0,
+      "acks": 0,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 5,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 6,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 6,
+      "fault": "partial_rst",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 7,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 1,
+      "acks": 1,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 7,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 8,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 8,
+      "fault": "pause_resume",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 9,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": true,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 9,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 10,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 10,
+      "fault": "half_open",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 11,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 1,
+      "acks": 1,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": true,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 11,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 12,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 12,
+      "fault": "playback_stop",
+      "status": "interrupted",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 13,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 1,
+      "acks": 1,
+      "heard_before_close": 0,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 13,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 14,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 14,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 15,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 15,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 16,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 16,
+      "fault": "asr_rst",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 17,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 0,
+      "acks": 0,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 17,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 18,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 18,
+      "fault": "plan_rst",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 19,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 0,
+      "acks": 0,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 19,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 20,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 20,
+      "fault": "partial_rst",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 21,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 1,
+      "acks": 1,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 21,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 22,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 22,
+      "fault": "pause_resume",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 23,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": true,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 23,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 24,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 24,
+      "fault": "half_open",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 25,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 1,
+      "acks": 1,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": true,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 25,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 26,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 26,
+      "fault": "playback_stop",
+      "status": "interrupted",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 27,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 1,
+      "acks": 1,
+      "heard_before_close": 0,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 27,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 28,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 28,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 29,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 29,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 30,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 30,
+      "fault": "asr_rst",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 31,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 0,
+      "acks": 0,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 31,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 32,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 32,
+      "fault": "plan_rst",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 33,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 0,
+      "acks": 0,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 33,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 34,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 34,
+      "fault": "partial_rst",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 35,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 1,
+      "acks": 1,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 35,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 36,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 36,
+      "fault": "pause_resume",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 37,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": true,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 37,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 38,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 38,
+      "fault": "half_open",
+      "status": "fault_injected",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 39,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 1,
+      "acks": 1,
+      "heard_before_close": 0,
+      "rst_applied": true,
+      "pause_observed": true,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 39,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 40,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    },
+    {
+      "index": 40,
+      "fault": "playback_stop",
+      "status": "interrupted",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 41,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 1,
+      "acks": 1,
+      "heard_before_close": 0,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": false
+    },
+    {
+      "index": 41,
+      "fault": "normal_close",
+      "status": "delivered",
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "service_cleanup": {
+        "cleanup_confirmed": true,
+        "constructed": 42,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "new_session": true,
+      "control": null,
+      "frames": 4,
+      "acks": 4,
+      "heard_before_close": 1,
+      "rst_applied": null,
+      "pause_observed": null,
+      "relay_bytes": {
+        "up": 100,
+        "down": 200
+      },
+      "relay_buffer_observed_max": 100,
+      "old_ack_checked": true,
+      "close_handshake_confirmed": true
+    }
+  ],
+  "connection_count": 42,
+  "checkpoints": [
+    {
+      "phase": "before_warmup",
+      "elapsed": 0,
+      "service": {
+        "cleanup_confirmed": true,
+        "constructed": 0,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "client": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 2
+      }
+    },
+    {
+      "phase": "after_warmup",
+      "elapsed": 1,
+      "service": {
+        "cleanup_confirmed": true,
+        "constructed": 2,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "client": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 2
+      }
+    },
+    {
+      "phase": "after_round_1",
+      "elapsed": 2,
+      "service": {
+        "cleanup_confirmed": true,
+        "constructed": 14,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "client": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 2
+      }
+    },
+    {
+      "phase": "after_round_2",
+      "elapsed": 3,
+      "service": {
+        "cleanup_confirmed": true,
+        "constructed": 28,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "client": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 2
+      }
+    },
+    {
+      "phase": "after_round_3",
+      "elapsed": 4,
+      "service": {
+        "cleanup_confirmed": true,
+        "constructed": 42,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "resources": {
+          "backend_rss_bytes": 100,
+          "backend_fds": 7,
+          "backend_threads": 1,
+          "asyncio_tasks": 2
+        },
+        "game": null
+      },
+      "client": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 2
+      }
+    }
+  ]
+}

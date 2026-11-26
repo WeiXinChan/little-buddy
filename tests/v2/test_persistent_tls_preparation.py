@@ -6,9 +6,10 @@ from types import SimpleNamespace as NS
 from unittest.mock import patch,AsyncMock
 from scripts import v2_persistent_tls as m
 
+ALLOWANCE=dict(model_calls=10,tts_calls=3,tts_unicode_characters=21,reserved_units=13,account_quota_known=False,bill_cny=None)
 METRICS=dict(backend_rss_bytes=100,backend_fds=7,backend_threads=1,asyncio_tasks=2)
 def state(n=1):
-    return dict(cleanup_confirmed=True,constructed=n,new_session=True,finished=True,active=False,quarantined=False,pending=0,retired=0,errors=0,heard=0,pending_audio=0,resources=dict(METRICS),game=None)
+    return dict(cleanup_confirmed=True,constructed=n,new_session=True,finished=True,active=False,quarantined=False,pending=0,retired=0,errors=0,heard=0,pending_audio=0,resources=dict(METRICS),game=None,allowance=dict(ALLOWANCE),binding=None,same_session=False,transport_closed=True)
 def fixture(rounds=3):
     rows=[]
     for index in range(rounds*14):
@@ -19,12 +20,18 @@ def fixture(rounds=3):
             new_session=True,control=None,frames=frames,acks=frames,heard_before_close=1 if status=='delivered' else 0,
             rst_applied=True if status=='fault_injected' else None,pause_observed=True if fault in {'half_open','pause_resume'} else None,
             relay_bytes=dict(up=100,down=200),relay_buffer_observed_max=100,old_ack_checked=True if index else None,close_handshake_confirmed=status=='delivered')
+        binding=m.digest(['synthetic-session',index]);row.update(binding=binding,same_session=True)
+        row['service_cleanup'].update(binding=binding,same_session=True)
         if index==0:row['continuous']=dict(same_connection=True,stop_recovered=True,old_ack_rejected=True,stop_pending=0,
             stop=dict(status='interrupted',heard_before=3,heard_after=3,pending=0),recovery=dict(status='delivered',mode='association',constructed=1),turns=[dict(mode=mode,status='delivered',delivered=True,constructed=1,state_hash='a'*64) for mode in ('story','adventure')],final=dict(constructed=1,game='association',pending_audio=0))
+        if index==0:
+            continuous=row['continuous'];continuous.update(initial_binding=binding,initial_anchor='a'*64,initial_played_count=1)
+            for step,count in zip(continuous['turns']+[continuous['stop'],continuous['recovery'],continuous['final']],(2,3,3,4,4)):step['played_count']=count
+            for step in continuous['turns']+[continuous['stop'],continuous['recovery'],continuous['final']]:step.update(binding=binding,same_session=True,played_anchor='a'*64)
         rows.append(row)
     checkpoints=[dict(phase='before_warmup',elapsed=0,service=state(0),client=dict(METRICS)),dict(phase='after_warmup',elapsed=1,service=state(2),client=dict(METRICS))]
     checkpoints += [dict(phase='after_round_'+str(i+1),elapsed=i+2,service=state((i+1)*14),client=dict(METRICS)) for i in range(rounds)]
-    return dict(format=1,source_sha='a'*40,seed=17,protocol_contract=m.CONTRACT,rounds_requested=rounds,status='collected_not_stability_verdict',cleanup_confirmed=True,service_exit=0,
+    return dict(format=1,source_sha='a'*40,layer='persistent_service_separate_driver_loopback_tls',service_forced_exit=False,shutdown=state(rounds*14),allowance=dict(ALLOWANCE),authority=dict(source_sha='a'*40,lock_identity=m.digest([1,2]),run_digest=m.digest('b'*32)),full_acceptance=False,p14_verified=False,continuous_peaks_known=False,seed=17,protocol_contract=m.CONTRACT,rounds_requested=rounds,status='collected_not_stability_verdict',cleanup_confirmed=True,service_exit=0,
         cloud_enabled=False,device_executed=False,gc_forced=False,service_pid=20,driver_pid=10,attempts=rows,connection_count=len(rows),checkpoints=checkpoints)
 
 class Preparation(unittest.TestCase):
@@ -64,7 +71,7 @@ class Preparation(unittest.TestCase):
                 self.args=args;self.kwargs=kwargs
                 output=Path(args[args.index('--output')+1]);(output/'result.json').write_text(json.dumps(fixture()))
             def wait(self,timeout):return 0
-        with tempfile.TemporaryDirectory() as d,patch.object(m,'heavy_lock',lock),patch.object(m.subprocess,'check_output',return_value='a'*40),patch.object(m.subprocess,'Popen',side_effect=Process) as spawn:
+        with tempfile.TemporaryDirectory() as d,patch.object(m,'heavy_lock',lock),patch.object(m.os,'fstat',return_value=NS(st_dev=1,st_ino=2)),patch.object(m.subprocess,'check_output',return_value='a'*40),patch.object(m.subprocess,'Popen',side_effect=Process) as spawn,patch.object(m.secrets,'token_hex',return_value='b'*32):
             report=m.supervise(Path(d)/'output',3)
             self.assertEqual(len(report['attempts']),42);self.assertEqual(spawn.call_count,1)
             self.assertTrue(spawn.call_args.kwargs['start_new_session']);self.assertEqual(spawn.call_args.kwargs['pass_fds'],(42,))
@@ -78,7 +85,7 @@ class Preparation(unittest.TestCase):
                 self.calls+=1
                 if self.calls==1:raise m.subprocess.TimeoutExpired('fixed',timeout)
                 return -9
-        with tempfile.TemporaryDirectory() as d,patch.object(m,'heavy_lock',lock),patch.object(m.subprocess,'check_output',return_value='a'*40),patch.object(m.subprocess,'Popen',side_effect=Process) as spawn,patch.object(m.os,'killpg') as kill:
+        with tempfile.TemporaryDirectory() as d,patch.object(m,'heavy_lock',lock),patch.object(m.os,'fstat',return_value=NS(st_dev=1,st_ino=2)),patch.object(m.subprocess,'check_output',return_value='a'*40),patch.object(m.subprocess,'Popen',side_effect=Process) as spawn,patch.object(m.os,'killpg') as kill:
             out=Path(d)/'output'
             with self.assertRaises(m.Rejected):m.supervise(out,3)
             self.assertEqual(spawn.call_count,1);kill.assert_called_once_with(12345,m.signal.SIGKILL)
@@ -86,15 +93,15 @@ class Preparation(unittest.TestCase):
 
 class Ownership(unittest.IsolatedAsyncioTestCase):
     def fake_peer(self):
-        session=NS(active=False,pending=[],game={},head=0,context=lambda:dict(heard=[]))
-        return NS(closed=True,socket=NS(connection_lost_waiter=asyncio.get_running_loop().create_future()),session=session,retired_tasks=set(),generation=None,recognition=None,visual_task=None,quarantined=False,sequence=0,epoch=0)
+        session=NS(active=False,pending=[],game={},head=0,public=[],session='synthetic',connection=0,context=lambda:dict(heard=[]))
+        return NS(closed=True,socket=NS(connection_lost_waiter=asyncio.get_running_loop().create_future(),state=__import__('websockets.protocol',fromlist=['State']).State.CLOSED,transport=NS(is_closing=lambda:True)),session=session,retired_tasks=set(),generation=None,recognition=None,visual_task=None,quarantined=False,sequence=0,epoch=0)
     async def test_only_confirmed_current_peer_released_no_completed_history(self):
-        service=m.Service();peer=self.fake_peer();peer.socket.connection_lost_waiter.set_result(None);service.peer=peer
+        service=m.Service();peer=self.fake_peer();peer.socket.connection_lost_waiter.set_result(None);service.peer=peer;service.raw_socket=NS(fileno=lambda:-1)
         with patch.object(m,'scalar_resources',return_value=METRICS),patch.object(m,'drain',new=AsyncMock(return_value=(True,set(),0))):
             r=await service.dispatch(dict(op='release'))
         self.assertTrue(r['ok']);self.assertIsNone(service.peer);self.assertFalse(hasattr(service,'peers'))
     async def test_unconfirmed_peer_retained_and_reconnect_configuration_denied(self):
-        service=m.Service();peer=self.fake_peer();peer.socket.connection_lost_waiter.set_result(None);service.peer=peer
+        service=m.Service();peer=self.fake_peer();peer.socket.connection_lost_waiter.set_result(None);service.peer=peer;service.raw_socket=NS(fileno=lambda:-1)
         with patch.object(m,'scalar_resources',return_value=METRICS),patch.object(m,'drain',new=AsyncMock(return_value=(False,set(),1))):
             r=await service.dispatch(dict(op='release'))
             self.assertFalse(r['ok']);self.assertIs(service.peer,peer);self.assertTrue(service.isolated)

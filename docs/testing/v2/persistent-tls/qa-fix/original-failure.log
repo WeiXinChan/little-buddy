@@ -1,0 +1,53 @@
+test_continuous_state_missing_session_identity_must_not_prove_same_session (__main__.Independent.test_continuous_state_missing_session_identity_must_not_prove_same_session) ... FAIL
+test_forced_service_exit_cannot_validate_as_confirmed (__main__.Independent.test_forced_service_exit_cannot_validate_as_confirmed) ... FAIL
+test_internal_driver_must_not_run_without_inherited_lock_and_isolation (__main__.Independent.test_internal_driver_must_not_run_without_inherited_lock_and_isolation) ... FAIL
+test_cancelled_connection_lost_does_not_prove_transport_released (__main__.Release.test_cancelled_connection_lost_does_not_prove_transport_released) ... FAIL
+
+======================================================================
+FAIL: test_continuous_state_missing_session_identity_must_not_prove_same_session (__main__.Independent.test_continuous_state_missing_session_identity_must_not_prove_same_session)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/persistent-tls/qa-fix/independent-original.py", line 20, in test_continuous_state_missing_session_identity_must_not_prove_same_session
+    with self.assertRaises(m.Rejected):m.validate_report(r,3,'a'*40)
+AssertionError: Rejected not raised
+
+======================================================================
+FAIL: test_forced_service_exit_cannot_validate_as_confirmed (__main__.Independent.test_forced_service_exit_cannot_validate_as_confirmed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/persistent-tls/qa-fix/independent-original.py", line 15, in test_forced_service_exit_cannot_validate_as_confirmed
+    with self.assertRaises(m.Rejected):m.validate_report(r,3,'a'*40)
+AssertionError: Rejected not raised
+
+======================================================================
+FAIL: test_internal_driver_must_not_run_without_inherited_lock_and_isolation (__main__.Independent.test_internal_driver_must_not_run_without_inherited_lock_and_isolation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/persistent-tls/qa-fix/independent-original.py", line 11, in test_internal_driver_must_not_run_without_inherited_lock_and_isolation
+    self.assertEqual(code,2,'internal driver ran without lock/isolation attestation')
+AssertionError: 0 != 2 : internal driver ran without lock/isolation attestation
+
+======================================================================
+FAIL: test_cancelled_connection_lost_does_not_prove_transport_released (__main__.Release.test_cancelled_connection_lost_does_not_prove_transport_released)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/persistent-tls/qa-fix/independent-original.py", line 29, in test_cancelled_connection_lost_does_not_prove_transport_released
+    self.assertFalse(result['ok'],'cancelled waiter/open transport accepted as confirmed release')
+AssertionError: True is not false : cancelled waiter/open transport accepted as confirmed release
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.011s
+
+FAILED (failures=4)

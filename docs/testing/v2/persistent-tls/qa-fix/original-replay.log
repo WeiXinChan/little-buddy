@@ -1,0 +1,9 @@
+test_continuous_state_missing_session_identity_must_not_prove_same_session (pr115_original.Independent.test_continuous_state_missing_session_identity_must_not_prove_same_session) ... ok
+test_forced_service_exit_cannot_validate_as_confirmed (pr115_original.Independent.test_forced_service_exit_cannot_validate_as_confirmed) ... ok
+test_internal_driver_must_not_run_without_inherited_lock_and_isolation (pr115_original.Independent.test_internal_driver_must_not_run_without_inherited_lock_and_isolation) ... ok
+test_cancelled_connection_lost_does_not_prove_transport_released (pr115_original.Release.test_cancelled_connection_lost_does_not_prove_transport_released) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.009s
+
+OK
