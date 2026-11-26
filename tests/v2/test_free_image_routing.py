@@ -271,6 +271,52 @@ class PublicPin(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(net.DownloadRejected):await backend.connect_tcp(net.OUTPUT_HOST,443)
             self.assertEqual(calls,[])
 
+    async def test_site_local_entire_prefix_boundaries_reject_before_any_connect(self):
+        import ipaddress
+        blocked=('fec0::','fec0::1','fec0:ffff:ffff:ffff:ffff:ffff:ffff:ffff',
+                 'fed0::1','feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
+        for address in blocked:
+            self.assertTrue(ipaddress.ip_address(address).is_site_local)
+            with self.subTest(address=address):
+                backend=net.PublicOutputBackend(lambda:None);called=[]
+                async def connect(*args):called.append(args);return FakeStream()
+                backend.backend.connect_tcp=connect
+                async def resolve(host):return records(address)
+                with patch('backend.v2.image_download.resolve_output',resolve):
+                    with self.assertRaises(net.DownloadRejected):await backend.connect_tcp(net.OUTPUT_HOST,443)
+                self.assertEqual(called,[])
+        # Both adjacent boundaries have independent existing exclusions, not a broad IPv6 ban.
+        for address in ('febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff','ff00::'):
+            self.assertFalse(ipaddress.ip_address(address).is_site_local)
+            with self.assertRaises(net.DownloadRejected):net.public_addresses(records(address))
+
+    async def test_mixed_site_local_public_results_fail_closed_in_either_order(self):
+        for addresses in (('8.8.8.8','fec0::1'),('fec0::1','8.8.8.8'),
+                          ('2606:4700:4700::1111','feff::1'),('feff::1','2606:4700:4700::1111')):
+            with self.subTest(addresses=addresses):
+                with self.assertRaises(net.DownloadRejected):net.public_addresses(records(*addresses))
+
+    async def test_public_ipv6_literal_connection_and_original_tls_host_remain_valid(self):
+        for address in ('2606:4700:4700::1111','2001:4860:4860::8888'):
+            backend=net.PublicOutputBackend(lambda:None);raw=FakeStream();calls=[]
+            async def connect(*args):calls.append(args);return raw
+            backend.backend.connect_tcp=connect
+            async def resolve(host):return records(address)
+            with patch('backend.v2.image_download.resolve_output',resolve):
+                stream=await backend.connect_tcp(net.OUTPUT_HOST,443)
+                stream=await stream.start_tls(ssl.create_default_context(),net.OUTPUT_HOST)
+            self.assertEqual(len(calls),1);self.assertEqual(calls[0][:2],(address,443))
+            self.assertEqual(raw.sni,net.OUTPUT_HOST)
+            await stream.aclose();self.assertTrue(raw.closed)
+
+    async def test_existing_special_range_exclusions_remain_composed_with_site_local(self):
+        for address in ('0.0.0.0','127.0.0.1','10.0.0.1','172.16.0.1','192.168.0.1',
+                        '100.64.0.1','169.254.169.254','192.0.2.1','198.51.100.1','203.0.113.1',
+                        '224.0.0.1','255.255.255.255','::','::1','fc00::1','fdff::1','fe80::1',
+                        'ff02::1','2001:db8::1','::ffff:8.8.8.8','2002:808:808::1','2001:0:808:808::1'):
+            with self.subTest(address=address):
+                with self.assertRaises(net.DownloadRejected):net.public_addresses(records(address))
+
     async def test_ip_pinned_once_and_tls_verifies_original_supplier_name(self):
         backend=net.PublicOutputBackend(lambda:None);stream=FakeStream();calls=[]
         async def connect(*args):calls.append(args);return stream

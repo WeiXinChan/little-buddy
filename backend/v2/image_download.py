@@ -49,7 +49,8 @@ def public_addresses(records):
         if (family==socket.AF_INET)!=(ip.version==4):raise DownloadRejected()
         if (not ip.is_global or ip.is_multicast or ip.is_reserved or ip.is_unspecified or
             ip.is_loopback or ip.is_link_local or
-            (ip.version==6 and (ip.ipv4_mapped or ip.sixtofour or ip.teredo))):raise DownloadRejected()
+            # is_global alone classifies deprecated fec0::/10 as global on Python 3.12.
+            (ip.version==6 and (ip.is_site_local or ip.ipv4_mapped or ip.sixtofour or ip.teredo))):raise DownloadRejected()
         if str(ip) not in addresses:addresses.append(str(ip))
     return sorted(addresses,key=lambda address:ipaddress.ip_address(address).version)
 

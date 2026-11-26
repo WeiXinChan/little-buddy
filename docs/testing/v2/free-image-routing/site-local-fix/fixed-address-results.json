@@ -1,0 +1,49 @@
+{
+  "network_calls": 0,
+  "results": [
+    {
+      "address": "fec0::",
+      "accepted": false,
+      "literal_result": []
+    },
+    {
+      "address": "fec0::1",
+      "accepted": false,
+      "literal_result": []
+    },
+    {
+      "address": "fed0::1",
+      "accepted": false,
+      "literal_result": []
+    },
+    {
+      "address": "feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+      "accepted": false,
+      "literal_result": []
+    },
+    {
+      "address": "febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+      "accepted": false,
+      "literal_result": []
+    },
+    {
+      "address": "ff00::",
+      "accepted": false,
+      "literal_result": []
+    },
+    {
+      "address": "2606:4700:4700::1111",
+      "accepted": true,
+      "literal_result": [
+        "2606:4700:4700::1111"
+      ]
+    },
+    {
+      "address": "2001:4860:4860::8888",
+      "accepted": true,
+      "literal_result": [
+        "2001:4860:4860::8888"
+      ]
+    }
+  ]
+}

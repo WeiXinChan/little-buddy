@@ -29,3 +29,6 @@ URL取图隔离
 新边界测试使用MockTransport、受控DNS/连接与真实PNG；覆盖free-only条件/错误体、单图已产后不可重试、双耗尽停止、DNS固定/TLS主机、URL/私网/header隔离、字节/MIME/PNG/图审、总deadline和取消。原图片适配/runtime/review/wire/description/静态素材套件也本地运行；不跑云、不读实际配置。证据中的URL签名/key均合成字符串，生产代码没有测试批准回执。
 
 root审查后：从含本PR的最终main重打后端发行并核manifest，审核上述两字段差异和示例workspace等值，确认两个免费用完即停开关；在原预算内做有限真实单图链路验证，只记录model/状态/输出host/尺寸/hash等必要metadata，不记录signed URL/原内容/key。然后按既有授权切换后端配置与APK的匹配清单。root/v2-rc8和APK源码清单未改，无需仅因后端适配重建APK或改版本。host、实际PNG512支持、耗时和账号授权仍以该最终验证为准，本批不宣称云已测。
+
+
+QA后续安全修复：原99方法绿遗漏Python将fec0::/10判作global的site-local边界；原失败原件及新103方法增量证据在`site-local-fix/`。现显式拒绝is_site_local，同时保留其他特殊地址与字面IP/TLS规则。原99记录仅属前版覆盖，不证明此边界；当前修复交既有QA复核，root未解除合并/真实单图暂停。
