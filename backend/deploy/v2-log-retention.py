@@ -69,6 +69,12 @@ def sweep():
     try:
         execute(['/usr/bin/journalctl','--namespace='+NAMESPACE,'--rotate','--vacuum-time=6d','--vacuum-size=32M','--quiet'])
     except Exception:raise Rejected('sweep_failed') from None
+    checked=time.time()
+    if not now<=checked<10**11:raise Rejected('clock_invalid')
+    now=checked
+    # Query a conservative horizon so I/O cannot turn a clean query stale.
+    # Each command has a 5s timeout; reject if the 60s observation margin is spent.
+    margin=60
     def timestamp(raw):
         lines=raw.splitlines()
         if len(lines)>1:raise ValueError()
@@ -81,15 +87,18 @@ def sweep():
     metadata=['/usr/bin/journalctl','--namespace='+NAMESPACE,'--no-pager','--quiet',
               '--output=json','--output-fields=__REALTIME_TIMESTAMP']
     try:
-        cutoff=now-7*DAY
+        cutoff=now-7*DAY+margin
         overdue=timestamp(execute(metadata+['--until=@'+format(cutoff,'.6f'),'--lines=1']))
         oldest=timestamp(execute(metadata+['--lines=+1']))
     except Exception:raise Rejected('metadata_invalid') from None
+    completed=time.time()
+    if not now<=completed<10**11 or completed-now>=margin:raise Rejected('clock_invalid')
     if overdue is not None:
         if overdue>cutoff:raise Rejected('metadata_invalid')
-        raise Rejected('retention_overdue')
-    if oldest is not None and oldest<=cutoff:raise Rejected('retention_overdue')
-    return dict(oldest_age_seconds=None if oldest is None else int(now-oldest),
+        raise Rejected('retention_overdue' if overdue<=completed-7*DAY else 'retention_margin')
+    if oldest is not None and oldest<=cutoff:
+        raise Rejected('retention_overdue' if oldest<=completed-7*DAY else 'retention_margin')
+    return dict(oldest_age_seconds=None if oldest is None else int(completed-oldest),
                 namespace=NAMESPACE,all_copies_deleted=False,scope='future_v2_application_namespace_only')
 
 

@@ -67,7 +67,34 @@ class Retention(unittest.TestCase):
         self.assertEqual(len(commands),3)
         self.assertIn('--rotate',commands[0]);self.assertIn('--vacuum-time=6d',commands[0]);self.assertIn('--vacuum-size=32M',commands[0])
         self.assertIn('--output-fields=__REALTIME_TIMESTAMP',commands[1]);self.assertIn('--lines=+1',commands[2])
-        self.assertIn('--until=@'+format(self.now-7*LOG.DAY,'.6f'),commands[1])
+        self.assertIn('--until=@'+format(self.now-7*LOG.DAY+60,'.6f'),commands[1])
+    def test_query_delay_crossing_deadline_cannot_return_success(self):
+        clock=[self.now];entry=self.now-7*LOG.DAY+1
+        def command(args):
+            if '--rotate' in args:return ''
+            if '--lines=1' in args:
+                cutoff=float(next(a for a in args if a.startswith('--until=@')).split('@')[1])
+                clock[0]+=2
+                return json.dumps({'__REALTIME_TIMESTAMP':str(int(entry*1e6))}) if entry<=cutoff else ''
+            return json.dumps({'__REALTIME_TIMESTAMP':str(int(clock[0]*1e6))})
+        with patch.object(LOG,'check'),patch.object(LOG.os,'geteuid',return_value=0),patch.object(LOG.time,'time',side_effect=lambda:clock[0]),patch.object(LOG,'execute',side_effect=command):
+            with self.assertRaises(LOG.Rejected) as caught:LOG.sweep()
+        self.assertEqual(caught.exception.code,'retention_overdue')
+
+    def test_clock_reversal_or_exhausted_observation_margin_fails_closed(self):
+        for stamps in ([self.now,self.now-1], [self.now,self.now,self.now-1], [self.now,self.now,self.now+60]):
+            with self.subTest(stamps=stamps),patch.object(LOG,'check'),patch.object(LOG.os,'geteuid',return_value=0),patch.object(LOG.time,'time',side_effect=stamps),patch.object(LOG,'execute',return_value=''):
+                with self.assertRaises(LOG.Rejected) as caught:LOG.sweep()
+                self.assertEqual(caught.exception.code,'clock_invalid')
+
+    def test_receipt_uses_completion_age_and_conservative_margin_is_not_overdue(self):
+        with patch.object(LOG,'check'),patch.object(LOG.os,'geteuid',return_value=0),patch.object(LOG.time,'time',side_effect=[self.now,self.now+2,self.now+4]),patch.object(LOG,'execute',side_effect=['','',json.dumps({'__REALTIME_TIMESTAMP':str(int((self.now-100)*1e6))})]):
+            self.assertEqual(LOG.sweep()['oldest_age_seconds'],104)
+        entry=self.now-7*LOG.DAY+30
+        with patch.object(LOG,'check'),patch.object(LOG.os,'geteuid',return_value=0),patch.object(LOG.time,'time',return_value=self.now),patch.object(LOG,'execute',side_effect=['',json.dumps({'__REALTIME_TIMESTAMP':str(int(entry*1e6))}), '']):
+            with self.assertRaises(LOG.Rejected) as caught:LOG.sweep()
+            self.assertEqual(caught.exception.code,'retention_margin')
+
     def test_age_boundary_and_new_activity_never_renews_original_archive(self):
         self.fake.archive('old',self.now-8*LOG.DAY,self.now-7*LOG.DAY)
         self.fake.archive('recent',self.now-5*LOG.DAY,self.now-5*LOG.DAY)
