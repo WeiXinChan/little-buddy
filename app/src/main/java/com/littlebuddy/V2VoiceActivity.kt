@@ -130,7 +130,7 @@ class V2VoiceActivity : Activity() {
             savePublicKey = { model -> publicKeyFile.begin { publish, failed ->
                 model.exportTransportKey({ com.littlebuddy.v2.transport.V2SshIdentity.load(create=true).registrationKey() }, publish, failed)
             } },
-            pageChanged = { state -> if (state.mode != PanelMode.SETTINGS || state.busy) publicKeyFile.focusLost() }
+            pageChanged = { state -> if (state.mode != PanelMode.SETTINGS || state.busy) publicKeyFile.pageUnavailable() }
         ).also { it.open() }
         startExitCapture(ticket)
     }
@@ -376,6 +376,7 @@ class V2VoiceActivity : Activity() {
             managementRevision++; managementRequested = false
             publicKeyFile.focusLost(); panel?.focusLost(); helpVisible = false; help?.stop(); stopVoice()
         } else if (foreground) {
+            publicKeyFile.focusGained()
             if (managementVisible) { panel?.open(); startExitCapture(managementRevision) }
             else if (!helpVisible) { eyes(); resumeConfigured() }
         }

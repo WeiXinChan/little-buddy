@@ -56,3 +56,8 @@ https://developer.android.com/training/data-storage/shared/documents-files
 https://android.googlesource.com/platform/packages/providers/MediaProvider/+/8e3c6bd122b2e42fd4a35659438060caa5448784/src/com/android/providers/media/util/FileUtils.java
 这些说明API29+自有Downloads无需存储权限、系统新建文档和文件名去重；不代表
 OPPO/USB实测。MIME使用application/octet-stream保留.pub，实际名仍在发布前核验。
+
+低版本返回时的管理页重绘仅锁定/撤销家长授权，不取消已公开的系统另存为流程；
+真正HOME/退出仍取消未完成IO。结果提示若先于窗口取焦到达，只缓存公开的成功/
+失败位置提示，取焦后显示，不缓存Grant或恢复管理。进程单例串行IO可清理Activity
+销毁后的迟到空文档结果，不启动服务/网络，线程工厂不持Activity/Grant/密钥。

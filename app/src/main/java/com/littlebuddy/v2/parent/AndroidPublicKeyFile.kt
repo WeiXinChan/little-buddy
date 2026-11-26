@@ -17,11 +17,12 @@ import java.util.concurrent.Executors
 /** Activity-owned public-only export. No Grant/PIN/token/key handle crosses this boundary. */
 internal class AndroidPublicKeyFile(private val activity: Activity) {
     private val main = Handler(Looper.getMainLooper())
-    private val io = Executors.newSingleThreadExecutor { Thread(it, "v2-public-key-file") }
-    private class Operation(val file: PublicKeyFile) { var writing = false; var picker = false }
+    private val io get() = PUBLIC_IO
+    private class Operation(val file: PublicKeyFile) { var writing = false; var picker = false; var publicPickerFlow = false }
     private var current: Operation? = null // main thread only; worker captures the specific operation
     private var destroyed = false
     private var cleanupUnconfirmed = false
+    private var pendingNotice: String? = null
     private val timeout = Runnable {
         current?.let { op ->
             op.file.cancel()
@@ -42,7 +43,7 @@ internal class AndroidPublicKeyFile(private val activity: Activity) {
                 if (!accepted) { finish(op, PublicKeyFile.Result.FAILED); return@authorize }
                 if (Build.VERSION.SDK_INT >= 29) write(op, null)
                 else {
-                    op.picker = true
+                    op.picker = true; op.publicPickerFlow = true
                     try {
                         activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                             addCategory(Intent.CATEGORY_OPENABLE); type = "application/octet-stream"
@@ -62,6 +63,12 @@ internal class AndroidPublicKeyFile(private val activity: Activity) {
         op.file.cancel()
         if (!op.writing) { current = null; main.removeCallbacks(timeout) }
     }
+    fun pageUnavailable() {
+        // A picker returns to a LOCKED parent page. Its already-public file is independent of
+        // that page; never revive a Grant to finish it. Actual HOME/exit still cancel normally.
+        if (current?.publicPickerFlow != true) focusLost()
+    }
+    fun focusGained() { pendingNotice?.let(::message) }
     fun cancel() {
         current?.let { op ->
             op.file.cancel()
@@ -69,7 +76,7 @@ internal class AndroidPublicKeyFile(private val activity: Activity) {
         }
         main.removeCallbacks(timeout)
     }
-    fun close() { destroyed = true; cancel(); io.shutdown() }
+    fun close() { destroyed = true; pendingNotice = null; cancel() }
     fun result(code: Int, result: Int, data: Intent?): Boolean {
         if (code != REQUEST) return false
         val op = current?.takeIf { it.picker }
@@ -119,7 +126,11 @@ internal class AndroidPublicKeyFile(private val activity: Activity) {
         })
     }
     private fun message(text: String) {
-        if (!destroyed && !activity.isFinishing && activity.hasWindowFocus()) Toast.makeText(activity, text, Toast.LENGTH_LONG).show()
+        if (destroyed || activity.isFinishing) return
+        pendingNotice = text
+        if (activity.hasWindowFocus()) {
+            Toast.makeText(activity, text, Toast.LENGTH_LONG).show(); pendingNotice = null
+        }
     }
     @android.annotation.TargetApi(29)
     private fun downloadsDestination(name: (String) -> Unit): PublicKeyFile.Destination {
@@ -185,5 +196,12 @@ internal class AndroidPublicKeyFile(private val activity: Activity) {
         deleteDocument(uri)
     }
     private fun deleteDocument(uri: Uri) { check(DocumentsContract.deleteDocument(activity.contentResolver, uri)) }
-    companion object { private const val REQUEST = 0x5632 }
+    companion object {
+        private const val REQUEST = 0x5632
+        // Process-owned public IO only; survives Activity destruction to clean late picker results.
+        // No Activity, Grant or key handle is retained in the thread factory.
+        private val PUBLIC_IO = Executors.newSingleThreadExecutor { task ->
+            Thread(task, "v2-public-key-file").apply { isDaemon = true }
+        }
+    }
 }
