@@ -80,7 +80,7 @@ def sweep():
         if len(lines)>1:raise ValueError()
         if not lines:return None
         value=json.loads(lines[0])
-        if not set(value)<={'__REALTIME_TIMESTAMP','__CURSOR','__MONOTONIC_TIMESTAMP','_BOOT_ID'} or not isinstance(value['__REALTIME_TIMESTAMP'],str) or not value['__REALTIME_TIMESTAMP'].isdigit():raise ValueError()
+        if not set(value)<={'__REALTIME_TIMESTAMP','__CURSOR','__MONOTONIC_TIMESTAMP','_BOOT_ID','__SEQNUM','__SEQNUM_ID'} or not isinstance(value['__REALTIME_TIMESTAMP'],str) or not value['__REALTIME_TIMESTAMP'].isdigit():raise ValueError()
         result=int(value['__REALTIME_TIMESTAMP'])/1000000
         if result<=0 or result>now+60:raise ValueError()
         return result
@@ -88,7 +88,7 @@ def sweep():
               '--output=json','--output-fields=__REALTIME_TIMESTAMP']
     try:
         cutoff=now-7*DAY+margin
-        overdue=timestamp(execute(metadata+['--until=@'+format(cutoff,'.6f'),'--lines=1']))
+        overdue=timestamp(execute(metadata+['--until=@'+format(cutoff,'.6f'),'--reverse','--lines=1']))
         oldest=timestamp(execute(metadata+['--lines=+1']))
     except Exception:raise Rejected('metadata_invalid') from None
     completed=time.time()

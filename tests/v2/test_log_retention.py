@@ -66,8 +66,20 @@ class Retention(unittest.TestCase):
         commands=[c for c in self.fake.calls if c[0]=='/usr/bin/journalctl']
         self.assertEqual(len(commands),3)
         self.assertIn('--rotate',commands[0]);self.assertIn('--vacuum-time=6d',commands[0]);self.assertIn('--vacuum-size=32M',commands[0])
-        self.assertIn('--output-fields=__REALTIME_TIMESTAMP',commands[1]);self.assertIn('--lines=+1',commands[2])
+        self.assertIn('--reverse',commands[1]);self.assertIn('--output-fields=__REALTIME_TIMESTAMP',commands[1]);self.assertIn('--lines=+1',commands[2])
         self.assertIn('--until=@'+format(self.now-7*LOG.DAY+60,'.6f'),commands[1])
+    def test_real_journal_sequence_metadata_is_accepted_but_message_is_rejected(self):
+        row={'__REALTIME_TIMESTAMP':str(int((self.now-100)*1e6)),
+             '__CURSOR':'metadata', '__MONOTONIC_TIMESTAMP':'10', '_BOOT_ID':'boot',
+             '__SEQNUM':'1', '__SEQNUM_ID':'sequence'}
+        for extra,expected in (({},0),({'MESSAGE':'PRIVATE'},2)):
+            with (patch.object(LOG,'check'),patch.object(LOG.os,'geteuid',return_value=0),
+                  patch.object(LOG.time,'time',return_value=self.now),
+                  patch.object(LOG,'execute',side_effect=['','',json.dumps(row|extra)]),
+                  redirect_stdout(io.StringIO()) as out):
+                self.assertEqual(LOG.cli(['sweep']),expected)
+            self.assertNotIn('PRIVATE',out.getvalue())
+
     def test_query_delay_crossing_deadline_cannot_return_success(self):
         clock=[self.now];entry=self.now-7*LOG.DAY+1
         def command(args):
