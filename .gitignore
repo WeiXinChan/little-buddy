@@ -8,3 +8,6 @@ local.properties
 
 __pycache__/
 *.pyc
+
+# Local issued device credential; never commit or attach private APK/build inputs.
+.private-device/

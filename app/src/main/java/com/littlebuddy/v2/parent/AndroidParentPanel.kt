@@ -17,7 +17,11 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
     private lateinit var prompt: AndroidOwnerPrompt
     private var closed = false
     private var viewFocused = false
-    val model = ParentPanelModel({ AndroidParentRuntime.load(activity) },
+    private val preset = java.util.concurrent.atomic.AtomicReference<DeviceConnectionPreset?>()
+    val model = ParentPanelModel({
+        preset.set(AndroidDeviceConnectionPreset.load(activity))
+        AndroidParentRuntime.load(activity)
+    },
         { task -> worker.execute(task) }, { task -> main.post(task) }, { state -> pageChanged(state); page.render(state) }, leave,
         { operation -> beginOwner(operation) }, AndroidParentRuntime::discard, securityRevoked)
     private val tick = object : Runnable {
@@ -25,7 +29,7 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
     }
     init {
         AndroidPinDiagnostic.enable()
-        page = ParentPanelView(activity, model, connectionNotice = connectionNotice, savePublicKey = { savePublicKey(model) })
+        page = ParentPanelView(activity, model, connectionNotice = connectionNotice, savePublicKey = { savePublicKey(model) }, connectionPreset = { preset.get() })
         prompt = AndroidOwnerPrompt(activity, { task -> worker.execute(task) }, { if (!closed && activity.hasWindowFocus()) open(force = true) })
     }
     private fun beginOwner(operation: OwnerOperation) { securityRevoked(); model.pause { page.pause() }; prompt.begin(operation) }

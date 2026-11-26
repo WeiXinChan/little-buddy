@@ -13,13 +13,15 @@ def selected(path):
     return path.startswith(('app/src/main/', 'app/src/debug/', 'app/src/v2Debug/', 'app/libs/', 'gradle/wrapper/', 'assets/v2-default/')) or path in {
         'app/build.gradle.kts','app/v2-release.json','settings.gradle.kts','gradle.properties','gradlew','scripts/v2-build-metadata.py'}
 
-def generate(output, pin_init_diagnostics=False):
+def generate(output, pin_init_diagnostics=False, private_device_preset=False):
     config=json.loads((ROOT/'app/v2-release.json').read_text())
     assert set(config)=={'format','version_code','version_name','application_id','protocol_contract','source_base'}
     assert len(config['source_base'])==40 and all(c in '0123456789abcdef' for c in config['source_base'])
     assert config['format']==1 and config['version_code']==22 and config['version_name']=='2.0.0-rc8'
     assert config['application_id']=='com.littlebuddy.sim.v2' and config['protocol_contract']==CONTRACT
+    assert not private_device_preset or pin_init_diagnostics
     if pin_init_diagnostics: config['version_name']='2.0.0-rc8.pin.fix2'
+    if private_device_preset: config['version_name']='2.0.0-rc8.pin.fix3.device1'
     paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).decode().split('\0')
     paths=sorted(p for p in paths if p and selected(p))
     inventory={}
@@ -40,7 +42,7 @@ def generate(output, pin_init_diagnostics=False):
     manifest=hashlib.sha256((ROOT/'assets/v2-default/manifest.json').read_bytes()).hexdigest()
     result=dict(config,build_id=f'v2-{config["version_code"]}-{digest[:16]}',source_content_sha256=digest,
                 resources_manifest_sha256=manifest,wire=2,images_v=2,volume_v=1,management_v=1,local_help_v=1,session_end_v=1,
-                feedback_protocol="feedback-v1",min_sdk=26,target_sdk=36,abi=['arm64-v8a'],distribution='pin_init_fix_candidate' if pin_init_diagnostics else 'internal_debug_candidate')
+                private_device_preset=private_device_preset,feedback_protocol="feedback-v1",min_sdk=26,target_sdk=36,abi=['arm64-v8a'],distribution='private_registered_device' if private_device_preset else 'pin_init_fix_candidate' if pin_init_diagnostics else 'internal_debug_candidate')
     output=Path(output); output.mkdir(parents=True,exist_ok=True)
     (output/'v2-build.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
     (output/'v2-source-inventory.json').write_bytes(canonical+b'\n')
@@ -49,4 +51,5 @@ def generate(output, pin_init_diagnostics=False):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(); parser.add_argument('--output',required=True)
     parser.add_argument('--pin-init-diagnostics',action='store_true')
-    args=parser.parse_args(); print(json.dumps(generate(args.output,args.pin_init_diagnostics),sort_keys=True))
+    parser.add_argument('--private-device-preset',action='store_true')
+    args=parser.parse_args(); print(json.dumps(generate(args.output,args.pin_init_diagnostics,args.private_device_preset),sort_keys=True))

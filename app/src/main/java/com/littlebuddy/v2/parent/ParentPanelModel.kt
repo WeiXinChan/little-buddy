@@ -126,7 +126,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         if (!active) return
         val d = domain.get() ?: return
         val proof = ownerChallenge
-        val savingOwner = state.busy && state.mode == PanelMode.OWNER_PIN
+        val savingOwner = state.busy && (state.mode == PanelMode.OWNER_PIN || state.mode == PanelMode.CONNECTION)
         if (proof != null && savingOwner)
             PinDiagnostic.event(PinDiagnostic.Stage.TICK, PinDiagnostic.Reason.SAVE_IN_PROGRESS)
         val ownerCurrent = proof == null ||

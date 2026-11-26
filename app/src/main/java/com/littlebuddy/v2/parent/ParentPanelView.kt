@@ -25,7 +25,8 @@ import android.widget.TextView
 internal class ParentPanelView(private val activity: Activity, private val model: ParentPanelModel,
     private val feedback: ParentFeedbackRoute = AndroidParentFeedbackRoute,
     private val connectionNotice: () -> String = { "" },
-    private val savePublicKey: () -> Unit = {}) {
+    private val savePublicKey: () -> Unit = {},
+    private val connectionPreset: () -> DeviceConnectionPreset? = { null }) {
     private val inputs = mutableListOf<EditText>()
     private val routes = ParentRouteSlot<ParentRoutePage>({ it.pause() }, { it.close() })
     fun pause() { clearInputs(); routes.pause() }
@@ -117,17 +118,23 @@ internal class ParentPanelView(private val activity: Activity, private val model
                 button("保存 PIN") { model.setOwnerPin(take(first), take(second)) }
             }
             PanelMode.CONNECTION -> {
+                val preset = connectionPreset()
+                if (preset != null) label("本机专用连接已预填，请确认后保存；不会自动提交。")
                 label("只导入管理员已发行的本设备 V2 地址和凭据，不在这里创建账号或令牌。TLS与候选协议核对通过后才启用儿童收音。")
                 label("私有SSH只转发127.0.0.1:19483；专属账户与公钥须管理员登记。V1账户/令牌不能用于V2授权。")
                 val mode=Spinner(activity).apply { adapter=ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item,
                     arrayOf("V2私有SSH", "已发行公网直连")); body.addView(this) }
-                val sshUser=EditText(activity).apply { hint="管理员发行的V2专属SSH账户"; isSaveEnabled=false; body.addView(this) }
-                val address = EditText(activity).apply { hint = "wss://…/v2/voice"; isSaveEnabled = false; body.addView(this) }
+                val sshUser=EditText(activity).apply { hint="管理员发行的V2专属SSH账户"; isSaveEnabled=false; setText(preset?.user ?: ""); body.addView(this) }
+                val address = EditText(activity).apply { hint = "wss://…/v2/voice"; isSaveEnabled = false; setText(preset?.address ?: ""); body.addView(this) }
                 val secret = EditText(activity).apply {
                     hint = "已发行的设备连接凭据"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                     transformationMethod = PasswordTransformationMethod.getInstance(); isSaveEnabled = false
                     importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-                    isLongClickable = false; filters = arrayOf(InputFilter.LengthFilter(256)); inputs.add(this); body.addView(this)
+                    isLongClickable = false; filters = arrayOf(InputFilter.LengthFilter(256))
+                    if (!state.busy) preset?.tokenChars()?.let { chars ->
+                        try { setText(chars, 0, chars.size) } finally { chars.fill('\u0000') }
+                    }
+                    inputs.add(this); body.addView(this)
                 }
                 button("保存已发行的连接") { model.importConnection(if (mode.selectedItemPosition==0) "wss://127.0.0.1:19483/v2/voice" else address.text.toString(), take(secret), if (mode.selectedItemPosition==0) sshUser.text.toString() else null) }
             }

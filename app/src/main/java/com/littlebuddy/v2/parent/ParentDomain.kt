@@ -344,14 +344,18 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
             val ticket = synchronized(lock) {
                 if (record == null || !ownerChallengeCurrent(proof, page) || proof.deviceBinding != binding ||
                     proof.operation != OwnerOperation.PROVISION_ENDPOINT) return false
-                challenge = null; generation
+                challenge = null; savingChallenge = proof; generation
             }
-            if (!owner.consume(proof)) return false
+            if (!owner.consume(proof)) { PinDiagnostic.event(PinDiagnostic.Stage.CONSUME, PinDiagnostic.Reason.REJECTED); return false }
+            PinDiagnostic.event(PinDiagnostic.Stage.CONSUME, PinDiagnostic.Reason.SUCCESS)
             val next = synchronized(lock) { record!!.updated(connection = value) }
             val saved = persist(next, transaction(page, ticket, { proof.expiresAt }) { now() < proof.expiresAt })
             if (saved) synchronized(lock) { generation++; grant = null; epoch.revokeIf(page) }
             return saved
-        } finally { worker.unlock() }
+        } finally {
+            synchronized(lock) { if (savingChallenge === proof) savingChallenge = null }
+            worker.unlock()
+        }
     }
     private fun persist(next: ParentRecord, transaction: ParentCommit): Boolean = try {
         PinDiagnostic.event(PinDiagnostic.Stage.COMMIT, PinDiagnostic.Reason.BEGIN)
