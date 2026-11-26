@@ -16,7 +16,7 @@ from backend.v2.companion import CompanionPolicy
 from backend.v2.voice import VoicePeer as ProductionVoicePeer
 from backend.v2.models import TEXT_MODELS
 from backend.v2.budget import ResponseBudget
-from backend.v2.diagnostics import CONTRACT_FAILURES
+from backend.v2.diagnostics import CONTRACT_FAILURES,CONTRACT_DETAILS
 
 class ProbeLimit(RuntimeError):pass
 
@@ -90,6 +90,7 @@ def peer_failure(peer):
     if not isinstance(failure,dict):return None
     choices=[('stage',FAILURE_STAGES),('kind',FAILURE_KINDS)]
     if 'contract' in failure:choices.append(('contract',CONTRACT_FAILURES))
+    if 'detail' in failure:choices.append(('detail',CONTRACT_DETAILS))
     return {key:failure.get(key) if isinstance(failure.get(key),str) and failure.get(key) in allowed else 'unknown'
             for key,allowed in choices}
 

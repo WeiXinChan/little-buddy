@@ -16,3 +16,12 @@ def mark_contract(error,code):
 def contract_code(error):
     code=getattr(error,'contract_diagnostic',None)
     return code if isinstance(code,str) and code in CONTRACT_FAILURES else 'unknown'
+
+CONTRACT_DETAILS=frozenset({'anchors_container','anchors_count','anchor_name','anchor_index_type','anchor_index_range'})
+def mark_contract_detail(error,detail):
+    if detail in CONTRACT_DETAILS:error.contract_detail=detail
+    return error
+
+def contract_detail(error):
+    detail=getattr(error,'contract_detail',None)
+    return detail if isinstance(detail,str) and detail in CONTRACT_DETAILS else 'unknown'

@@ -20,9 +20,11 @@ PLAN = obj(dict(
     mode=enum('chat','guess','story','adventure','association'),
     rules=string(2000),
     roles=dict(type='array',items=string(80),maxItems=8),
-    secrets=dict(type='object',additionalProperties=string(1000),maxProperties=8),
+    secrets=dict(type='object',additionalProperties=string(999),maxProperties=8,propertyNames=string(79)),
     sentences=dict(type='array',items=dict(type='string',minLength=1,maxLength=120),minItems=1,maxItems=4),
-    anchors=dict(type='object',additionalProperties=dict(type='integer',minimum=0,maximum=3),maxProperties=16),
+    anchors=dict(type='object',additionalProperties=dict(type='integer',minimum=0,maximum=3),maxProperties=16,
+                 propertyNames=dict(type='string',minLength=1,maxLength=40),
+                 description='Zero-based indexes into actual sentences; every value must also be less than len(sentences). Never secret values or references.'),
     tools=dict(type='array',items=IMAGE_TOOL,maxItems=1)),
     required=['action','mode','rules','roles','secrets','sentences','anchors'])
 FACT_ITEM = obj(dict(
