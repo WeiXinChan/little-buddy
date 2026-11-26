@@ -10,7 +10,7 @@ internal data class CaptureStamp(val frames:Long,val nanoTime:Long)
 internal class NativeReadLedger(private val capacity:Int,private val mono:()->Long,
     private val boot:()->Long,private val stamp:()->CaptureStamp?) {
     companion object {
-        const val MODEL="phase500us-long500ms-v1"
+        const val MODEL="phase500us-long500ms-phase2-v2"
         const val STARTUP_LIMIT_MS=500L
         const val STARTUP_SAMPLES=8000
         const val MIN_RATE=15984L
@@ -76,7 +76,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     fun clockModel()=MODEL
     init {require(capacity>reserve && startupMs>0)}
     private fun refresh():Pair<CaptureStamp?,Long> = try { refreshChecked() }
-    catch(error:CaptureClockFailure) { throw CaptureClockFailure(error.reason,evidence()) }
+    catch(error:CaptureClockFailure) { throw CaptureClockFailure(error.reason,evidence(),error.longWitness) }
     private fun refreshChecked():Pair<CaptureStamp?,Long> {
         val before=mono()
         previous=observed; attempted=null; gapMs=difference(before,checkedAt); apiMs=0

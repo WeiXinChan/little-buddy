@@ -26,7 +26,11 @@ internal object AndroidPinDiagnostic {
             }, "v2-pin-diag").apply { isDaemon = true }
             writer.start()
             com.littlebuddy.v2.CaptureClockDiagnostic.install { error ->
-                if(remaining.getAndDecrement()>0) {
+                val w=error.longWitness
+                if(w!=null && remaining.getAndDecrement()>0) {
+                    queue.offer("mono_ms=${System.nanoTime()/1_000_000} stage=CAPTURE_LONG_PAIR reason=${error.reason.name} from_frame=${w.fromFrame} from_ns=${w.fromNs} to_frame=${w.toFrame} to_ns=${w.toNs} df=${w.toFrame-w.fromFrame} dn_ns=${w.toNs-w.fromNs} lower_budget=${w.lowerBudget} upper_budget=${w.upperBudget} phase_ns=500000 min_rate=15984 max_rate=16016")
+                }
+                if(error.reason!=com.littlebuddy.v2.CaptureClockReason.LONG_RAW_REJECT_PHASE_FEASIBLE && remaining.getAndDecrement()>0) {
                     val e=error.evidence
                     queue.offer("mono_ms=${System.nanoTime()/1_000_000} stage=CAPTURE_CLOCK_DETAIL reason=${error.reason.name} frames=${e.frames} reads=${e.reads} df=${e.deltaFrames} dn_ns=${e.deltaNs} age_ns=${e.ageNs} check_gap_ms=${e.checkGapMs} api_ms=${e.apiMs} bridge_ms=${e.bridgeMs} capacity=${e.capacity}")
                 }

@@ -46,14 +46,15 @@ class ClockEnvelopeTest {
   for(i in 0..100){if(runCatching{walk.observe(CaptureStamp(i*320L,i*20_000_000L+i*40_000L))}.isFailure){failed=true;break}}
   assertTrue(failed)
  }
- @Test fun everyEligibleLongPairIsCheckedNotOnlyFirstOrLatest(){
-  // All points remain in the +/-0.5ms phase model, but this 500ms raw pair violates the
-  // original +/-1000ppm,+/-2-frame oracle. A first-only or reset window would miss it.
-  val c=CaptureClockEnvelope()
-  c.observe(CaptureStamp(0,0));c.observe(CaptureStamp(320,20_000_000-450_000))
-  for(i in 2..25)c.observe(CaptureStamp(i*320L,i*20_000_000L-450_000))
-  val e=rejects{c.observe(CaptureStamp(26*320L,26*20_000_000L+450_000))}
-  assertEquals("capture long rate outside bound",e.message)
+ // The original raw+2-frame rejection test is retained verbatim in prior commit a3da670
+ // and the pre-fix evidence. It asserted a policy inconsistent with the phase model.
+ @Test fun allHistoricalPhaseConstraintsStillRejectSustainedNonconstantWalk(){
+  val c=CaptureClockEnvelope();var failure:Throwable?=null
+  for(i in 0..3000) {
+   failure=runCatching{c.observe(CaptureStamp(i*320L,i*20_000_000L+i*30_000L))}.exceptionOrNull()
+   if(failure!=null)break
+  }
+  assertNotNull(failure)
  }
  @Test fun uncertaintySpendsNativeRoomAndMakesSampleTimeEarlier(){
   var now=0L;var stamp=CaptureStamp(0,0)

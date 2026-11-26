@@ -25,14 +25,16 @@ internal enum class CaptureClockReason(val legacy: String) {
     CLOCK_MODEL_RANGE("capture clock model range"),
     LONG_RATE_OUTSIDE_BOUND("capture long rate outside bound"),
     CLOCK_HISTORY_EXHAUSTED("capture clock history exhausted"),
+    LONG_RAW_REJECT_PHASE_FEASIBLE("raw long oracle rejects phase feasible model"),
     RECORDER_NOT_RECORDING("capture recorder not recording")
 }
 internal data class CaptureClockEvidence(
     val frames:Long=0, val reads:Long=0, val deltaFrames:Long=0, val deltaNs:Long=0,
     val ageNs:Long=0, val checkGapMs:Long=0, val apiMs:Long=0, val bridgeMs:Long=0,
     val capacity:Int=0)
+internal data class CaptureLongWitness(val fromFrame:Long,val fromNs:Long,val toFrame:Long,val toNs:Long,val lowerBudget:Long,val upperBudget:Long)
 internal class CaptureClockFailure(val reason:CaptureClockReason,
-    val evidence:CaptureClockEvidence=CaptureClockEvidence()):IllegalStateException(reason.legacy)
+    val evidence:CaptureClockEvidence=CaptureClockEvidence(),val longWitness:CaptureLongWitness?=null):IllegalStateException(reason.legacy)
 internal fun clockCheck(valid:Boolean, reason:CaptureClockReason) {
     if(!valid)throw CaptureClockFailure(reason)
 }
