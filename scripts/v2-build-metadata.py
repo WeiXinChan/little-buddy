@@ -19,7 +19,7 @@ def generate(output, pin_init_diagnostics=False):
     assert len(config['source_base'])==40 and all(c in '0123456789abcdef' for c in config['source_base'])
     assert config['format']==1 and config['version_code']==22 and config['version_name']=='2.0.0-rc8'
     assert config['application_id']=='com.littlebuddy.sim.v2' and config['protocol_contract']==CONTRACT
-    if pin_init_diagnostics: config['version_name']='2.0.0-rc8.pin.fix1'
+    if pin_init_diagnostics: config['version_name']='2.0.0-rc8.pin.fix2'
     paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).decode().split('\0')
     paths=sorted(p for p in paths if p and selected(p))
     inventory={}

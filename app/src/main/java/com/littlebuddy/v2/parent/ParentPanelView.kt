@@ -24,7 +24,8 @@ import android.widget.TextView
 /** Actual native widgets. No PIN String, saved input, autofill, suggestions or clipboard import. */
 internal class ParentPanelView(private val activity: Activity, private val model: ParentPanelModel,
     private val feedback: ParentFeedbackRoute = AndroidParentFeedbackRoute,
-    private val connectionNotice: () -> String = { "" }) {
+    private val connectionNotice: () -> String = { "" },
+    private val savePublicKey: () -> Unit = {}) {
     private val inputs = mutableListOf<EditText>()
     private val routes = ParentRouteSlot<ParentRoutePage>({ it.pause() }, { it.close() })
     fun pause() { clearInputs(); routes.pause() }
@@ -98,6 +99,7 @@ internal class ParentPanelView(private val activity: Activity, private val model
                         }, "仅导出公钥"))
                     }
                 }
+                button("保存V2公钥文件（USB传到Mac）") { savePublicKey() }
                 button("系统验证并导入连接配置") { model.requestSystemOwner(OwnerOperation.PROVISION_ENDPOINT) }
                 button("修改 PIN") { model.navigate(PanelMode.CHANGE_PIN) }
                 button("帮助与反馈") { model.navigate(PanelMode.FEEDBACK) }

@@ -57,6 +57,7 @@ class V2VoiceActivity : Activity() {
     private var execution = ParentPlaybackSettings()
     private var budget: PlaybackBudget? = null
     private var panel: AndroidParentPanel? = null
+    private val publicKeyFile by lazy { AndroidPublicKeyFile(this) }
     private var help: LocalHelpOutput? = null
     private val pageRequests=ManagementPageRequests()
     private var managementRequested: Boolean
@@ -96,6 +97,7 @@ class V2VoiceActivity : Activity() {
         result(exitCapture?.nativeProof ?: releasedExitRecorder)
     } }
     private fun leaveManagement() {
+        publicKeyFile.cancel()
         val ticket=++managementRevision
         managementVisible=false; managementRequested=true; managementReturning=true
         panel?.close(); panel=null; eyes()
@@ -124,7 +126,12 @@ class V2VoiceActivity : Activity() {
         if (ticket!=managementRevision || !foreground || !hasWindowFocus() || !managementRequested) return
         managementRequested=false; managementVisible=true; eyesAttached=false
         eyeState.revoke();eyeView?.show(EyeMood.IDLE);eyeRevision++
-        panel=AndroidParentPanel(this, { leaveManagement() }, { stopVoice() }, { connectionNotice }).also { it.open() }
+        panel=AndroidParentPanel(this, { leaveManagement() }, { stopVoice() }, { connectionNotice },
+            savePublicKey = { model -> publicKeyFile.begin { publish ->
+                model.exportTransportKey({ com.littlebuddy.v2.transport.V2SshIdentity.load(create=true).registrationKey() }, publish)
+            } },
+            pageChanged = { state -> if (state.mode != PanelMode.SETTINGS || state.busy) publicKeyFile.focusLost() }
+        ).also { it.open() }
         startExitCapture(ticket)
     }
     private fun startExitCapture(ticket: Long) { owner.post {
@@ -349,7 +356,7 @@ class V2VoiceActivity : Activity() {
     override fun onPause() {
         foreground = false;cancelRecorders(); managementRevision++; managementRequested = false
         com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this,com.littlebuddy.v2.feedback.LogStage.CANCEL)
-        panel?.pause(); helpVisible = false; help?.stop(); stopVoice(); super.onPause()
+        publicKeyFile.focusLost(); panel?.pause(); helpVisible = false; help?.stop(); stopVoice(); super.onPause()
     }
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) panel?.localTouch()
@@ -367,7 +374,7 @@ class V2VoiceActivity : Activity() {
         if (!hasFocus) {
             cancelRecorders()
             managementRevision++; managementRequested = false
-            panel?.focusLost(); helpVisible = false; help?.stop(); stopVoice()
+            publicKeyFile.focusLost(); panel?.focusLost(); helpVisible = false; help?.stop(); stopVoice()
         } else if (foreground) {
             if (managementVisible) { panel?.open(); startExitCapture(managementRevision) }
             else if (!helpVisible) { eyes(); resumeConfigured() }
@@ -377,7 +384,12 @@ class V2VoiceActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (grantResults.any { it != PackageManager.PERMISSION_GRANTED }) stopVoice() else resumeConfigured()
     }
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        if (!publicKeyFile.result(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
+    }
     override fun onDestroy() {
+        publicKeyFile.close()
         foreground = false;cancelRecorders(); managementRevision++; managementRequested = false
         panel?.close(); panel = null; help?.close(); help = null
         stopVoice(); owner.post { audioThread.quitSafely() }; configurationWorker.shutdown()

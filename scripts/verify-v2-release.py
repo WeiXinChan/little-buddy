@@ -39,7 +39,7 @@ def inspect(apk, pin_init_diagnostics=False):
             raise ValueError('apk_resources_mismatch')
         if any(value in json.dumps(meta) for value in ['/home/','/tmp/','Bearer ','PRIVATE KEY','password']):
             raise ValueError('private_build_metadata')
-        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=22 or meta['version_name']!=('2.0.0-rc8.pin.fix1' if pin_init_diagnostics else '2.0.0-rc8'):
+        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=22 or meta['version_name']!=('2.0.0-rc8.pin.fix2' if pin_init_diagnostics else '2.0.0-rc8'):
             raise ValueError('candidate_version_mismatch')
         if pin_init_diagnostics and meta.get("distribution")!="pin_init_fix_candidate": raise ValueError("diagnostic_identity_mismatch")
         return meta

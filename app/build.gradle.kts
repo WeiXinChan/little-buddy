@@ -27,7 +27,7 @@ require(releaseVersionCode.isPresent == releaseVersionName.isPresent) {
 val v2Release = JsonSlurper().parse(file("v2-release.json")) as Map<*, *>
 val v2Code = (v2Release["version_code"] as Number).toInt()
 val pinDiagnostics = providers.gradleProperty("pinInitDiagnostics").orNull == "true"
-val v2Name = (v2Release["version_name"] as String) + if (pinDiagnostics) ".pin.fix1" else ""
+val v2Name = (v2Release["version_name"] as String) + if (pinDiagnostics) ".pin.fix2" else ""
 require(v2Code >= 15 && v2Name.matches(Regex("[0-9]+[.][0-9]+[.][0-9]+(?:-[a-zA-Z0-9.]+)?")))
 androidComponents {
     onVariants(selector().withBuildType("v2Debug")) { variant ->
