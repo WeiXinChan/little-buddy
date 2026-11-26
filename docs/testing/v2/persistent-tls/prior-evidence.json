@@ -1,0 +1,211 @@
+{
+  "reference_sha256": "72193d49f7ba0e1628e9d7db6247503ff0ab45a7269077afbb04ec0426bb1cf7",
+  "source": "15f9e791d3c7c16bb58a84819dd79fad017c6e6c",
+  "rows": [
+    {
+      "arm": "retain",
+      "attempted": 14,
+      "cleanup": {
+        "confirmed": true,
+        "pending_tasks": 0,
+        "errors": 0,
+        "isolated": false
+      },
+      "points": [
+        {
+          "phase": "baseline_after_import_gc",
+          "rss_bytes": 38449152,
+          "live": {}
+        },
+        {
+          "phase": "report_held_owner_held",
+          "rss_bytes": 44171264,
+          "live": {
+            "owner": 1,
+            "peer": 14,
+            "session": 14,
+            "websocket": 14,
+            "ssl_transport": 14,
+            "ssl_object": 14,
+            "relay": 14,
+            "writer": 28,
+            "tcp_transport": 28,
+            "reader_protocol": 28,
+            "task": 178
+          }
+        },
+        {
+          "phase": "report_saved_loop_gc_owner_held",
+          "rss_bytes": 44187648,
+          "live": {
+            "owner": 1,
+            "peer": 14,
+            "session": 14,
+            "websocket": 14,
+            "ssl_transport": 14,
+            "ssl_object": 14,
+            "relay": 14,
+            "writer": 28,
+            "tcp_transport": 28,
+            "reader_protocol": 28,
+            "task": 178
+          }
+        },
+        {
+          "phase": "history_retained_control",
+          "rss_bytes": 44187648,
+          "live": {
+            "owner": 1,
+            "peer": 14,
+            "session": 14,
+            "websocket": 14,
+            "ssl_transport": 14,
+            "ssl_object": 14,
+            "relay": 14,
+            "writer": 28,
+            "tcp_transport": 28,
+            "reader_protocol": 28,
+            "task": 178
+          }
+        },
+        {
+          "phase": "report_released_owner_held",
+          "rss_bytes": 44191744,
+          "live": {
+            "owner": 1,
+            "peer": 14,
+            "session": 14,
+            "websocket": 14,
+            "ssl_transport": 14,
+            "ssl_object": 14,
+            "relay": 14,
+            "writer": 28,
+            "tcp_transport": 28,
+            "reader_protocol": 28,
+            "task": 178
+          }
+        },
+        {
+          "phase": "observer_owner_released_loop_gc",
+          "rss_bytes": 44191744,
+          "live": {
+            "owner": 0,
+            "peer": 0,
+            "session": 0,
+            "websocket": 0,
+            "ssl_transport": 0,
+            "ssl_object": 0,
+            "relay": 0,
+            "writer": 0,
+            "tcp_transport": 0,
+            "reader_protocol": 0,
+            "task": 0
+          }
+        }
+      ]
+    },
+    {
+      "arm": "release",
+      "attempted": 14,
+      "cleanup": {
+        "confirmed": true,
+        "pending_tasks": 0,
+        "errors": 0,
+        "isolated": false
+      },
+      "points": [
+        {
+          "phase": "baseline_after_import_gc",
+          "rss_bytes": 38543360,
+          "live": {}
+        },
+        {
+          "phase": "report_held_owner_held",
+          "rss_bytes": 44285952,
+          "live": {
+            "owner": 1,
+            "peer": 14,
+            "session": 14,
+            "websocket": 14,
+            "ssl_transport": 14,
+            "ssl_object": 14,
+            "relay": 14,
+            "writer": 28,
+            "tcp_transport": 28,
+            "reader_protocol": 28,
+            "task": 178
+          }
+        },
+        {
+          "phase": "report_saved_loop_gc_owner_held",
+          "rss_bytes": 44302336,
+          "live": {
+            "owner": 1,
+            "peer": 14,
+            "session": 14,
+            "websocket": 14,
+            "ssl_transport": 14,
+            "ssl_object": 14,
+            "relay": 14,
+            "writer": 28,
+            "tcp_transport": 28,
+            "reader_protocol": 28,
+            "task": 178
+          }
+        },
+        {
+          "phase": "confirmed_history_control",
+          "rss_bytes": 44302336,
+          "live": {
+            "owner": 1,
+            "peer": 1,
+            "session": 1,
+            "websocket": 1,
+            "ssl_transport": 1,
+            "ssl_object": 1,
+            "relay": 14,
+            "writer": 0,
+            "tcp_transport": 0,
+            "reader_protocol": 0,
+            "task": 2
+          }
+        },
+        {
+          "phase": "report_released_owner_held",
+          "rss_bytes": 44306432,
+          "live": {
+            "owner": 1,
+            "peer": 0,
+            "session": 0,
+            "websocket": 0,
+            "ssl_transport": 0,
+            "ssl_object": 0,
+            "relay": 0,
+            "writer": 0,
+            "tcp_transport": 0,
+            "reader_protocol": 0,
+            "task": 0
+          }
+        },
+        {
+          "phase": "observer_owner_released_loop_gc",
+          "rss_bytes": 44306432,
+          "live": {
+            "owner": 0,
+            "peer": 0,
+            "session": 0,
+            "websocket": 0,
+            "ssl_transport": 0,
+            "ssl_object": 0,
+            "relay": 0,
+            "writer": 0,
+            "tcp_transport": 0,
+            "reader_protocol": 0,
+            "task": 0
+          }
+        }
+      ]
+    }
+  ],
+  "interpretation": "diagnostic_history_retains_objects; RSS_not_exact_original_attribution; no_new_execution"
+}
