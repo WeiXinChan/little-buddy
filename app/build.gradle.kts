@@ -49,6 +49,7 @@ val prepareV2Metadata by tasks.registering(Exec::class) {
         rootProject.fileTree("assets/v2-default"),rootProject.fileTree("app/libs"),
         rootProject.fileTree("gradle/wrapper"),rootProject.file("app/v2-release.json"),
         rootProject.file("app/build.gradle.kts"),rootProject.file("scripts/v2-build-metadata.py"),
+        rootProject.file("scripts/v2-release-snapshot.py"),
         rootProject.file("settings.gradle.kts"),rootProject.file("gradle.properties"))
     outputs.dir(v2Metadata)
     commandLine("python3","scripts/v2-build-metadata.py","--output",v2Metadata.get().asFile.absolutePath)
