@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "previous_head": "0bc3c57e04f90cc59e42884a30824e40e4e976dd",
+  "new_methods": 5,
+  "author_and_affected": 26,
+  "qa_original": 3,
+  "unique_passed": 29,
+  "failed": 0,
+  "skipped": 0,
+  "cloud_calls": 0,
+  "device_executed": false,
+  "hour_executed": false,
+  "continuous_peaks_known": false,
+  "files": {
+    "after.log": "649a87bafbee533a551fc2ed0eaa6e2dda18a10eb47813e6bd05846d61340478",
+    "before.log": "426c2047f607ce07b7a16db0a09ad51d0f46e56b8587bca410f7fb4b7775a7bf",
+    "independent.py": "e7003e1f354f413ada5672c8eeb0954579e7c72cc9d6afc5ad5d88e97022ccd1",
+    "original-independent.log": "6f958303f4e43247e0ed4580709a467cf0a3f303ebedb00d694ed8b114a06cca",
+    "original-review.json": "3c43c57ea94b3054e4b44d900ca73ea456fa4941fbe08d5c8720fd05d9eb124f",
+    "report.md": "3fa10a9ea423af4f79550526f54e6fbb64d672dc18854e583ea3f6d9d257aaca",
+    "short-fixture.json": "b07fcd8772282b01f5db9f21acb9f2a269e61fb0e370f4977cdc814be9e70788",
+    "targeted.log": "8bc11351d843af000f822b3df7e65753622871521d3629c1f28dca81f63d69fd"
+  }
+}

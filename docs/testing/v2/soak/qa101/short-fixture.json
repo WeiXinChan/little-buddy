@@ -1,0 +1,382 @@
+{
+  "format": 1,
+  "layer": "synthetic_text_real_voicepeer_json_duplex_simulated_ack",
+  "cloud_enabled": false,
+  "device_executed": false,
+  "device_events": null,
+  "resource_scope": "runner_owned_sessions_and_current_process",
+  "elapsed_seconds": 0.202,
+  "active_attempt_seconds": 0.01,
+  "effective_interaction_seconds": null,
+  "standby_seconds": 0.191,
+  "cleanup_seconds": 0.001,
+  "requested_seconds": 0.2,
+  "observation_seconds": 0.201,
+  "wall_60_minutes_observed": false,
+  "limits": {
+    "duration": 0.2,
+    "interval": 30,
+    "sample_interval": 30,
+    "attempt_timeout": 40,
+    "max_attempts": 120,
+    "model_calls": 720,
+    "tts_calls": 240,
+    "tts_characters": 28800,
+    "allowance_units": 960,
+    "model_units": 1,
+    "tts_units": 1
+  },
+  "stop_reason": "duration",
+  "attempted": 1,
+  "delivered": 1,
+  "failures": 0,
+  "attempts": [
+    {
+      "index": 0,
+      "scenario": "guess",
+      "injected": "normal",
+      "started": 0.0,
+      "status": "delivered",
+      "observed": {
+        "frames": 2,
+        "game_mode": "guess",
+        "interrupted": false,
+        "first_text_to_transport_ms": 8.16,
+        "acoustic_reply_ms": null,
+        "interruption_to_speaker_silence_ms": null
+      },
+      "completed": 0.01
+    }
+  ],
+  "resource_samples": [
+    {
+      "elapsed": 0.0,
+      "phase": "initial",
+      "backend_rss_bytes": 36106240,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 4,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 0,
+      "retired_pending": 0,
+      "generation_pending": 0,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.0,
+      "phase": "attempt_started",
+      "backend_rss_bytes": 36114432,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 5,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 0,
+      "retired_pending": 0,
+      "generation_pending": 0,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.001,
+      "phase": "periodic",
+      "backend_rss_bytes": 36134912,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 9,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 0,
+      "retired_pending": 0,
+      "generation_pending": 0,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.001,
+      "phase": "operation_started",
+      "backend_rss_bytes": 36143104,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 9,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 1,
+      "retired_pending": 0,
+      "generation_pending": 1,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.002,
+      "phase": "retired_added",
+      "backend_rss_bytes": 36151296,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 11,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 1,
+      "retired_pending": 1,
+      "generation_pending": 1,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.002,
+      "phase": "retired_removed",
+      "backend_rss_bytes": 36155392,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 10,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 1,
+      "retired_pending": 0,
+      "generation_pending": 1,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.008,
+      "phase": "retired_added",
+      "backend_rss_bytes": 36159488,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 11,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 1,
+      "retired_pending": 1,
+      "generation_pending": 1,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.009,
+      "phase": "retired_removed",
+      "backend_rss_bytes": 36163584,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 9,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 1,
+      "retired_pending": 0,
+      "generation_pending": 1,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.009,
+      "phase": "retired_added",
+      "backend_rss_bytes": 36163584,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 10,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 1,
+      "retired_pending": 1,
+      "generation_pending": 1,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.009,
+      "phase": "retired_removed",
+      "backend_rss_bytes": 36163584,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 9,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 1,
+      "retired_pending": 0,
+      "generation_pending": 1,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.009,
+      "phase": "operation_finished",
+      "backend_rss_bytes": 36163584,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 10,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 0,
+      "retired_pending": 0,
+      "generation_pending": 1,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.01,
+      "phase": "attempt_finished",
+      "backend_rss_bytes": 36163584,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 8,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 0,
+      "retired_pending": 0,
+      "generation_pending": 0,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.201,
+      "phase": "before_transport_cleanup",
+      "backend_rss_bytes": 36171776,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 7,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 0,
+      "retired_pending": 0,
+      "generation_pending": 0,
+      "transport_tasks_pending": 3
+    },
+    {
+      "elapsed": 0.201,
+      "phase": "after_transport_cleanup",
+      "backend_rss_bytes": 36175872,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 2,
+      "device_rss_bytes": null,
+      "active_sessions": 0,
+      "active_operations": 0,
+      "retired_pending": 0,
+      "generation_pending": 0,
+      "transport_tasks_pending": 0
+    },
+    {
+      "elapsed": 0.201,
+      "phase": "after_owner_cleanup",
+      "backend_rss_bytes": 36179968,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 1,
+      "device_rss_bytes": null,
+      "active_sessions": 0,
+      "active_operations": 0,
+      "retired_pending": 0,
+      "generation_pending": 0,
+      "transport_tasks_pending": 0
+    },
+    {
+      "elapsed": 0.202,
+      "phase": "final",
+      "backend_rss_bytes": 36179968,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 1,
+      "device_rss_bytes": null,
+      "active_sessions": 0,
+      "active_operations": 0,
+      "retired_pending": 0,
+      "generation_pending": 0,
+      "transport_tasks_pending": 0
+    }
+  ],
+  "resource_trends": {
+    "backend_rss_bytes": {
+      "first": 36106240,
+      "last": 36179968,
+      "maximum": 36179968,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "backend_fds": {
+      "first": 7,
+      "last": 7,
+      "maximum": 7,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "backend_threads": {
+      "first": 1,
+      "last": 1,
+      "maximum": 1,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "asyncio_tasks": {
+      "first": 4,
+      "last": 1,
+      "maximum": 11,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "retired_pending": {
+      "first": 0,
+      "last": 0,
+      "maximum": 1,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "active_operations": {
+      "first": 0,
+      "last": 0,
+      "maximum": 1,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "generation_pending": {
+      "first": 0,
+      "last": 0,
+      "maximum": 1,
+      "maximum_kind": "observed_sample_maximum"
+    },
+    "transport_tasks_pending": {
+      "first": 3,
+      "last": 0,
+      "maximum": 3,
+      "maximum_kind": "observed_sample_maximum"
+    }
+  },
+  "sampling": {
+    "observations": 16,
+    "retained": 16,
+    "evicted": 0,
+    "errors": 0,
+    "active_observed": true,
+    "continuous_peaks_known": false,
+    "valid": true,
+    "missing_metrics": []
+  },
+  "resource_collection_valid": true,
+  "model_stage_calls": {
+    "plan": 1,
+    "facts": 1,
+    "safe": 1
+  },
+  "model_failed_or_cancelled": 0,
+  "usage_delta": {
+    "requests": null,
+    "failures": null,
+    "prompt_tokens": null,
+    "completion_tokens": null
+  },
+  "interrupted_attempts": 0,
+  "delivery_rate_all_attempts": 1.0,
+  "planned_attempts": 120,
+  "not_started": 119,
+  "reservation_unit": "synthetic_units",
+  "billing_bound_verified": false,
+  "allowance": {
+    "model_calls": 3,
+    "tts_calls": 1,
+    "tts_unicode_characters": 7,
+    "reserved_units": 4,
+    "account_quota_known": false,
+    "bill_cny": null
+  },
+  "cleanup": {
+    "confirmed": true,
+    "pending_tasks": 0,
+    "provider_reusable": true
+  },
+  "caller_cancelled": false,
+  "full_acceptance": false,
+  "p14_verified": false,
+  "p12_verified": false,
+  "p15_verified": false,
+  "missing": [
+    "device_business_driver",
+    "real_asr_endpoint",
+    "tls_network_observation",
+    "acoustic_timings",
+    "billing_reconciliation",
+    "semantic_review"
+  ]
+}

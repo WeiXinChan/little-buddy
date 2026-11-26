@@ -1,0 +1,9 @@
+test_attempt_cap_standby_is_not_mixed_interaction_acceptance (__main__.Independent.test_attempt_cap_standby_is_not_mixed_interaction_acceptance) ... ok
+test_real_active_operation_peak_must_not_disappear_between_samples (__main__.Independent.test_real_active_operation_peak_must_not_disappear_between_samples) ... ok
+test_unconfirmed_cleanup_cannot_restore_provider_or_claim_pass (__main__.Independent.test_unconfirmed_cleanup_cannot_restore_provider_or_claim_pass) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.570s
+
+OK
+ACTIVE_PEAK {'witness': 1, 'reported_peak': 1, 'samples': [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]}

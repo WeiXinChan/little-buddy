@@ -1,0 +1,151 @@
+{
+  "format": 1,
+  "layer": "synthetic_text_real_voicepeer_json_duplex_simulated_ack",
+  "cloud_enabled": false,
+  "device_executed": false,
+  "device_events": null,
+  "resource_scope": "runner_owned_sessions_and_current_process",
+  "elapsed_seconds": 0.201,
+  "active_attempt_seconds": 0.008,
+  "effective_interaction_seconds": null,
+  "standby_seconds": 0.193,
+  "cleanup_seconds": 0.0,
+  "requested_seconds": 0.2,
+  "observation_seconds": 0.201,
+  "wall_60_minutes_observed": false,
+  "limits": {
+    "duration": 0.2,
+    "interval": 30,
+    "sample_interval": 30,
+    "attempt_timeout": 40,
+    "max_attempts": 120,
+    "model_calls": 720,
+    "tts_calls": 240,
+    "tts_characters": 28800,
+    "allowance_units": 960,
+    "model_units": 1,
+    "tts_units": 1
+  },
+  "stop_reason": "duration",
+  "attempted": 1,
+  "delivered": 1,
+  "failures": 0,
+  "attempts": [
+    {
+      "index": 0,
+      "scenario": "guess",
+      "injected": "normal",
+      "started": 0.0,
+      "status": "delivered",
+      "observed": {
+        "frames": 2,
+        "game_mode": "guess",
+        "interrupted": false,
+        "first_text_to_transport_ms": 7.67,
+        "acoustic_reply_ms": null,
+        "interruption_to_speaker_silence_ms": null
+      },
+      "completed": 0.008
+    }
+  ],
+  "resource_samples": [
+    {
+      "elapsed": 0.0,
+      "backend_rss_bytes": 36143104,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 9,
+      "device_rss_bytes": null,
+      "active_sessions": 1,
+      "active_operations": 0,
+      "retired_pending": 0
+    },
+    {
+      "elapsed": 0.201,
+      "backend_rss_bytes": 36192256,
+      "backend_threads": 1,
+      "backend_fds": 7,
+      "asyncio_tasks": 1,
+      "device_rss_bytes": null,
+      "active_sessions": 0,
+      "active_operations": 0,
+      "retired_pending": 0
+    }
+  ],
+  "resource_trends": {
+    "backend_rss_bytes": {
+      "first": 36143104,
+      "last": 36192256,
+      "maximum": 36192256
+    },
+    "backend_fds": {
+      "first": 7,
+      "last": 7,
+      "maximum": 7
+    },
+    "backend_threads": {
+      "first": 1,
+      "last": 1,
+      "maximum": 1
+    },
+    "asyncio_tasks": {
+      "first": 9,
+      "last": 1,
+      "maximum": 9
+    },
+    "retired_pending": {
+      "first": 0,
+      "last": 0,
+      "maximum": 0
+    },
+    "active_operations": {
+      "first": 0,
+      "last": 0,
+      "maximum": 0
+    }
+  },
+  "model_stage_calls": {
+    "plan": 1,
+    "facts": 1,
+    "safe": 1
+  },
+  "model_failed_or_cancelled": 0,
+  "usage_delta": {
+    "requests": null,
+    "failures": null,
+    "prompt_tokens": null,
+    "completion_tokens": null
+  },
+  "interrupted_attempts": 0,
+  "delivery_rate_all_attempts": 1.0,
+  "planned_attempts": 120,
+  "not_started": 119,
+  "reservation_unit": "synthetic_units",
+  "billing_bound_verified": false,
+  "allowance": {
+    "model_calls": 3,
+    "tts_calls": 1,
+    "tts_unicode_characters": 7,
+    "reserved_units": 4,
+    "account_quota_known": false,
+    "bill_cny": null
+  },
+  "cleanup": {
+    "confirmed": true,
+    "pending_tasks": 0,
+    "provider_reusable": true
+  },
+  "caller_cancelled": false,
+  "full_acceptance": false,
+  "p14_verified": false,
+  "p12_verified": false,
+  "p15_verified": false,
+  "missing": [
+    "device_business_driver",
+    "real_asr_endpoint",
+    "tls_network_observation",
+    "acoustic_timings",
+    "billing_reconciliation",
+    "semantic_review"
+  ]
+}

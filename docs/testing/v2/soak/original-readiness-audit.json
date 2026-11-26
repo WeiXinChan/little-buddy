@@ -1,0 +1,69 @@
+{
+  "audit": "A36/P14 execution readiness",
+  "source": "233b6cffdef4d0c502d0905035b27a503de426e3",
+  "existing_driver": "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-86-8c4eebd1bbc1/workdir/parent-completion/scripts/v2-device-regression.py",
+  "driver_sha256": "12b3291e6af115191aac6181bcf87c444a4a8a3b7e0a6ed394d55bc24aa1f3e4",
+  "observed_coverage": [
+    "native playback ACK and release",
+    "TLS roundtrip and missing ACK negative control",
+    "background and screen lock cleanup",
+    "permission revoke/deny/restore"
+  ],
+  "missing_coverage": [
+    "60 minute mixed interaction scheduler",
+    "network disturbance and repeated interruption over duration",
+    "bounded resource trend samples and task backlog",
+    "effective interaction versus standby duration",
+    "complete actual cost categories and billing reconciliation",
+    "acoustic expression-end to audible reply and interruption-to-silence observations"
+  ],
+  "conclusion": "existing driver is short device lifecycle regression, not A36/P14 runner",
+  "device_executed": false,
+  "cloud_calls": 0,
+  "full_acceptance": false,
+  "required_measurements": {
+    "duration_seconds": 3600,
+    "resource_samples": [
+      "monotonic_elapsed",
+      "backend_rss_bytes",
+      "backend_fd_count",
+      "backend_thread_count",
+      "active_session_count",
+      "active_operation_count",
+      "device_process_rss_bytes"
+    ],
+    "events": [
+      "attempt_started",
+      "expression_finished",
+      "first_effective_audible_reply",
+      "interruption_started",
+      "speaker_silenced",
+      "operation_completed",
+      "failure",
+      "network_transition",
+      "game_transition"
+    ],
+    "all_attempts_in_denominator": true,
+    "billing_categories": [
+      "ASR",
+      "LLM_input",
+      "LLM_output",
+      "TTS",
+      "images",
+      "safety",
+      "summary",
+      "retry",
+      "cancelled_but_billed"
+    ],
+    "unknown_is_not_zero": true,
+    "privacy": "synthetic fixtures and fixed identifiers only; no raw child audio/chat/credentials; acoustic evidence requires explicit observation conditions"
+  },
+  "execution_preconditions": [
+    "user device ready after evening deferral",
+    "final APK and backend frozen and paired",
+    "semantic blockers closed",
+    "cost and stop-at-free-exhaustion checks",
+    "exclusive device lease and bounded cleanup"
+  ],
+  "next": "build and independently review a mixed-interaction runner before live phone session; do not reuse short regression PASS as 60-minute proof"
+}

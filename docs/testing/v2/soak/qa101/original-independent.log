@@ -1,0 +1,29 @@
+test_attempt_cap_standby_is_not_mixed_interaction_acceptance (__main__.Independent.test_attempt_cap_standby_is_not_mixed_interaction_acceptance) ... ok
+test_real_active_operation_peak_must_not_disappear_between_samples (__main__.Independent.test_real_active_operation_peak_must_not_disappear_between_samples) ... FAIL
+test_unconfirmed_cleanup_cannot_restore_provider_or_claim_pass (__main__.Independent.test_unconfirmed_cleanup_cannot_restore_provider_or_claim_pass) ... ok
+
+======================================================================
+FAIL: test_real_active_operation_peak_must_not_disappear_between_samples (__main__.Independent.test_real_active_operation_peak_must_not_disappear_between_samples)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-88-a96590e5792e/workdir/pr101-review/source/../independent.py", line 20, in test_real_active_operation_peak_must_not_disappear_between_samples
+    self.assertGreater(r['resource_trends']['active_operations']['maximum'],0,'actual active operations must have a recorded active sample/peak, not only idle samples')
+AssertionError: 0 not greater than 0 : actual active operations must have a recorded active sample/peak, not only idle samples
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.564s
+
+FAILED (failures=1)
+ACTIVE_PEAK {'witness': 1, 'reported_peak': 0, 'samples': [0, 0]}

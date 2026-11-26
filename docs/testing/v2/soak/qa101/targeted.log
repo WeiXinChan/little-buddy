@@ -1,0 +1,31 @@
+test_cancel_cleanup_and_real_retired_task_changes_are_observed (tests.v2.test_soak_sampling.Sampling.test_cancel_cleanup_and_real_retired_task_changes_are_observed) ... ok
+test_phase_event_does_not_synthesize_nonexistent_operation (tests.v2.test_soak_sampling.Sampling.test_phase_event_does_not_synthesize_nonexistent_operation) ... ok
+test_real_peak_is_retained_after_small_ring_evicts_active_rows (tests.v2.test_soak_sampling.Sampling.test_real_peak_is_retained_after_small_ring_evicts_active_rows) ... ok
+test_sample_errors_and_unknown_resources_are_not_valid_collection_or_raw_logs (tests.v2.test_soak_sampling.Sampling.test_sample_errors_and_unknown_resources_are_not_valid_collection_or_raw_logs) ... ok
+test_zero_await_model_operation_is_captured_at_real_registry_mutation (tests.v2.test_soak_sampling.Sampling.test_zero_await_model_operation_is_captured_at_real_registry_mutation) ... ok
+test_all_failed_attempts_are_counted_and_global_allowance_not_reset (tests.v2.test_soak_runner.Soak.test_all_failed_attempts_are_counted_and_global_allowance_not_reset) ... ok
+test_caller_cancellation_and_resource_failures_are_observable (tests.v2.test_soak_runner.Soak.test_caller_cancellation_and_resource_failures_are_observable) ... ok
+test_external_cloud_and_device_are_off_by_default_before_io (tests.v2.test_soak_runner.Soak.test_external_cloud_and_device_are_off_by_default_before_io) ... ok
+test_mixed_actual_protocol_interrupt_and_injected_network_are_distinct (tests.v2.test_soak_runner.Soak.test_mixed_actual_protocol_interrupt_and_injected_network_are_distinct) ... ok
+test_real_elapsed_schedule_waits_not_rapid_count_and_never_claims_hour (tests.v2.test_soak_runner.Soak.test_real_elapsed_schedule_waits_not_rapid_count_and_never_claims_hour) ... ok
+test_stop_event_returns_failure_denominator_and_restores_confirmed_provider (tests.v2.test_soak_runner.Soak.test_stop_event_returns_failure_denominator_and_restores_confirmed_provider) ... ok
+test_stubborn_provider_bounded_cleanup_closed_meter_and_nonreuse (tests.v2.test_soak_runner.Soak.test_stubborn_provider_bounded_cleanup_closed_meter_and_nonreuse) ... ok
+test_timeout_and_provider_quota_failure_stop_without_retry (tests.v2.test_soak_runner.Soak.test_timeout_and_provider_quota_failure_stop_without_retry) ... ok
+test_async_observer_is_rejected_without_running_its_body (tests.v2.test_multiturn_probe.Probe.test_async_observer_is_rejected_without_running_its_body) ... ok
+test_catalogue_covers_eight_topics_and_explicit_transition_targets (tests.v2.test_multiturn_probe.Probe.test_catalogue_covers_eight_topics_and_explicit_transition_targets) ... ok
+test_image_configuration_or_oversized_case_cannot_run (tests.v2.test_multiturn_probe.Probe.test_image_configuration_or_oversized_case_cannot_run) ... ok
+test_observer_exception_stops_before_next_turn_and_is_not_pass (tests.v2.test_multiturn_probe.Probe.test_observer_exception_stops_before_next_turn_and_is_not_pass) ... ok
+test_observer_receives_detached_immutable_actual_context_without_expected (tests.v2.test_multiturn_probe.Probe.test_observer_receives_detached_immutable_actual_context_without_expected) ... ok
+test_played_history_loss_or_unchanged_history_is_not_continuity (tests.v2.test_multiturn_probe.Probe.test_played_history_loss_or_unchanged_history_is_not_continuity) ... ok
+test_real_voicepeer_progresses_context_from_actual_ack_not_expectations (tests.v2.test_multiturn_probe.Probe.test_real_voicepeer_progresses_context_from_actual_ack_not_expectations) ... ok
+test_request_gate_counts_actual_retry_calls_and_rejects_before_io (tests.v2.test_multiturn_probe.Probe.test_request_gate_counts_actual_retry_calls_and_rejects_before_io) ... ok
+test_rule_role_and_abandon_detectors_flag_mismatch (tests.v2.test_multiturn_probe.Probe.test_rule_role_and_abandon_detectors_flag_mismatch) ... ok
+test_run_report_excludes_provider_previous_usage (tests.v2.test_multiturn_probe.Probe.test_run_report_excludes_provider_previous_usage) ... ok
+test_safety_rejection_never_counts_delivered_or_heard (tests.v2.test_multiturn_probe.Probe.test_safety_rejection_never_counts_delivered_or_heard) ... ok
+test_usage_is_batch_delta_with_missing_unknown_not_zero (tests.v2.test_multiturn_probe.Probe.test_usage_is_batch_delta_with_missing_unknown_not_zero) ... ok
+test_wrong_mode_stops_batch_instead_of_overwriting_context (tests.v2.test_multiturn_probe.Probe.test_wrong_mode_stops_batch_instead_of_overwriting_context) ... ok
+
+----------------------------------------------------------------------
+Ran 26 tests in 3.444s
+
+OK
