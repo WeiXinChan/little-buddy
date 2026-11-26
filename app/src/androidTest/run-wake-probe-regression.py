@@ -9,7 +9,7 @@ compiler=[jar('org.jetbrains.kotlin',a,v) for a,v in [('kotlin-compiler-embeddab
 runtime=[compiler[1],jar('junit','junit','4.13.2'),jar('org.hamcrest','hamcrest-core','1.3')]
 base=root/'app/src/androidTest/java/com/littlebuddy'
 with tempfile.TemporaryDirectory(dir=root,prefix='native-probe-tests-') as out:
- subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',out,*[str(base/(n+'.kt')) for n in ['NativeProbeSafety','NativeProbeWindow','WakeFixtureKernel','WakeFixtureKernelTest']],str(root/'app/src/main/java/com/littlebuddy/v2/RecorderLease.kt')],check=True)
- result=subprocess.run(['java','-Xmx256m','-Dwake.repo='+str(root),'-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.WakeFixtureKernelTest'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+ subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',out,*[str(base/(n+'.kt')) for n in ['NativeProbeSafety','NativeProbeWindow','WakeFixtureKernel','WakeFixtureKernelTest','WakeHitOrderingTest']],str(root/'app/src/main/java/com/littlebuddy/v2/RecorderLease.kt')],check=True)
+ result=subprocess.run(['java','-Xmx256m','-Dwake.repo='+str(root),'-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.WakeFixtureKernelTest','com.littlebuddy.WakeHitOrderingTest'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
  print(result.stdout,end='');assert 'PRIVATE_SYNTHETIC_MESSAGE' not in result.stdout
  result.check_returncode()

@@ -112,3 +112,14 @@ After true worker join, last_case_id/offered/hits/raw_tail also retain the lates
 BEFORE its assertions (including out-of-bounds/negative-case hits); do not hide a bad raw tail by
 only reporting completed cases. last_phase is the last operation, not a fabricated original failure
 site after finally/close; fixed reason plus last-case metadata identify failed assertions.
+
+## KWS-01 returned-evidence ordering
+
+After production accept returns, record raw hit/tail/fed first, immediately assert that a negative
+case did not hit and that any positive raw tail is in (0,fed]. Only AFTER those typed assertions
+may the checkpoint stop continuation for cancel/focus loss. Invalid observed evidence remains FAIL;
+a valid hit plus cancellation is still dependency, never success, and no hit plus cancellation
+stays dependency. Before-call cancellation does not invent an observation. All model close/final
+budget/scratch/lease checks remain unchanged. After real join, the actual Bundle still projects
+last_case_id/offered/hits/raw_tail independently of completed cases, including failed observations.
+Original QA counterexample inputs/assertions and the 12PASS/2FAIL log are retained separately.

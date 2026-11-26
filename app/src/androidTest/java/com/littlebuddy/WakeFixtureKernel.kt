@@ -110,9 +110,11 @@ internal class WakeFixtureKernel(
                     currentOffered=fed+size
                     hit=model.accept(samples,size);fed+=size
                     currentTail=hit;currentHits=if(hit==null)0 else 1
-                    checkpoint()
+                    // Witness returned native evidence before later revocation may stop continuation.
                     if(hit!=null){wakeRequire(expectHit,"WAKE_UNEXPECTED_HIT")
-                        wakeRequire(hit>0 && hit<=fed,"WAKE_TAIL_OUTSIDE_INPUT");break}
+                        wakeRequire(hit>0 && hit<=fed,"WAKE_TAIL_OUTSIDE_INPUT")}
+                    checkpoint() // Valid hit + cancellation is dependency, never successful completion.
+                    if(hit!=null)break
                 }finally{bytes.fill(0);samples.fill(0)}
             }}finally{input?.close()}
             wakeRequire((hit!=null)==expectHit,"WAKE_EXPECTED_HIT_MISSING")
