@@ -18,6 +18,9 @@ internal object PinDiagnostic {
         try { sink?.invoke(sequence.get(), System.nanoTime() / 1_000_000, stage, reason) }
         catch (_: Throwable) { /* Observability must never affect authorization. */ }
     }
+    fun observe(stage: Stage, reason: () -> Reason) {
+        try { if (sink != null) event(stage, reason()) } catch (_: Throwable) { }
+    }
     fun error(stage: Stage, error: Exception) = event(stage, when (error) {
         is java.security.GeneralSecurityException -> Reason.SECURITY_ERROR
         is java.io.IOException -> Reason.IO_ERROR

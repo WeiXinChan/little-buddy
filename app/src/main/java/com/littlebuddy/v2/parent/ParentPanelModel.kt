@@ -68,6 +68,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         grant = null; ownerChallenge?.let(ownerDiscard); ownerChallenge = null; pending.forEach { it.fill('\u0000') }; pending.clear()
     }
     fun pause(afterInvalidate: () -> Unit = {}) {
+        PinDiagnostic.event(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.CANCEL)
         invalidate(); afterInvalidate(); show(PanelState(PanelMode.VERIFY, PanelNotice.LOCKED))
     }
     /** Foreground route failure only. Background pause remains inactive.

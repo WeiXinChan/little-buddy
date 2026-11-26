@@ -178,7 +178,7 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
                     if (quarantined || page != epoch.current() || challenge !== proof ||
                         now() >= proof.expiresAt || proof.deviceBinding != binding ||
                         proof.operation != (if (record == null) OwnerOperation.INITIALIZE_PIN else OwnerOperation.RESET_PIN)) {
-                        PinDiagnostic.event(PinDiagnostic.Stage.SAVE, if (now() >= proof.expiresAt) PinDiagnostic.Reason.EXPIRED else PinDiagnostic.Reason.CHALLENGE_REJECT); return false
+                        PinDiagnostic.observe(PinDiagnostic.Stage.SAVE) { if (now() >= proof.expiresAt) PinDiagnostic.Reason.EXPIRED else PinDiagnostic.Reason.CHALLENGE_REJECT }; return false
                     }
                     challenge = null; generation
                 }
@@ -195,13 +195,13 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
                     cooldownUntil = 0; generation++; grant = null; challenge = null
                     epoch.revokeIf(page)
                 }
-                PinDiagnostic.event(PinDiagnostic.Stage.RESULT, when (state()) {
+                PinDiagnostic.observe(PinDiagnostic.Stage.RESULT) { when (state()) {
                     State.UNOWNED -> PinDiagnostic.Reason.UNOWNED
                     State.LOCKED -> PinDiagnostic.Reason.LOCKED
                     State.AUTHORIZED -> PinDiagnostic.Reason.AUTHORIZED
                     State.COOLDOWN -> PinDiagnostic.Reason.COOLDOWN
                     State.QUARANTINED -> PinDiagnostic.Reason.QUARANTINED
-                })
+                } }
                 return committed
             } catch (error: Exception) { PinDiagnostic.error(PinDiagnostic.Stage.SAVE, error); throw error }
             finally { worker.unlock() }
@@ -304,7 +304,11 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
         }
     }
     fun ownerChallengeCurrent(proof: OwnerChallenge, page: Long): Boolean = synchronized(lock) {
-        !quarantined && page == epoch.current() && challenge === proof && now() < proof.expiresAt
+        val current = !quarantined && page == epoch.current() && challenge === proof && now() < proof.expiresAt
+        if (!current) PinDiagnostic.observe(PinDiagnostic.Stage.PAGE) {
+            if (now() >= proof.expiresAt) PinDiagnostic.Reason.EXPIRED else PinDiagnostic.Reason.CHALLENGE_REJECT
+        }
+        current
     }
     fun saveSettings(candidate: Grant, settings: ParentPlaybackSettings): Boolean {
         requireWorker()

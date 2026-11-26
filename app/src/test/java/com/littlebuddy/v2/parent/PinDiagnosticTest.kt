@@ -70,9 +70,11 @@ class PinDiagnosticTest {
     }
     @Test fun genuineExpiryStillRejects() {
         val r = Rig(stopAt="hash"); r.race { r.time += 120_000; r.model.tick() }; assertNull(r.stored)
+        assertTrue(r.has(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.EXPIRED))
     }
     @Test fun focusCancellationStillRejects() {
         val r = Rig(stopAt="hash"); r.race { r.model.pause() }; assertNull(r.stored)
+        assertTrue(r.has(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.CANCEL))
     }
     @Test fun consumeRejectionHasNoDeriveOrWrite() {
         val r=Rig(consume=false); r.owner(); r.save(); r.drain(); assertNull(r.stored)
