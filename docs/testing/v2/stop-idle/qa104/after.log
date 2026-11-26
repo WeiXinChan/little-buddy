@@ -1,0 +1,11 @@
+test_commands_exception_does_not_clear_deadline_or_leave_settling_token (__main__.Independent.test_commands_exception_does_not_clear_deadline_or_leave_settling_token) ... ok
+test_poll_visual_exception_during_stop_closes_actual_run (__main__.Independent.test_poll_visual_exception_during_stop_closes_actual_run) ... ok
+test_replacement_prepared_not_poisoned_by_revoked_reply_deadline (__main__.Independent.test_replacement_prepared_not_poisoned_by_revoked_reply_deadline) ... ok
+test_runner_control_and_unknown_failure_enums_never_reflect_content (__main__.Independent.test_runner_control_and_unknown_failure_enums_never_reflect_content) ... ok
+test_ttl_and_heartbeat_expire_during_real_cancellation_window (__main__.Independent.test_ttl_and_heartbeat_expire_during_real_cancellation_window) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.465s
+
+OK
+REPLACEMENT_PREPARED {'old_deadline': 115.0, 'new_prepared_deadline': 119.0, 'remaining_input': 3.0, 'monitor_done': False, 'response_expired': False}

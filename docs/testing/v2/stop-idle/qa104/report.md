@@ -1,0 +1,13 @@
+# STOP104-01：旧reply与替换prepared期限分别归属
+
+已等待读取独立QA最终报告01a21721-b1ab-76a6-bf96-3f08ed9757e6及冻结脚本。原5方法、初版手工新deadline变体及报告逐字保存。旧6f787ac6原样复跑最终5方法4PASS/1FAIL：实际decision(new_turn)产生119新prepared/原输入预算，clock116尚余3秒，旧stop完成后monitor却按残留reply115结束。before.log保留。
+
+修复不仅加prepared比较：
+
+1. settling token捕获原prepared身份、原input budget对象/原deadline以及旧reply timing字段。任一替换或新generation/revision/turn/output改变，都不能再按旧token豁免一个新的回复deadline；初版手工119变体修后会在119正确到期。
+2. 旧operation有限退出已确认、基础output scope未变且deadline/progress/确认字段仍等于捕获旧值时，可以仅退休这些仍属旧reply的字段；即使prepared/input budget已经替换，也保留新prepared对象及119原预算，不误消费它的intent，不续租。这不会清除已被新reply改为119等字段。
+3. 旧取消尚在途、或新输入等待prepared握手期间，monitor按真实awaiting_input的原ResponseBudget执行deadline，且只在无player/pending/活跃新generation时不poll已撤销旧reply。合法新prepared必须匹配当前revision及原budget.deadline。新的实际回复仍按自身reply deadline/progress检查；TTL/heartbeat始终由_live检查。取消.5秒界限、commands/poll_visual异常failclosed不变。
+
+最终5原QA方法PASS：actual decision新prepared clock116/remaining3/monitor_done=false/response_expired=false；附初版5方法PASS，其中4与最终重叠，未重复加分母。作者47PASS（原43+新增4），最终口径52唯一PASS/0FAIL/0SKIP，编译/diff通过。新增检查原decision路径旧字段已退休但新预算仍119，119.01及时timeout；仅budget替换、仅generation替换、仅reply deadline替换均不被旧token清除/遮蔽；会话TTL不变。旧scope/commands异常/TTL/heartbeat等原断言保留。
+
+root已结束的185秒离线报告逐字保留，source仍旧6f787ac6：7尝试5交付2预期打断、0失败、0pending，仅验证旧90秒场景恢复，不覆盖STOP104-01，不贴给本次新head或当60分钟PASS。原90秒FAIL、root115反例、QA新FAIL均继续保留。本轮未重启/取消root进程，未运行云/手机/185秒/60分钟、未部署/合并/派生agent。等待独立QA增量通过后root再决定长测，A36/P14仍OPEN。

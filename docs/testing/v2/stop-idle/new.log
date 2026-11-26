@@ -1,0 +1,33 @@
+test_actual_run_remains_connected_after_old_deadline_then_next_turn_delivers (tests.v2.test_stop_idle.StopIdle.test_actual_run_remains_connected_after_old_deadline_then_next_turn_delivers) ... FAIL
+test_cancel_crossing_deadline_waits_confirmation_then_idles (tests.v2.test_stop_idle.StopIdle.test_cancel_crossing_deadline_waits_confirmation_then_idles) ... ok
+test_new_revision_prepared_or_player_scope_during_cancel_is_not_cleared (tests.v2.test_stop_idle.StopIdle.test_new_revision_prepared_or_player_scope_during_cancel_is_not_cleared) ... ok
+test_prepared_matching_reply_keeps_original_response_deadline (tests.v2.test_stop_idle.StopIdle.test_prepared_matching_reply_keeps_original_response_deadline) ... ok
+test_root_monitor_counterexample_stopped_deadline_released_without_ttl_change (tests.v2.test_stop_idle.StopIdle.test_root_monitor_counterexample_stopped_deadline_released_without_ttl_change) ... ok
+test_six_scenarios_with_controlled_thirty_second_intervals_same_session (tests.v2.test_stop_idle.StopIdle.test_six_scenarios_with_controlled_thirty_second_intervals_same_session) ... ok
+test_unconfirmed_old_resource_and_expired_session_do_not_become_idle_live (tests.v2.test_stop_idle.StopIdle.test_unconfirmed_old_resource_and_expired_session_do_not_become_idle_live) ... ok
+
+======================================================================
+FAIL: test_actual_run_remains_connected_after_old_deadline_then_next_turn_delivers (tests.v2.test_stop_idle.StopIdle.test_actual_run_remains_connected_after_old_deadline_then_next_turn_delivers)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_stop_idle.py", line 36, in test_actual_run_remains_connected_after_old_deadline_then_next_turn_delivers
+    await asyncio.sleep(.12);self.assertFalse(p.closed)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 7 tests in 1.051s
+
+FAILED (failures=1)

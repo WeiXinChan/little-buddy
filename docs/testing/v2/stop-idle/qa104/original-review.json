@@ -1,0 +1,60 @@
+{
+  "head": "6f787ac698bc7258a98aaeb23951b1fbf7d28451",
+  "tree": "67c341e11565e371daddabedbb4743697345a93e",
+  "base": "7f3bd941d4af8a7c283f68ceda16fa41bfff532d",
+  "verdict": "HOLD_REPLACEMENT_PREPARED_DEADLINE_OWNERSHIP",
+  "tests": {
+    "unique": 26,
+    "passed": 25,
+    "failed": 1,
+    "skipped": 0,
+    "stop_idle8_soak8_sampling5": 21,
+    "independent": 5
+  },
+  "author43_scope": "stop8+read_retry9+session13+soak8+sampling5; QA reran21+5independent, not full43",
+  "source_sha256": {
+    "backend/v2/voice.py": "2367ce78adbcb306d33364009ac9493c5e15e841548a176f5fb6c844c1e442c2",
+    "scripts/v2_soak.py": "11881bb84685ef012de06cd48295d9390575629895b5d453bb96bc9d5a219021"
+  },
+  "findings": [
+    {
+      "id": "STOP104-01",
+      "locations": [
+        "backend/v2/voice.py:605-613",
+        "backend/v2/voice.py:1156-1165"
+      ],
+      "invariant": "A replacement prepared must not be governed by an already-revoked old reply deadline, while valid new reply deadlines must not be suppressed",
+      "reproducer": "controlled same-scope prepared replacement during old generation cancellation, using actual decision producer and separately live ResponseBudget",
+      "values": {
+        "old_reply_deadline": 115,
+        "replacement_prepared_deadline": 119,
+        "now": 116,
+        "remaining_input_seconds": 3,
+        "stop_completed": true,
+        "monitor_done": true,
+        "response_expired": true
+      },
+      "cause": "stop returns on prepared identity change without retiring still-old reply deadline; monitor settlement token omits prepared/reply-deadline identity, then polls old expired deadline after settlement clears",
+      "suggestion": "Track the revoked reply/deadline owner separately; retire only still-owned old reply deadline after confirmed stop, preserve new prepared and its original budget. Do not simply poll the old deadline when prepared changes or reset/renew new deadlines."
+    }
+  ],
+  "positive_boundaries": [
+    "confirmed plain stop clears old reply only, TTL/heartbeat unchanged",
+    "TTL and heartbeat expire during actual cancellation window",
+    "commands exception clears settling token but does not falsely zero deadline or renew lease",
+    "poll_visual exception actual run completes closed/inactive",
+    "runner controls/stage/reason unknown values sanitized, exception body not accessed",
+    "unconfirmed resource continues failclosed in targeted tests"
+  ],
+  "original_evidence_hashes": {
+    "original-soak-90s-failure.json": "ccd622ee47130914c79f65e550343f3f58d15289b99557ae1025926837840aa1",
+    "original-deadline.json": "df2ca10515446e688720ea08375baa041c5814b8c79849ea10ea8945342504b1",
+    "old-run-failure.log": "6034934d3c2dc260f69724c862cd52034afb2391d713c3875707fccc1ec9ef2b"
+  },
+  "scope": "controlled clocks and synthetic provider/transport only; new prepared injected via actual internal decision callback under concurrency invariant requested, not end-to-end wire scheduling or frequency proof",
+  "clock_note": "Initial poll_visual test asserted session state before run finally completed; corrected to await actual run task and now PASS. Initial log preserved, not a second product defect.",
+  "cloud_calls": 0,
+  "device_operations": 0,
+  "long_real_clock_or_60min_run": false,
+  "product_or_author_modified": false
+}

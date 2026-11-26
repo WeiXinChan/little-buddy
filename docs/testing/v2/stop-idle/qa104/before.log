@@ -1,0 +1,31 @@
+test_commands_exception_does_not_clear_deadline_or_leave_settling_token (__main__.Independent.test_commands_exception_does_not_clear_deadline_or_leave_settling_token) ... ok
+test_poll_visual_exception_during_stop_closes_actual_run (__main__.Independent.test_poll_visual_exception_during_stop_closes_actual_run) ... ok
+test_replacement_prepared_not_poisoned_by_revoked_reply_deadline (__main__.Independent.test_replacement_prepared_not_poisoned_by_revoked_reply_deadline) ... FAIL
+test_runner_control_and_unknown_failure_enums_never_reflect_content (__main__.Independent.test_runner_control_and_unknown_failure_enums_never_reflect_content) ... ok
+test_ttl_and_heartbeat_expire_during_real_cancellation_window (__main__.Independent.test_ttl_and_heartbeat_expire_during_real_cancellation_window) ... ok
+
+======================================================================
+FAIL: test_replacement_prepared_not_poisoned_by_revoked_reply_deadline (__main__.Independent.test_replacement_prepared_not_poisoned_by_revoked_reply_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/docs/testing/v2/stop-idle/qa104/independent.py", line 32, in test_replacement_prepared_not_poisoned_by_revoked_reply_deadline
+    self.assertFalse(p.session.response_expired or monitor.done(),'old revoked reply deadline must not terminate a replacement prepared whose original budget is still live')
+AssertionError: True is not false : old revoked reply deadline must not terminate a replacement prepared whose original budget is still live
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.475s
+
+FAILED (failures=1)
+REPLACEMENT_PREPARED {'old_deadline': 115.0, 'new_prepared_deadline': 119.0, 'remaining_input': 3.0, 'monitor_done': True, 'response_expired': True}

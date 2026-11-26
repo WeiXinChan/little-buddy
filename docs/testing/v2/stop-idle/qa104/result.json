@@ -1,0 +1,27 @@
+{
+  "format": 1,
+  "previous_head": "6f787ac698bc7258a98aaeb23951b1fbf7d28451",
+  "author_methods": 47,
+  "final_original_qa_methods": 5,
+  "unique_passed": 52,
+  "failed": 0,
+  "skipped": 0,
+  "old_original_qa_failed": 1,
+  "initial_oracle_methods_also_passed_not_double_counted": 5,
+  "cloud_calls": 0,
+  "device_executed": false,
+  "hour_executed": false,
+  "root_185s_applies_only_to_previous_head": true,
+  "files": {
+    "after.log": "b5261f9bc09641e068b13a4514062b9d16d47526cb3a6d1f4f840f5e5dce5c44",
+    "before.log": "d5a29c05bff7f17a16cef19a0aed156eebadc9d2e0e7471011d846aaed9ac77e",
+    "independent.py": "2b34d9cd14dfd88f03e40649fbf1ff278b9154604f18a1833068f2e846ce2f34",
+    "initial-controlled-deadline.py": "bb33e99141f5dee12cfb86b182be2a781d8877ed56edc4744809afcbf1ec4021",
+    "initial-oracle-after.log": "68c32ba05faa49c45c0942696e17eddb8ebfa48c23e1a6123ad940e63429dedc",
+    "original-independent.log": "397ac0acf360e4230b4206c8bb51c478214986838fa5bd6eb3042d2b5adbe4a0",
+    "original-review.json": "f075c6be165ecfec25c7633b88f6c6f33a619ab0d93c7aea08bec129b05c6e76",
+    "report.md": "bc954d64540f2ec4a9036f100c85789b406ded63f0a37d3aa18b43dae97f95d9",
+    "root-185s-pass.json": "3c654e438fb1d9b3f921af2eaa1ee7d4ecc560bcc2e40415a6338359e0110e75",
+    "targeted.log": "40c1c6975a5f03adbd9745d8f3ee187b6d8d6f088236b6a7a507c182fb0a7a89"
+  }
+}

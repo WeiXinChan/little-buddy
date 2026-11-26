@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "base": "7f3bd941d4af8a7c283f68ceda16fa41bfff532d",
+  "new_methods": 8,
+  "normal_methods": 43,
+  "passed": 43,
+  "failed": 0,
+  "skipped": 0,
+  "old_run_falsifier_exit": 1,
+  "controlled_clock": true,
+  "cloud_calls": 0,
+  "device_executed": false,
+  "hour_executed": false,
+  "files": {
+    "new.log": "b0f3b7581491912510188941d260a2037fa089259fd339adc3c621dfdcc0405f",
+    "old-run-failure.log": "6034934d3c2dc260f69724c862cd52034afb2391d713c3875707fccc1ec9ef2b",
+    "original-deadline.json": "df2ca10515446e688720ea08375baa041c5814b8c79849ea10ea8945342504b1",
+    "original-probe.py": "0af7683a18746b94123f1abe416911c6466a80ad2eed51fd537c0e7372faceb5",
+    "original-soak-90s-failure.json": "ccd622ee47130914c79f65e550343f3f58d15289b99557ae1025926837840aa1",
+    "report.md": "7bd08651636613efd541362e56b6ecc8733e5249caf99d561dc7f6df4c64dbc6",
+    "targeted.log": "a7032661fd10a370c2ce13b9f717c761b932678ebdbbc874e481ddfabd5a280f"
+  }
+}
