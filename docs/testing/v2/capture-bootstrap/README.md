@@ -89,3 +89,14 @@ ONNX ports. It checks delayed250ms anchoring, absent/late/stale/regressing/rate-
 original sample0/keyword coordinates, private-cache clearing/cancellation, no unanchored accept/upload,
 21/50frame owner delay, lease/native cancellation and accumulating continuous native loss. This is
 code and controlled continuity evidence; it is not a real ONNX acoustic run or OPPO production PASS.
+
+## Probe caller cancellation integration
+
+ProbeControl now registers the actual prefix through ProbeStartupCancellation BEFORE native start.
+Its foreground/focus callback, timeout, outer-finally and worker release all synchronously clear the
+same staged cache before stop/native IO. Registration racing an already-cancelled caller also clears
+immediately. The helper delegates to actual CaptureBootstrap.clear; it does not hold a monitor across
+JNI. Two controlled regressions block a real bootstrap read after filling the prefix, cancel/late-
+register from the caller, and require all staged samples zero while the worker remains blocked. After
+unblocking, the read scratch must also be finally zero and admission must remain rejected. Existing
+stop/cleanup failure-over-dependency priority is exercised alongside them (15 host methods total).

@@ -154,6 +154,8 @@ internal class ProbeMetadata {
 /** Native-only counterpart to production cancellation. Never closes/replaces another owner's recorder. */
 internal class ProbeControl(private val lease:RecorderLease,private val meta:ProbeMetadata) {
     val cancelled=AtomicBoolean(false)
+    private val startup=ProbeStartupCancellation(cancelled)
+    fun installStartup(prefix:CaptureBootstrap){startup.install(prefix)}
     private val lock=Any()
     private val stopOnce=AtomicBoolean(false)
     val stopFailure=AtomicReference<String?>(null)
@@ -162,7 +164,7 @@ internal class ProbeControl(private val lease:RecorderLease,private val meta:Pro
     fun install(value:AudioRecord){synchronized(lock){native=value}}
     fun start(){synchronized(lock){check(!cancelled.get());checkNotNull(native).startRecording()}}
     fun cancel(){
-        cancelled.set(true)
+        startup.cancel()
         if(!stopOnce.compareAndSet(false,true) || !lease.beginStop())return
         val work=Thread({
             try {guardedProbeStop({synchronized(lock){native?.let{if(it.recordingState==AudioRecord.RECORDSTATE_RECORDING)it.stop()}}}) {
@@ -172,7 +174,7 @@ internal class ProbeControl(private val lease:RecorderLease,private val meta:Pro
         stopper=work
         guardedProbeStop({work.start()}){stopFailure.compareAndSet(null,it);meta.stopExceptionClass=it;lease.endStop()}
     }
-    fun release(){synchronized(lock){
+    fun release(){startup.clear();synchronized(lock){
         val value=native
         if(value==null){if(!meta.nativeAttempted){meta.stopped=true;meta.released=true;lease.nativeReleased()};return}
         try {
@@ -278,6 +280,7 @@ class NativeTimestampTest {
                         }else{meta.timestampUnavailable++;null}
                     }
                     val prefix=CaptureBootstrap(ledger)
+                    cancellation.installStartup(prefix)
                     meta.phase="native_start";meta.startCallMs=SystemClock.elapsedRealtime()
                     cancellation.start();meta.startDurationMs=SystemClock.elapsedRealtime()-meta.startCallMs
                     if(native.recordingState!=AudioRecord.RECORDSTATE_RECORDING)dependency("DEPENDENCY_NATIVE_START_RESTRICTED");meta.started=true
