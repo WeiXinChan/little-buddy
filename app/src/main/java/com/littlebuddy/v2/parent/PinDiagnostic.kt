@@ -5,17 +5,17 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Closed vocabulary only. No authentication data or exception text can enter this port.
  * Disabled by default. The diagnostic adapter must be nonblocking; all failures are isolated. */
 internal object PinDiagnostic {
-    enum class Stage { PROMPT, TAKE, APPROVE, RECEIPT, PAGE, TICK, SAVE, CONSUME, DERIVE, COMMIT, RESULT, RENDER, CONFIG, SSH, FORWARD, SOCKET, WSS, PROTOCOL, CAPTURE_NATIVE, CAPTURE_MODEL, CAPTURE_STARTUP, CAPTURE_READ, CAPTURE_CLOCK, CAPTURE_QUEUE, CAPTURE_KWS, CAPTURE_CLEANUP, HELP, TECHNICAL }
+    enum class Stage { PROMPT, TAKE, APPROVE, RECEIPT, PAGE, TICK, SAVE, CONSUME, DERIVE, COMMIT, RESULT, RENDER, CONFIG, SOCKET_CREATE, SOCKET_OPTIONS, SOCKET_MAP, SOCKET_CONNECT, TLS, ERROR_CHAIN, ERROR_SITE, SSH, FORWARD, SOCKET, WSS, PROTOCOL, CAPTURE_NATIVE, CAPTURE_MODEL, CAPTURE_STARTUP, CAPTURE_READ, CAPTURE_CLOCK, CAPTURE_QUEUE, CAPTURE_KWS, CAPTURE_CLEANUP, HELP, TECHNICAL }
     enum class Reason { BEGIN, SUCCESS, REJECTED, ERROR, MISSING, EXPIRED, NO_FOCUS, CANCEL,
         INVALIDATED, TICK_OWNER_INVALID, SAVE_IN_PROGRESS, EARLY_REJECT, CHALLENGE_REJECT,
         PIN_MISMATCH, STALE_CALLBACK, UNOWNED, LOCKED, AUTHORIZED, COOLDOWN, QUARANTINED,
-        SECURITY_ERROR, IO_ERROR, STATE_ERROR, OTHER_ERROR, TLS_HANDSHAKE, TLS_PEER, SSH_ERROR, TIMEOUT, ARGUMENT_ERROR, READY, SAVED_LOCAL, NO_CONFIG, HOLD, PARENT_RETRY, RETURN, NETWORK, CLOSED, PROTOCOL_FAILED, INCOMPATIBLE, CAPTURE_FAILED, RELEASE_FAILED, TLS_ERROR, AUTH_DENIED, HTTP_FAILED, CONNECT_FAILED, DNS_FAILED }
+        SECURITY_ERROR, IO_ERROR, STATE_ERROR, OTHER_ERROR, TLS_HANDSHAKE, TLS_PEER, SSH_ERROR, TIMEOUT, ARGUMENT_ERROR, READY, SAVED_LOCAL, NO_CONFIG, HOLD, PARENT_RETRY, RETURN, NETWORK, CLOSED, PROTOCOL_FAILED, INCOMPATIBLE, CAPTURE_FAILED, RELEASE_FAILED, TLS_ERROR, AUTH_DENIED, HTTP_FAILED, CONNECT_FAILED, DNS_FAILED, SOCKET_ERROR, EOF_ERROR, INTERRUPTED_IO, SITE_MAP, SITE_CONNECT, SITE_OKHTTP_CONNECT, SITE_TLS, SITE_UNKNOWN, SITE_JAVA_SOCKET, SITE_CONSCRYPT, TARGET_UNRESOLVED, TARGET_HOST, TARGET_PORT, FORWARD_UNAVAILABLE }
     private val sequence = AtomicInteger()
     @Volatile private var sink: ((Int, Long, Stage, Reason) -> Unit)? = null
     fun install(adapter: ((Int, Long, Stage, Reason) -> Unit)?) { sink = adapter }
     fun begin() { if (sink != null) { sequence.incrementAndGet(); event(Stage.PROMPT, Reason.BEGIN) } }
     fun beginRuntime() { if (sink != null) { sequence.incrementAndGet(); event(Stage.CONFIG, Reason.BEGIN) } }
-    /** Closed exception categories only: never inspect messages, stack traces or response bodies. */
+    /** Closed exception categories and source-site enums only: never emit messages, dynamic class names, frames or response bodies. */
     fun runtimeError(stage: Stage, error: Throwable) {
         try {
         var item: Throwable? = error
@@ -34,10 +34,24 @@ internal object PinDiagnostic {
                 e is java.security.GeneralSecurityException || e is SecurityException -> Reason.SECURITY_ERROR
                 e is IllegalStateException -> Reason.STATE_ERROR
                 e is IllegalArgumentException -> Reason.ARGUMENT_ERROR
+                e is java.net.SocketException -> Reason.SOCKET_ERROR
+                e is java.io.EOFException -> Reason.EOF_ERROR
+                e is java.io.InterruptedIOException -> Reason.INTERRUPTED_IO
                 e is java.io.IOException -> Reason.IO_ERROR
                 else -> Reason.OTHER_ERROR
             }
             if (reason == Reason.OTHER_ERROR || reason == Reason.IO_ERROR) reason = category
+            event(Stage.ERROR_CHAIN, category)
+            val site = e.stackTrace.firstOrNull { it.className.startsWith("com.littlebuddy.v2.") || it.className == "okhttp3.internal.connection.RealConnection" || it.className == "java.net.Socket" || it.className.startsWith("com.android.org.conscrypt.") }
+            event(Stage.ERROR_SITE, when {
+                site?.className == "com.littlebuddy.v2.transport.V2Forwarding" -> Reason.SITE_MAP
+                site?.className == "com.littlebuddy.v2.transport.V2MappedSocket" -> Reason.SITE_CONNECT
+                site?.className == "okhttp3.internal.connection.RealConnection" && site.methodName == "connectTls" -> Reason.SITE_TLS
+                site?.className == "okhttp3.internal.connection.RealConnection" -> Reason.SITE_OKHTTP_CONNECT
+                site?.className == "java.net.Socket" -> Reason.SITE_JAVA_SOCKET
+                site?.className?.startsWith("com.android.org.conscrypt.") == true -> Reason.SITE_CONSCRYPT
+                else -> Reason.SITE_UNKNOWN
+            })
             item = e.cause?.takeIf { it !== e }
         }
         event(stage, reason)

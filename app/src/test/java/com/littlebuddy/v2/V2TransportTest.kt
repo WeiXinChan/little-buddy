@@ -12,6 +12,101 @@ import java.net.Proxy
 import java.util.Properties
 
 class V2TransportTest {
+    @Test fun realLoopbackUsesMappedSocketThroughOkHttp() {
+        val server=java.net.ServerSocket(0,1,java.net.InetAddress.getByName("127.0.0.1"))
+        server.soTimeout=2000
+        val failure=java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val thread=Thread {
+            try { server.accept().use { socket ->
+                socket.soTimeout=2000
+                val input=socket.getInputStream().bufferedReader()
+                while (!input.readLine().isNullOrEmpty()) { }
+                socket.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK".toByteArray())
+            } } catch(e:Throwable) { failure.set(e) }
+        }
+        thread.start()
+        val factory=object:javax.net.SocketFactory() {
+            override fun createSocket()=V2MappedSocket { server.localPort }
+            override fun createSocket(h:String,p:Int):java.net.Socket=error("unsupported")
+            override fun createSocket(h:String,p:Int,l:java.net.InetAddress,lp:Int):java.net.Socket=error("unsupported")
+            override fun createSocket(h:java.net.InetAddress,p:Int):java.net.Socket=error("unsupported")
+            override fun createSocket(h:java.net.InetAddress,p:Int,l:java.net.InetAddress,lp:Int):java.net.Socket=error("unsupported")
+        }
+        val client=OkHttpClient.Builder().proxy(Proxy.NO_PROXY).retryOnConnectionFailure(false).socketFactory(factory).build()
+        try {
+            client.newCall(Request.Builder().url("http://127.0.0.1:19483/v2/voice").build()).execute().use {
+                assertEquals(200,it.code);assertEquals("OK",it.body!!.string())
+            }
+        } finally { server.close();thread.join(3000);client.connectionPool.evictAll();client.dispatcher.executorService.shutdownNow() }
+        assertFalse(thread.isAlive);failure.get()?.let { throw AssertionError(it) }
+    }
+    @Test fun mappedSocketRejectsUnresolvedWrongPortAndClosedOwner() {
+        for (target in listOf(java.net.InetSocketAddress.createUnresolved("127.0.0.1",19483),java.net.InetSocketAddress("127.0.0.1",19443),java.net.InetSocketAddress("127.0.0.2",19483))) {
+            V2MappedSocket { 12345 }.use { socket ->
+                try { socket.connect(target,100);fail("unsafe mapping") } catch(_:IOException) { }
+                assertFalse(socket.isConnected)
+            }
+        }
+        V2MappedSocket { error("closed") }.use { socket ->
+            try { socket.connect(java.net.InetSocketAddress("127.0.0.1",19483),100);fail("closed owner") } catch(_:IllegalStateException) { }
+        }
+    }
+    @Test fun diagnosticNeverEmitsExceptionText() {
+        val seen=mutableListOf<Pair<PinDiagnostic.Stage,PinDiagnostic.Reason>>()
+        PinDiagnostic.install { _,_,s,r -> seen.add(s to r) }
+        try {
+            PinDiagnostic.runtimeError(PinDiagnostic.Stage.WSS,java.net.SocketException("SECRET raw packet").apply {
+                initCause(javax.net.ssl.SSLHandshakeException("SECRET token"))
+            })
+            assertTrue(seen.contains(PinDiagnostic.Stage.ERROR_CHAIN to PinDiagnostic.Reason.SOCKET_ERROR))
+            assertTrue(seen.contains(PinDiagnostic.Stage.ERROR_CHAIN to PinDiagnostic.Reason.TLS_HANDSHAKE))
+            assertTrue(seen.contains(PinDiagnostic.Stage.WSS to PinDiagnostic.Reason.SOCKET_ERROR))
+            assertFalse(seen.toString().contains("SECRET"))
+        } finally { PinDiagnostic.install(null) }
+    }
+    @Test fun realTlsWebSocketUpgradeThroughMappedSocket() {
+        val keys=java.security.KeyStore.getInstance("PKCS12").apply {
+            File(System.getProperty("loopback.p12")).inputStream().use { load(it,"fixture".toCharArray()) }
+        }
+        val km=javax.net.ssl.KeyManagerFactory.getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm()).apply { init(keys,"fixture".toCharArray()) }
+        val tm=javax.net.ssl.TrustManagerFactory.getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm()).apply { init(keys) }
+        val trust=tm.trustManagers.filterIsInstance<javax.net.ssl.X509TrustManager>().single()
+        val tls=javax.net.ssl.SSLContext.getInstance("TLS").apply { init(km.keyManagers,tm.trustManagers,null) }
+        val server=tls.serverSocketFactory.createServerSocket(0,1,java.net.InetAddress.getByName("127.0.0.1"))
+        server.soTimeout=3000
+        val accepted=java.util.concurrent.atomic.AtomicReference<java.net.Socket?>()
+        val serverError=java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val thread=Thread {
+            try { server.accept().use { socket ->
+                accepted.set(socket);socket.soTimeout=3000
+                val input=socket.getInputStream().bufferedReader();val headers=mutableListOf<String>()
+                while(true) { val line=input.readLine() ?: error("EOF");if(line.isEmpty()) break;headers.add(line) }
+                assertEquals("GET /v2/voice HTTP/1.1",headers.first())
+                val key=headers.single { it.startsWith("Sec-WebSocket-Key:",true) }.substringAfter(':').trim()
+                val accept=java.util.Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("SHA-1").digest((key+"258EAFA5-E914-47DA-95CA-C5AB0DC85B11").toByteArray()))
+                socket.getOutputStream().write(("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "+accept+"\r\n\r\n").toByteArray())
+                // Wait for client cancellation; no application payload or credential is sent.
+                try { socket.getInputStream().read() } catch(_:IOException) { }
+            } } catch(e:Throwable) { serverError.set(e) }
+        }
+        val factory=object:javax.net.SocketFactory() {
+            override fun createSocket()=V2MappedSocket { server.localPort }
+            override fun createSocket(h:String,p:Int):java.net.Socket=error("unsupported")
+            override fun createSocket(h:String,p:Int,l:java.net.InetAddress,lp:Int):java.net.Socket=error("unsupported")
+            override fun createSocket(h:java.net.InetAddress,p:Int):java.net.Socket=error("unsupported")
+            override fun createSocket(h:java.net.InetAddress,p:Int,l:java.net.InetAddress,lp:Int):java.net.Socket=error("unsupported")
+        }
+        val client=OkHttpClient.Builder().proxy(Proxy.NO_PROXY).retryOnConnectionFailure(false).socketFactory(factory).sslSocketFactory(tls.socketFactory,trust).build()
+        val done=java.util.concurrent.CountDownLatch(1);val error=java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        thread.start()
+        val ws=client.newWebSocket(Request.Builder().url("wss://127.0.0.1:19483/v2/voice").build(),object:okhttp3.WebSocketListener() {
+            override fun onOpen(w:okhttp3.WebSocket,r:okhttp3.Response) { done.countDown() }
+            override fun onFailure(w:okhttp3.WebSocket,t:Throwable,r:okhttp3.Response?) { error.set(t);done.countDown() }
+        })
+        try { assertTrue(done.await(5,java.util.concurrent.TimeUnit.SECONDS));error.get()?.let { throw AssertionError(it) } }
+        finally { ws.cancel();accepted.get()?.close();server.close();thread.join(4000);client.connectionPool.evictAll();client.dispatcher.executorService.shutdownNow() }
+        assertFalse(thread.isAlive);serverError.get()?.let { throw AssertionError(it) }
+    }
     private val token="a".repeat(32)
     private val public=File("src/v2Debug/assets/v2-transport").takeIf { it.isDirectory }
         ?: File("app/src/v2Debug/assets/v2-transport")

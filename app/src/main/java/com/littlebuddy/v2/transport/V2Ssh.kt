@@ -146,8 +146,17 @@ internal enum class Target(val path: String) { VOICE("/v2/voice"), FEEDBACK("/v2
 internal object V2Forwarding {
     fun mapped(address: SocketAddress, port: Int): InetSocketAddress {
         val requested=address as? InetSocketAddress
-        if(requested?.address?.hostAddress!=V2SshProfile.LOOPBACK || requested.port!=V2SshProfile.PORT || port !in 1..65535)
+        val reason = when {
+            requested == null || requested.isUnresolved -> PinDiagnostic.Reason.TARGET_UNRESOLVED
+            requested.address.hostAddress != V2SshProfile.LOOPBACK -> PinDiagnostic.Reason.TARGET_HOST
+            requested.port != V2SshProfile.PORT -> PinDiagnostic.Reason.TARGET_PORT
+            port !in 1..65535 -> PinDiagnostic.Reason.FORWARD_UNAVAILABLE
+            else -> null
+        }
+        if (reason != null) {
+            PinDiagnostic.event(PinDiagnostic.Stage.SOCKET_MAP,reason)
             throw IOException("Unexpected device transport target")
+        }
         return InetSocketAddress(V2SshProfile.LOOPBACK,port)
     }
 }
@@ -171,6 +180,10 @@ internal class V2Ssh(private val profile: V2SshProfile) : AutoCloseable {
                 chain.proceed(chain.request())
             }
             .connectionPool(ConnectionPool())
+            .eventListener(object : okhttp3.EventListener() {
+                override fun secureConnectStart(call: okhttp3.Call) { PinDiagnostic.event(PinDiagnostic.Stage.TLS,PinDiagnostic.Reason.BEGIN) }
+                override fun secureConnectEnd(call: okhttp3.Call, handshake: okhttp3.Handshake?) { PinDiagnostic.event(PinDiagnostic.Stage.TLS,PinDiagnostic.Reason.SUCCESS) }
+            })
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)
             .sslSocketFactory(tls.socketFactory, profile.trust)
@@ -178,16 +191,10 @@ internal class V2Ssh(private val profile: V2SshProfile) : AutoCloseable {
                 override fun createSocket(): Socket {
                     try {
                         open()
-                        return object : Socket(Proxy.NO_PROXY) {
-                            override fun connect(endpoint: SocketAddress, timeout: Int) {
-                                val mapped=synchronized(lock) { check(!closed);V2Forwarding.mapped(endpoint,localPort) }
-                                try {
-                                    super.connect(mapped,timeout)
-                                    PinDiagnostic.event(PinDiagnostic.Stage.SOCKET,PinDiagnostic.Reason.SUCCESS)
-                                } catch(error:Exception) { PinDiagnostic.runtimeError(PinDiagnostic.Stage.SOCKET,error); throw error }
-                            }
-                        }
+                        PinDiagnostic.event(PinDiagnostic.Stage.SOCKET_CREATE,PinDiagnostic.Reason.BEGIN)
+                        return V2MappedSocket { synchronized(lock) { check(!closed); localPort } }
                     } catch (failure: Exception) {
+                        PinDiagnostic.runtimeError(PinDiagnostic.Stage.SOCKET_CREATE,failure)
                         close()
                         throw SocketException("Device SSH connection failed").apply { initCause(failure) }
                     }
