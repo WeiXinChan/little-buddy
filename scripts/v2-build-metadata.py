@@ -17,7 +17,7 @@ def generate(output):
     config=json.loads((ROOT/'app/v2-release.json').read_text())
     assert set(config)=={'format','version_code','version_name','application_id','protocol_contract','source_base'}
     assert len(config['source_base'])==40 and all(c in '0123456789abcdef' for c in config['source_base'])
-    assert config['format']==1 and config['version_code']==20 and config['version_name']=='2.0.0-rc6'
+    assert config['format']==1 and config['version_code']==21 and config['version_name']=='2.0.0-rc7'
     assert config['application_id']=='com.littlebuddy.sim.v2' and config['protocol_contract']==CONTRACT
     paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).decode().split('\0')
     paths=sorted(p for p in paths if p and selected(p))
