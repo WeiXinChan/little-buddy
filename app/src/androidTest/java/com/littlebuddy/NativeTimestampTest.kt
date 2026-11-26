@@ -37,13 +37,16 @@ import java.util.concurrent.atomic.AtomicReference
 class NativeTimestampRunner : AndroidJUnitRunner() {
     companion object {
         const val METHOD="com.littlebuddy.NativeTimestampTest#nativeTimestampAndProductionLedger"
+        const val STARTUP_METHOD="com.littlebuddy.NativeTimestampStartupTest#compareTimestampStartup"
         const val TARGET="com.littlebuddy.V2VoiceActivity"
     }
     override fun newApplication(loader:ClassLoader,name:String,context:Context):Application =
         super.newApplication(loader,Application::class.java.name,context)
     override fun onCreate(arguments:Bundle?) {
         val selected=Bundle(arguments ?: Bundle())
-        require(selected.getString("class")==METHOD && selected.getString("nativeTimestampProbe")=="true" &&
+        val selectedClass=selected.getString("class")
+        require(selectedClass in setOf(METHOD,STARTUP_METHOD) &&
+            (selectedClass!=STARTUP_METHOD || selected.getString("nativeTimestampStartupDiagnostic")=="true") && selected.getString("nativeTimestampProbe")=="true" &&
             selected.getString("businessIdlePreflight")=="true") { "native probe requires exact class and host idle preflight" }
         selected.putString("disableAnalytics","true")
         super.onCreate(selected)
@@ -72,8 +75,8 @@ class NativeTimestampForegroundActivity : Activity() {
     override fun onDestroy(){active=false;cancelNative?.invoke();super.onDestroy()}
 }
 
-private class NativeDependency(val code:String):AssumptionViolatedException(code)
-private class ProbeMetadata {
+internal class NativeDependency(val code:String):AssumptionViolatedException(code)
+internal class ProbeMetadata {
     @Volatile var outcome="NOT_EXECUTED"
     @Volatile var reason=""
     @Volatile var exceptionClass=""
@@ -148,7 +151,7 @@ private class ProbeMetadata {
 }
 
 /** Native-only counterpart to production cancellation. Never closes/replaces another owner's recorder. */
-private class ProbeControl(private val lease:RecorderLease,private val meta:ProbeMetadata) {
+internal class ProbeControl(private val lease:RecorderLease,private val meta:ProbeMetadata) {
     val cancelled=AtomicBoolean(false)
     private val lock=Any()
     private val stopOnce=AtomicBoolean(false)
