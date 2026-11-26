@@ -10,7 +10,7 @@ compiler+=[jar('org.jetbrains.kotlinx','kotlinx-coroutines-core-jvm','1.8.0'),ja
 runtime=[compiler[1],jar('junit','junit','4.13.2'),jar('org.hamcrest','hamcrest-core','1.3')]
 parent=root/'app/src/main/java/com/littlebuddy/v2/parent'
 names=['ParentDomain.kt','ParentCodec.kt','ParentEnvelope.kt','ParentCommit.kt','ParentPanelModel.kt','ParentConfiguration.kt','OwnerReceipt.kt']
-sources=[parent/p for p in names]+[root/'app/src/test/java/com/littlebuddy/v2/parent/OwnerTickRegressionTest.kt']
+sources=[parent/p for p in names]+[root/'app/src/test/java/com/littlebuddy/v2/parent'/name for name in ['OwnerTickRegressionTest.kt','ParentPanelModelTest.kt','ParentCompletionTest.kt']]+[root/'app/src/main/java/com/littlebuddy/v2/LocalHelpScope.kt',root/'app/src/main/java/com/littlebuddy/v2/PlaybackBudget.kt']
 with tempfile.TemporaryDirectory(dir=root,prefix='pin-fix-tests-') as out:
  subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',out,*map(str,sources)],check=True)
- subprocess.run(['java','-Xmx256m','-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.v2.parent.OwnerTickRegressionTest'],check=True)
+ subprocess.run(['java','-Xmx256m','-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.v2.parent.OwnerTickRegressionTest','com.littlebuddy.v2.parent.ParentPanelModelTest','com.littlebuddy.v2.parent.ParentCompletionTest'],check=True)
