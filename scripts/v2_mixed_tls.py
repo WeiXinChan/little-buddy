@@ -288,6 +288,27 @@ async def run_driver(args,plan,authority):
         save()
     return report
 
+def validate_shutdown(state,rows,identity):
+    """Service.state() after every admitted peer's confirmed release, not a
+    fabricated count of attempts. Existing report validation requires a distinct
+    measured binding per admitted row, including a final duration cutoff.
+    """
+    p.require(type(state) is dict and state['finished'] is True)
+    for key in ('active','quarantined','generation','same_session','recognition_active'):
+        p.require(state[key] is False)
+    for key in ('pending','retired','errors','heard','pending_audio','played_count','capture_bytes','asr_active','tts_active'):
+        p.require(type(state[key]) is int and state[key]==0)
+    for key in ('binding','played_anchor','state_hash','game','rules_hash','roles_hash'):
+        p.require(state[key] is None)
+    constructed=0
+    for row in rows:
+        release=row['release']
+        p.require(type(release['constructed']) is int and release['constructed']==constructed+1 and release['finished'] is True)
+        p.require(release['binding']==row['binding'] and release['same_session'] is True)
+        constructed=release['constructed']
+    p.require(type(state['constructed']) is int and state['constructed']==constructed and state['process']==identity)
+
+
 def _validate_report(report,plan):
     p.require('failure_kind' not in report)
     p.require(report['limits']==asdict(plan) and report['duration']==plan.duration and type(report['collection_errors']) is int and report['collection_errors']==0)
@@ -342,7 +363,7 @@ def _validate_report(report,plan):
     timing=report['timing'];p.require(timing['elapsed_seconds']>=plan.duration and abs(sum(timing['wall_seconds'].values())-timing['elapsed_seconds'])<.01)
     p.require(timing['declared_input_seconds']>0 and timing['simulated_ack_playback_seconds']>0 and timing['wall_seconds']['input']>=timing['declared_input_seconds'] and timing['wall_seconds']['playback']>=timing['simulated_ack_playback_seconds'])
     p.require(abs(sum(r['input_seconds'] for r in turns)-timing['declared_input_seconds'])<.001 and abs(sum(r['playback_seconds'] for r in turns)-timing['simulated_ack_playback_seconds'])<.001)
-    p.require(report['shutdown']['pending']==report['shutdown']['retired']==report['shutdown']['errors']==0 and report['shutdown']['binding'] is None)
+    validate_shutdown(report['shutdown'],rows,samples[-1]['service_process'])
 
 
 def validate_report(report,plan):
