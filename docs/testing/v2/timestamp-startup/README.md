@@ -81,7 +81,7 @@ Dedicated runner empty Application and target-component replacement foreground i
 
 ```
 adb -s "$SERIAL" install -r -t "$REVIEWED_TEST_APK"
-adb -s "$SERIAL" shell am instrument -w -r \
+adb -s "$SERIAL" shell am instrument --no-logcat -w -r \
  -e class com.littlebuddy.NativeTimestampStartupTest#compareTimestampStartup \
  -e nativeTimestampProbe true -e nativeTimestampStartupDiagnostic true \
  -e businessIdlePreflight true \
@@ -89,7 +89,7 @@ adb -s "$SERIAL" shell am instrument -w -r \
 ```
 
 Capture only this instrumentation's metadata stdout. No full logcat/PCM/environment contents.
-Use --no-logcat if supported as in the previous procedure. The allowlist contains exactly the old
+--no-logcat is explicitly required; root has already confirmed OPPO accepts it. The allowlist contains exactly the old
 production-probe method OR the new diagnostic method, with an additional explicit diagnostic flag.
 Do not run the old production oracle and relabel its original failure, or interpret diagnostic OK
 as a production fix. Root alone executes/reviews device observations and decides integration.
