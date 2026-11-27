@@ -1,0 +1,43 @@
+test_late_repair_cancel_revision_or_expiry_cannot_commit (tests.v2.test_plan_format_repair.Format.test_late_repair_cancel_revision_or_expiry_cannot_commit) ... ok
+test_network_and_format_share_one_slot_not_two (tests.v2.test_plan_format_repair.Format.test_network_and_format_share_one_slot_not_two) ... ok
+test_nonwhitelist_code_and_secret_or_facts_do_not_use_port (tests.v2.test_plan_format_repair.Format.test_nonwhitelist_code_and_secret_or_facts_do_not_use_port) ... ok
+test_one_complete_replan_same_payload_no_draft_and_original_budget (tests.v2.test_plan_format_repair.Format.test_one_complete_replan_same_payload_no_draft_and_original_budget) ... ok
+test_private_replan_pending_or_consumed_never_admitted (tests.v2.test_plan_format_repair.Format.test_private_replan_pending_or_consumed_never_admitted) ... ok
+test_repaired_proposal_still_requires_full_ack (tests.v2.test_plan_format_repair.Format.test_repaired_proposal_still_requires_full_ack) ... ok
+test_second_invalid_plan_terminal_no_fact_repeat_or_publication (tests.v2.test_plan_format_repair.Format.test_second_invalid_plan_terminal_no_fact_repeat_or_publication) ... FAIL
+test_cancel_or_new_revision_during_correction_cannot_publish_late_response (tests.v2.test_plan_repair.Repair.test_cancel_or_new_revision_during_correction_cannot_publish_late_response) ... ok
+test_consumed_retry_private_transition_and_pending_output_do_not_repair (tests.v2.test_plan_repair.Repair.test_consumed_retry_private_transition_and_pending_output_do_not_repair) ... ok
+test_correction_quota_failure_and_forged_safety_tag_do_not_grant_another_attempt (tests.v2.test_plan_repair.Repair.test_correction_quota_failure_and_forged_safety_tag_do_not_grant_another_attempt) ... ok
+test_fact_retry_and_correction_share_atomic_single_reservation (tests.v2.test_plan_repair.Repair.test_fact_retry_and_correction_share_atomic_single_reservation) ... ok
+test_initial_model_promise_count_can_correct_without_sending_invalid_proposal (tests.v2.test_plan_repair.Repair.test_initial_model_promise_count_can_correct_without_sending_invalid_proposal) ... ok
+test_probe_anchors_each_synthetic_expression_and_repair_is_metered (tests.v2.test_plan_repair.Repair.test_probe_anchors_each_synthetic_expression_and_repair_is_metered) ... ok
+test_repaired_plan_still_needs_safety_and_full_ack (tests.v2.test_plan_repair.Repair.test_repaired_plan_still_needs_safety_and_full_ack) ... ok
+test_second_bad_plan_is_terminal_no_tts_and_facts_not_duplicated (tests.v2.test_plan_repair.Repair.test_second_bad_plan_is_terminal_no_tts_and_facts_not_duplicated) ... ok
+test_success_sends_first_bound_once_replans_same_snapshot_without_bad_candidate (tests.v2.test_plan_repair.Repair.test_success_sends_first_bound_once_replans_same_snapshot_without_bad_candidate) ... ok
+test_unknown_plan_error_quota_and_expired_original_budget_do_not_expand_calls (tests.v2.test_plan_repair.Repair.test_unknown_plan_error_quota_and_expired_original_budget_do_not_expand_calls) ... ok
+
+======================================================================
+FAIL: test_second_invalid_plan_terminal_no_fact_repeat_or_publication (tests.v2.test_plan_format_repair.Format.test_second_invalid_plan_terminal_no_fact_repeat_or_publication)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/plan-format-repair/tests/v2/test_plan_format_repair.py", line 44, in test_second_invalid_plan_terminal_no_fact_repeat_or_publication
+    self.assertEqual(m.calls,2);self.assertEqual(m.facts,1)
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 1
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.158s
+
+FAILED (failures=1)

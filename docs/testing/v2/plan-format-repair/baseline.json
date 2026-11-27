@@ -1,0 +1,21 @@
+{
+  "source": "ffd1dd9b946eece4cae8cd3eeea897467cd2f51e",
+  "verdict": "FAIL_plan_anchor_index_type_before_audio",
+  "full_device_acceptance": false,
+  "result": "closeout-adventure-sea-ffd1dd9b-once/result.json",
+  "cleanup": true,
+  "supervisor_artifact_valid": false,
+  "usage": {
+    "requests": 2,
+    "failures": 0,
+    "prompt_tokens": 4524,
+    "completion_tokens": 194
+  },
+  "quota_live_verified": false,
+  "findings": [
+    "first PLAN rejected on anchor_index_type",
+    "zero acknowledged text or committed game",
+    "next cloud groups stopped; targeted bounded repair being prepared"
+  ],
+  "review_sha256": "e3d9b505753b49a7c744ade783e867a351e5f2e004812bb48aec3e8385abc431"
+}

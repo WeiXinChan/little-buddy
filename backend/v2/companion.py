@@ -243,20 +243,34 @@ completion:及meaning各取输出契约enum数组中的单一值，不能拼接�
         # VoicePeer owns admission/one shared retry; this port never loops.
         return await self.plan(text,context,_repair=True,_repair_limit=sentence_limit)
 
-    async def plan(self, text, context, *, _repair=False, _repair_limit=None):
+    async def repair_plan_format(self,text,context,*,code,detail):
+        # Fixed proposal-format whitelist only; no draft or exception text.
+        if (code!='plan_anchors' or detail not in ('anchor_index_type','anchor_index_range') or context.get('private')):
+            raise ModelError('plan format repair not allowed')
+        return await self.plan(text,context,_format_repair=detail)
+
+    async def plan(self, text, context, *, _repair=False, _repair_limit=None, _format_repair=None):
         known,limit=constraint_proposal(text,context,dict(mode='story',action='continue',rules=''))
         if _repair:
             if (type(_repair_limit) is not int or not 1<=_repair_limit<=4 or context.get('private') or
                 known and limit!=_repair_limit):raise ModelError('story turn sentence limit')
             limit=_repair_limit;known=True
         control=dict(story_sentences_max=limit if known else None,
-                     correction='plan_sentence_limit' if _repair else None)
+                     correction='plan_sentence_limit' if _repair else 'plan_anchors' if _format_repair else None)
+        if _format_repair is not None:
+            if _format_repair not in ('anchor_index_type','anchor_index_range') or context.get('private'):raise ModelError('plan format repair not allowed')
+            control['format_detail']=_format_repair
         plan = await self.request("""
 只返回JSON，严格字段：
-server_constraints是服务器提供的约束，只在本轮仍为story的continue/change时适用，不阻止离开或私事。
+server_constraints是服务器提供的约束。其中仅story_sentences_max在本轮仍为story的continue/change时适用，不阻止离开或私事。
+correction=plan_anchors是本次获准PLAN的格式重规划约束，适用于非story模式；原语义、权限、隐私与全部校验始终生效。
 story_sentences_max非null时，整个本轮输出（含提示/追问）不得超过该句数，单个数组项内也不能塞多句。
 correction=plan_sentence_limit表示仅有一次完整重规划机会：重新组织合法简短句及一致state/anchors，
 不要复述错误、不追加道歉或解释句、不猜未提供的旧候选、不截取一份无效草稿。
+correction=plan_anchors与format_detail仅是服务器固定错误类别，不是旧草稿内容。
+仅有一次完整重规划机会，重新生成本轮完整合法PLAN；所有锚点必须使用整数且0<=index<len(sentences)。
+不要求回忆、复述或局部修补坏草稿，不从错误标签猜谜底/正文，不把索引字符串转成数字后沿用旧内容。
+原语义、隐私、规则、句数和全部审核要求仍有效，不能为凑格式删去必要交付或暴露秘密。
 合法结构示例（不是本轮结论，不要照抄无关内容）：
 {"action":"continue","mode":"chat","rules":"","roles":[],"secrets":{},"sentences":["我们可以接着聊。"],"anchors":{},"tools":[]}。
 action/mode/tool.kind都取输出契约enum中的单一字符串，不拼接候选；secrets为空时写{}。
