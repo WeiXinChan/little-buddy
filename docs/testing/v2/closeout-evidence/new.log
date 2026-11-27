@@ -1,0 +1,18 @@
+test_actual_http_model_adapter_schema_and_usage (tests.v2.test_m05.Integration.test_actual_http_model_adapter_schema_and_usage) ... ok
+test_child_preference_cross_turn_and_played_dialogue_relation (tests.v2.test_m05.Integration.test_child_preference_cross_turn_and_played_dialogue_relation) ... ok
+test_late_model_failure_cannot_revoke_new_participant (tests.v2.test_m05.Integration.test_late_model_failure_cannot_revoke_new_participant) ... ok
+test_long_chat_over_128_segments_and_64k_cumulative (tests.v2.test_m05.Integration.test_long_chat_over_128_segments_and_64k_cumulative) ... ok
+test_private_scope_compaction_and_return_to_shared_cannot_leak (tests.v2.test_m05.Integration.test_private_scope_compaction_and_return_to_shared_cannot_leak) ... ok
+test_rules_roles_cross_game_and_private_projection (tests.v2.test_m05.Integration.test_rules_roles_cross_game_and_private_projection) ... ok
+test_safety_negative_control_prevents_any_audio (tests.v2.test_m05.Integration.test_safety_negative_control_prevents_any_audio) ... ok
+test_solo_original_capture_budget_cannot_be_renewed_by_duplicate_or_heartbeat (tests.v2.test_m05.Integration.test_solo_original_capture_budget_cannot_be_renewed_by_duplicate_or_heartbeat) ... ok
+test_supplier_failure_classification_does_not_infer_quota_from_429 (tests.v2.test_m05.Integration.test_supplier_failure_classification_does_not_infer_quota_from_429) ... ok
+test_unplayed_story_cannot_commit_rules_or_heard (tests.v2.test_m05.Integration.test_unplayed_story_cannot_commit_rules_or_heard) ... ok
+test_same_session_cold_sources_and_played_unplayed_after_compaction (tests.v2.test_closeout_boundaries.MemoryBoundaries.test_same_session_cold_sources_and_played_unplayed_after_compaction) ... ok
+test_one_leaves_then_any_speaker_stop_then_all_end (tests.v2.test_closeout_boundaries.WireBoundaries.test_one_leaves_then_any_speaker_stop_then_all_end) ... ok
+test_private_and_hidden_answer_across_modes_and_shared_replan (tests.v2.test_closeout_boundaries.WireBoundaries.test_private_and_hidden_answer_across_modes_and_shared_replan) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 3.141s
+
+OK

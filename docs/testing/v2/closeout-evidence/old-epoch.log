@@ -1,0 +1,6 @@
+test_revoked_epoch_input_has_no_effect (tests.v2.test_m04.PeerTests.test_revoked_epoch_input_has_no_effect) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.003s
+
+OK
