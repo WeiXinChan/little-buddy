@@ -25,7 +25,7 @@ class Model:
         if 'allow' in fields:
             if self.bad_review=='outage':raise RuntimeError('SYNTHETIC_PRIVATE')
             if self.bad_review=='shape':return '{"allow":"true"}'
-            return json.dumps(dict(allow=data['segment'] not in self.denied))
+            return json.dumps(dict(allow=data['segment'] not in self.denied,quality=True))
         if 'keep' in fields:return '{"keep":[]}'
         return json.dumps(dict(action=self.action,mode=self.mode,rules='',roles=[],secrets={},sentences=self.sentences,anchors={},tools=[]),ensure_ascii=False)
 

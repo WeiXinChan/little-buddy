@@ -47,7 +47,9 @@ class PlanDiagnostics(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report['turns'][1]['delivery_metadata']['audio_chunks'],0)
         self.assertFalse(report['turns'][1]['delivery_metadata']['game_committed'])
         self.assertEqual(seen[0]['heard'],seen[1]['heard']);self.assertEqual(seen[0]['game'],seen[1]['game'])
-        self.assertEqual(len([i for i,d in model.requests if '严格字段' in i]),2)
+        # The approved format repair spends the one shared slot; still no
+        # third generation, TTS, or state on the second bad candidate.
+        self.assertEqual(len([i for i,d in model.requests if '严格字段' in i]),3)
         self.assertNotIn('第二轮',json.dumps(report,ensure_ascii=False))
 
     async def test_optional_defaults_and_valid_plan_still_follow_original_contract(self):

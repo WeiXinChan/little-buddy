@@ -53,7 +53,7 @@ class SafetyHelp(unittest.IsolatedAsyncioTestCase):
                 value = verdict[count-1] if isinstance(verdict, list) else verdict
                 if value == 'timeout': raise httpx.ReadTimeout('SYNTHETIC_PRIVATE_PROVIDER_ERROR')
                 if value == 'outage': return httpx.Response(503, json={'error': {'message': 'SYNTHETIC_PRIVATE_PROVIDER_ERROR'}})
-                content = value if isinstance(value, str) else json.dumps({'allow': value})
+                content = value if isinstance(value, str) else json.dumps({'allow': value,'quality':True})
             elif '提取孩子' in instruction:
                 content = '{"facts":[]}'
             else:

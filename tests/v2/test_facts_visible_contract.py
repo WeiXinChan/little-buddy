@@ -15,7 +15,7 @@ class VisibleContract(unittest.IsolatedAsyncioTestCase):
         calls=[]
         async def response(request):
             body=json.loads(request.content);calls.append(body);instruction=body['messages'][0]['content']
-            result=facts if '提取孩子' in instruction else {'allow':True} if '审核下一个' in instruction else fixtures.plan()
+            result=facts if '提取孩子' in instruction else {'allow':True,'quality':True} if '审核下一个' in instruction else fixtures.plan()
             return httpx.Response(200,json={'choices':[{'message':{'content':json.dumps(result,ensure_ascii=False)}}],'usage':{'prompt_tokens':10,'completion_tokens':2}})
         http=httpx.AsyncClient(transport=httpx.MockTransport(response));self.addAsyncCleanup(http.aclose)
         adapter=DashScopeModel(DashScope(http,workspace='synthetic',region='cn-beijing',key='SYNTHETIC',asr='fake',llm=model,tts='fake',voice='fake'))

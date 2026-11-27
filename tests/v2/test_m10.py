@@ -57,7 +57,7 @@ class M10(unittest.IsolatedAsyncioTestCase):
                 value = next(verdicts)
                 if value == 'outage':
                     return httpx.Response(503, json={'error': {'message': 'SYNTHETIC_SECRET'}})
-                raw = value if isinstance(value, str) else json.dumps({'allow': value})
+                raw = value if isinstance(value, str) else json.dumps({'allow': value,'quality':True})
             elif '提取孩子' in instruction:
                 raw = '{"facts":[]}'
             else:
@@ -121,7 +121,8 @@ class M10(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(speech.texts, ['只有我懂你'])
 
     async def test_negative_control_bypassing_semantic_gate_is_observable(self):
-        with patch.object(UnifiedProviders, 'safe', AsyncMock(return_value=True)):
+        from backend.v2.review import ReviewDecision
+        with patch.object(UnifiedProviders, 'review', AsyncMock(return_value=ReviewDecision(True,True))):
             _, speech, _, _ = await self.exercise(['合成危险请求'], [False])
         self.assertEqual(speech.texts, ['合成危险请求'])
 

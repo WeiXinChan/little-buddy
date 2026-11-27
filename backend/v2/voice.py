@@ -17,6 +17,7 @@ from uuid import uuid4
 from backend.v2.session import Identity, Session
 from backend.v2.budget import ResponseBudget
 from backend.v2.safety import SafetyFault, local_help
+from backend.v2.review import ReviewDecision,QualityFault
 from backend.v2.images import revealable
 from backend.v2.dynamic_images import ImageScope, ImageFailure
 from backend.v2.image_descriptions import ExplicitImageRequest
@@ -873,12 +874,17 @@ class VoicePeer:
 
     async def review(self, operation, text):
         try:
-            verdict = await self.owned(operation, self.providers.safe, text, operation.session.context())
+            function=getattr(self.providers,'review',None) or self.providers.safe
+            verdict = await self.owned(operation, function, text, operation.session.context())
         except SafetyFault:
             raise
         except Exception:
             raise SafetyFault('review_unavailable') from None
-        if verdict is not True:
+        if isinstance(verdict,ReviewDecision):
+            if not verdict.safety_allowed:raise SafetyFault('content_blocked')
+            if not verdict.quality_allowed:raise QualityFault()
+        elif verdict is not True:
+            # Legacy injected boolean safety providers remain fail-closed.
             raise SafetyFault('content_blocked' if verdict is False else 'review_unavailable')
 
     def respond(self, text, epoch):
@@ -1063,8 +1069,10 @@ class VoicePeer:
                 @asynccontextmanager
                 async def planned():
                     async def items():
+                        nonlocal stage
                         for sentence in plan['sentences']:
                             if len(plan['sentences']) > 1:
+                                stage='safety'
                                 await self.review(operation, sentence)
                             yield sentence
                     yield items()
