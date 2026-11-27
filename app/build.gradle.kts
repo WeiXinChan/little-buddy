@@ -30,7 +30,7 @@ val pinDiagnostics = providers.gradleProperty("pinInitDiagnostics").orNull == "t
 val privateDevicePreset = providers.gradleProperty("privateDevicePreset").orNull == "true"
 require(!privateDevicePreset || pinDiagnostics) { "Private device candidate requires explicit diagnostic candidate mode" }
 val v2Name = (v2Release["version_name"] as String) +
-    if (privateDevicePreset) ".pin.fix8.device1" else if (pinDiagnostics) ".pin.fix2" else ""
+    if (privateDevicePreset) ".pin.fix9.device1" else if (pinDiagnostics) ".pin.fix2" else ""
 require(v2Code >= 15 && v2Name.matches(Regex("[0-9]+[.][0-9]+[.][0-9]+(?:-[a-zA-Z0-9.]+)?")))
 androidComponents {
     onVariants(selector().withBuildType("v2Debug")) { variant ->

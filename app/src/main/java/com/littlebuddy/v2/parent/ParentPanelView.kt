@@ -1,10 +1,6 @@
 package com.littlebuddy.v2.parent
 
 import android.app.Activity
-import android.content.Intent
-import android.widget.Spinner
-import android.widget.ArrayAdapter
-import com.littlebuddy.v2.transport.V2SshIdentity
 import android.text.InputFilter
 import android.text.InputType
 import android.text.TextUtils
@@ -64,8 +60,8 @@ internal class ParentPanelView(private val activity: Activity, private val model
             PanelMode.CHANGE_PIN -> "修改 PIN"
             else -> "家长管理"
         }, 26f)
-        val version=activity.packageManager.getPackageInfo(activity.packageName,0)
-        label("V2 ${version.versionName} · 连接状态：${connectionNotice()}",14f)
+        if (state.mode == PanelMode.SETTINGS) label(if (model.hasSavedConnection) "本机连接已保存" else "尚未连接",14f)
+        if (state.mode == PanelMode.SETTINGS && model.hasSavedConnection) label(connectionNotice(),14f)
         label(if (state.notice == PanelNotice.NONE && state.mode == PanelMode.SETTINGS)
             "已验证。退出或闲置后会锁定。" else notice(state.notice))
         when (state.mode) {
@@ -92,16 +88,11 @@ internal class ParentPanelView(private val activity: Activity, private val model
                         duration.text.toString().toInt()) }.onSuccess(model::saveExecutionSettings)
                         .onFailure { label("请检查音量0–100、语速85–115、时长60–600。") }
                 }
-                button("导出V2设备SSH公钥（供管理员登记）") {
-                    model.exportTransportKey({ V2SshIdentity.load(create=true).registrationKey() }) { publicKey ->
-                        activity.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                            type="text/plain"; putExtra(Intent.EXTRA_TEXT, publicKey)
-                            putExtra(Intent.EXTRA_SUBJECT, "V2设备SSH公钥；尚须服务器登记")
-                        }, "仅导出公钥"))
-                    }
+                if (!model.hasSavedConnection) {
+                    if (connectionPreset() != null)
+                        button("连接瓦力") { model.requestSystemOwner(OwnerOperation.PROVISION_ENDPOINT) }
+                    else label("此安装包尚未提供本机连接，请联系安装管理员。")
                 }
-                button("保存V2公钥文件（USB传到Mac）") { savePublicKey() }
-                button("系统验证并导入连接配置") { model.requestSystemOwner(OwnerOperation.PROVISION_ENDPOINT) }
                 button("修改 PIN") { model.navigate(PanelMode.CHANGE_PIN) }
                 button("帮助与反馈") { model.navigate(PanelMode.FEEDBACK) }
             }
@@ -113,35 +104,24 @@ internal class ParentPanelView(private val activity: Activity, private val model
                 button("返回管理") { model.navigate(PanelMode.SETTINGS) }
             }
             PanelMode.OWNER_PIN -> {
-                label("系统验证已完成。此步骤只设置本机 PIN，不证明远程家庭账号归属。")
+                label("系统验证已完成，请设置家长 PIN。")
                 val first = pin(body, "新6位PIN"); val second = pin(body, "再次输入")
                 button("保存 PIN") { model.setOwnerPin(take(first), take(second)) }
             }
             PanelMode.CONNECTION -> {
                 val preset = connectionPreset()
-                if (preset != null) label("本机专用连接已预填，请确认后保存；不会自动提交。")
-                label("只导入管理员已发行的本设备 V2 地址和凭据，不在这里创建账号或令牌。TLS与候选协议核对通过后才启用儿童收音。")
-                label("私有SSH只转发127.0.0.1:19483；专属账户与公钥须管理员登记。V1账户/令牌不能用于V2授权。")
-                val mode=Spinner(activity).apply { adapter=ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item,
-                    arrayOf("V2私有SSH", "已发行公网直连")); body.addView(this) }
-                val sshUser=EditText(activity).apply { hint="管理员发行的V2专属SSH账户"; isSaveEnabled=false; setText(preset?.user ?: ""); body.addView(this) }
-                val address = EditText(activity).apply { hint = "wss://…/v2/voice"; isSaveEnabled = false; setText(preset?.address ?: ""); body.addView(this) }
-                val secret = EditText(activity).apply {
-                    hint = "已发行的设备连接凭据"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                    transformationMethod = PasswordTransformationMethod.getInstance(); isSaveEnabled = false
-                    importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
-                    isLongClickable = false; filters = arrayOf(InputFilter.LengthFilter(256))
-                    if (!state.busy) preset?.tokenChars()?.let { chars ->
-                        try { setText(chars, 0, chars.size) } finally { chars.fill('\u0000') }
-                    }
-                    inputs.add(this); body.addView(this)
+                if (model.hasSavedConnection) label("本机连接已保存，无需重复设置。")
+                else if (preset == null) label("此安装包尚未提供本机连接，请联系安装管理员。")
+                else {
+                    label("使用本机已准备好的连接。确认后保存，无需填写其他信息。")
+                    button("确认连接") { model.importConnection(preset.address, preset.tokenChars(), preset.user) }
                 }
-                button("保存已发行的连接") { model.importConnection(if (mode.selectedItemPosition==0) "wss://127.0.0.1:19483/v2/voice" else address.text.toString(), take(secret), if (mode.selectedItemPosition==0) sshUser.text.toString() else null) }
+
             }
             PanelMode.FEEDBACK -> label("家长授权已失效，请返回重新验证。")
             PanelMode.UNAVAILABLE -> {
                 if (state.notice == PanelNotice.UNOWNED) {
-                    label("首次使用先重新验证本机系统凭据，再设置PIN；不会读取或修改其他应用配对。")
+                    label("首次使用请先完成系统验证，再设置家长 PIN。")
                     button("系统验证并初始化 PIN") { model.requestSystemOwner(OwnerOperation.INITIALIZE_PIN) }
                 } else label("需安全锁屏与可用系统认证；Android 8–10还需已登记的硬件指纹。旧密钥/记录异常不会自动重建。")
             }

@@ -38,7 +38,8 @@ class RuntimeRetryGateTest {
         PinDiagnostic.install{_,_,_,r->seen.add(r)}
         PinDiagnostic.runtimeError(PinDiagnostic.Stage.WSS,javax.net.ssl.SSLHandshakeException("synthetic sensitive text"))
         PinDiagnostic.runtimeError(PinDiagnostic.Stage.WSS,java.net.SocketTimeoutException("synthetic sensitive text"))
-        assertEquals(listOf(PinDiagnostic.Reason.TLS_HANDSHAKE,PinDiagnostic.Reason.TIMEOUT),seen)
+        assertEquals(listOf(PinDiagnostic.Reason.TLS_HANDSHAKE,PinDiagnostic.Reason.SITE_UNKNOWN,PinDiagnostic.Reason.TLS_HANDSHAKE,
+            PinDiagnostic.Reason.TIMEOUT,PinDiagnostic.Reason.SITE_UNKNOWN,PinDiagnostic.Reason.TIMEOUT),seen)
     }
     private class Rig {
         var time=0L;var record=ParentRecord(ByteArray(16),ByteArray(32));var savedSignals=0

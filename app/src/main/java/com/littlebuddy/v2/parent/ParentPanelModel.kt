@@ -29,6 +29,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     private val viewRevision = AtomicLong()
     private val pending = ConcurrentHashMap.newKeySet<CharArray>()
     @Volatile private var active = false
+    @Volatile var hasSavedConnection = false; private set
     private var page = -1L
     private var grant: ParentDomain.Grant? = null
     private var ownerChallenge: OwnerChallenge? = null
@@ -49,7 +50,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         work {
             if (!live(ticket)) return@work
             val result = runCatching { domain.get() ?: load() }
-            result.getOrNull()?.let { domain.compareAndSet(null, it) }
+            result.getOrNull()?.let { domain.compareAndSet(null, it); hasSavedConnection = it.childConfiguration()?.connection != null }
             ui {
                 if (!live(ticket)) return@ui
                 val d = result.getOrNull()
@@ -226,7 +227,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         val permitted = when (operation) {
             OwnerOperation.INITIALIZE_PIN -> d.state() == ParentDomain.State.UNOWNED
             OwnerOperation.RESET_PIN -> state.mode == PanelMode.VERIFY && d.state() != ParentDomain.State.UNOWNED
-            OwnerOperation.PROVISION_ENDPOINT -> state.mode == PanelMode.SETTINGS && grant?.let(d::isAuthorized) == true
+            OwnerOperation.PROVISION_ENDPOINT -> !hasSavedConnection && state.mode == PanelMode.SETTINGS && grant?.let(d::isAuthorized) == true
         }
         if (permitted) ownerRequest(operation)
     }
@@ -292,7 +293,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     }
     fun importConnection(address: String, token: CharArray, sshUser: String? = null) {
         val d = domain.get(); val proof = ownerChallenge
-        if (!active || state.busy || state.mode != PanelMode.CONNECTION || d == null || proof == null) {
+        if (!active || state.busy || hasSavedConnection || state.mode != PanelMode.CONNECTION || d == null || proof == null) {
             token.fill('\u0000'); return
         }
         val epoch = page; val ticket = revision.get(); pending.add(token); show(state.copy(busy = true))
@@ -300,7 +301,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
             val saved = try { live(ticket) && d.provisionConnection(proof, epoch, ParentConnection(address, String(token), sshUser).also { it.requireRunnable() }) }
                 catch (_: Exception) { false } finally { token.fill('\u0000'); pending.remove(token) }
             ui { if (live(ticket)) {
-                if (saved) configurationSaved()
+                if (saved) { hasSavedConnection = true; configurationSaved() }
                 ownerChallenge = null; page = -1L
                 locked(d, if (saved) PanelNotice.CONNECTION_SAVED else PanelNotice.OWNER_UNAVAILABLE) } }
         }

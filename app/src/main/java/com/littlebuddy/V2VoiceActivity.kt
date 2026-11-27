@@ -70,12 +70,12 @@ class V2VoiceActivity : Activity() {
     @Volatile private var foreground = false
     @Volatile private var focused = false
     private var permissionRequested = false
-    @Volatile private var connectionNotice="正在读取本机连接状态；尚未进行服务核验。"
+    @Volatile private var connectionNotice="正在检查连接。"
     private fun eyes() {
         if (eyesAttached) return
         imageRoute?.clear()
         val frame = android.widget.FrameLayout(this)
-        val eyes = V2EyesView(this) { requestParentManagement() }.also { it.onLocalHelp = { showLocalHelp() } }
+        val eyes = V2EyesView(this) { requestParentManagement() }
         eyeView=eyes;resetEyes()
         frame.addView(eyes)
         val picture = android.widget.ImageView(this).apply {
@@ -135,7 +135,7 @@ class V2VoiceActivity : Activity() {
             } },
             pageChanged = { state -> if (state.mode != PanelMode.SETTINGS || state.busy) publicKeyFile.focusLost() },
             configurationSaved = {
-                connectionNotice="本机连接配置已保存；尚未连接或核对服务协议。"
+                connectionNotice="连接已保存，退出管理后连接。"
                 PinDiagnostic.event(PinDiagnostic.Stage.CONFIG, PinDiagnostic.Reason.SAVED_LOCAL)
             }
         ).also { it.open() }
@@ -206,7 +206,7 @@ class V2VoiceActivity : Activity() {
                 retryGate.technicalFailure()
                 PinDiagnostic.event(PinDiagnostic.Stage.TECHNICAL,PinDiagnostic.Reason.RELEASE_FAILED)
                 runOnUiThread { if (ticket==managementRevision) {
-                    connectionNotice="音频释放尚未确认；儿童收音保持关闭，可在家长管理检查配置。"
+                    connectionNotice="收音暂不可用，已安全暂停。"
                     openManagementPage(ticket)
                 } }; return@post
             }
@@ -238,10 +238,10 @@ class V2VoiceActivity : Activity() {
                 PinDiagnostic.event(PinDiagnostic.Stage.CONFIG, if (connection==null) PinDiagnostic.Reason.NO_CONFIG else PinDiagnostic.Reason.READY)
                 if (connection==null) {
                     connectionNotice=if (configuration==null) "安全配置不可用或尚未初始化；请从家长验证检查，不会自动连接。"
-                        else "尚未配置V2连接；PIN验证后选择系统验证并导入连接配置。"
+                        else "尚未连接，请在家长验证后选择连接瓦力。"
                     return@runOnUiThread
                 }
-                connectionNotice="本机连接配置已保存；正在准备连接，尚未完成协议核验。"
+                connectionNotice="正在连接。"
                 if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                     if (!permissionRequested) { permissionRequested = true; requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 804) }
                     return@runOnUiThread
@@ -288,10 +288,10 @@ class V2VoiceActivity : Activity() {
                     "listening"->com.littlebuddy.v2.feedback.LogStage.RECOGNIZE;else->null }
                 if(stage!=null && stage!=lastLog) { lastLog=stage;com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this@V2VoiceActivity,stage) }
                 connectionNotice=when(status) {
-                    "incompatible" -> "服务协议不兼容，儿童收音未启用；请管理员核对候选包与服务契约。"
-                    "compatibility" -> "正在核对已配置服务协议；核对前不启动儿童收音。"
-                    "wake", "listening", "speaking", "thinking", "waiting_complete", "waiting_incomplete", "waiting_thinking", "clarify" -> "V2连接与协议已核对；退出管理回待唤醒。"
-                    else -> "连接暂不可用，不代表配置发行或设备验收成功。"
+                    "incompatible" -> "服务暂不可用，收音已暂停。"
+                    "compatibility" -> "正在连接。"
+                    "wake", "listening", "speaking", "thinking", "waiting_complete", "waiting_incomplete", "waiting_thinking", "clarify" -> "已连接，退出管理后等待唤醒。"
+                    else -> "连接暂不可用。"
                 }
                 if (status == "listening" && voice?.isAwake == true) budget?.begin()
             }, { images?.inputChanged() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showTechnicalFailure(lastFailure) } },
@@ -365,7 +365,7 @@ class V2VoiceActivity : Activity() {
         if (!retryGate.technicalFailure()) return
         PinDiagnostic.event(PinDiagnostic.Stage.TECHNICAL, reason)
         PinDiagnostic.event(PinDiagnostic.Stage.TECHNICAL, PinDiagnostic.Reason.HOLD)
-        connectionNotice="技术准备未完成（${reason.name}）；已暂停自动重试，可进入家长管理检查后退出重试一次。"
+        connectionNotice="连接或收音暂不可用，已暂停。退出管理可重试一次。"
         helpVisible=false; help?.stop()
         val ticket=++managementRevision
         releaseAudio { _ ->

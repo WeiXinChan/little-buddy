@@ -42,5 +42,13 @@ class ConnectionSaveTest {
     @Test fun storageFailureQuarantines(){val r=Rig(fail=true);r.race{r.model.tick()};assertNull(r.record.connection);assertEquals(ParentDomain.State.QUARANTINED,r.domain.state())}
     @Test fun replacementPageCannotBorrowOldCommit(){val r=Rig();r.race{r.domain.enterPage();r.model.tick()};assertNull(r.record.connection)}
     @Test fun successStillLocksAndRequiresExplicitPin(){val r=Rig();r.ready();r.model.importConnection(ADDRESS,"a".repeat(32).toCharArray(),USER);r.drain();assertNotNull(r.record.connection);assertEquals(ParentDomain.State.LOCKED,r.domain.state());assertEquals(PanelNotice.CONNECTION_SAVED,r.model.state.notice)}
+    @Test fun savedConnectionIsRecognizedOnReopenWithoutImport(){
+        val r=Rig();r.ready();r.model.importConnection(ADDRESS,"a".repeat(32).toCharArray(),USER);r.drain()
+        val saved=r.record.connection;assertTrue(r.model.hasSavedConnection)
+        r.model.open();r.drain();r.model.verify("123456".toCharArray());r.drain()
+        assertTrue(r.model.hasSavedConnection);assertEquals(PanelMode.SETTINGS,r.model.state.mode)
+        r.model.importConnection(ADDRESS,"b".repeat(32).toCharArray(),USER);r.drain();assertSame(saved,r.record.connection)
+    }
+    @Test fun newConnectionRemainsUnconfiguredUntilExplicitAuthorizedSave(){val r=Rig();r.ready();assertFalse(r.model.hasSavedConnection);assertNull(r.record.connection)}
     companion object { const val ADDRESS="wss://127.0.0.1:19483/v2/voice";const val USER="v2-device-oppo" }
 }
