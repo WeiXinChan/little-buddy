@@ -1,0 +1,42 @@
+F.usage: python3 -m unittest [-h] --case
+                           {body-danger,death-danger,shared-intent,cold-query}
+                           [--execute] [--acknowledge-quota-not-live-verified]
+                           [--output OUTPUT]
+python3 -m unittest: error: argument --case: invalid choice: 'all' (choose from 'body-danger', 'death-danger', 'shared-intent', 'cold-query')
+...
+======================================================================
+FAIL: test_cold_actual_session_plan_review_ack (tests.v2.test_finite_probe.Finite.test_cold_actual_session_plan_review_ack)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/finite-coverage/tests/v2/test_finite_probe.py", line 34, in test_cold_actual_session_plan_review_ack
+    reviews=[x for x in r['trace'] if x['kind']=='review'];self.assertEqual([x['phase'] for x in reviews],['whole','segment'])
+                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['whole'] != ['whole', 'segment']
+
+Second list contains 1 additional elements.
+First extra element 1:
+'segment'
+
+- ['whole']
++ ['whole', 'segment']
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.174s
+
+FAILED (failures=1)
+{"status": "disabled", "source": "8682f5a567ddadae1f717cab8d706d6b4ee52316", "case": "body-danger", "limits": {"model_requests": 8, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "cloud_calls": 0}
+{"status": "disabled", "source": "8682f5a567ddadae1f717cab8d706d6b4ee52316", "case": "death-danger", "limits": {"model_requests": 8, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "cloud_calls": 0}
+{"status": "disabled", "source": "8682f5a567ddadae1f717cab8d706d6b4ee52316", "case": "shared-intent", "limits": {"model_requests": 16, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "cloud_calls": 0}
+{"status": "disabled", "source": "8682f5a567ddadae1f717cab8d706d6b4ee52316", "case": "cold-query", "limits": {"model_requests": 8, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "cloud_calls": 0}
