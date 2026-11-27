@@ -129,11 +129,28 @@ class Flash(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(ValueError,'release_model_policy_mismatch'):verify(folder,source)
 
     async def test_package_cannot_label_old_model_source_as_new_default(self):
-        from backend.v2.release import package
+        from backend.v2.release import package,LOG_POLICY_FILES
+        from unittest.mock import patch
+        import subprocess
+        # This historic source predates the separate log namespace. Supply only
+        # the current reviewed log-policy prerequisites; keep its actual old
+        # model/source bytes so package reaches the intended model rejection.
+        real_output=subprocess.check_output; supplied=set()
+        def prerequisite_fixture(command,**kwargs):
+            if command[:2]==['git','ls-tree']:
+                paths=real_output(command,**kwargs).splitlines()
+                return '\n'.join(sorted(set(paths)|LOG_POLICY_FILES))+'\n'
+            if command[:2]==['git','show']:
+                path=command[2].split(':',1)[1]
+                if path in LOG_POLICY_FILES:
+                    supplied.add(path);return Path(path).read_bytes()
+            return real_output(command,**kwargs)
         with tempfile.TemporaryDirectory() as directory:
             output=Path(directory)/'release.tar.gz'
-            with self.assertRaisesRegex(ValueError,'release_source_model_mismatch'):
-                package('4f991de1e2f18eb3f79db03ee1b217a6d4daa0db',output)
+            with patch('backend.v2.release.subprocess.check_output',side_effect=prerequisite_fixture):
+                with self.assertRaisesRegex(ValueError,'release_source_model_mismatch'):
+                    package('4f991de1e2f18eb3f79db03ee1b217a6d4daa0db',output)
+            self.assertEqual(supplied,LOG_POLICY_FILES)
             self.assertFalse(output.exists())
 
     async def test_formal_live_entry_uses_selected_model_and_v2_release_adapter(self):

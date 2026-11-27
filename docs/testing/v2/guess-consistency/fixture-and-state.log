@@ -1,0 +1,39 @@
+test_allowlist_model_schema_and_probe_admission_are_exact (test_flash_text_config.Flash.test_allowlist_model_schema_and_probe_admission_are_exact) ... ok
+test_formal_live_entry_uses_selected_model_and_v2_release_adapter (test_flash_text_config.Flash.test_formal_live_entry_uses_selected_model_and_v2_release_adapter) ... {"service": "little-buddy-v2", "event": "ready_loopback"}
+{"service": "little-buddy-v2", "event": "stopped"}
+ok
+test_free_only_error_does_not_try_another_or_paid_model (test_flash_text_config.Flash.test_free_only_error_does_not_try_another_or_paid_model) ... ok
+test_invalid_plan_fact_safety_or_duplicate_json_never_passes_delivery (test_flash_text_config.Flash.test_invalid_plan_fact_safety_or_duplicate_json_never_passes_delivery) ... ok
+test_package_cannot_label_old_model_source_as_new_default (test_flash_text_config.Flash.test_package_cannot_label_old_model_source_as_new_default) ... Executing <Task finished name='Task-46' coro=<Flash.test_package_cannot_label_old_model_source_as_new_default() done, defined at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/guess-consistency/tests/v2/test_flash_text_config.py:131> result=None created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.355 seconds
+ok
+test_preflight_accepts_explicit_candidates_rejects_omni_and_identity_is_honest (test_flash_text_config.Flash.test_preflight_accepts_explicit_candidates_rejects_omni_and_identity_is_honest) ... ok
+test_release_identity_binds_default_text_and_independent_review (test_flash_text_config.Flash.test_release_identity_binds_default_text_and_independent_review) ... Executing <Task finished name='Task-56' coro=<Flash.test_release_identity_binds_default_text_and_independent_review() done, defined at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/guess-consistency/tests/v2/test_flash_text_config.py:115> result=None created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.524 seconds
+ok
+test_selected_default_flash_real_voicepeer_json_object_and_usage (test_flash_text_config.Flash.test_selected_default_flash_real_voicepeer_json_object_and_usage) ... ok
+test_visual_review_remains_qwen4_regardless_text_choice (test_flash_text_config.Flash.test_visual_review_remains_qwen4_regardless_text_choice) ... ok
+test_actual_voicepeer_changed_secret_fails_before_any_new_audio_or_state (tests.v2.test_guess_consistency.Guess.test_actual_voicepeer_changed_secret_fails_before_any_new_audio_or_state) ... ok
+test_contract_covers_nonliteral_guesses_and_no_automatic_substring_judge (tests.v2.test_guess_consistency.Guess.test_contract_covers_nonliteral_guesses_and_no_automatic_substring_judge) ... ok
+test_current_answer_reaches_plan_and_correct_confirmation_can_be_acked (tests.v2.test_guess_consistency.Guess.test_current_answer_reaches_plan_and_correct_confirmation_can_be_acked) ... ok
+test_explicit_answer_substitution_rejected_without_overwrite_or_playback (tests.v2.test_guess_consistency.Guess.test_explicit_answer_substitution_rejected_without_overwrite_or_playback) ... ok
+test_review_rejection_prevents_inconsistent_candidate_commit (tests.v2.test_guess_consistency.Guess.test_review_rejection_prevents_inconsistent_candidate_commit) ... ok
+test_role_exchange_clears_old_answer_and_commits_new_role_only_after_ack (tests.v2.test_guess_consistency.Guess.test_role_exchange_clears_old_answer_and_commits_new_role_only_after_ack) ... ok
+test_wrong_guess_preserves_hidden_and_consistent_clue_not_answer (tests.v2.test_guess_consistency.Guess.test_wrong_guess_preserves_hidden_and_consistent_clue_not_answer) ... ok
+test_compact_preserves_guess_role_and_legacy_non_guess_compatible (tests.v2.test_guess_consistency.GuessSwap.test_compact_preserves_guess_role_and_legacy_non_guess_compatible) ... ok
+test_continued_guesser_does_not_restore_old_host_secret (tests.v2.test_guess_consistency.GuessSwap.test_continued_guesser_does_not_restore_old_host_secret) ... ok
+test_guesser_proposal_does_not_commit_without_ack (tests.v2.test_guess_consistency.GuessSwap.test_guesser_proposal_does_not_commit_without_ack) ... ok
+test_held_current_capacity_reply_restores_original_guess_role (tests.v2.test_guess_consistency.GuessSwap.test_held_current_capacity_reply_restores_original_guess_role) ... ok
+test_private_role_proposal_cannot_change_public_game (tests.v2.test_guess_consistency.GuessSwap.test_private_role_proposal_cannot_change_public_game) ... ok
+test_raw_session_state_cannot_commit_guesser_with_host_secret (tests.v2.test_guess_consistency.GuessSwap.test_raw_session_state_cannot_commit_guesser_with_host_secret) ... ok
+test_role_type_invalid_is_fixed_diagnostic_not_unclassified_typeerror (tests.v2.test_guess_consistency.GuessSwap.test_role_type_invalid_is_fixed_diagnostic_not_unclassified_typeerror) ... ok
+test_swap_with_clue_replies_same_turn_and_never_stores_hypothesis (tests.v2.test_guess_consistency.GuessSwap.test_swap_with_clue_replies_same_turn_and_never_stores_hypothesis) ... ok
+test_swap_without_clue_can_ask_for_question (tests.v2.test_guess_consistency.GuessSwap.test_swap_without_clue_can_ask_for_question) ... ok
+test_end_final_action_closes_after_ack (tests.v2.test_private_replan.PrivateReplan.test_end_final_action_closes_after_ack) ... ok
+test_handoff_final_action_replaces_and_clears_session (tests.v2.test_private_replan.PrivateReplan.test_handoff_final_action_replaces_and_clears_session) ... ok
+test_private_final_action_never_publishes_reply (tests.v2.test_private_replan.PrivateReplan.test_private_final_action_never_publishes_reply) ... ok
+test_replan_failure_preserves_private_scope (tests.v2.test_private_replan.PrivateReplan.test_replan_failure_preserves_private_scope) ... ok
+test_shared_continue_publishes_without_old_private_context (tests.v2.test_private_replan.PrivateReplan.test_shared_continue_publishes_without_old_private_context) ... ok
+
+----------------------------------------------------------------------
+Ran 30 tests in 1.268s
+
+OK
