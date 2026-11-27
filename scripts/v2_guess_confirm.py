@@ -90,7 +90,7 @@ class Speech:
         g.tts+=1;g.characters+=len(text)
         return self.inner.synthesize(text,rate)
 
-def game(peer):return {k:copy.deepcopy(v) for k,v in peer.session.game.items() if k in {'mode','rules','roles','turn_limit'}}
+def game(peer):return {k:copy.deepcopy(v) for k,v in peer.session.game.items() if k in {'mode','rules','roles','turn_limit','guess_role'}}
 async def run_group(providers,*,progress=None,warmup=False,turns_by_case=TURNS):
     from backend.v2.companion import UnifiedProviders,CompanionPolicy
     from backend.v2.budget import ResponseBudget

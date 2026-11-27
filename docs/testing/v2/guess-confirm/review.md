@@ -15,3 +15,5 @@ python3 -I -B scripts/v2_guess_confirm.py --case guess-confirm --execute --ackno
 4项离线方法PASS/0SKIP，0.126秒：两个不同自由合成答案经实际新Session产生→第二输入正确→第三清空；首轮无answer只1PLAN/1轮就停；实际Sink不ACK+短外层期限后仅1轮、无第二输入；严格source pin及默认不读配置/不执行。无ACK检查仅测试将组期限收短以免等45秒，没有改生产lease/预算。未云/设备/长测/锁/部署，不重跑G02/G05或旧真实失败。
 
 更新到guess_role修复head521c6cd7的独立工具提交：game前后审计含guess_role，逐轮记录固定guess_normalization，明确模型原本返回错误secret被清理的情况；旧a3ed实测猜中PASS/第三轮漏答FAIL仍保留，非重写旧结果。仅root随后一次复验，author无云。
+
+工具首次新检查3PASS/1ERROR原件role-audit-initial-failure.log保留：审计game白名单漏加guess_role（生产已ACK并存储），补审计字段后4PASS；未放宽断言，非生产角色丢失，不执行云。
