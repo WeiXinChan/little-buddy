@@ -1,0 +1,35 @@
+{
+  "not_executed": true,
+  "no_G02_G05_story_adventure_repeat": true,
+  "first_only": "retain-only-change",
+  "cases": [
+    {
+      "id": "retain-only-change",
+      "inputs": [
+        "我们玩会飞的东西，不重复。我已经说过小鸟和飞机，这些不能再用；这次我说蝴蝶，轮到你。",
+        "只改成两个字，保留会飞和不重复，不重新开始；轮到你了。"
+      ],
+      "max_model_requests": 16,
+      "judge": "按实际完整ACK与孩子输入核双方已用词；第二轮不应报小鸟/飞机/蝴蝶或首轮AI刚报词，且保留会飞与字数规则；不靠关键词计分"
+    },
+    {
+      "id": "explicit-new-round",
+      "inputs": [
+        "我们玩会飞的东西，不重复。我已经说过小鸟和飞机，这些不能再用；这次我说蝴蝶，轮到你。",
+        "明确重新开一局，旧词这局可以再用，其它仍是会飞、两个字、本局不重复，我先小鸟。"
+      ],
+      "max_model_requests": 16,
+      "judge": "可用上一局词但不可重复本新局孩子刚报小鸟；不要求模型一定复用旧词，正常新词也合法；不能误拒重开"
+    }
+  ],
+  "limits": {
+    "group_seconds": 45,
+    "parent_seconds": 55,
+    "per_request_max_tokens": 1400,
+    "shared_production_retry": 1,
+    "no_harness_retry": true,
+    "no_fallback": true
+  },
+  "expected_not_sent_to_model": true,
+  "author_cloud_calls": 0
+}
