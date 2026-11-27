@@ -31,6 +31,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         {requestCancel();owner.post{failed()}})
     @Volatile private var startupHandle:CaptureBootstrap?=null
     @Volatile private var operation=PinDiagnostic.CaptureOperation.NONE
+    private var lastOperation=PinDiagnostic.CaptureOperation.NONE
+    private var operationBeforeNs=0L
+    private var operationAfterNs=0L
     @Volatile private var workerJoined=false
     @Volatile private var thread: Thread? = null
     @Volatile var nativeProof = RecorderProof(); private set
@@ -39,6 +42,19 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(stage,diagnosticScope,cancelled=cancelled.get(),
             allowed=runCatching{allowed()}.getOrDefault(false),stopRequested=stopRequested.get(),
             nativeReleased=nativeProof.released,workerJoined=joined,operation=operation))
+    }
+    /** Fixed scalar trace only for slow operations (or rearm); hard-capped by the adapter. */
+    private inline fun <T> measured(kind:PinDiagnostic.CaptureOperation,block:()->T):T {
+        val before=System.nanoTime();operation=kind
+        try {return block()} finally {
+            val after=System.nanoTime();val elapsed=after-before
+            lastOperation=kind;operationBeforeNs=before;operationAfterNs=after
+            if(elapsed>=20_000_000 || kind==PinDiagnostic.CaptureOperation.KWS_REARM)
+                PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CAPTURE_OPERATION,
+                    diagnosticScope,operation=kind,operationNs=elapsed,cancelled=cancelled.get(),
+                    allowed=runCatching{allowed()}.getOrDefault(false),stopRequested=stopRequested.get(),nativeReleased=nativeProof.released))
+            operation=PinDiagnostic.CaptureOperation.NONE
+        }
     }
     fun start() {
         check(started.compareAndSet(false,true) && thread == null && !quarantined)
@@ -85,11 +101,10 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         }
         var timestampResult=CaptureTimestampResult.NOT_CALLED
         fun context()=CaptureClockContext(diagnosticScope.activity,diagnosticScope.transport,diagnosticScope.capture,
-            step,cancelled.get(),runCatching{allowed()}.getOrDefault(false),stopRequested.get(),nativeProof.released,timestampResult)
+            step,cancelled.get(),runCatching{allowed()}.getOrDefault(false),stopRequested.get(),nativeProof.released,timestampResult,lastOperation.ordinal,operationBeforeNs,operationAfterNs)
         var diagnosticStage=PinDiagnostic.Stage.CAPTURE_NATIVE
         var attemptedNative=false
         var attemptedWake=false
-        var modelUncertain=false
         try {
             val minimum = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO,
                                                        AudioFormat.ENCODING_PCM_16BIT)
@@ -111,7 +126,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             PinDiagnostic.event(diagnosticStage,PinDiagnostic.Reason.BEGIN)
             attemptedWake=true
             wake = AbsoluteWake(assets,modelDirectory){!cancelled.get() && allowed()}
-            wake.initialize()
+            measured(PinDiagnostic.CaptureOperation.MODEL_INIT) { wake.initialize() }
             if (cancelled.get() || !allowed()) return
             val timestamp=AudioTimestamp()
             val continuity=NativeReadLedger(nativeBytes/2,CaptureMonotonic::nowMs,
@@ -174,24 +189,26 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     idle = client.idleSerial
                     awake = false; voiced = false; uploadSamples = 0
                     detector = SpeechDetector(320, initialFloor = 36.0); wakeBase = wakeOrigin(position,count)
-                    attemptedWake=true
-                    wake = AbsoluteWake(assets,modelDirectory){!cancelled.get() && allowed()}
-                    wake.initialize()
+                    // Model/cache IO is forbidden on this running-recorder rearm path.
+                    diagnosticStage=PinDiagnostic.Stage.CAPTURE_KWS;step=CaptureReadStep.KWS_REARM
+                    measured(PinDiagnostic.CaptureOperation.KWS_REARM) { checkNotNull(wake).rearm() }
+                    diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK;step=CaptureReadStep.POST_REARM
+                    continuity.check()
                 }
                 if (!awake) {
                     if(cancelled.get() || !allowed())break
                     diagnosticStage=PinDiagnostic.Stage.CAPTURE_KWS
                     step=CaptureReadStep.KWS
                     operation=PinDiagnostic.CaptureOperation.KWS
-                    val candidate=try{wake?.accept(frame,count)}finally{operation=PinDiagnostic.CaptureOperation.NONE}
+                    val candidate=measured(PinDiagnostic.CaptureOperation.KWS) { wake?.accept(frame,count) }
                     step=CaptureReadStep.POST_KWS
                     diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                     continuity.check()
                     val tail=candidate ?: continue
                     if(cancelled.get() || !allowed())break
                     awake = true
-                    try {wake?.close()}catch(failure:Exception){modelUncertain=true;wake=null;throw failure}
-                    wake = null
+                    // Keep the model owned until recorder release; next idle uses a fresh stream.
+
                     detector = SpeechDetector(320, initialFloor = 36.0)
                     continuity.check()
                     diagnosticStage=PinDiagnostic.Stage.CAPTURE_KWS
@@ -276,7 +293,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             }
             if(released)lease?.nativeReleased()
             diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_RELEASE)
-            var disposed=!modelUncertain
+            var disposed=true
             try { aec?.release() } catch(_:Exception){quarantined=true;disposed=false}
             // A blocked close retains the process lease even though native is already released.
             try { wake?.close() } catch(_:Exception){quarantined=true;return}

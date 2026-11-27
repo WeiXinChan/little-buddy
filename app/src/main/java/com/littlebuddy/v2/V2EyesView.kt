@@ -28,7 +28,7 @@ internal class V2EyesView(context: Context, private val requestManagement: () ->
     }
     private val hold = ParentCornerHold()
     private val held = Runnable { if (hold.fire(hasWindowFocus())) requestManagement() }
-    init { setBackgroundColor(Color.BLACK); contentDescription = "瓦力的两只眼睛。长按右下角进入家长验证。"; isSaveEnabled = false }
+    init { setBackgroundColor(Color.BLACK); contentDescription = "瓦力的两只眼睛。长按右下角进入家长管理。"; isSaveEnabled = false }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val shape=mood.shape();paint.color=0xff000000.toInt() or shape.color

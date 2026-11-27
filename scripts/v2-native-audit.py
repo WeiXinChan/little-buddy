@@ -39,7 +39,7 @@ def elf(raw):
    for off in range(s[4],s[4]+s[5],s[9]):
     name,info,visibility,index,_,_=struct.unpack_from('<IBBHQQ',raw,off)
     if index and info>>4 in (1,2) and (visibility&3) in (0,3):exports.add(string(sections[s[6]],name))
- expected={'Java_com_littlebuddy_v2_V2KwsNative_'+n for n in ('contextBytes','create','feed','ready','decode','close')}|{'JNI_OnLoad'}
+ expected={'Java_com_littlebuddy_v2_V2KwsNative_'+n for n in ('contextBytes','create','newStream','feed','ready','decode','close')}|{'JNI_OnLoad'}
  need(exports==expected,'native_public_symbols')
  need(dependencies=={'libonnxruntime.so','libc.so','libm.so','libdl.so','liblog.so','libandroid.so'},'native_dependencies')
  need(soname==NAME,'native_soname')

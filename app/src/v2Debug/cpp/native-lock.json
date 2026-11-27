@@ -6,7 +6,7 @@
   "upstream_tag": "v1.12.27",
   "upstream_archive_sha256": "e115e6115b51f38cec71cf659a1b39b5a592bb8a9d7fa312f8c8981acea14ac5",
   "runtime": "original AAR ONNXRuntime1.17.1/API17",
-  "library_sha256": "286a164baad5f475e9d441f901f18a8b051f43323c895ae959e7ae9eec86f5db",
+  "library_sha256": "61c7070fc05fa5b9c1d663d369a550fcc891c42bed729a442aa7a72e2690a3b2",
   "source_inputs": {
     "app/src/v2Debug/cpp/build-native.py": "29f2fc453ac459eef8342e27d892935dccae35a0501fe485a9a6e043ea31f15b",
     "app/src/v2Debug/cpp/dependencies.json": "d4012601cff780dca810fd758d1d966e51ca07b5a13a5f2166c62981ba839433",
@@ -15,6 +15,6 @@
     "app/src/v2Debug/cpp/source-pins.json": "f0dd60f4a1e144384f0f76c20ccc5d8fb2905597bac33f449bf31706a192e2a3",
     "app/src/v2Debug/cpp/third_party/LICENSE.sherpa-onnx": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
     "app/src/v2Debug/cpp/third_party/android-jni-26.h": "b71b0a7bbe3ce424d263c45a88dc96e90d988e31ab1c2ae94a8e5c3656aca819",
-    "app/src/v2Debug/cpp/v2_kws.cc": "ed7e4bc6489cd65f012973fcf9b5bef4dcc67d3691751910c868835ba824bd7a"
+    "app/src/v2Debug/cpp/v2_kws.cc": "2efa7d09d6e4f9b1c11eb2509fd40443c2660aa0aaaa3dda2ac11f762ea01327"
   }
 }

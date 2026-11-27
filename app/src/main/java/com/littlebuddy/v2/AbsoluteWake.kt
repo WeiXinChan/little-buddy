@@ -24,6 +24,13 @@ internal class AbsoluteWake(private val assets:AssetManager,private val director
         check(V2KwsNative.create(storage,paths))
         initialized=true
     }
+    /** New feature/decoder origin, same already-loaded model. Worker-only; never called across JNI. */
+    fun rearm() {
+        check(initialized && !closed)
+        if(!allowed())return
+        V2KwsNative.newStream(checkNotNull(context))
+        fed=0L
+    }
     override fun accept(samples:ShortArray,count:Int):Long? {
         check(!closed);require(count in 1..minOf(320,samples.size))
         if(!allowed())return null
@@ -66,6 +73,7 @@ internal object V2KwsNative {
     }
     external fun contextBytes():Int
     external fun create(context:ByteBuffer,paths:Array<String>):Boolean
+    external fun newStream(context:ByteBuffer)
     external fun feed(context:ByteBuffer,samples:ShortArray,count:Int)
     external fun ready(context:ByteBuffer):Boolean
     external fun decode(context:ByteBuffer):DoubleArray?

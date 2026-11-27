@@ -3,6 +3,13 @@ import org.junit.Assert.*
 import org.junit.Test
 class NativeLedgerTest {
  private fun rejects(body:()->Unit){try{body();fail("unsafe continuity admitted")}catch(_:IllegalStateException){}}
+ @Test fun actualCode30DiscontinuityCannotBeAbsorbedAsPhaseOrRate(){
+  val envelope=CaptureClockEnvelope();val lastNs=181023145690251L
+  envelope.observe(CaptureStamp(2193600L-2880,lastNs-1359703077L))
+  val error=runCatching{envelope.observe(CaptureStamp(2193600,lastNs))}.exceptionOrNull()
+  assertTrue(error is CaptureClockFailure)
+  assertEquals(CaptureClockReason.PHASE_RATE_MODEL_EXHAUSTED,(error as CaptureClockFailure).reason)
+ }
  @Test fun cumulativeUnreadShrinksRemainingRoomAcrossSubBufferDelays(){
   var now=0L;var frames=0L
   val ledger=NativeReadLedger(3200,{now},{now}){CaptureStamp(frames,now*1_000_000)}
