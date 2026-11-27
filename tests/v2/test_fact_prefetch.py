@@ -133,9 +133,13 @@ class Prefetch(unittest.IsolatedAsyncioTestCase):
 
     async def test_parallel_read_failures_share_one_retry_reservation(self):
         m=Controlled();m.fail_plan=True;m.fail_fact=True
-        task,p,speech,peers=await self.start(m);await task
+        task,p,speech,peers=await self.start(m)
+        original_budget=peers[0].input_budget
+        await task
         self.assertLessEqual(m.plan_count+m.fact_count,3);self.assertEqual(speech.texts,[])
-        self.assertEqual(peers[0].input_budget.read_retry_revision,0)
+        # Fixed local help disarms the failed input; inspect the actual shared
+        # reservation, not the fresh budget installed after scope revocation.
+        self.assertEqual(original_budget.read_retry_revision,0)
 
     async def test_cancel_stubborn_prefetch_is_bounded_retained_and_cannot_publish(self):
         m=Controlled();m.fact_gate=asyncio.Event();m.stubborn=True

@@ -1,0 +1,40 @@
+test_actual_voicepeer_delay_dependency_contrast_and_identical_fact_inputs (tests.v2.test_fact_prefetch.Prefetch.test_actual_voicepeer_delay_dependency_contrast_and_identical_fact_inputs) ... ok
+test_cancel_stubborn_prefetch_is_bounded_retained_and_cannot_publish (tests.v2.test_fact_prefetch.Prefetch.test_cancel_stubborn_prefetch_is_bounded_retained_and_cannot_publish) ... ok
+test_capacity_rejection_preserves_old_evidence_and_reviews_fallback_before_tts (tests.v2.test_fact_prefetch.Prefetch.test_capacity_rejection_preserves_old_evidence_and_reviews_fallback_before_tts) ... ok
+test_end_discards_and_confirms_prefetch_before_goodbye_tts (tests.v2.test_fact_prefetch.Prefetch.test_end_discards_and_confirms_prefetch_before_goodbye_tts) ... ok
+test_epoch_revoke_discards_finished_prefetch (tests.v2.test_fact_prefetch.Prefetch.test_epoch_revoke_discards_finished_prefetch) ... ok
+test_existing_private_replan_does_not_prefetch_across_projection (tests.v2.test_fact_prefetch.Prefetch.test_existing_private_replan_does_not_prefetch_across_projection) ... ok
+test_facts_finishes_before_plan_but_cannot_commit_or_tts_until_original_gate (tests.v2.test_fact_prefetch.Prefetch.test_facts_finishes_before_plan_but_cannot_commit_or_tts_until_original_gate) ... ok
+test_handoff_cancels_prefetch_without_new_session_fact_or_audio (tests.v2.test_fact_prefetch.Prefetch.test_handoff_cancels_prefetch_without_new_session_fact_or_audio) ... ok
+test_invalid_fact_provenance_never_reaches_review_tts_or_storage (tests.v2.test_fact_prefetch.Prefetch.test_invalid_fact_provenance_never_reaches_review_tts_or_storage) ... ok
+test_invalid_plan_retires_pending_fact_read_without_publication (tests.v2.test_fact_prefetch.Prefetch.test_invalid_plan_retires_pending_fact_read_without_publication) ... ok
+test_parallel_read_failures_share_one_retry_reservation (tests.v2.test_fact_prefetch.Prefetch.test_parallel_read_failures_share_one_retry_reservation) ... FAIL
+test_private_transition_commits_only_private_current_input (tests.v2.test_fact_prefetch.Prefetch.test_private_transition_commits_only_private_current_input) ... ok
+test_revision_change_discards_finished_facts_without_commit (tests.v2.test_fact_prefetch.Prefetch.test_revision_change_discards_finished_facts_without_commit) ... ok
+test_revision_revoked_before_prefetch_task_starts_makes_no_fact_request (tests.v2.test_fact_prefetch.Prefetch.test_revision_revoked_before_prefetch_task_starts_makes_no_fact_request) ... ok
+
+======================================================================
+FAIL: test_parallel_read_failures_share_one_retry_reservation (tests.v2.test_fact_prefetch.Prefetch.test_parallel_read_failures_share_one_retry_reservation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/v2-functions/tests/v2/test_fact_prefetch.py", line 138, in test_parallel_read_failures_share_one_retry_reservation
+    self.assertEqual(peers[0].input_budget.read_retry_revision,0)
+AssertionError: None != 0
+
+----------------------------------------------------------------------
+Ran 14 tests in 1.315s
+
+FAILED (failures=1)
+{"synthetic_serial_dependency_first_audio_ms": 148.76, "synthetic_overlapped_first_audio_ms": 85.91, "not_cloud_latency": true}

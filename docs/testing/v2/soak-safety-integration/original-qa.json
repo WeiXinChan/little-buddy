@@ -1,0 +1,143 @@
+{
+  "source": "715443314a780906565f68fd682a326339ca1057",
+  "original_result_sha256": "78427c6e5ff9ad262645dd013f1026104ab37435666929d687e32bd8e1053a6a",
+  "verdict": "REPRODUCIBLE_TOOL_PAUSE_OBSERVATION_RACE_MATCHES_FAILURE_WINDOW_NOT_UNIQUE_ORIGINAL_CAUSE_PROOF",
+  "actual_evidence": {
+    "elapsed": 718.2591531580547,
+    "last_turn": {
+      "index": 89,
+      "connection_index": 8,
+      "step": 8,
+      "fault": "half_open",
+      "status": "ready_fault",
+      "elapsed": 711.1825625140918,
+      "frame_start": 162,
+      "ack_start": 161,
+      "playback_start_samples": 3720000,
+      "binding": "9ecf42ba712191c58466918409360fb589d171eb078c59e0b170cb2589ee143f",
+      "same_session": true,
+      "frames": 2,
+      "acks": 1,
+      "first_audio_seconds": 0.009176817024126649,
+      "ack_attempts": 1,
+      "media": {
+        "sent": 96000,
+        "paced": 96000,
+        "accepted": 96000,
+        "received": 4800,
+        "acked": 2400,
+        "ack_head": 2400
+      },
+      "input_started": 711.1867670620559,
+      "input_finished": 717.3749483360443,
+      "input_seconds": 6.0,
+      "playback_seconds": 0.1,
+      "completed": 718.0171935210237
+    },
+    "last_connection": {
+      "index": 8,
+      "round": 0,
+      "slot": 8,
+      "fault": "half_open",
+      "status": "incomplete",
+      "started": 638.5388846090063,
+      "turn_start": 80,
+      "cleanup_confirmed": true,
+      "binding": "9ecf42ba712191c58466918409360fb589d171eb078c59e0b170cb2589ee143f",
+      "new_session": true,
+      "cross_connection_old_ack_checked": true,
+      "rst_applied": null,
+      "pause_observed": null,
+      "frames": 164,
+      "acks": 162,
+      "ack_attempts": 162,
+      "normal_close_confirmed": false,
+      "client_cleanup": true,
+      "relay_bytes": {
+        "up": 148457,
+        "down": 38049
+      },
+      "relay_buffer_peak": 1359,
+      "release": {
+        "constructed": 9,
+        "new_session": true,
+        "finished": true,
+        "active": false,
+        "quarantined": false,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "generation": false,
+        "sequence": 1,
+        "epoch": 11,
+        "heard": 0,
+        "pending_audio": 0,
+        "game": null,
+        "binding": "9ecf42ba712191c58466918409360fb589d171eb078c59e0b170cb2589ee143f",
+        "same_session": true,
+        "played_anchor": null,
+        "played_count": 0,
+        "state_hash": "dbd925f1e04e0c5b9b6b41af5e37762fdfc4b5db6bed77c40b7d4d950e24839f",
+        "allowance": {
+          "model_calls": 355,
+          "tts_calls": 88,
+          "tts_unicode_characters": 1056,
+          "reserved_units": 443,
+          "account_quota_known": false,
+          "bill_cny": null
+        },
+        "resources": {
+          "backend_rss_bytes": 40837120,
+          "backend_threads": 1,
+          "backend_fds": 10,
+          "asyncio_tasks": 1
+        },
+        "elapsed": 718.231852,
+        "process": {
+          "pid": 4024702,
+          "start_ticks": 79705433
+        },
+        "asr_active": 0,
+        "tts_active": 0,
+        "capture_bytes": 0,
+        "head": 0,
+        "recognition_active": false,
+        "rules_hash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "roles_hash": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "cleanup_confirmed": true,
+        "transport_closed": true
+      },
+      "turn_end": 90,
+      "completed": 718.2239174190909
+    },
+    "failure_kind": "unconfirmed",
+    "forced_exit": true
+  },
+  "locations": [
+    "scripts/v2_persistent_tls.py:217: firstACK后跳过后续ACK",
+    "scripts/v2_mixed_tls.py:216: 等首ACK返回后才pause上下行并等blocked[down] .5秒",
+    "scripts/v2_tls_soak.py:98: blocked只在read之前或read返回有数据后置位；pause自身不置位"
+  ],
+  "causal_chain": [
+    "ACK1后audio2可能已穿过relay，被客户端on_audio计数但故障策略不ACK；服务只在ACK后产生下一包",
+    "relay已await source.read等待audio3；pause只是clear gate，不能唤醒正在进行的read",
+    "服务等ACK2/relay等audio3，没有后续down字节，blocked不置位；.5秒wait_for超时，尚未赋pause_observed/rst_applied",
+    "最后ready_fault、2包received/1ACK及null标记与此路径一致。原报告无原异常枚举，不能称已证明原唯一根因或供应商问题。"
+  ],
+  "independent_reproduction": {
+    "tests": 3,
+    "real_frozen_function": "TcpRelay.pipe_bytes",
+    "transport": "in-memory stream substitutes, no TCP/TLS/native",
+    "negative": "先转发两包再pause，无第三包时blocked wait超时；补第三包才产生blocked且不转发",
+    "positive": "首包到客户端后、ACK1之前arm down；上行仍开允许ACK1，服务下一包唤醒read形成真实blocked；再pause up",
+    "original_files_unchanged": true
+  },
+  "minimal_fix": [
+    "只改测试工具时序：half_open首ACK前的before_ack钩子arm down，保留up到ACK1发送完成；等真实down阻塞见证后再pause up，随后按原有界时间reset",
+    "不得仅把pause()调用改成blocked=true或放宽.5秒来刷通过；需同时核relay字节/收到和ACK/blocked/恢复新Session",
+    "加固定白名单阶段元数据区分half_open_arm/block_wait/reset/cleanup/shutdown与bounded异常种类，不记录异常原文",
+    "保留原90/3600失败与3个轻量反例；修后root仅一次目标half_open+恢复短原生验证，再决定唯一长测；不重跑完整长测定位此竞态"
+  ],
+  "product_bug_proven": false,
+  "new_tests_cloud_device_lock": false
+}

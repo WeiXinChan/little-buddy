@@ -1,0 +1,10 @@
+[
+  {
+    "mutation": "shutdown.active=true",
+    "accepted": true
+  },
+  {
+    "mutation": "shutdown.quarantined=true",
+    "accepted": true
+  }
+]

@@ -1,0 +1,79 @@
+{
+  "base_sha": "fd843b046fcd0a5033f938a6894ccc60499fbddd",
+  "dependency_pr": 115,
+  "limits": {
+    "duration": 3600,
+    "connections": 70,
+    "turns": 720,
+    "model_calls": 3600,
+    "tts_calls": 720,
+    "characters": 20000,
+    "units": 4320,
+    "input_seconds": 6.0,
+    "playback_seconds": 2.0,
+    "sample_seconds": 5.0
+  },
+  "short_seconds": 90,
+  "default_enabled": false,
+  "expected_inputs": [
+    {
+      "index": 0,
+      "label": "guess",
+      "expected_mode": "guess",
+      "input_text_sha256": "ee7d2b20afe2b3e656f01415d9e06ad726ec40904b941f9debf3b8be3f9d274e"
+    },
+    {
+      "index": 1,
+      "label": "story_start",
+      "expected_mode": "story",
+      "input_text_sha256": "c0f252a764ade19fafee43930c3d6872781a211fd35b7734e0ac6b4e0b6262c1"
+    },
+    {
+      "index": 2,
+      "label": "rule_change",
+      "expected_mode": "story",
+      "input_text_sha256": "4c8c6c5e9d88c64b21559fbf7d6c0ab44431fccffe5f83c66866a8be5955e162"
+    },
+    {
+      "index": 3,
+      "label": "story_continue",
+      "expected_mode": "story",
+      "input_text_sha256": "1c82c0f4e290b8a990a33a5e28e31ac2be5935915497d4ad0cfd388b9aef6094"
+    },
+    {
+      "index": 4,
+      "label": "adventure",
+      "expected_mode": "adventure",
+      "input_text_sha256": "3554d2e1d987d771b862a4505f7729e4e57464dc0001f66709bc5b67064e5eaa"
+    },
+    {
+      "index": 5,
+      "label": "role_exchange",
+      "expected_mode": "adventure",
+      "input_text_sha256": "ba4ac639429abd770aa260f2efa89d916f8f6cc2860619a9842e998fc76a9fcb"
+    },
+    {
+      "index": 6,
+      "label": "association",
+      "expected_mode": "association",
+      "input_text_sha256": "a5ee869e1dec65b7cf3e8078a93f2728899c24990f47727ac4a2433c5d891e03"
+    },
+    {
+      "index": 7,
+      "label": "association_continue",
+      "expected_mode": "association",
+      "input_text_sha256": "23dd637e2eed89458b5ed45467c8ed177095ce03c154446d577d9a14e0705c75"
+    },
+    {
+      "index": 8,
+      "label": "story_restart",
+      "expected_mode": "story",
+      "input_text_sha256": "881515ccafee048378e6b53316534ff8e704510538cbb2aa3a4f0f147552f714"
+    }
+  ],
+  "workload": "7 completed turns + partial-ACK stop + same-session recovery + real fault per connection; alternating new-session normal recovery; fixed7 fault cycle",
+  "max_samples": 8192,
+  "cloud_requests_authorized": 0,
+  "device_executed": false,
+  "acceptance": false
+}

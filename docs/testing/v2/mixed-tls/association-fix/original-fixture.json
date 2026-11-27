@@ -1,0 +1,992 @@
+{
+  "status": "duration_collected_not_acceptance",
+  "limits": {
+    "duration": 90,
+    "connections": 70,
+    "turns": 720,
+    "model_calls": 3600,
+    "tts_calls": 720,
+    "characters": 20000,
+    "units": 4320,
+    "input_seconds": 6.0,
+    "playback_seconds": 2.0,
+    "sample_seconds": 5.0
+  },
+  "duration": 90,
+  "collection_errors": 0,
+  "cleanup_confirmed": true,
+  "forced_exit": false,
+  "service_exit": 0,
+  "cloud": false,
+  "device": false,
+  "acoustic": false,
+  "acceptance": false,
+  "gc_forced": false,
+  "connections": [
+    {
+      "index": 0,
+      "started": 0.0,
+      "completed": 76.2,
+      "fault": "asr_rst",
+      "status": "fault_injected",
+      "turn_start": 0,
+      "turn_end": 10,
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "release": {
+        "cleanup_confirmed": true,
+        "transport_closed": true,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "active": false,
+        "quarantined": false,
+        "constructed": 1,
+        "finished": true,
+        "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "same_session": true
+      },
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "new_session": true,
+      "frames": 161,
+      "acks": 161,
+      "old_ack_checked": true,
+      "cross_connection_old_ack_checked": null,
+      "rst_applied": true
+    },
+    {
+      "index": 1,
+      "started": 76.4,
+      "completed": 91.0,
+      "fault": "normal_close",
+      "status": "duration_cutoff",
+      "turn_start": 10,
+      "turn_end": 12,
+      "cleanup_confirmed": true,
+      "client_cleanup": true,
+      "release": {
+        "cleanup_confirmed": true,
+        "transport_closed": true,
+        "pending": 0,
+        "retired": 0,
+        "errors": 0,
+        "heard": 0,
+        "pending_audio": 0,
+        "active": false,
+        "quarantined": false,
+        "constructed": 2,
+        "finished": true,
+        "binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "same_session": true
+      },
+      "binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "new_session": true
+    }
+  ],
+  "turns": [
+    {
+      "index": 0,
+      "first_audio_seconds": 0.01,
+      "status": "delivered",
+      "input_seconds": 6.0,
+      "playback_seconds": 2.0,
+      "frames": 20,
+      "acks": 20,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 1,
+      "first_audio_seconds": 0.01,
+      "status": "delivered",
+      "input_seconds": 6.0,
+      "playback_seconds": 2.0,
+      "frames": 20,
+      "acks": 20,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 2,
+      "first_audio_seconds": 0.01,
+      "status": "delivered",
+      "input_seconds": 6.0,
+      "playback_seconds": 2.0,
+      "frames": 20,
+      "acks": 20,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 3,
+      "first_audio_seconds": 0.01,
+      "status": "delivered",
+      "input_seconds": 6.0,
+      "playback_seconds": 2.0,
+      "frames": 20,
+      "acks": 20,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 4,
+      "first_audio_seconds": 0.01,
+      "status": "delivered",
+      "input_seconds": 6.0,
+      "playback_seconds": 2.0,
+      "frames": 20,
+      "acks": 20,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 5,
+      "first_audio_seconds": 0.01,
+      "status": "delivered",
+      "input_seconds": 6.0,
+      "playback_seconds": 2.0,
+      "frames": 20,
+      "acks": 20,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 6,
+      "first_audio_seconds": 0.01,
+      "status": "delivered",
+      "input_seconds": 6.0,
+      "playback_seconds": 2.0,
+      "frames": 20,
+      "acks": 20,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 7,
+      "first_audio_seconds": 0.01,
+      "status": "interrupted",
+      "input_seconds": 6.0,
+      "playback_seconds": 0.1,
+      "frames": 1,
+      "acks": 1,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 8,
+      "first_audio_seconds": 0.01,
+      "status": "delivered",
+      "input_seconds": 6.0,
+      "playback_seconds": 2.0,
+      "frames": 20,
+      "acks": 20,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 9,
+      "first_audio_seconds": 0.01,
+      "status": "fault_injected",
+      "input_seconds": 6.0,
+      "playback_seconds": 0,
+      "frames": 0,
+      "acks": 0,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 10,
+      "first_audio_seconds": 0.01,
+      "status": "delivered",
+      "input_seconds": 6.0,
+      "playback_seconds": 2.0,
+      "frames": 20,
+      "acks": 20,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    },
+    {
+      "index": 11,
+      "first_audio_seconds": 0.01,
+      "status": "duration_cutoff",
+      "input_seconds": 6.0,
+      "playback_seconds": 0,
+      "frames": 0,
+      "acks": 0,
+      "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "played_anchor": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "no_partial_commit": true
+    }
+  ],
+  "samples": [
+    {
+      "event": "before_warmup",
+      "elapsed": 0,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 0,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 5,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 10,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 15,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 20,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 25,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 30,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 35,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 40,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 45,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 50,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 55,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 60,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 65,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 70,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 75,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "after_warmup",
+      "elapsed": 76.3,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 80,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 85,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "periodic",
+      "elapsed": 90,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    },
+    {
+      "event": "final",
+      "elapsed": 91,
+      "service_process": {
+        "pid": 20,
+        "start_ticks": 100
+      },
+      "client_process": {
+        "pid": 10,
+        "start_ticks": 90
+      },
+      "service_resources": {
+        "backend_rss_bytes": 100,
+        "backend_fds": 7,
+        "backend_threads": 1,
+        "asyncio_tasks": 3
+      },
+      "client_resources": {
+        "backend_rss_bytes": 120,
+        "backend_fds": 10,
+        "backend_threads": 1,
+        "asyncio_tasks": 4
+      },
+      "allowance": {
+        "model_calls": 50,
+        "tts_calls": 10,
+        "tts_unicode_characters": 100,
+        "reserved_units": 60,
+        "account_quota_known": false,
+        "bill_cny": null
+      }
+    }
+  ],
+  "rounds": [],
+  "service_pid": 20,
+  "driver_pid": 10,
+  "shutdown": {
+    "pending": 0,
+    "retired": 0,
+    "errors": 0,
+    "heard": 0,
+    "pending_audio": 0,
+    "played_count": 0,
+    "capture_bytes": 0,
+    "asr_active": 0,
+    "tts_active": 0,
+    "binding": null,
+    "played_anchor": null,
+    "state_hash": null,
+    "game": null,
+    "rules_hash": null,
+    "roles_hash": null,
+    "active": false,
+    "quarantined": false,
+    "finished": true,
+    "generation": false,
+    "same_session": false,
+    "recognition_active": false,
+    "constructed": 2,
+    "process": {
+      "pid": 20,
+      "start_ticks": 100
+    },
+    "allowance": {
+      "model_calls": 50,
+      "tts_calls": 10,
+      "tts_unicode_characters": 100,
+      "reserved_units": 60,
+      "account_quota_known": false,
+      "bill_cny": null
+    }
+  },
+  "timing": {
+    "elapsed_seconds": 91.0,
+    "declared_input_seconds": 72.0,
+    "simulated_ack_playback_seconds": 18.1,
+    "wall_seconds": {
+      "input": 72.0,
+      "playback": 18.1,
+      "processing": 0.5,
+      "idle": 0.0,
+      "network": 0.05,
+      "cleanup": 0.35
+    }
+  }
+}

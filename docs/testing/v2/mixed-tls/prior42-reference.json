@@ -1,0 +1,29 @@
+{
+  "verdict": "PASS_SINGLE_BOUNDED_PERSISTENT_TLS_RUN",
+  "review_sha256": "74427355cf4bd1b74db473a9cf88a898d4b2173ba64a1f68d4295ce983f3d5ed",
+  "source_sha": "5999999c9724281180b52b281e300b0b102f69d3",
+  "prior_result_sha256": "65d894896ba3ca12c9b77363a6789786728827a2bd139b746a145df349deba76",
+  "counts": {
+    "connections": 42,
+    "statuses": {
+      "delivered": 27,
+      "fault_injected": 12,
+      "interrupted": 3
+    },
+    "fault_labels": {
+      "normal_close": 24,
+      "asr_rst": 3,
+      "plan_rst": 3,
+      "partial_rst": 3,
+      "pause_resume": 3,
+      "half_open": 3,
+      "playback_stop": 3
+    },
+    "rst_true": 12,
+    "pause_true": 6,
+    "old_ack_checked": 36,
+    "unique_session_bindings": 42
+  },
+  "scope": "read_only_prior42_reference_no_rerun",
+  "interpretation": "2.7s bounded synthetic run; warm RSS +2.390625MiB is not a plateau or 60min acceptance"
+}
