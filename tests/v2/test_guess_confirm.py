@@ -12,7 +12,7 @@ class Model(old.Model):
         if '严格字段' in instruction:
             self.inputs.append(data['text'])
             count=len(self.inputs)
-            self.next_plan.update(action='change' if count in (1,3) else 'continue',mode='guess',
+            self.next_plan.update(guess_role='setter' if count<3 else 'guesser',action='change' if count in (1,3) else 'continue',mode='guess',
                 rules='瓦力出题孩子猜' if count<3 else '孩子出题瓦力猜',roles=['瓦力出题','孩子猜'] if count<3 else ['孩子出题','瓦力猜'],
                 secrets={'answer':self.answer} if self.answer and count<3 else {},
                 sentences=['它可以飞起来。'] if count==1 else [f'猜对了，是{self.answer}。'] if count==2 else ['我猜是灯。'])
@@ -27,6 +27,7 @@ class Confirm(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(turns[1]['dynamic_synthetic_guess']);self.assertEqual(turns[1]['synthetic_input'],m.inputs[1])
             self.assertEqual(turns[0]['synthetic_hidden_after'],{'answer':answer})
             self.assertEqual(turns[2]['synthetic_hidden_after'],{})
+            self.assertEqual(turns[2]['game_after']['guess_role'],'guesser')
             self.assertIsNone(result['semantic_pass'])
     async def test_missing_answer_stops_before_second_request(self):
         m=Model(None);result=await g.run_group(UnifiedProviders(old.Speech(),m))
@@ -42,7 +43,7 @@ class Confirm(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(m.inputs),1);self.assertEqual(len(result['cases'][0]['turns']),1)
         self.assertTrue(result['stopped']);self.assertFalse(result['cases'][0]['turns'][0]['reply_final_segment_ack'])
     async def test_source_pin_and_default_disabled(self):
-        self.assertEqual(g.SOURCE,'a3ed0ea2b42bb3a341cecc7e27f6d71d14e0ede9')
+        self.assertEqual(g.SOURCE,'521c6cd7cb5a8746496c447732b62fac7879c4bb')
         self.assertEqual(len(g.verify_source()),64)
         with patch.object(g,'verify_source',side_effect=AssertionError('no read')):
             self.assertEqual(g.main(['--case','guess-confirm']),0)

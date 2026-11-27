@@ -4,7 +4,7 @@ No real ASR, images, microphone or device playback. Never a semantic PASS oracle
 import argparse,asyncio,copy,hashlib,json,os,pathlib,signal,subprocess,sys,time
 from contextlib import asynccontextmanager
 ROOT=pathlib.Path(__file__).resolve().parent
-SOURCE='a3ed0ea2b42bb3a341cecc7e27f6d71d14e0ede9'
+SOURCE='521c6cd7cb5a8746496c447732b62fac7879c4bb'
 MODEL='deepseek-v4.1-flash-1017'
 WARMUP='我们轮流说水果，一次一个，不重复，我先说苹果。'
 ALL_CASES={'guess-confirm':('猜家里的东西吧，你描述，我猜，不先说答案。',None,'现在由我问你猜：能照亮房间的是什么？')}
@@ -160,7 +160,7 @@ async def run_group(providers,*,progress=None,warmup=False,turns_by_case=TURNS):
                             session_ended=any(e['type']=='session_end' for e in sink.events)
                             ended=reply_ended or session_ended
                             failures=[e['code'] for e in sink.events if e['type']=='failure']
-                            observation.update(budget_events=copy.deepcopy(g.denials[denials_before:]),actual_complete_ack_segments=copy.deepcopy(sink.segments),reply_final_segment_ack=sink.final_segments>0,public_game_committed=sink.game_commits>0,private_mode_after=peer.session.private_mode,model_attempts=copy.deepcopy(g.model[offset:]),tts_requests=g.tts-tts_before,tts_characters=g.characters-chars_before,session_active_after=peer.session.active,output_deadline=peer.session.deadline,actual_complete_ack_texts=list(sink.played),local_help=list(sink.local),synthetic_hidden_after=copy.deepcopy(peer.session.secrets),game_after=game(peer),events=copy.deepcopy(sink.events),error=peer_failure(peer),partial_unknown=len(peer.session.uncertain),pending_audio=len(peer.session.pending),audio_frames=sink.frames,acks_accepted=sink.acks,final_ack=sink.game_commits>0,reply_end=reply_ended,session_end=session_ended,partial_delivery=bool(failures and sink.played),completed_ms=round((time.monotonic()-start)*1000,2),resource_diagnostics=copy.deepcopy(peer.probe_resources),quarantined=peer.quarantined)
+                            observation.update(guess_normalization=getattr(peer,'last_guess_normalization',None),budget_events=copy.deepcopy(g.denials[denials_before:]),actual_complete_ack_segments=copy.deepcopy(sink.segments),reply_final_segment_ack=sink.final_segments>0,public_game_committed=sink.game_commits>0,private_mode_after=peer.session.private_mode,model_attempts=copy.deepcopy(g.model[offset:]),tts_requests=g.tts-tts_before,tts_characters=g.characters-chars_before,session_active_after=peer.session.active,output_deadline=peer.session.deadline,actual_complete_ack_texts=list(sink.played),local_help=list(sink.local),synthetic_hidden_after=copy.deepcopy(peer.session.secrets),game_after=game(peer),events=copy.deepcopy(sink.events),error=peer_failure(peer),partial_unknown=len(peer.session.uncertain),pending_audio=len(peer.session.pending),audio_frames=sink.frames,acks_accepted=sink.acks,final_ack=sink.game_commits>0,reply_end=reply_ended,session_end=session_ended,partial_delivery=bool(failures and sink.played),completed_ms=round((time.monotonic()-start)*1000,2),resource_diagnostics=copy.deepcopy(peer.probe_resources),quarantined=peer.quarantined)
                             observation['status']='cloud_reply_complete_simulated_ack' if ended and not failures else ('partial_cloud_ack_plus_local_help_protocol' if sink.played else 'local_help_protocol_only') if sink.local else 'failed_or_partial'
                             if len(g.denials)>denials_before:
                                 observation['status']='partial_cloud_ack_plus_harness_budget_stop' if sink.played else 'harness_budget_stop'
