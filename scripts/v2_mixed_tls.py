@@ -112,7 +112,7 @@ class MixedService(p.Service):
 
 class PacedWire(p.Wire):
     def __init__(self,*args,timeline,observe,**kw):
-        super().__init__(*args,**kw);self.timeline=timeline;self.observe=observe;self.input_end=None;self.first_latency=None;self.total_ack_samples=0;self.reset_media()
+        super().__init__(*args,**kw);self.timeline=timeline;self.observe=observe;self.input_end=None;self.first_latency=None;self.total_ack_samples=0;self.fault_relay=None;self.reset_media()
     def reset_media(self):
         self.sent=0;self.paced=0;self.accepted=None;self.received=0;self.ack_samples=0;self.ack_head=0
         self.input_started=None;self.input_end=None;self.first_latency=None;self.first_at=None;self.segments=set()
@@ -133,6 +133,9 @@ class PacedWire(p.Wire):
         self.timeline.enter('processing');state=(await self.ipc.call('barrier',seq=self.seq-1))['state'];self.accepted=state['capture_bytes']//2;p.require(self.accepted==96000)
         await self.observe('input_finished');await self.command('probe',revision=self.revision)
     async def before_ack(self,event):
+        if self.fault=='half_open' and self.turn_acks==0:
+            p.require(self.fault_relay is not None)
+            self.fault_relay.pause('down')
         pcm=base64.b64decode(event['pcm'],validate=True);p.require(0<len(pcm)<=4800 and len(pcm)%2==0 and event['end']-event['start']==len(pcm)//2)
         if self.first_latency is None:
             self.first_latency=(self.first_at if self.first_at is not None else time.monotonic())-self.input_end;await self.observe('first_audio_transport')
@@ -195,6 +198,7 @@ class MixedDriver:
             port=await relay.start()
             ws=await p.connect(f'wss://127.0.0.1:{port}/v2/voice',ssl=self.tls,server_hostname='localhost',additional_headers={'Authorization':'Bearer '+p.TOKEN},max_size=16000,max_queue=4,write_limit=16000,close_timeout=.2,open_timeout=2)
             wire=PacedWire(ws,self.ipc,'normal_close',self.old_ack,timeline=self.timeline,observe=self.observe)
+            wire.fault_relay=relay
             tasks={asyncio.create_task(wire.receive()),asyncio.create_task(wire.heartbeat())};self.current=(relay,tasks)
             await wire.command('scope');await wire.scope.wait();await wire.command('wake')
             initial=(await self.ipc.call('state'))['state'];row['binding']=initial['binding'];row['new_session']=initial['new_session'];p.require(initial['new_session'] is True)
@@ -212,7 +216,9 @@ class MixedDriver:
             self.timeline.enter('network');row.update(rst_applied=None,pause_observed=None)
             if fault in {'asr_rst','plan_rst','partial_rst'}:row['rst_applied']=relay.reset();p.require(row['rst_applied'])
             elif fault=='half_open':
-                relay.pause('up');relay.pause('down');await asyncio.wait_for(relay.blocked['down'].wait(),.5)
+                # Downstream was armed before ACK1; keep upstream open until
+                # the next real server bytes witness the downstream block.
+                await asyncio.wait_for(relay.blocked['down'].wait(),.5);relay.pause('up')
                 row['pause_observed']=True;await asyncio.sleep(.05);row['rst_applied']=relay.reset();p.require(row['rst_applied'])
             elif fault=='pause_resume':
                 relay.pause('down');await self.ipc.call('unblock');await asyncio.wait_for(relay.blocked['down'].wait(),.5)
