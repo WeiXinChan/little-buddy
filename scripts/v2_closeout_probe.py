@@ -19,7 +19,7 @@ def select_case(name):
     if name in ALL_CASES:TURNS[name]=ALL_CASES[name]
     CASES=tuple((k,v[0]) for k,v in TURNS.items())
 
-LIMITS=dict(model_requests=21,tts_requests=12,tts_characters=1440,execution_seconds=45,case_cleanup_seconds=.25,supervisor_seconds=55,request_bytes=32768,planning_model_cny=5.)
+LIMITS=dict(model_requests=24,tts_requests=12,tts_characters=1440,execution_seconds=45,case_cleanup_seconds=.25,supervisor_seconds=55,request_bytes=32768,planning_model_cny=5.)
 LOCAL_TEXT='如果你正有危险，先别做危险动作，马上呼叫能安全帮助你的可信任大人；必要时，用安全可行的方式寻求当地紧急帮助。不要自行攀爬、跨越或为求助冒险移动；只有安全可行时才远离危险。我现在不能安全地继续这个回答。'
 
 def save(path,value):
@@ -47,7 +47,8 @@ class Meter:
     async def complete(self,instruction,data,*,schema=None):
         g=self.guard;g.ensure()
         props=(schema or {}).get('properties',{});stage=next((name for key,name in [('mode','plan'),('facts','facts'),('allow','safe')] if key in props),'other')
-        if stage in {'plan','facts'} and g.turn_stages.get(stage,0):g.deny('no_repeat_stage',stage)
+        if stage in {'plan','facts'} and (g.turn_stages.get(stage,0)>=2 or sum(g.turn_stages.get(k,0) for k in ('plan','facts'))>=3):g.deny('declared_read_stage_cap',stage)
+        if stage=='safe' and g.turn_stages.get(stage,0)>=5:g.deny('declared_safety_stage_cap',stage)
         g.turn_stages[stage]=g.turn_stages.get(stage,0)+1
         chunks=[instruction.encode(),json.dumps(data,ensure_ascii=False).encode(),json.dumps(schema,ensure_ascii=False).encode()]
         if any(len(x)>LIMITS['request_bytes'] for x in chunks):g.deny('request_bytes',stage)
@@ -61,8 +62,11 @@ class Meter:
         try:
             result=await self.inner.complete(instruction,data,schema=schema);g.ensure();row['completed']=True;return result
         except BaseException as error:
-            g.open=False # no later request after any upstream failure, including quota
-            name=type(error).__name__;row['failure_kind']=name if name in {'ModelError','SafetyFault','TimeoutError','CancelledError','RuntimeError','ConnectionError'} else 'unknown'
+            from backend.v2.voice import VoiceFault
+            # The production shared retry/CAS remains the only retry owner.
+            # Do not close this gate before its admitted transient retry.
+            if not isinstance(error,VoiceFault) or error.code not in {'network','timeout'}:g.open=False
+            name=type(error).__name__;row['failure_kind']=name if name in {'ModelError','SafetyFault','TimeoutError','CancelledError','RuntimeError','ConnectionError','VoiceFault'} else 'unknown'
             raise
         finally:row['elapsed_ms']=round((time.monotonic()-start)*1000,2)
 class Speech:
@@ -268,6 +272,8 @@ async def memory_compare(providers,*,progress=None):
                 if progress:progress(copy.deepcopy(report))
     except BaseException as error:
         report['stopped']=True
+        report['stop_kind']='mechanical_budget' if guard.denials else 'controlled_failure'
+        report['budget_denials']=copy.deepcopy(guard.denials)
         report['failure_kind']=type(error).__name__ if type(error).__name__ in {'ModelError','TimeoutError','CancelledError','RuntimeError'} else 'unknown'
         # Raw exception text is never material in this synthetic audit.
     finally:
@@ -307,8 +313,8 @@ async def live(out):
         save(out/'result.json',result)
 
 def admission():
-    return dict(source=SOURCE,model=MODEL,no_fallback=True,no_automatic_retry=True,
-        case=SELECTED,model_request_limit=2 if SELECTED=='memory-compare' else 21,quota_not_live_verified_acknowledged=True,account_quota_verified=False,
+    return dict(source=SOURCE,model=MODEL,no_fallback=True,no_automatic_retry=True,production_shared_retry_preserved=True,
+        case=SELECTED,model_request_limit=2 if SELECTED=='memory-compare' else 24,quota_not_live_verified_acknowledged=True,account_quota_verified=False,
         authorization='existing_user_authorization_for_bounded_text_recheck',
         historical_user_evidence=dict(model=MODEL,free_tokens_shown=999070,
             free_tier_exhaustion_stop_enabled=True,live_verified=False),
@@ -323,7 +329,7 @@ def main(argv=None):
     args=parser.parse_args(argv)
     select_case(args.case)
     if not args.execute:
-        print(json.dumps(dict(status='DISABLED_PLAN_ONLY',source=SOURCE,case=SELECTED,cases=TURNS,limits={**LIMITS,'model_requests':2 if SELECTED=='memory-compare' else 21},semantic_pass=None,cloud_calls=0),ensure_ascii=False));return 0
+        print(json.dumps(dict(status='DISABLED_PLAN_ONLY',source=SOURCE,case=SELECTED,cases=TURNS,limits={**LIMITS,'model_requests':2 if SELECTED=='memory-compare' else 24},semantic_pass=None,cloud_calls=0),ensure_ascii=False));return 0
     if not args.acknowledge_quota_not_live_verified or args.output is None:return 2
     verify_source()
     if args._worker:

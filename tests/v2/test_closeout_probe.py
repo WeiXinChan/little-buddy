@@ -56,3 +56,25 @@ class Preparation(unittest.IsolatedAsyncioTestCase):
     async def test_source_pin_is_final_main(self):
         self.assertEqual(p.SOURCE,'b568ef4730b0e30552bfc4577915bbec1afa6a61')
         self.assertEqual(len(p.verify_source()),64)
+
+    async def test_production_sentence_repair_remains_admitted_and_metered(self):
+        from tests.v2.test_plan_repair import RepairModel
+        p.select_case('story-forest')
+        model=RepairModel()
+        # Existing production helper's first input contains explicit one-sentence rule.
+        p.TURNS['story-forest']=('我们每人一句，继续编故事。',)
+        result=await p.run_group(UnifiedProviders(old.Speech(),model))
+        self.assertFalse(result['stopped'])
+        self.assertEqual(model.plan_calls,2);self.assertEqual(model.fact_calls,1)
+        turn=result['cases'][0]['turns'][0]
+        self.assertEqual(turn['status'],'cloud_reply_complete_simulated_ack')
+        self.assertNotIn('CANDIDATE_ONLY',str(turn['actual_complete_ack_texts']))
+        self.assertEqual(result['totals']['budget_denials'],[])
+
+    async def test_harness_third_plan_is_mechanical_denial_not_model_quality(self):
+        guard=p.Guard();model=old.Model(old.plan());meter=p.Meter(model,guard)
+        for _ in range(2):await meter.complete('synthetic',{},schema={'properties':{'mode':{}}})
+        with self.assertRaises(RuntimeError):await meter.complete('synthetic',{},schema={'properties':{'mode':{}}})
+        self.assertEqual(len(model.requests),2)
+        self.assertEqual(guard.denials[-1]['reason'],'declared_read_stage_cap')
+        self.assertFalse(guard.denials[-1]['network_started'])
