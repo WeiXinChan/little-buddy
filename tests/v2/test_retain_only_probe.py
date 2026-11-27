@@ -1,3 +1,4 @@
+from tests.v2.pin_objects import assert_git_pin,assert_rejects_changed_copy
 import unittest,json
 from unittest.mock import patch
 from backend.v2.companion import UnifiedProviders
@@ -48,7 +49,7 @@ class Preparation(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(SystemExit):probe.main(['--case','all'])
     async def test_source_pin_matches_fixed_production_not_tool_self_hash(self):
         self.assertEqual(probe.SOURCE,'79ba62b3b7e8b16d15b43249039891e568de8672')
-        self.assertEqual(len(probe.verify_source()),64)
+        assert_git_pin(self,probe,'v2_retain_only_probe_pin.json')
         from pathlib import Path
         pin=json.loads((Path(probe.__file__).parent/'v2_retain_only_probe_pin.json').read_text())
         self.assertNotIn('scripts/v2_retain_only_probe.py',pin['files'])
