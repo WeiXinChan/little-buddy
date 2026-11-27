@@ -1,17 +1,17 @@
 # 固定单 case 补验驱动
 
-依赖 PR144 的 `v2_cold_query_preparation.py`（本工具提交不改它）；产品 source 固定 `8682f5a567ddadae1f717cab8d706d6b4ee52316`，backend/v2 等价 fe49。独立工具 pin 包含现有完整 source manifest 以及复用 harness/本工具/seed 的 SHA256；不互相递归 hash。
+依赖 PR144 的 `v2_cold_query_preparation.py`（本工具提交不改它）；当前产品 source 固定 `1b3af8d41886ee08965e3b5d7ec387ef4fefd56f`（PR146 冷档审核 query 修复）。独立工具 pin 包含现有完整 source manifest 以及复用 harness/本工具/seed 的 SHA256；不互相递归 hash。
 
 默认只打印禁用计划：
 
 ```sh
-python3 -I -B scripts/v2_finite_probe.py --case body-danger
+python3 -I -B scripts/v2_finite_probe.py --case cold-query
 ```
 
-root 首批唯一执行命令（本作者未运行）：
+root 本批唯一 cold-query 执行命令（本作者未运行；body/death/shared 已由 root 实测目标通过，不重跑）：
 
 ```sh
-python3 -I -B scripts/v2_finite_probe.py --case body-danger --execute --acknowledge-quota-not-live-verified --output /home/ubuntu/tech/v2-delivery/finite-body-danger-8682-once
+python3 -I -B scripts/v2_finite_probe.py --case cold-query --execute --acknowledge-quota-not-live-verified --output /home/ubuntu/tech/v2-delivery/finite-cold-query-1b3af8d-once
 ```
 
 可选值仅 body-danger/death-danger/shared-intent/cold-query，无 all、自定义输入或自动下一组；其余 case 待 root 判读前组再选，分别用独立未存在输出目录。body8/death8/shared16/cold8 模型请求上限；组45秒、父55秒，12次合成TTS/1440字符、每请求32768B、模型输出1400token及既有规划预留。无模型 fallback、无工具自动重试；生产共享一次读 retry/修复、原 CAS/响应预算保持。每轮读阶段共≤3、review≤5，上限8；整段审核始终保留，多句才增加逐句审核，单句复用整段审核，不改变生产门禁。用量 before/after delta、缺 usage 未知均沿既有工具；额度未实时核验，历史用户用完即停截图不等于实时余额/零账单保证。
@@ -31,3 +31,7 @@ python3 -m unittest tests.v2.test_finite_probe tests.v2.test_m05.Integration.tes
 ```
 
 本轮0云/设备/部署/长测，不建立服务，不触heavy.lock。
+
+## 本批pin更新
+
+生产PR146独立交付；工具合入该固定源码仅为复验，不改旧8682失败原件/历史pin。当前父验证要求实际PLAN以及每一次whole/segment review均含精确冷档source_id/source_text，审核上下文被改为空的负控会拒绝。现有最终ACK、allow/quality、清理条件不变。新增pin组合13项离线PASS（工具6+修复6+原安全负控1），不是13个真实语义样本；报告见cold-pin-targeted.txt。旧7项准备日志作为历史保留。只cold一次，上限8，45/55秒与共享repair不变。

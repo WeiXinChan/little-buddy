@@ -1,5 +1,5 @@
 {
-  "source": "8682f5a567ddadae1f717cab8d706d6b4ee52316",
+  "source": "1b3af8d41886ee08965e3b5d7ec387ef4fefd56f",
   "files": {
     "app/src/main/java/com/littlebuddy/v2/LocalHelpOutput.kt": "a667bee28665030f6cddea53e3b35d4f947e51dbe774b5e3eba6e535ebb5d1d5",
     "backend/animal/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -57,7 +57,7 @@
     "backend/v2/session.py": "d30d4975435db78057882b80f8c6c120b577bd84bcbbae2395b07ad8bdc933a6",
     "backend/v2/speech.py": "79ed4eb773e4c2e61341835197bdc1936a50f0094fa664c24a5ca280f7c630d2",
     "backend/v2/story_rules.py": "e5396b977c9a5f118ec42119daca6c2f22c93da165438b626bf7643589e7e9ff",
-    "backend/v2/voice.py": "759b7822eeaa7062cb952bdcf4682676205f86a6153a7a9a0f83818375a44ecf",
+    "backend/v2/voice.py": "1bc6863639054c2509313a576691371774bfbfaadee391f826492591400bf516",
     "backend/voice.py": "9a945d90e6a4158f09fe9fb967a6829eddf976f3c9c6cb35db70994fe145285c",
     "backend/wire.py": "f516a2533114fa38f57948be6f248ec4ab1f1ae5024c6b0285d389fe6096cac7",
     "scripts/android-ci-result-test.py": "d0a79b881303da9fcf7e1873656fb627737ad62f5525111b526b3458bd18b74a",
@@ -112,6 +112,6 @@
     "scripts/verify-v2-release.py": "8f88c68764e3032c1043dbd8add3c23f1a5de1ee157ad98ea58e9e555c0f69c5",
     "scripts/v2_closeout_probe.py": "e07d631fbad84c9eaff3c059df6707c87d65a53f80b8fa68f6c3e28c99966da0",
     "scripts/v2_cold_query_preparation.py": "671a4ad40180d211118d27ac3ba1260336abdcaa581f9b56fb000d92db40d4ba",
-    "scripts/v2_finite_probe.py": "b2f873a83a2e02c1fa6378a60964e994f26c7512ae373242375983c3b5068a35"
+    "scripts/v2_finite_probe.py": "8e7bd5d45e52a1fcab146af9cee4680d3e70dd3cf394e79419bcaf708c5d92a5"
   }
 }

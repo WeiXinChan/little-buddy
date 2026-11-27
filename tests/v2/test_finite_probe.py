@@ -39,6 +39,10 @@ class Finite(unittest.IsolatedAsyncioTestCase):
         for row in bad['trace']:
             if row['kind']=='plan':row['context']['facts']={}
         with self.assertRaises(ValueError):p.validate(bad,'cold-query')
+        bad=copy.deepcopy(r)
+        for row in bad['trace']:
+            if row['kind']=='review':row['context']['facts']={}
+        with self.assertRaisesRegex(ValueError,'cold_review_basis'):p.validate(bad,'cold-query')
     async def test_shared_repair_preserved_extra_plan_denied(self):
         from tests.v2.test_plan_repair import RepairModel
         # The reviewed base and real production retry path, not a harness loop.
