@@ -1,0 +1,15 @@
+test_boolean_and_out_of_range_have_exact_repair_constraint (tests.v2.test_plan_format_repair.Format.test_boolean_and_out_of_range_have_exact_repair_constraint) ... ok
+test_format_then_sentence_failure_cannot_spend_second_repair (tests.v2.test_plan_format_repair.Format.test_format_then_sentence_failure_cannot_spend_second_repair) ... ok
+test_late_repair_cancel_revision_or_expiry_cannot_commit (tests.v2.test_plan_format_repair.Format.test_late_repair_cancel_revision_or_expiry_cannot_commit) ... ok
+test_network_and_format_share_one_slot_not_two (tests.v2.test_plan_format_repair.Format.test_network_and_format_share_one_slot_not_two) ... ok
+test_nonstory_adventure_format_repair_is_not_story_only (tests.v2.test_plan_format_repair.Format.test_nonstory_adventure_format_repair_is_not_story_only) ... ok
+test_nonwhitelist_code_and_secret_or_facts_do_not_use_port (tests.v2.test_plan_format_repair.Format.test_nonwhitelist_code_and_secret_or_facts_do_not_use_port) ... ok
+test_one_complete_replan_same_payload_no_draft_and_original_budget (tests.v2.test_plan_format_repair.Format.test_one_complete_replan_same_payload_no_draft_and_original_budget) ... ok
+test_private_replan_pending_or_consumed_never_admitted (tests.v2.test_plan_format_repair.Format.test_private_replan_pending_or_consumed_never_admitted) ... ok
+test_repaired_proposal_still_requires_full_ack (tests.v2.test_plan_format_repair.Format.test_repaired_proposal_still_requires_full_ack) ... ok
+test_second_invalid_plan_terminal_no_fact_repeat_or_publication (tests.v2.test_plan_format_repair.Format.test_second_invalid_plan_terminal_no_fact_repeat_or_publication) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.091s
+
+OK
