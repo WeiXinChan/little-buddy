@@ -302,7 +302,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             "thinking_wait" -> status(inputEyeStatus())
             "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status(inputEyeStatus()) }
             "session_end" -> {
-                if (event.getString("reason") != "conversation_ended" || !imageScopeCurrent(event)) return
+                if (!SessionTermination.accepts(event.optString("reason"), active, permitted(), childBlocked,
+                    event.optLong("epoch",-1)==epoch && imageScopeCurrent(event))) return
                 close(); sessionEnded()
             }
             "management" -> {
@@ -322,10 +323,12 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                         else helpScope.accept(event.getString("session"), event.getLong("turn"), epoch, gate.revision,
                             value.getInt("v"), value.getString("prompt_id"), value.getString("reason"))
                     }.getOrNull() ?: return // stale/malformed help must not close or lend authority to a newer turn
+                    PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CLIENT_FAIL,diagnosticScope,
+                        source=PinDiagnostic.FailSource.SERVER_SAFETY,wire=wireKind,point=wirePoint))
                     deliveringSafety=true
                     try { interrupt(); status("failure"); localHelp(help) }
                     finally { deliveringSafety=false }
-                } else { interrupt(); status("failure"); failed() }
+                } else { fail(ServerFailure.classify(event.optString("code")).localCode) }
             }
             else -> {wirePoint=PinDiagnostic.WirePoint.UNKNOWN_EVENT;error("unknown event")}
         }
@@ -421,8 +424,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
     private fun fail(code: String) {
         PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CLIENT_FAIL,diagnosticScope,
-            source=PinDiagnostic.failSource(code),wire=if(code=="protocol")wireKind else PinDiagnostic.WireKind.NONE,
-            point=if(code=="protocol")wirePoint else PinDiagnostic.WirePoint.NONE))
+            source=PinDiagnostic.failSource(code),wire=if(code=="protocol" || code.startsWith("server_"))wireKind else PinDiagnostic.WireKind.NONE,
+            point=if(code=="protocol" || code.startsWith("server_"))wirePoint else PinDiagnostic.WirePoint.NONE))
         PinDiagnostic.event(PinDiagnostic.Stage.PROTOCOL,when(code) {
             "incompatible"->PinDiagnostic.Reason.INCOMPATIBLE
             "closed"->PinDiagnostic.Reason.CLOSED

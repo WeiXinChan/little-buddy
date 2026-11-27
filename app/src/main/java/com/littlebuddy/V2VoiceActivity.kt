@@ -319,8 +319,10 @@ class V2VoiceActivity : Activity() {
                 management = { entry -> runOnUiThread { if (ticket == transportRevision) requestParentManagement(entry) } },
                 permitted = { foreground && focused && ticket == transportRevision }, images = images,
                 managed = { phase -> runOnUiThread { if (ticket==transportRevision) managementChanged(phase) } },
-                sessionEnded = { runOnUiThread { if (ticket==transportRevision) {
-                    managementRevision++; releaseAudio { quiet -> if (quiet && foreground) { eyes(); resumeConfigured() } }
+                sessionEnded = { runOnUiThread { if (ticket==transportRevision && foreground && focused && !managementRequested && !managementVisible && !helpVisible) {
+                    val page=++managementRevision
+                    releaseAudio { quiet -> if (quiet && ticket+1==transportRevision && page==managementRevision && foreground && focused &&
+                        !managementRequested && !managementVisible && !helpVisible) { eyes(); resumeConfigured() } }
                 } } }, requiredContract=ReleaseCompatibility.CONTRACT,
                 http=http, closeTransport={ ssh?.close() }, diagnosticScope=diagnosticScope(ticket,0), actualOutput={playing->
                     if(playing && foreground && focused && ticket==transportRevision && lastLog!=com.littlebuddy.v2.feedback.LogStage.PLAY) {

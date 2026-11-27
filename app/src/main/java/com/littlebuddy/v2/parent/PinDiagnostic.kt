@@ -15,7 +15,7 @@ internal object PinDiagnostic {
         CLIENT_FAIL, CLIENT_CLOSE_BEGIN, CLIENT_CLOSE_END, TRANSPORT_RETIRE, CAPTURE_START, CAPTURE_CANCEL,
         CAPTURE_STOP_BEGIN, CAPTURE_STOP_END, CAPTURE_FAILURE, CAPTURE_RELEASE, WORKER_JOINED, FAILURE_UI_APPLY, FAILURE_UI_RETIRED }
     enum class CaptureOperation { NONE, NATIVE_READ, TIMESTAMP, KWS, CLEANUP }
-    enum class FailSource { NONE, RECEIVE_PROTOCOL, PLAYBACK_PUMP, ROUTE, BACKPRESSURE, LIFECYCLE, MANAGEMENT, EXPIRED, INCOMPATIBLE, NETWORK, CLOSED, RELEASE, OTHER }
+    enum class FailSource { NONE, RECEIVE_PROTOCOL, PLAYBACK_PUMP, ROUTE, BACKPRESSURE, LIFECYCLE, MANAGEMENT, EXPIRED, INCOMPATIBLE, NETWORK, CLOSED, RELEASE, SERVER_TIMEOUT, SERVER_QUOTA, SERVER_VOICE, SERVER_SAFETY, SERVER_AUTH, SERVER_UNAVAILABLE, SERVER_UNKNOWN, OTHER }
     enum class WireKind { NONE, UNPARSED, SCOPE, OPEN, BOUND, AUDIO, DECISION, REVOKE, IMAGE, MANAGEMENT, FAILURE, SESSION_END, OTHER }
     enum class WirePoint { NONE, ENVELOPE, JSON_PARSE, DISPATCH, SCOPE_BIND, PLAYER_BIND, AUDIO_VALIDATE, AUDIO_ENQUEUE, UNKNOWN_EVENT }
     data class RuntimeEvent(val stage:RuntimeStage,val scope:Scope,val source:FailSource=FailSource.NONE,
@@ -28,6 +28,10 @@ internal object PinDiagnostic {
     fun installRuntime(value:((RuntimeEvent)->Unit)?) {runtimeSink=value}
     fun runtime(value:RuntimeEvent) {try{runtimeSink?.invoke(value)}catch(_:Throwable){}}
     fun failSource(code:String)=when(code) {
+        "server_timeout"->FailSource.SERVER_TIMEOUT; "server_quota"->FailSource.SERVER_QUOTA
+        "server_voice"->FailSource.SERVER_VOICE; "server_safety"->FailSource.SERVER_SAFETY
+        "server_auth"->FailSource.SERVER_AUTH; "server_unavailable"->FailSource.SERVER_UNAVAILABLE
+        "server_unknown"->FailSource.SERVER_UNKNOWN
         "protocol"->FailSource.RECEIVE_PROTOCOL; "playback"->FailSource.PLAYBACK_PUMP
         "route"->FailSource.ROUTE; "backpressure"->FailSource.BACKPRESSURE; "lifecycle"->FailSource.LIFECYCLE
         "management"->FailSource.MANAGEMENT; "expired"->FailSource.EXPIRED; "incompatible"->FailSource.INCOMPATIBLE
