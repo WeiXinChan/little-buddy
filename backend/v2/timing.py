@@ -57,7 +57,12 @@ def mark(stage,peer,operation=None,*,count=0,bytes=0,outcome='ok'):
                 result=trace.observer(MappingProxyType(dict(row)))
                 if inspect.isawaitable(result):
                     if inspect.iscoroutine(result):result.close()
-                    elif isinstance(result,asyncio.Future):result.cancel()
+                    elif isinstance(result,asyncio.Future):
+                        # An invalid observer may return the voice's own Task.
+                        # Never cancel/await a task owned by the application.
+                        def observed(done):
+                            if not done.cancelled():done.exception()
+                        result.add_done_callback(observed)
                     raise ValueError('observer_sync_required')
             except BaseException:
                 trace.observer_failed=True;trace.observer=None

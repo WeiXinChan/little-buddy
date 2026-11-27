@@ -1,6 +1,6 @@
 # 唯一隔离实际诊断（未部署）
 
-冻结执行source `8e22de6bd01ddc9106c0fbe348e27c3b990afe41`，原始私密输出stage-probe-8e22de6b-once；result SHA256 `a544d5c3ebd1c1d66e3265731e8147a0f9cb15a038c9d01d8cf95b55fd39dddf`。按已有明确授权执行一次，不重跑。此后提交仅证据说明，未改变该运行源码。
+冻结执行source `8e22de6bd01ddc9106c0fbe348e27c3b990afe41`，原始私密输出stage-probe-8e22de6b-once；result SHA256 `a544d5c3ebd1c1d66e3265731e8147a0f9cb15a038c9d01d8cf95b55fd39dddf`。按已有明确授权执行一次，不重跑。原始执行版本及结果不改。后续追加证据，并单独收紧非法observer返回应用Task的处理：只观察异常、不取消/等待该Task，防止诊断误取消语音。该非法observer分支未在真实轮使用；本轮不会为此再次云调用。
 
 固定AIFF SHA/22050Hz/68097samples核对后仅一次重采样，16k为49413samples、98826bytes、SHA `db6dd2c7fa373f4b9d0b8304f1322158e57d66cc72436a53fce4125d810db69b`。实时节拍输入，不在手机播放。ASR empty=false、fixed_case_matches=true；未保存转写/提示词/回答/PCM。
 

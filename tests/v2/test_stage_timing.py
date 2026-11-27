@@ -119,3 +119,9 @@ class Timing(unittest.IsolatedAsyncioTestCase):
     def test_release_selects_new_v2_module(self):
         from backend.v2.release import selected
         self.assertTrue(selected('backend/v2/timing.py'))
+
+    async def test_observer_returning_voice_task_never_cancels_it(self):
+        self.make();trace=timing.Trace(lambda row:asyncio.current_task())
+        with timing.observe(trace):await self.turn('合成普通问候。')
+        self.assertTrue(trace.observer_failed);self.assertTrue(self.peer.session.public)
+        self.assertEqual(asyncio.current_task().cancelling(),0)
