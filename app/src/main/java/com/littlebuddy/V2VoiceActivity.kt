@@ -57,6 +57,7 @@ class V2VoiceActivity : Activity() {
     private var execution = ParentPlaybackSettings()
     private var budget: PlaybackBudget? = null
     private var panel: AndroidParentPanel? = null
+    private val publicKeyFile by lazy { AndroidPublicKeyFile(this) }
     private var help: LocalHelpOutput? = null
     private val pageRequests=ManagementPageRequests()
     private var managementRequested: Boolean
@@ -64,16 +65,17 @@ class V2VoiceActivity : Activity() {
         set(value) { if (value) pageRequests.immediate(managementRevision) else pageRequests.clear() }
     @Volatile private var managementVisible = false
     private var helpVisible = false
+    private val retryGate = RuntimeRetryGate()
     private var managementReturning=false
     @Volatile private var foreground = false
     @Volatile private var focused = false
     private var permissionRequested = false
-    @Volatile private var connectionNotice="尚未配置V2连接；进入家长验证后可导入已发行的配置。"
+    @Volatile private var connectionNotice="正在检查连接。"
     private fun eyes() {
         if (eyesAttached) return
         imageRoute?.clear()
         val frame = android.widget.FrameLayout(this)
-        val eyes = V2EyesView(this) { requestParentManagement() }.also { it.onLocalHelp = { showLocalHelp() } }
+        val eyes = V2EyesView(this) { requestParentManagement() }
         eyeView=eyes;resetEyes()
         frame.addView(eyes)
         val picture = android.widget.ImageView(this).apply {
@@ -96,6 +98,9 @@ class V2VoiceActivity : Activity() {
         result(exitCapture?.nativeProof ?: releasedExitRecorder)
     } }
     private fun leaveManagement() {
+        publicKeyFile.cancel()
+        retryGate.explicitParentRetry()
+        PinDiagnostic.event(PinDiagnostic.Stage.TECHNICAL, PinDiagnostic.Reason.PARENT_RETRY)
         val ticket=++managementRevision
         managementVisible=false; managementRequested=true; managementReturning=true
         panel?.close(); panel=null; eyes()
@@ -108,7 +113,7 @@ class V2VoiceActivity : Activity() {
                 if (ticket!=managementRevision || !foreground) return@post
                 val client=voice
                 if (!released) { client?.close(); releaseState="quarantined"
-                    runOnUiThread { if (ticket==managementRevision) { managementRequested=false; managementReturning=false; showLocalHelp() } }; return@post }
+                    runOnUiThread { if (ticket==managementRevision) { managementRequested=false; managementReturning=false; showTechnicalFailure(PinDiagnostic.Reason.RELEASE_FAILED) } }; return@post }
                 if (configuration!=null && client!=null) {
                     budget?.tighten(configuration.playback.durationSeconds)
                     if (client.resumeManagement(configuration.playback,resumedImages)) return@post
@@ -124,7 +129,16 @@ class V2VoiceActivity : Activity() {
         if (ticket!=managementRevision || !foreground || !hasWindowFocus() || !managementRequested) return
         managementRequested=false; managementVisible=true; eyesAttached=false
         eyeState.revoke();eyeView?.show(EyeMood.IDLE);eyeRevision++
-        panel=AndroidParentPanel(this, { leaveManagement() }, { stopVoice() }, { connectionNotice }).also { it.open() }
+        panel=AndroidParentPanel(this, { leaveManagement() }, { stopVoice() }, { connectionNotice },
+            savePublicKey = { model -> publicKeyFile.begin { publish, failed ->
+                model.exportTransportKey({ com.littlebuddy.v2.transport.V2SshIdentity.load(create=true).registrationKey() }, publish, failed)
+            } },
+            pageChanged = { state -> if (state.mode != PanelMode.SETTINGS || state.busy) publicKeyFile.pageUnavailable() },
+            configurationSaved = {
+                connectionNotice="连接已保存，退出管理后连接。"
+                PinDiagnostic.event(PinDiagnostic.Stage.CONFIG, PinDiagnostic.Reason.SAVED_LOCAL)
+            }
+        ).also { it.open() }
         startExitCapture(ticket)
     }
     private fun startExitCapture(ticket: Long) { owner.post {
@@ -189,7 +203,12 @@ class V2VoiceActivity : Activity() {
             if (recorderQuiet) capture=null
             if (!playerQuiet || !recorderQuiet) {
                 client?.close(); releaseState="quarantined"
-                runOnUiThread { if (ticket==managementRevision) { managementRequested=false; showLocalHelp() } }; return@post
+                retryGate.technicalFailure()
+                PinDiagnostic.event(PinDiagnostic.Stage.TECHNICAL,PinDiagnostic.Reason.RELEASE_FAILED)
+                runOnUiThread { if (ticket==managementRevision) {
+                    connectionNotice="收音暂不可用，已安全暂停。"
+                    openManagementPage(ticket)
+                } }; return@post
             }
             releaseState="management"
             if (client==null || !client.pauseManagement()) runOnUiThread { openManagementPage(ticket) }
@@ -198,25 +217,31 @@ class V2VoiceActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        help = LocalHelpOutput(this) { helpVisible = false; eyes(); resumeConfigured() }
+        AndroidPinDiagnostic.enable()
+        help = LocalHelpOutput(this) {
+            PinDiagnostic.event(PinDiagnostic.Stage.HELP, PinDiagnostic.Reason.RETURN)
+            helpVisible = false; eyes(); resumeConfigured()
+        }
         eyes()
         if (Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(
             android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { back() }
     }
     private fun resumeConfigured() {
-        if (!foreground || !hasWindowFocus() || managementVisible || managementRequested || helpVisible) return
+        if (!retryGate.automaticAllowed || !foreground || !hasWindowFocus() || managementVisible || managementRequested || helpVisible) return
         val ticket = managementRevision
         configurationWorker.execute {
             val configuration = runCatching { AndroidParentRuntime.load(this).childConfiguration() }.getOrNull()
             runOnUiThread {
-                if (ticket != managementRevision || !foreground || !hasWindowFocus() || managementVisible || managementRequested || helpVisible) return@runOnUiThread
+                if (!retryGate.automaticAllowed || ticket != managementRevision || !foreground || !hasWindowFocus() || managementVisible || managementRequested || helpVisible) return@runOnUiThread
                 if (configuration != null) execution = configuration.playback
                 val connection = configuration?.connection
+                PinDiagnostic.event(PinDiagnostic.Stage.CONFIG, if (connection==null) PinDiagnostic.Reason.NO_CONFIG else PinDiagnostic.Reason.READY)
                 if (connection==null) {
                     connectionNotice=if (configuration==null) "安全配置不可用或尚未初始化；请从家长验证检查，不会自动连接。"
-                        else "尚未配置V2连接；PIN验证后选择系统验证并导入连接配置。"
+                        else "尚未连接，请在家长验证后选择连接瓦力。"
                     return@runOnUiThread
                 }
+                connectionNotice="正在连接。"
                 if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                     if (!permissionRequested) { permissionRequested = true; requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 804) }
                     return@runOnUiThread
@@ -236,30 +261,40 @@ class V2VoiceActivity : Activity() {
         check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked)
         val ticket = transportRevision; val settings = execution; val images = imageRoute
         owner.post {
-            if (ticket != transportRevision || !foreground || !focused || voice != null || capture != null || releaseState == "quarantined") return@post
+            if (!retryGate.automaticAllowed || ticket != transportRevision || !foreground || !focused || voice != null || capture != null || releaseState == "quarantined") return@post
+            PinDiagnostic.beginRuntime()
             releaseState = "active"; budget = PlaybackBudget(android.os.SystemClock::elapsedRealtime, settings.durationSeconds)
             val ssh=try { sshUser?.let { com.littlebuddy.v2.transport.V2Ssh(
                 com.littlebuddy.v2.transport.V2SshProfile.load(this@V2VoiceActivity,it)) } }
-                catch (_: Exception) { connectionNotice="V2私有传输配置不可用"; releaseState="released"; return@post }
+                catch (error: Exception) { PinDiagnostic.runtimeError(PinDiagnostic.Stage.SSH,error); runOnUiThread { if(ticket==transportRevision) showTechnicalFailure(PinDiagnostic.Reason.SSH_ERROR) }; return@post }
             val http=try { val base=okhttp3.OkHttpClient.Builder().proxy(java.net.Proxy.NO_PROXY)
                 .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build()
                 ssh?.client(base) ?: base }
-                catch (_: Exception) { ssh?.close(); releaseState="released"; return@post }
+                catch (error: Exception) { PinDiagnostic.runtimeError(PinDiagnostic.Stage.WSS,error); ssh?.close(); runOnUiThread { if(ticket==transportRevision) showTechnicalFailure(PinDiagnostic.Reason.OTHER_ERROR) }; return@post }
             var lastLog: com.littlebuddy.v2.feedback.LogStage?=null
+            var lastFailure=PinDiagnostic.Reason.OTHER_ERROR
             val client = VoiceClient(owner, statusCallback@ { status ->
                 if(ticket!=transportRevision || !foreground || !focused)return@statusCallback
+                lastFailure=when(status) {
+                    "network" -> PinDiagnostic.Reason.NETWORK
+                    "closed" -> PinDiagnostic.Reason.CLOSED
+                    "incompatible" -> PinDiagnostic.Reason.INCOMPATIBLE
+                    "protocol" -> PinDiagnostic.Reason.PROTOCOL_FAILED
+                    "release" -> PinDiagnostic.Reason.RELEASE_FAILED
+                    else -> PinDiagnostic.Reason.OTHER_ERROR
+                }
                 publishEyes(ticket){state,key->state.status(key,status)}
                 val stage=when(status) { "compatibility","wake"->com.littlebuddy.v2.feedback.LogStage.CONNECT
                     "listening"->com.littlebuddy.v2.feedback.LogStage.RECOGNIZE;else->null }
                 if(stage!=null && stage!=lastLog) { lastLog=stage;com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this@V2VoiceActivity,stage) }
                 connectionNotice=when(status) {
-                    "incompatible" -> "服务协议不兼容，儿童收音未启用；请管理员核对候选包与服务契约。"
-                    "compatibility" -> "正在核对已配置服务协议；核对前不启动儿童收音。"
-                    "wake", "listening", "speaking" -> "V2连接与协议已核对；退出管理回待唤醒。"
-                    else -> "连接暂不可用，不代表配置发行或设备验收成功。"
+                    "incompatible" -> "服务暂不可用，收音已暂停。"
+                    "compatibility" -> "正在连接。"
+                    "wake", "listening", "speaking", "thinking", "waiting_complete", "waiting_incomplete", "waiting_thinking", "clarify" -> "已连接，退出管理后等待唤醒。"
+                    else -> "连接暂不可用。"
                 }
                 if (status == "listening" && voice?.isAwake == true) budget?.begin()
-            }, { images?.inputChanged() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
+            }, { images?.inputChanged() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showTechnicalFailure(lastFailure) } },
                 playbackSettings = settings,
                 localHelp = { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 management = { entry -> runOnUiThread { if (ticket == transportRevision) requestParentManagement(entry) } },
@@ -278,7 +313,7 @@ class V2VoiceActivity : Activity() {
             voice = client
             try { client.connect(address, credential)
                 // Capture starts only from the authenticated, compatible scope callback.
-            } catch (_: Exception) { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } }
+            } catch (error: Exception) { PinDiagnostic.runtimeError(PinDiagnostic.Stage.WSS,error); runOnUiThread { if (ticket == transportRevision) showTechnicalFailure(PinDiagnostic.Reason.OTHER_ERROR) } }
         }
     }
     private fun startChildCapture(client: VoiceClient, ticket: Long) {
@@ -288,7 +323,7 @@ class V2VoiceActivity : Activity() {
         capture=Capture(assets,owner,client,
             allowed={ foreground && focused && ticket==transportRevision && recorderTicket==captureRevision.get() && !managementRequested && !managementVisible },
             recording={active->publishEyes(ticket){state,key->state.recording(key,recorderTicket,active)}}) {
-            runOnUiThread { if (ticket==transportRevision) showLocalHelp() }
+            runOnUiThread { if (ticket==transportRevision) showTechnicalFailure(PinDiagnostic.Reason.CAPTURE_FAILED) }
         }.also { it.start() }
         owner.removeCallbacks(durationLimit); owner.postDelayed(durationLimit,250)
         releaseState="active"
@@ -326,7 +361,22 @@ class V2VoiceActivity : Activity() {
         runOnUiThread { done(quiet) }
     } }
     private fun stopVoice() = releaseAudio()
+    private fun showTechnicalFailure(reason: PinDiagnostic.Reason) {
+        if (!retryGate.technicalFailure()) return
+        PinDiagnostic.event(PinDiagnostic.Stage.TECHNICAL, reason)
+        PinDiagnostic.event(PinDiagnostic.Stage.TECHNICAL, PinDiagnostic.Reason.HOLD)
+        connectionNotice="连接或收音暂不可用，已暂停。退出管理可重试一次。"
+        helpVisible=false; help?.stop()
+        val ticket=++managementRevision
+        releaseAudio { _ ->
+            if (ticket==managementRevision && foreground && hasWindowFocus() && !managementVisible && !managementRequested) {
+                eyes(); eyeState.status(EyeToken(transportRevision,eyeRevision),"technical_failure");eyeView?.show(eyeState.mood)
+                Toast.makeText(this, "技术准备未完成，已暂停自动重试。可从隐藏入口进入家长管理。", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     private fun showLocalHelp() {
+        PinDiagnostic.event(PinDiagnostic.Stage.HELP, PinDiagnostic.Reason.BEGIN)
         if (!foreground || !hasWindowFocus() || managementVisible || managementRequested || helpVisible) return
         helpVisible = true; val ticket = ++managementRevision
         eyesAttached = false
@@ -349,7 +399,7 @@ class V2VoiceActivity : Activity() {
     override fun onPause() {
         foreground = false;cancelRecorders(); managementRevision++; managementRequested = false
         com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this,com.littlebuddy.v2.feedback.LogStage.CANCEL)
-        panel?.pause(); helpVisible = false; help?.stop(); stopVoice(); super.onPause()
+        publicKeyFile.focusLost(); panel?.pause(); helpVisible = false; help?.stop(); stopVoice(); super.onPause()
     }
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) panel?.localTouch()
@@ -367,8 +417,9 @@ class V2VoiceActivity : Activity() {
         if (!hasFocus) {
             cancelRecorders()
             managementRevision++; managementRequested = false
-            panel?.focusLost(); helpVisible = false; help?.stop(); stopVoice()
+            publicKeyFile.focusLost(); panel?.focusLost(); helpVisible = false; help?.stop(); stopVoice()
         } else if (foreground) {
+            publicKeyFile.focusGained()
             if (managementVisible) { panel?.open(); startExitCapture(managementRevision) }
             else if (!helpVisible) { eyes(); resumeConfigured() }
         }
@@ -377,7 +428,12 @@ class V2VoiceActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (grantResults.any { it != PackageManager.PERMISSION_GRANTED }) stopVoice() else resumeConfigured()
     }
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        if (!publicKeyFile.result(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
+    }
     override fun onDestroy() {
+        publicKeyFile.close()
         foreground = false;cancelRecorders(); managementRevision++; managementRequested = false
         panel?.close(); panel = null; help?.close(); help = null
         stopVoice(); owner.post { audioThread.quitSafely() }; configurationWorker.shutdown()

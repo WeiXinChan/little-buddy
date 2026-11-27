@@ -1,0 +1,152 @@
+{
+  "main_base": "fd843b046fcd0a5033f938a6894ccc60499fbddd",
+  "main_tree": "b73860e8185dbc5ac47095c614d5456fde1795ac",
+  "fix9_head": "409c6b82d38de0fefe12e053bc135af74dd8757f",
+  "release_config": "unchanged main code23/2.0.0-rc9; private suffix .integrated1.device1",
+  "local_integration": "single final-fix9 history merge plus explicit main release-guard conflict resolution and PR122 missing fixes; no upstream PR merged",
+  "prs": [
+    {
+      "baseRefName": "main",
+      "headRefName": "agent/tita-86-rc8-pin-diag",
+      "headRefOid": "7fdfb560d627bdc333177126a5975a215f9592bd",
+      "number": 120,
+      "state": "OPEN",
+      "title": "diag: RC8 owner PIN initialization stages (code22)",
+      "tree": "a7febfa47aeca699839e8143478a1e171b49933c",
+      "main_merge_base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+      "actual_parent_shas": [
+        "9d0001f7bff10b87880b12d24440eb9984ad839c"
+      ],
+      "resolution": "bounded diagnostic enum/hooks retained opt-in; obsolete standalone RC8 diagnostic version/validator mode removed"
+    },
+    {
+      "baseRefName": "main",
+      "headRefName": "agent/tita-86-rc8-pin-tick-fix",
+      "headRefOid": "46cddced07e2e63b0a67bfe32ef840364c7fcdd6",
+      "number": 121,
+      "state": "OPEN",
+      "title": "fix: preserve RC8 owner PIN save across lifecycle ticks",
+      "tree": "30202e156f325bd852768129f81ca13eda58838d",
+      "main_merge_base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+      "actual_parent_shas": [
+        "686809bf94383e6eda325f7b4f50aaf9d6fe87d8",
+        "7fdfb560d627bdc333177126a5975a215f9592bd"
+      ],
+      "resolution": "final fix9 ancestry retained; build metadata rebased onto strict main RC9"
+    },
+    {
+      "baseRefName": "agent/tita-86-rc8-pin-tick-fix",
+      "headRefName": "agent/tita-86-rc8-public-key-file",
+      "headRefOid": "7f9544d9f99962c4ce8cef1ec88f611748b2c243",
+      "number": 122,
+      "state": "OPEN",
+      "title": "feat: save V2 public key to a USB-readable Downloads file",
+      "tree": "bef31a926ff54e157dd1f815ebff28715012bb37",
+      "main_merge_base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+      "actual_parent_shas": [
+        "208e78f309dc79a3c6f1afe7a7b71b32cb7d4622"
+      ],
+      "resolution": "latest 7f9544d export failure/picker/cleanup fixes restored explicitly; fixes absent from PR123 snapshot"
+    },
+    {
+      "baseRefName": "review/rc8-installed-fix2-1ae519b",
+      "headRefName": "agent/tita-86-rc8-device-preset",
+      "headRefOid": "c7c68bb7844c7ddff05bd275c6d59e699a654ad8",
+      "number": 123,
+      "state": "OPEN",
+      "title": "feat: privately prefill the issued OPPO connection after owner authentication",
+      "tree": "d9ef7ded0ee8a8188a205935ab5a12e9a55c0682",
+      "main_merge_base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+      "actual_parent_shas": [
+        "1ae519b16b13004a4f88418cb640df54cf72b3e1"
+      ],
+      "resolution": "final fix9 ancestry retained; build metadata rebased onto strict main RC9",
+      "snapshot_base": "1ae519b16b13004a4f88418cb640df54cf72b3e1",
+      "not_based_on_pr122_head": true
+    },
+    {
+      "baseRefName": "agent/tita-86-rc8-device-preset",
+      "headRefName": "agent/tita-86-rc8-help-loop",
+      "headRefOid": "110a2762e8fa731374ef8cddc11af9ebdb77c42a",
+      "number": 124,
+      "state": "OPEN",
+      "title": "fix: stop technical startup failures from looping through safety help",
+      "tree": "133479330540e20d419c64f20241d518b39aefd1",
+      "main_merge_base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+      "actual_parent_shas": [
+        "d7bb2ea0e8b9b72dfb55b4a8a23ed2de6bc5a344"
+      ],
+      "resolution": "final fix9 ancestry retained; build metadata rebased onto strict main RC9"
+    },
+    {
+      "baseRefName": "agent/tita-86-rc8-help-loop",
+      "headRefName": "agent/tita-86-rc8-wss-socket",
+      "headRefOid": "329aa18bd475858847c0f7772d1199e8ba9eb3f8",
+      "number": 125,
+      "state": "OPEN",
+      "title": "RC8 fix5: pinpoint mapped socket and TLS failure without private data",
+      "tree": "9b579b6b8a3c6e441ca669dbdb4ee8b84099aa12",
+      "main_merge_base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+      "actual_parent_shas": [
+        "110a2762e8fa731374ef8cddc11af9ebdb77c42a"
+      ],
+      "resolution": "final fix9 ancestry retained; build metadata rebased onto strict main RC9"
+    },
+    {
+      "baseRefName": "agent/tita-86-rc8-wss-socket",
+      "headRefName": "agent/tita-86-rc8-capture-clock",
+      "headRefOid": "a3da670e40cb839fa5b207b818d2cb4fbcaeee5b",
+      "number": 126,
+      "state": "OPEN",
+      "title": "RC8 fix6: identify exact capture clock rejection with safe metadata",
+      "tree": "5bc85aedd4d310ec68294c38b80a6e9f1571472b",
+      "main_merge_base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+      "actual_parent_shas": [
+        "329aa18bd475858847c0f7772d1199e8ba9eb3f8"
+      ],
+      "resolution": "final fix9 ancestry retained; build metadata rebased onto strict main RC9"
+    },
+    {
+      "baseRefName": "agent/tita-86-rc8-capture-clock",
+      "headRefName": "agent/tita-86-rc8-clock-phase",
+      "headRefOid": "ad83c656e38ae0368e30e92b74c9113bf653821a",
+      "number": 127,
+      "state": "OPEN",
+      "title": "RC8 fix7: include endpoint phase uncertainty in long-window bounds",
+      "tree": "18d120efc86f07eda17ce8fc2da1d04e18b3ae0f",
+      "main_merge_base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+      "actual_parent_shas": [
+        "a3da670e40cb839fa5b207b818d2cb4fbcaeee5b"
+      ],
+      "resolution": "final fix9 ancestry retained; build metadata rebased onto strict main RC9"
+    },
+    {
+      "baseRefName": "agent/tita-86-rc8-clock-phase",
+      "headRefName": "agent/tita-86-rc8-clock-bounded",
+      "headRefOid": "7a79c7b50f6254750f75e86c42af5320624d46db",
+      "number": 128,
+      "state": "OPEN",
+      "title": "RC8 fix8: finite runtime phase compatibility with conservative capture budgets",
+      "tree": "293a6bcfc36a30ec3d2a1e8d6d3e5d4049d642cd",
+      "main_merge_base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+      "actual_parent_shas": [
+        "ad83c656e38ae0368e30e92b74c9113bf653821a"
+      ],
+      "resolution": "final fix9 ancestry retained; build metadata rebased onto strict main RC9"
+    },
+    {
+      "baseRefName": "agent/tita-86-rc8-clock-bounded",
+      "headRefName": "agent/tita-86-rc8-parent-ux",
+      "headRefOid": "409c6b82d38de0fefe12e053bc135af74dd8757f",
+      "number": 129,
+      "state": "OPEN",
+      "title": "Simplify private-device parent connection and remove extra help gesture",
+      "tree": "cc85d9e64217de79351ba611d8c423f5b60e6271",
+      "main_merge_base": "cf187d4d35490726e3ce996c6cbe3df678a65a67",
+      "actual_parent_shas": [
+        "7a79c7b50f6254750f75e86c42af5320624d46db"
+      ],
+      "resolution": "final fix9 ancestry retained; build metadata rebased onto strict main RC9"
+    }
+  ]
+}

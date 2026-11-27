@@ -9,7 +9,7 @@ compiler=[jar('org.jetbrains.kotlin',a,v) for a,v in [('kotlin-compiler-embeddab
 compiler+=[jar('org.jetbrains.kotlinx','kotlinx-coroutines-core-jvm','1.8.0'),jar('org.jetbrains','annotations','13.0')]
 runtime=[compiler[1],jar('junit','junit','4.13.2'),jar('org.hamcrest','hamcrest-core','1.3')]
 parent=root/'app/src/main/java/com/littlebuddy/v2/parent'
-names=['ParentDomain.kt','ParentCodec.kt','ParentEnvelope.kt','ParentCommit.kt','ParentPanelModel.kt','ParentConfiguration.kt','OwnerReceipt.kt']
+names=['PinDiagnostic.kt','ParentDomain.kt','ParentCodec.kt','ParentEnvelope.kt','ParentCommit.kt','ParentPanelModel.kt','ParentConfiguration.kt','OwnerReceipt.kt']
 sources=[parent/p for p in names]+[root/'app/src/main/java/com/littlebuddy/v2/ManagementState.kt',root/'app/src/main/java/com/littlebuddy/v2/InputGate.kt',root/'app/src/main/java/com/littlebuddy/v2/PlaybackBudget.kt',root/'app/src/test/java/com/littlebuddy/v2/ManagementStateTest.kt',root/'app/src/test/java/com/littlebuddy/v2/parent/ManagementRevocationTest.kt']
 with tempfile.TemporaryDirectory(dir=root,prefix='completion-tests-') as out:
  if '--negative' in sys.argv:

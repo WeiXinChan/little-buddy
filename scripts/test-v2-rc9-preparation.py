@@ -38,13 +38,14 @@ class RC9Preparation(unittest.TestCase):
   (self.root/'assets/v2-default/manifest.json').write_bytes(self.resource)
   subprocess.run(['git','add','.'],cwd=self.root,check=True)
   self.output=self.root/'generated'
- def generate(self):
-  with patch.object(gen,'ROOT',self.root):return gen.generate(self.output)
- def inspect(self,metadata=None,inventory=None,resource=None,images=None,duplicate=None):
-  meta=self.generate() if metadata is None else metadata
+ def generate(self,private=False,diagnostics=False):
+  with patch.object(gen,'ROOT',self.root):return gen.generate(self.output,diagnostics,private)
+ def inspect(self,metadata=None,inventory=None,resource=None,images=None,duplicate=None,private=False,diagnostics=False,payload=False):
+  meta=self.generate(private,diagnostics) if metadata is None else metadata
   raw=(self.output/'v2-source-inventory.json').read_bytes() if inventory is None else inventory
   archive=self.root/'NOT_AN_INSTALLABLE_APK.zip'
   with zipfile.ZipFile(archive,'w') as z:
+   if payload:z.writestr('assets/v2-device-preset.bin',b'SYNTHETIC PRIVATE BUILD FIXTURE ONLY')
    z.writestr('assets/v2-build.json',json.dumps(meta));z.writestr('assets/v2-source-inventory.json',raw)
    z.writestr('assets/v2-default/manifest.json',self.resource if resource is None else resource)
    pngs=self.pngs() if images is None else images
@@ -52,7 +53,7 @@ class RC9Preparation(unittest.TestCase):
    if duplicate:
     with warnings.catch_warnings():
      warnings.simplefilter('ignore',UserWarning);z.writestr(duplicate,b'DUPLICATE UNIT FIXTURE')
-  with patch.object(verify,'__file__',str(self.root/'scripts/verify-v2-release.py')):return verify.inspect(archive)
+  with patch.object(verify,'__file__',str(self.root/'scripts/verify-v2-release.py')):return verify.inspect(archive,diagnostics,private)
  def test_strict_rc9_identity_with_corrected_resources(self):
   meta=self.inspect();self.assertEqual((23,'2.0.0-rc9','com.littlebuddy.sim.v2'),(meta['version_code'],meta['version_name'],meta['application_id']))
   self.assertTrue(meta['build_id'].startswith('v2-23-'));self.assertEqual(gen.RC9_RESOURCES_MANIFEST,meta['resources_manifest_sha256'])
@@ -144,4 +145,32 @@ class RC9Preparation(unittest.TestCase):
    with self.assertRaises(AssertionError):self.generate()
   finally:star.write_bytes(data)
   with self.assertRaisesRegex(ValueError,'candidate_config_mismatch'):self.inspect(dict(meta,source_base='f'*40))
+ def test_private_candidate_requires_explicit_mode_and_has_rc9_identity(self):
+  meta=self.generate(private=True,diagnostics=True)
+  self.assertEqual((23,'2.0.0-rc9.integrated1.device1'),(meta['version_code'],meta['version_name']))
+  self.assertEqual('private_registered_device',self.inspect(meta,private=True,diagnostics=True,payload=True)['distribution'])
+  with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(meta,payload=True)
+ def test_missing_or_unexpected_private_payload_refused(self):
+  meta=self.generate(private=True)
+  with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(meta,private=True)
+  public=self.generate()
+  with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(public,payload=True)
+ def test_diagnostic_flag_does_not_resurrect_obsolete_rc8_packaging(self):
+  meta=self.generate(diagnostics=True)
+  self.assertEqual('2.0.0-rc9',meta['version_name'])
+  self.assertTrue(self.inspect(meta,diagnostics=True)['diagnostics_enabled'])
+  with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(meta)
+ def test_private_mode_cannot_bypass_exact_source_inventory(self):
+  meta=self.generate(private=True);claimed=json.loads((self.output/'v2-source-inventory.json').read_bytes())
+  del claimed['app/src/main/Sentinel.kt'];raw=gen._snapshot.canonical(claimed);digest=hashlib.sha256(raw).hexdigest()
+  meta.update(source_content_sha256=digest,build_id='v2-23-'+digest[:16])
+  with self.assertRaisesRegex(ValueError,'source_inventory_set_mismatch'):self.inspect(meta,inventory=raw,private=True,payload=True)
+ def test_private_mode_cannot_bypass_png_set_or_identity(self):
+  meta=self.generate(private=True);images=self.pngs();del images['assets/v2-default/png/star-bunny.png']
+  with self.assertRaisesRegex(ValueError,'apk_resource_set_mismatch'):self.inspect(meta,images=images,private=True,payload=True)
+  with self.assertRaisesRegex(ValueError,'candidate_version_mismatch'):self.inspect(dict(meta,version_code=22),private=True,payload=True)
+ def test_distribution_and_mode_types_are_strict(self):
+  meta=self.generate(private=True)
+  with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(dict(meta,distribution='internal_debug_candidate'),private=True,payload=True)
+  with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(dict(meta,private_device_preset=1),private=True,payload=True)
 if __name__=='__main__':unittest.main(verbosity=2)
