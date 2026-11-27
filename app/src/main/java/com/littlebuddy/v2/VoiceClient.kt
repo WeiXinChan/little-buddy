@@ -1,5 +1,6 @@
 package com.littlebuddy.v2
 
+import com.littlebuddy.v2.parent.PinDiagnostic
 import android.os.Handler
 import android.os.SystemClock
 import android.util.Base64
@@ -37,6 +38,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                            private val actualOutput: (Boolean)->Unit = {}) {
     fun nativeProof() = player.nativeProof()
     private var controlQuarantined=false
+    private var deliveringSafety=false // handler-owned: an accepted safety event must still show text if stop fails
     val quarantined get() = player.quarantined || controlQuarantined
     private val childVolume=ChildVolume(playbackSettings.volume)
     private val managementState = ManagementState(SystemClock::elapsedRealtime)
@@ -101,12 +103,14 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         require(address.startsWith("wss://") && address.endsWith("/v2/voice") &&
                 !address.contains('@') && !address.contains('?') && !address.contains('#'))
         require(token.matches(Regex("[a-zA-Z0-9]{32,256}")))
+        PinDiagnostic.event(PinDiagnostic.Stage.WSS,PinDiagnostic.Reason.BEGIN)
         active = true
         epoch = 0; sequence = 0; helpScope.clear()
         val request = Request.Builder().url(address).header("Authorization", "Bearer $token").build()
         socket = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) { handler.post {
                 if (socket !== webSocket || !active) return@post
+                PinDiagnostic.event(PinDiagnostic.Stage.WSS,PinDiagnostic.Reason.SUCCESS)
                 if (requiredContract!=null) {
                     compatible=false; compatibilityDeadline=SystemClock.elapsedRealtime()+4000
                     send("scope"); status("compatibility")
@@ -115,10 +119,17 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             } }
             override fun onMessage(webSocket: WebSocket, text: String) { handler.post {
                 if (socket !== webSocket || !active) return@post
-                try { receive(text) } catch (_: Exception) { fail("protocol") }
+                try { receive(text) } catch (error: Exception) { PinDiagnostic.runtimeError(PinDiagnostic.Stage.PROTOCOL,error); fail("protocol") }
             } }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                handler.post { if (socket === webSocket) fail("network") }
+                handler.post { if (socket === webSocket && active) {
+                    PinDiagnostic.runtimeError(PinDiagnostic.Stage.WSS,t)
+                    if(response?.code==401 || response?.code==403)
+                        PinDiagnostic.event(PinDiagnostic.Stage.WSS,PinDiagnostic.Reason.AUTH_DENIED)
+                    else if(response!=null && response.code>=400)
+                        PinDiagnostic.event(PinDiagnostic.Stage.WSS,PinDiagnostic.Reason.HTTP_FAILED)
+                    fail("network")
+                } }
             }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 handler.post { if (socket === webSocket) fail("closed") }
@@ -150,7 +161,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                             event.optInt("management_v",-1),event.optString("session",""),event.optLong("turn",-1),
                             event.getLong("epoch"),event.optLong("revision",-1),event.optString("state","")) ||
                         event.optString("protocol_contract","")!=requiredContract) { fail("incompatible"); return }
-                    bindNormalScope(managementScope(event)); compatible=true; status("wake"); ready(); return
+                    bindNormalScope(managementScope(event)); compatible=true; PinDiagnostic.event(PinDiagnostic.Stage.PROTOCOL,PinDiagnostic.Reason.READY); status("wake"); ready(); return
                 }
                 if (!managementPending) {
                     if (event.getLong("revision")==gate.revision && ReleaseCompatibility.accepts(event.getInt("v"),
@@ -301,7 +312,9 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                         else helpScope.accept(event.getString("session"), event.getLong("turn"), epoch, gate.revision,
                             value.getInt("v"), value.getString("prompt_id"), value.getString("reason"))
                     }.getOrNull() ?: return // stale/malformed help must not close or lend authority to a newer turn
-                    interrupt(); status("failure"); localHelp(help)
+                    deliveringSafety=true
+                    try { interrupt(); status("failure"); localHelp(help) }
+                    finally { deliveringSafety=false }
                 } else { interrupt(); status("failure"); failed() }
             }
             else -> error("unknown event")
@@ -397,9 +410,17 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         send("stop", "intent" to intent) // Only after local native calls completed.
     }
     private fun fail(code: String) {
+        PinDiagnostic.event(PinDiagnostic.Stage.PROTOCOL,when(code) {
+            "incompatible"->PinDiagnostic.Reason.INCOMPATIBLE
+            "closed"->PinDiagnostic.Reason.CLOSED
+            "network"->PinDiagnostic.Reason.NETWORK
+            "release"->PinDiagnostic.Reason.RELEASE_FAILED
+            else->PinDiagnostic.Reason.PROTOCOL_FAILED
+        })
         val pending=childBlocked
         if (pending && code!="expired") controlQuarantined=true
-        close(); if (pending) managed(ManagementState.Phase.DEAD); status(code); failed()
+        close(); if (pending) managed(ManagementState.Phase.DEAD); status(code)
+        if (!deliveringSafety) failed()
     }
     fun close() {
         managementState.close(); entryGate.clear(); childVolume.clear(); childBlocked=true; managementPending=false

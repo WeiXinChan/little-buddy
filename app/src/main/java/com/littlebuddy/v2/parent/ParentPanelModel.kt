@@ -22,12 +22,14 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     private val render: (PanelState) -> Unit, private val leave: () -> Unit,
     private val ownerRequest: (OwnerOperation) -> Unit = {},
     private val ownerDiscard: (OwnerChallenge) -> Unit = {},
-    private val securityRevoked: () -> Unit = {}) {
+    private val securityRevoked: () -> Unit = {},
+    private val configurationSaved: () -> Unit = {}) {
     private val domain = AtomicReference<ParentDomain?>()
     private val revision = AtomicLong()
     private val viewRevision = AtomicLong()
     private val pending = ConcurrentHashMap.newKeySet<CharArray>()
     @Volatile private var active = false
+    @Volatile var hasSavedConnection = false; private set
     private var page = -1L
     private var grant: ParentDomain.Grant? = null
     private var ownerChallenge: OwnerChallenge? = null
@@ -48,7 +50,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         work {
             if (!live(ticket)) return@work
             val result = runCatching { domain.get() ?: load() }
-            result.getOrNull()?.let { domain.compareAndSet(null, it) }
+            result.getOrNull()?.let { domain.compareAndSet(null, it); hasSavedConnection = it.childConfiguration()?.connection != null }
             ui {
                 if (!live(ticket)) return@ui
                 val d = result.getOrNull()
@@ -61,12 +63,14 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     }
     /** Synchronous lifecycle first step: revoke before any worker, page callback or IO cleanup. */
     private fun invalidate() {
+        PinDiagnostic.event(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.INVALIDATED)
         active = false; revision.incrementAndGet()
         if (page >= 0) domain.get()?.invalidatePage(page)
         page = -1L
         grant = null; ownerChallenge?.let(ownerDiscard); ownerChallenge = null; pending.forEach { it.fill('\u0000') }; pending.clear()
     }
     fun pause(afterInvalidate: () -> Unit = {}) {
+        PinDiagnostic.event(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.CANCEL)
         invalidate(); afterInvalidate(); show(PanelState(PanelMode.VERIFY, PanelNotice.LOCKED))
     }
     /** Foreground route failure only. Background pause remains inactive.
@@ -98,10 +102,17 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
             ParentDomain.State.QUARANTINED -> PanelNotice.STORAGE
             else -> notice ?: PanelNotice.NONE
         }
+        PinDiagnostic.event(PinDiagnostic.Stage.RESULT, when (reason) {
+            PanelNotice.UNOWNED -> PinDiagnostic.Reason.UNOWNED
+            PanelNotice.STORAGE -> PinDiagnostic.Reason.QUARANTINED
+            PanelNotice.COOLDOWN -> PinDiagnostic.Reason.COOLDOWN
+            else -> PinDiagnostic.Reason.LOCKED
+        })
         show(PanelState(if (reason == PanelNotice.UNOWNED || reason == PanelNotice.STORAGE)
             PanelMode.UNAVAILABLE else PanelMode.VERIFY, reason))
     }
     private fun lock(d: ParentDomain) {
+        PinDiagnostic.event(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.INVALIDATED)
         securityRevoked()
         revision.incrementAndGet(); if (page >= 0) d.invalidatePage(page); grant = null
         pending.forEach { it.fill('\u0000') }; pending.clear()
@@ -117,7 +128,15 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         if (!active) return
         val d = domain.get() ?: return
         val proof = ownerChallenge
-        if (proof != null && !d.ownerChallengeCurrent(proof, page)) { ownerChallenge = null; lock(d); return }
+        val savingOwner = state.busy && (state.mode == PanelMode.OWNER_PIN || state.mode == PanelMode.CONNECTION)
+        if (proof != null && savingOwner)
+            PinDiagnostic.event(PinDiagnostic.Stage.TICK, PinDiagnostic.Reason.SAVE_IN_PROGRESS)
+        val ownerCurrent = proof == null ||
+            (if (savingOwner) d.ownerSaveCurrent(proof, page) else d.ownerChallengeCurrent(proof, page))
+        if (!ownerCurrent) {
+            PinDiagnostic.event(PinDiagnostic.Stage.TICK, PinDiagnostic.Reason.TICK_OWNER_INVALID)
+            ownerChallenge = null; lock(d); return
+        }
         val current = grant
         if (current != null && !d.isAuthorized(current)) lock(d)
         else if (current == null && !state.busy && state.notice == PanelNotice.COOLDOWN &&
@@ -208,7 +227,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         val permitted = when (operation) {
             OwnerOperation.INITIALIZE_PIN -> d.state() == ParentDomain.State.UNOWNED
             OwnerOperation.RESET_PIN -> state.mode == PanelMode.VERIFY && d.state() != ParentDomain.State.UNOWNED
-            OwnerOperation.PROVISION_ENDPOINT -> state.mode == PanelMode.SETTINGS && grant?.let(d::isAuthorized) == true
+            OwnerOperation.PROVISION_ENDPOINT -> !hasSavedConnection && state.mode == PanelMode.SETTINGS && grant?.let(d::isAuthorized) == true
         }
         if (permitted) ownerRequest(operation)
     }
@@ -221,12 +240,13 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         show(PanelState(PanelMode.VERIFY, PanelNotice.LOADING, true))
         work {
             val proof = if (live(ticket)) d.beginOwnerOperation(operation, epoch) else null
-            val accepted = proof != null && live(ticket) && runCatching { approve(proof) }.getOrDefault(false) &&
+            val accepted = proof != null && live(ticket) && runCatching { approve(proof) }.onFailure { (it as? Exception)?.let { error -> PinDiagnostic.error(PinDiagnostic.Stage.APPROVE, error) } }.getOrDefault(false) &&
                 d.ownerChallengeCurrent(proof, epoch)
             ui {
                 if (!live(ticket)) { d.invalidatePage(epoch); proof?.let(ownerDiscard); return@ui }
-                if (!accepted || proof == null) locked(d, PanelNotice.OWNER_UNAVAILABLE)
+                if (!accepted || proof == null) { PinDiagnostic.event(PinDiagnostic.Stage.APPROVE, PinDiagnostic.Reason.REJECTED); locked(d, PanelNotice.OWNER_UNAVAILABLE) }
                 else {
+                    PinDiagnostic.event(PinDiagnostic.Stage.APPROVE, PinDiagnostic.Reason.SUCCESS)
                     ownerChallenge = proof
                     show(PanelState(if (operation == OwnerOperation.PROVISION_ENDPOINT) PanelMode.CONNECTION else PanelMode.OWNER_PIN,
                         PanelNotice.OWNER_READY))
@@ -235,8 +255,10 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         }
     }
     fun setOwnerPin(pin: CharArray, repeated: CharArray) {
+        PinDiagnostic.event(PinDiagnostic.Stage.SAVE, PinDiagnostic.Reason.BEGIN)
         val d = domain.get(); val proof = ownerChallenge
         if (!active || state.busy || state.mode != PanelMode.OWNER_PIN || d == null || proof == null) {
+            PinDiagnostic.event(PinDiagnostic.Stage.SAVE, PinDiagnostic.Reason.EARLY_REJECT)
             pin.fill('\u0000'); repeated.fill('\u0000'); return
         }
         if (!validPin(pin) || !pin.contentEquals(repeated)) {
@@ -247,34 +269,48 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         work {
             val saved = try { live(ticket) && d.replacePin(pin, proof, epoch) }
                 catch (_: Exception) { false } finally { pin.fill('\u0000'); pending.remove(pin) }
-            ui { if (live(ticket)) { ownerChallenge = null; page = -1L
+            ui {
+                if (!live(ticket)) PinDiagnostic.event(PinDiagnostic.Stage.RESULT, PinDiagnostic.Reason.STALE_CALLBACK)
+                if (live(ticket)) {
+                PinDiagnostic.event(PinDiagnostic.Stage.RESULT, if (saved) PinDiagnostic.Reason.SUCCESS else PinDiagnostic.Reason.REJECTED)
+                ownerChallenge = null; page = -1L
                 locked(d, if (saved) PanelNotice.PIN_CHANGED else PanelNotice.OWNER_UNAVAILABLE) } }
         }
     }
     /** Public registration material only; publish after a fresh final Grant decision. */
-    fun exportTransportKey(create: () -> String, publish: (String) -> Unit) {
-        val d=domain.get() ?: return; val current=grant ?: return
-        if (!active || state.busy || state.mode!=PanelMode.SETTINGS || !d.localAction(current)) return
+    fun exportTransportKey(create: () -> String, publish: (String) -> Unit) =
+        exportTransportKey(create, publish, {})
+    /** File export can report failure promptly; the original sharing overload keeps its behavior. */
+    fun exportTransportKey(create: () -> String, publish: (String) -> Unit, unavailable: () -> Unit) {
+        val d=domain.get(); val current=grant
+        if (d==null || current==null || !active || state.busy || state.mode!=PanelMode.SETTINGS || !d.localAction(current)) {
+            unavailable(); return
+        }
         val ticket=revision.get()
+        fun rejected() { ui { if (live(ticket) && state.mode==PanelMode.SETTINGS) unavailable() } }
         work {
-            val key=runCatching { create() }.getOrNull() ?: return@work
+            val key=runCatching { create() }.getOrNull() ?: run { rejected(); return@work }
             var released: String? = null
             // Final decision publishes public material in memory on the worker, never a UI/IO callback.
             if (live(ticket)) d.acceptProtected(current) { released=key }
-            val material=released ?: return@work
-            ui { if (live(ticket) && state.mode==PanelMode.SETTINGS && d.isAuthorized(current)) publish(material) }
+            val material=released ?: run { rejected(); return@work }
+            ui { if (live(ticket) && state.mode==PanelMode.SETTINGS) {
+                if (d.isAuthorized(current)) publish(material) else unavailable()
+            } }
         }
     }
     fun importConnection(address: String, token: CharArray, sshUser: String? = null) {
         val d = domain.get(); val proof = ownerChallenge
-        if (!active || state.busy || state.mode != PanelMode.CONNECTION || d == null || proof == null) {
+        if (!active || state.busy || hasSavedConnection || state.mode != PanelMode.CONNECTION || d == null || proof == null) {
             token.fill('\u0000'); return
         }
         val epoch = page; val ticket = revision.get(); pending.add(token); show(state.copy(busy = true))
         work {
             val saved = try { live(ticket) && d.provisionConnection(proof, epoch, ParentConnection(address, String(token), sshUser).also { it.requireRunnable() }) }
                 catch (_: Exception) { false } finally { token.fill('\u0000'); pending.remove(token) }
-            ui { if (live(ticket)) { ownerChallenge = null; page = -1L
+            ui { if (live(ticket)) {
+                if (saved) { hasSavedConnection = true; configurationSaved() }
+                ownerChallenge = null; page = -1L
                 locked(d, if (saved) PanelNotice.CONNECTION_SAVED else PanelNotice.OWNER_UNAVAILABLE) } }
         }
     }

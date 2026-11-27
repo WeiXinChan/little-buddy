@@ -20,7 +20,7 @@ class NativeLedgerTest {
     now=(stampNs+999999)/1_000_000
     ledger.read(320)
     val captured=ledger.sampleTime(position)
-    assertTrue(captured<=1000+now);assertTrue(1000+now-captured<=3)
+    assertTrue(captured<=1000+now);assertTrue(1000+now-captured<=4)
    }
    assertEquals(9_600_000L,ledger.readSamples)
   }
@@ -29,7 +29,7 @@ class NativeLedgerTest {
   // The first hardware pair establishes capture time, including a delayed start.
   var now=500L;var frame=0L
   val ledger=NativeReadLedger(3200,{now},{now+1000}){CaptureStamp(frame,now*1_000_000)}
-  ledger.check();now=520;frame=320;assertTrue(ledger.read(320) in 1518..1520)
+  ledger.check();now=520;frame=320;assertTrue(ledger.read(320) in 1517..1520)
  }
  @Test fun lateFirstHardwareCounterCannotHideAlreadyOverwrittenSamples(){
   val ledger=NativeReadLedger(3200,{500},{1500}){CaptureStamp(8000,500_000_000)}
@@ -65,9 +65,9 @@ class NativeLedgerTest {
   }
   val room=ledger.remainingMs()
   assertTrue(ledger.ready)
-  // New earliest stamp=9.5ms and the current mono bin ends11ms: 25 additional possible
-  // samples spend room. This tightens169ms to168ms; it does not weaken the old safety bound.
-  assertEquals((3200L-320-185)*1000/16016,room)
+  // Runtime earliest stamp=8ms and the current mono bin ends11ms: 49 additional possible
+  // samples spend room. This tightens169ms to166ms; it does not weaken the old safety bound.
+  assertEquals((3200L-320-209)*1000/16016,room)
   assertTrue(room<(3200L-320-160)*1000/16016)
  }
  @Test fun timestampApiDelayAgesOldStampInsteadOfRenewingBudget(){

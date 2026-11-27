@@ -26,7 +26,10 @@ require(releaseVersionCode.isPresent == releaseVersionName.isPresent) {
 }
 val v2Release = JsonSlurper().parse(file("v2-release.json")) as Map<*, *>
 val v2Code = (v2Release["version_code"] as Number).toInt()
-val v2Name = v2Release["version_name"] as String
+val pinDiagnostics = providers.gradleProperty("pinInitDiagnostics").orNull == "true"
+val privateDevicePreset = providers.gradleProperty("privateDevicePreset").orNull == "true"
+val v2Name = (v2Release["version_name"] as String) +
+    if (privateDevicePreset) ".integrated1.device1" else ""
 require(v2Code >= 15 && v2Name.matches(Regex("[0-9]+[.][0-9]+[.][0-9]+(?:-[a-zA-Z0-9.]+)?")))
 androidComponents {
     onVariants(selector().withBuildType("v2Debug")) { variant ->
@@ -51,10 +54,26 @@ val prepareV2Metadata by tasks.registering(Exec::class) {
         rootProject.file("app/build.gradle.kts"),rootProject.file("scripts/v2-build-metadata.py"),
         rootProject.file("scripts/v2-release-snapshot.py"),
         rootProject.file("settings.gradle.kts"),rootProject.file("gradle.properties"))
+    inputs.property("pinInitDiagnostics", pinDiagnostics)
+    inputs.property("privateDevicePreset", privateDevicePreset)
     outputs.dir(v2Metadata)
-    commandLine("python3","scripts/v2-build-metadata.py","--output",v2Metadata.get().asFile.absolutePath)
+    val arguments = mutableListOf("python3", "scripts/v2-build-metadata.py", "--output", v2Metadata.get().asFile.absolutePath)
+    if (pinDiagnostics) arguments.add("--pin-init-diagnostics")
+    if (privateDevicePreset) arguments.add("--private-device-preset")
+    commandLine(arguments)
 }
 tasks.matching { it.name == "preV2DebugBuild" }.configureEach { dependsOn(prepareV2Metadata) }
+
+// Local issued credential is deliberately outside tracked sources/public source inventory.
+val privatePresetAssets = layout.buildDirectory.dir("generated/private-device-assets")
+val preparePrivatePreset by tasks.registering(Copy::class) {
+    onlyIf { privateDevicePreset }
+    from(rootProject.file(".private-device/preset.bin")) { rename { "v2-device-preset.bin" } }
+    into(privatePresetAssets)
+    fileMode = 384; dirMode = 448 // 0600 / 0700
+    doFirst { require(rootProject.file(".private-device/preset.bin").isFile) { "Private device input unavailable" } }
+}
+if (privateDevicePreset) tasks.matching { it.name == "preV2DebugBuild" }.configureEach { dependsOn(preparePrivatePreset) }
 
 val imageAssets = layout.buildDirectory.dir("generated/v2-images")
 val prepareV2Images by tasks.registering(Sync::class) {
@@ -190,6 +209,8 @@ android {
         targetSdk = 36
         versionCode = 13
         versionName = "0.1.12-animal-private"
+        buildConfigField("boolean", "PIN_INIT_DIAGNOSTICS", "false")
+        buildConfigField("boolean", "V2_DEVICE_PRESET", "false")
         buildConfigField("boolean", "BUDDY_SSH", "false")
         testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
@@ -201,6 +222,8 @@ android {
         }
         create("v2Debug") {
             initWith(getByName("debug"))
+            buildConfigField("boolean", "PIN_INIT_DIAGNOSTICS", pinDiagnostics.toString())
+            buildConfigField("boolean", "V2_DEVICE_PRESET", privateDevicePreset.toString())
             applicationIdSuffix = ".v2"
             ndk.abiFilters += "arm64-v8a"
             matchingFallbacks += "debug"
@@ -227,6 +250,7 @@ android {
             assets.srcDir("src/debug/assets")
             assets.srcDir(imageAssets)
             assets.srcDir(v2Metadata)
+            if (privateDevicePreset) assets.srcDir(privatePresetAssets)
         }
         getByName("ciRelease") {
             java.srcDir("src/release/java")

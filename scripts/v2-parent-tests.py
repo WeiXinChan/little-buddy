@@ -31,7 +31,7 @@ compiler = [jar("org.jetbrains.kotlin", "kotlin-compiler-embeddable", "2.2.21"),
 runtime = [compiler[1], jar("junit", "junit", "4.13.2"),
            jar("org.hamcrest", "hamcrest-core", "1.3")]
 source = ROOT / "app/src/main/java/com/littlebuddy/v2/parent"
-sources = [source / "ParentDomain.kt", source / "ParentCodec.kt", source / "ParentEnvelope.kt",
+sources = [source / "PinDiagnostic.kt", source / "ParentDomain.kt", source / "ParentCodec.kt", source / "ParentEnvelope.kt",
            source / "SealedParentStore.kt", source / "ParentCommit.kt", source / "ParentPanelModel.kt",
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentDomainTest.kt",
            ROOT / "app/src/test/java/com/littlebuddy/v2/parent/ParentKeyStoreTest.kt",
