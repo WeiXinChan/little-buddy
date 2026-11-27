@@ -290,7 +290,11 @@ class VoicePeer:
             if following.valid() and following.private_mode==self.session.private_mode:
                 self.recognition=asyncio.create_task(self._analyze(data,following))
         except asyncio.CancelledError:
-            if not old.done():self.track_retired(old)
+            if not old.done():
+                self.track_retired(old)
+                if self.recognition_handoff is owner:
+                    self.quarantined=True
+                    if self.next_probe is not None and self.next_probe[2] is old:self.next_probe=None
             raise
         finally:
             if self.recognition_handoff is owner:self.recognition_handoff=None

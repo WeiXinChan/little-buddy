@@ -164,3 +164,12 @@ class Handoff(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.providers.recognizers,1)
             self.assertIsNone(p.analysis)
         finally:await self.clean()
+
+    async def test_direct_handoff_caller_cancel_does_not_leave_reusable_connection(self):
+        gate=asyncio.Event();await self.make(hold_asr=True,gate=gate)
+        try:
+            await self.queue(2);await self.providers.close_enter.wait()
+            helper=self.peer.recognition_handoff;helper.cancel();await asyncio.gather(helper,return_exceptions=True)
+            self.assertTrue(self.peer.quarantined);self.assertIsNone(self.peer.next_probe)
+            self.assertEqual(self.providers.recognizers,1)
+        finally:await self.clean()
