@@ -28,6 +28,8 @@ val v2Release = JsonSlurper().parse(file("v2-release.json")) as Map<*, *>
 val v2Code = (v2Release["version_code"] as Number).toInt()
 val pinDiagnostics = providers.gradleProperty("pinInitDiagnostics").orNull == "true"
 val privateDevicePreset = providers.gradleProperty("privateDevicePreset").orNull == "true"
+val configurationDiagnosticOnly = providers.gradleProperty("configurationDiagnosticOnly").orNull == "true"
+require(!configurationDiagnosticOnly || (pinDiagnostics && privateDevicePreset)) { "Configuration-only probe requires private diagnostic mode" }
 val v2Name = (v2Release["version_name"] as String) +
     if (privateDevicePreset) ".integrated1.device1" else ""
 require(v2Code >= 15 && v2Name.matches(Regex("[0-9]+[.][0-9]+[.][0-9]+(?:-[a-zA-Z0-9.]+)?")))
@@ -56,10 +58,12 @@ val prepareV2Metadata by tasks.registering(Exec::class) {
         rootProject.file("settings.gradle.kts"),rootProject.file("gradle.properties"))
     inputs.property("pinInitDiagnostics", pinDiagnostics)
     inputs.property("privateDevicePreset", privateDevicePreset)
+    inputs.property("configurationDiagnosticOnly", configurationDiagnosticOnly)
     outputs.dir(v2Metadata)
     val arguments = mutableListOf("python3", "scripts/v2-build-metadata.py", "--output", v2Metadata.get().asFile.absolutePath)
     if (pinDiagnostics) arguments.add("--pin-init-diagnostics")
     if (privateDevicePreset) arguments.add("--private-device-preset")
+    if (configurationDiagnosticOnly) arguments.add("--configuration-diagnostic-only")
     commandLine(arguments)
 }
 tasks.matching { it.name == "preV2DebugBuild" }.configureEach { dependsOn(prepareV2Metadata) }
@@ -211,6 +215,7 @@ android {
         versionName = "0.1.12-animal-private"
         buildConfigField("boolean", "PIN_INIT_DIAGNOSTICS", "false")
         buildConfigField("boolean", "V2_DEVICE_PRESET", "false")
+        buildConfigField("boolean", "CONFIGURATION_DIAGNOSTIC_ONLY", "false")
         buildConfigField("boolean", "BUDDY_SSH", "false")
         testInstrumentationRunner = "com.littlebuddy.SimUiRunner"
     }
@@ -224,6 +229,7 @@ android {
             initWith(getByName("debug"))
             buildConfigField("boolean", "PIN_INIT_DIAGNOSTICS", pinDiagnostics.toString())
             buildConfigField("boolean", "V2_DEVICE_PRESET", privateDevicePreset.toString())
+            buildConfigField("boolean", "CONFIGURATION_DIAGNOSTIC_ONLY", configurationDiagnosticOnly.toString())
             applicationIdSuffix = ".v2"
             ndk.abiFilters += "arm64-v8a"
             matchingFallbacks += "debug"

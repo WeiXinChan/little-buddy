@@ -15,7 +15,7 @@ internal class ParentRouteSession(val domain: ParentDomain, val grant: ParentDom
 
 /** Activity owns main/UI calls; work and UI queues are explicit. No accepted Boolean is authority.
  * Every asynchronous result is page/revision guarded, every write uses the actual Grant again.
- * load runs on the worker. Production binding comes from a system-auth-required Keystore key.
+ * load runs on the worker. Production local management is a page capability, not owner identity.
  */
 internal class ParentPanelModel(private val load: () -> ParentDomain?,
     private val work: (() -> Unit) -> Unit, private val ui: (() -> Unit) -> Unit,
@@ -23,7 +23,8 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     private val ownerRequest: (OwnerOperation) -> Unit = {},
     private val ownerDiscard: (OwnerChallenge) -> Unit = {},
     private val securityRevoked: () -> Unit = {},
-    private val configurationSaved: () -> Unit = {}) {
+    private val configurationSaved: () -> Unit = {},
+    val directManagement: Boolean = false) {
     private val domain = AtomicReference<ParentDomain?>()
     private val revision = AtomicLong()
     private val viewRevision = AtomicLong()
@@ -46,7 +47,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         invalidate()
         active = true
         val ticket = revision.get()
-        show(PanelState(PanelMode.VERIFY, PanelNotice.LOADING, true))
+        show(PanelState(if (directManagement) PanelMode.SETTINGS else PanelMode.VERIFY, PanelNotice.LOADING, true))
         work {
             if (!live(ticket)) return@work
             val result = runCatching { domain.get() ?: load() }
@@ -56,8 +57,25 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
                 val d = result.getOrNull()
                 if (d == null) show(PanelState(PanelMode.UNAVAILABLE,
                     if (result.isFailure) PanelNotice.STORAGE else PanelNotice.UNCONFIGURED))
+                else if (d.localManagement) openLocal(d, ticket)
                 else { page = d.enterPage(); locked(d) }
                 if (live(ticket)) ready()
+            }
+        }
+    }
+    private fun openLocal(d: ParentDomain, ticket: Long) {
+        page = d.enterPage()
+        val epoch = page
+        work {
+            val current = if (live(ticket)) d.enterLocal(epoch) else null
+            ui {
+                if (!live(ticket)) { current?.let(d::revokePage); return@ui }
+                if (current == null || !d.isAuthorized(current)) {
+                    show(PanelState(PanelMode.UNAVAILABLE, PanelNotice.STORAGE))
+                } else {
+                    grant = current
+                    show(PanelState(PanelMode.SETTINGS, volume = d.volumeLimit(current), settings = d.settings(current)))
+                }
             }
         }
     }
@@ -71,7 +89,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     }
     fun pause(afterInvalidate: () -> Unit = {}) {
         PinDiagnostic.event(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.CANCEL)
-        invalidate(); afterInvalidate(); show(PanelState(PanelMode.VERIFY, PanelNotice.LOCKED))
+        invalidate(); afterInvalidate(); show(PanelState(if (directManagement) PanelMode.UNAVAILABLE else PanelMode.VERIFY, PanelNotice.LOCKED))
     }
     /** Foreground route failure only. Background pause remains inactive.
      * Retire the exact page before cleanup, then offer a new locked UI with NO Grant.
@@ -108,6 +126,9 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
             PanelNotice.COOLDOWN -> PinDiagnostic.Reason.COOLDOWN
             else -> PinDiagnostic.Reason.LOCKED
         })
+        if (d.localManagement) {
+            show(PanelState(PanelMode.UNAVAILABLE, if (reason == PanelNotice.STORAGE) reason else PanelNotice.LOCKED)); return
+        }
         show(PanelState(if (reason == PanelNotice.UNOWNED || reason == PanelNotice.STORAGE)
             PanelMode.UNAVAILABLE else PanelMode.VERIFY, reason))
     }
@@ -182,6 +203,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
     }
     fun navigate(mode: PanelMode, localInput: Boolean = true): ParentRouteSession? {
         val d = domain.get() ?: return null; val current = grant ?: return null
+        if (d.localManagement && mode == PanelMode.CHANGE_PIN) return null
         if (!active || state.busy || mode !in setOf(PanelMode.SETTINGS, PanelMode.CHANGE_PIN, PanelMode.FEEDBACK)) return null
         if (!(if (localInput) d.localAction(current) else d.isAuthorized(current))) { lock(d); return null }
         val next = d.nextPage(current) ?: run { lock(d); return null }
@@ -237,7 +259,7 @@ internal class ParentPanelModel(private val load: () -> ParentDomain?,
         if (!active || state.busy) return
         page = d.enterPage(); grant = null; ownerChallenge = null
         val epoch = page; val ticket = revision.incrementAndGet()
-        show(PanelState(PanelMode.VERIFY, PanelNotice.LOADING, true))
+        show(PanelState(if (directManagement) PanelMode.SETTINGS else PanelMode.VERIFY, PanelNotice.LOADING, true))
         work {
             val proof = if (live(ticket)) d.beginOwnerOperation(operation, epoch) else null
             val accepted = proof != null && live(ticket) && runCatching { approve(proof) }.onFailure { (it as? Exception)?.let { error -> PinDiagnostic.error(PinDiagnostic.Stage.APPROVE, error) } }.getOrDefault(false) &&

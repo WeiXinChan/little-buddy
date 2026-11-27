@@ -8,6 +8,6 @@ internal object AndroidDeviceConnectionPreset {
     fun load(context: Context): DeviceConnectionPreset? {
         if (!BuildConfig.V2_DEVICE_PRESET) return null
         return try { DeviceConnectionPreset.read(context.assets.open(DeviceConnectionPreset.ASSET)) }
-        catch (_: Exception) { null }
+        catch (error: Exception) { ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.PRESET,ConfigurationDiagnostic.category(error)); null }
     }
 }

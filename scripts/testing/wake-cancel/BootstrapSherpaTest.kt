@@ -26,8 +26,8 @@ class BootstrapSherpaTest {
     assertTrue(DecodeScenario.floats!!.all{it==0f});frame.fill(0)
    }
    assertEquals(read,position);assertTrue(accepts>0)
-   assertTrue(ledger.sampleTime(0) in origin-4..origin)
-   assertTrue(ledger.sampleTime(1920) in origin+116..origin+120)
+   assertTrue(ledger.sampleTime(0)+1+CaptureClockBridge.LIMIT_MS in origin-4..origin)
+   assertTrue(ledger.sampleTime(1920)+1+CaptureClockBridge.LIMIT_MS in origin+116..origin+120)
   }finally{prefix.clear();wake.close();DecodeScenario.reset()}
  }
 }

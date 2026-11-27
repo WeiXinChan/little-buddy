@@ -29,7 +29,9 @@ class DevicePhaseTest {
   assertEquals(640L,ledger.readSamples)
   assertTrue(ledger.remainingMs()<oldRoom)
   assertTrue(ledger.sampleTime(0)<oldZero)
-  assertEquals(-4L,ledger.sampleTime(0))
+  // Original phase/rounding -4ms, now additionally charge offset lower -1ms
+  // and the unchanged 5ms bridge displacement budget instead of point mapping.
+  assertEquals(-4L-1L-5L,ledger.sampleTime(0))
   now=61;stamp=CaptureStamp(960,61_087_384);ledger.read(320)
   assertEquals(960L,ledger.readSamples)
  }

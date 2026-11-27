@@ -62,7 +62,8 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
                             private val requireWorker: () -> Unit,
                             private val owner: OwnerProof = UnconfiguredOwnerProof,
                             private val binding: String,
-                            private val hasher: PinHasher = PinHasher()) {
+                            private val hasher: PinHasher = PinHasher(),
+                            val localManagement: Boolean = false) {
     internal class Grant internal constructor(internal val generation: Long, internal val pageEpoch: Long)
     enum class State { UNOWNED, LOCKED, AUTHORIZED, COOLDOWN, QUARANTINED }
     private val lock = Any()
@@ -84,6 +85,36 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
             record = store.read()
             cooldownUntil = now() + (record?.cooldownMs ?: 0)
         } catch (_: Exception) { quarantined = true }
+    }
+
+    /** Explicit local-management policy, not owner proof. One atomic schema migration retains
+     * settings/connection and removes obsolete PIN material. Existing transport keys are untouched. */
+    fun initializeLocal(preset: ParentConnection? = null): Boolean {
+        requireWorker()
+        if (!localManagement || worker.isHeldByCurrentThread || !worker.tryLock()) {
+            ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.MIGRATION,ConfigurationDiagnostic.Reason.BUSY); return false
+        }
+        try {
+            if (quarantined) { ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.MIGRATION,ConfigurationDiagnostic.Reason.QUARANTINED); return false }
+            val old = record
+            val next = ParentRecord(ByteArray(0), ByteArray(0), volumeLimit = old?.volumeLimit ?: 60,
+                speechRate = old?.speechRate ?: 100, durationSeconds = old?.durationSeconds ?: 600,
+                connection = old?.connection ?: preset)
+            if (old != null && old.salt.isEmpty() && (old.connection != null || preset == null)) return true
+            val saved = persist(next, ParentCommit({ !quarantined }))
+            if (saved) synchronized(lock) { cooldownUntil = 0; challenge = null; savingChallenge = null }
+            return saved
+        } finally { worker.unlock() }
+    }
+    /** Foreground page capability only; no claim of PIN/system authentication. */
+    fun enterLocal(page: Long): Grant? {
+        requireWorker()
+        if (!localManagement || worker.isLocked) return null
+        return synchronized(lock) {
+            if (quarantined || record == null || record!!.salt.isNotEmpty() || page != epoch.current()) null
+            else { generation++; deadline = now() + IDLE_MS
+                Grant(generation, page).also { grant = it } }
+        }
     }
 
     fun enterPage(): Long = epoch.revoke()
@@ -140,6 +171,7 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
         if (!valid(candidate)) false else { deadline = now() + IDLE_MS; true }
     }
     fun beginOwnerOperation(operation: OwnerOperation, page: Long): OwnerChallenge? {
+        if (localManagement) return null
         // Random generation may block; it also stays outside the memory monitor.
         if (worker.isLocked) return null
         val nonce = ByteArray(32).also(SecureRandom()::nextBytes)
@@ -170,6 +202,7 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     }
 
     fun replacePin(pin: CharArray, proof: OwnerChallenge, page: Long): Boolean {
+        if (localManagement) { pin.fill('\u0000'); return false }
         try {
             requireWorker()
             if (!asciiPin(pin) || worker.isHeldByCurrentThread || !worker.tryLock()) {
@@ -216,6 +249,7 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     /** Normal PIN change requires the existing verified session, unlike forgotten-PIN recovery.
      * New material is staged on the worker and the actual Grant is checked again at publication. */
     fun changePin(candidate: Grant, pin: CharArray): Boolean {
+        if (localManagement) { pin.fill('\u0000'); return false }
         try {
             requireWorker()
             if (!asciiPin(pin) || worker.isHeldByCurrentThread || !worker.tryLock()) return false
@@ -235,6 +269,7 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     }
 
     fun verify(pin: CharArray, page: Long): Grant? {
+        if (localManagement) { pin.fill('\u0000'); return null }
         try {
             requireWorker()
             if (!asciiPin(pin) || worker.isHeldByCurrentThread || !worker.tryLock()) return null
@@ -291,7 +326,9 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     /** Worker-only execution snapshot. Recheck authenticated storage/key presence before a new child session. */
     fun childConfiguration(): ParentChildConfiguration? {
         requireWorker()
-        if (worker.isHeldByCurrentThread || !worker.tryLock()) return null
+        if (worker.isHeldByCurrentThread || !worker.tryLock()) {
+            ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.CHILD_READ,ConfigurationDiagnostic.Reason.BUSY); return null
+        }
         try {
             val expected = synchronized(lock) { if (quarantined) return null; record } ?: return null
             val durable = checkNotNull(store.read())

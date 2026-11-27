@@ -1,8 +1,8 @@
 {
   "format": 1,
-  "version_code": 23,
-  "version_name": "2.0.0-rc9",
+  "version_code": 29,
+  "version_name": "2.0.0-rc9.nopin.expiry1",
   "application_id": "com.littlebuddy.sim.v2",
   "protocol_contract": "v2-voice2-safety1-images2-volume1-management1-end1",
-  "source_base": "60d83a50b5d8cd54ff78bcda30460907265488aa"
+  "source_base": "c4b250d52f5a495b7909c2569ffe6e173ca848ca"
 }

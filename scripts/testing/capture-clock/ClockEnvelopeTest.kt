@@ -104,7 +104,9 @@ class ClockEnvelopeTest {
   now=1023;stamp=CaptureStamp(320,1_023_000_000);ledger.stageRead(320)
   assertFalse(ledger.startupAnchored)
   now=1043;stamp=CaptureStamp(640,1_043_000_000);ledger.stageRead(320);ledger.finishStartup()
-  assertEquals(640L,ledger.readSamples);assertTrue(ledger.sampleTime(0) in 998..1003)
+  assertEquals(640L,ledger.readSamples);// Offset lower(-1ms) and unchanged possible bridge displacement(-5ms) are now
+  // charged explicitly. The original mono/sample0 constraint is unchanged.
+  assertTrue(ledger.sampleTime(0)+6 in 998..1003)
  }
 
 }

@@ -30,22 +30,53 @@ internal object AndroidParentFeedbackRoute : ParentFeedbackRoute {
     }
 }
 
-/** Local system authentication is the issuer; remote family recovery/endpoint issuance are separate. */
+/** Local management needs no lock-screen credential. Transport identity remains independent. */
 internal object AndroidParentRuntime {
-    @Volatile private var authority: AndroidOwner? = null
-    fun discard(challenge: OwnerChallenge) { authority?.discard(challenge) }
-    fun helpSettings(activity: Activity): ParentPlaybackSettings? {
-        if (!AndroidParentStore.hasExistingDomain(activity)) return ParentPlaybackSettings()
-        return load(activity).childConfiguration()?.playback
-    }
-    /** Deletion-only recovery can load existing credentials, never initialize an owner/domain. */
+    fun discard(challenge: OwnerChallenge) { /* Legacy receipts are never issued in local mode. */ }
+    fun helpSettings(activity: Activity): ParentPlaybackSettings? = load(activity).childConfiguration()?.playback
     fun existing(context: android.content.Context): ParentDomain? {
-        if(!AndroidParentStore.hasExistingDomain(context))return null
-        val owner=AndroidOwner.open(context,create=false)
-        return AndroidParentDomain.open(context.applicationContext,owner.binding,owner)
+        if (!AndroidParentStore.hasExistingDomain(context) && !AndroidParentStore.hasIsolatedDomain(context)) return null
+        return local(context)
     }
-    fun load(activity: Activity): ParentDomain {
-        val owner = AndroidOwner.open(activity); authority = owner
-        return AndroidParentDomain.open(activity.applicationContext, owner.binding, owner)
+    fun load(activity: Activity): ParentDomain = ParentRuntimePath.load(platform(activity))
+    fun configuration(activity: Activity): ConfigurationResult = configuration(platform(activity))
+    internal fun configuration(platform: ParentRuntimePlatform): ConfigurationResult = ParentRuntimePath.configuration(platform)
+    private fun local(context: android.content.Context): ParentDomain = ParentRuntimePath.load(platform(context))
+    private fun platform(context: android.content.Context) = object : ParentRuntimePlatform {
+        override fun legacyAliasPresent() = AndroidOwner.existingAlias()
+        private val isolatedSelector get() = android.util.AtomicFile(context.noBackupFilesDir.resolve("v2-parent-local-selected-v1"))
+        override fun isolatedMarker():ByteArray? = try {
+            isolatedSelector.openRead().use { input ->
+                check(input.channel.size()==1L)
+                val value=input.read();check(value>=0 && input.read()==-1)
+                byteArrayOf(value.toByte())
+            }
+        } catch(_:java.io.FileNotFoundException){null}
+        override fun isolatedExists() = AndroidParentStore.hasIsolatedDomain(context)
+        override fun isolatedDomain() = AndroidIsolatedParentDomain.open(context)
+        override fun publishIsolatedMarker() {
+            val f=isolatedSelector;val out=f.startWrite()
+            try {out.write(byteArrayOf(1));out.flush();out.fd.sync();f.finishWrite(out)}
+            catch(e:Exception){f.failWrite(out);throw e}
+        }
+        override fun requireWorker() = AndroidParentStore.worker()
+        override fun existingStore() = AndroidParentStore.hasExistingDomain(context)
+        override fun legacyBinding() = AndroidOwner.existingBinding()
+        private val selector get() = context.noBackupFilesDir.resolve("v2-local-management-binding-v1")
+        override fun marker(): ByteArray? {
+            val marker=selector
+            if(!marker.exists())return null
+            check(marker.isFile && marker.length()==1L)
+            return marker.readBytes()
+        }
+        override fun createMarker() {
+            java.io.FileOutputStream(selector).use { it.write(byteArrayOf(1));it.fd.sync() }
+        }
+        override fun domain(binding:String) = AndroidParentDomain.open(context.applicationContext,binding)
+        override fun preset(): ParentConnection? = AndroidDeviceConnectionPreset.load(context)?.let {
+            val token=it.tokenChars()
+            try { ParentConnection(it.address,String(token),it.user).also{c->c.requireRunnable()} }
+            finally { token.fill('\u0000') }
+        }
     }
 }

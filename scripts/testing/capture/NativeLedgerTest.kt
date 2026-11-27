@@ -20,7 +20,8 @@ class NativeLedgerTest {
     now=(stampNs+999999)/1_000_000
     ledger.read(320)
     val captured=ledger.sampleTime(position)
-    assertTrue(captured<=1000+now);assertTrue(1000+now-captured<=4)
+    assertTrue(captured<=1000+now);// Existing phase/rounding4ms plus explicit initial offset(-1) and 5ms displacement.
+    assertTrue(1000+now-captured<=4+1+CaptureClockBridge.LIMIT_MS)
    }
    assertEquals(9_600_000L,ledger.readSamples)
   }
@@ -29,7 +30,7 @@ class NativeLedgerTest {
   // The first hardware pair establishes capture time, including a delayed start.
   var now=500L;var frame=0L
   val ledger=NativeReadLedger(3200,{now},{now+1000}){CaptureStamp(frame,now*1_000_000)}
-  ledger.check();now=520;frame=320;assertTrue(ledger.read(320) in 1517..1520)
+  ledger.check();now=520;frame=320;assertTrue(ledger.read(320)+1+CaptureClockBridge.LIMIT_MS in 1517..1520)
  }
  @Test fun lateFirstHardwareCounterCannotHideAlreadyOverwrittenSamples(){
   val ledger=NativeReadLedger(3200,{500},{1500}){CaptureStamp(8000,500_000_000)}

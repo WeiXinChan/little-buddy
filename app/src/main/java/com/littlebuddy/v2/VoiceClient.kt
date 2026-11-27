@@ -35,6 +35,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                                .followRedirects(false).followSslRedirects(false).proxy(java.net.Proxy.NO_PROXY)
                                .connectTimeout(4, TimeUnit.SECONDS).build(),
                            private val closeTransport: () -> Unit = {},
+                           private val diagnosticScope:PinDiagnostic.Scope=PinDiagnostic.Scope(),
                            private val actualOutput: (Boolean)->Unit = {}) {
     fun nativeProof() = player.nativeProof()
     private var controlQuarantined=false
@@ -48,6 +49,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var epoch = 0L
     private var sequence = 0L
     private var active = false
+    private var wirePoint=PinDiagnostic.WirePoint.NONE
+    private var wireKind=PinDiagnostic.WireKind.NONE
     private var compatible = requiredContract == null
     private var compatibilityDeadline=0L
     @Volatile var isAwake = false; private set
@@ -146,15 +149,19 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
     private fun receive(text: String) {
         if (!permitted()) { close(); return }
+        wirePoint=PinDiagnostic.WirePoint.ENVELOPE;wireKind=PinDiagnostic.WireKind.UNPARSED
         require(text.length <= 16000 && text.toByteArray(Charsets.UTF_8).size <= 16000)
+        wirePoint=PinDiagnostic.WirePoint.JSON_PARSE
         val event = JSONObject(text)
+        wirePoint=PinDiagnostic.WirePoint.ENVELOPE
         require(event.getInt("v") == 2)
         if (event.getLong("epoch") != epoch) return
-        val kind=event.getString("type")
+        val kind=event.getString("type");wireKind=PinDiagnostic.wireKind(kind);wirePoint=PinDiagnostic.WirePoint.DISPATCH
         if (childBlocked && kind !in setOf("scope", "management_state", "revoke", "failure")) return
         if (!compatible && kind!="scope") { if (kind=="failure") fail("incompatible"); return }
         when (kind) {
             "scope" -> {
+                wirePoint=PinDiagnostic.WirePoint.SCOPE_BIND
                 if (!compatible) {
                     if (event.getLong("epoch")!=epoch || event.getLong("revision")!=gate.revision ||
                         !ReleaseCompatibility.accepts(event.getInt("v"),event.optString("protocol_contract", ""),
@@ -208,6 +215,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 else send("bind", "player" to checkNotNull(playerName))
             }
             "bound" -> {
+                wirePoint=PinDiagnostic.WirePoint.PLAYER_BIND
                 require(event.getString("player") == playerName)
                 if (event.has("revision") && event.getLong("revision") != gate.revision) return
                 ackIdentity = event.getJSONObject("identity"); ackSequence = 0
@@ -216,11 +224,13 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 images?.bind(ImageScope(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision))
             }
             "audio" -> {
+                wirePoint=PinDiagnostic.WirePoint.AUDIO_VALIDATE
                 val data = Base64.decode(event.getString("pcm"), Base64.NO_WRAP)
                 require(data.isNotEmpty() && data.size <= 4800 && data.size % 2 == 0)
                 val pcm = ShortArray(data.size/2)
                 ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(pcm)
                 val binding = Binding(epoch, event.getString("player"), event.getInt("stream"))
+                wirePoint=PinDiagnostic.WirePoint.AUDIO_ENQUEUE
                 player.enqueue(AudioPacket(binding, event.getString("segment"), event.getLong("start"),
                                            event.getLong("end"), pcm))
                 data.fill(0); status("speaking")
@@ -292,7 +302,11 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             "thinking_wait" -> status(inputEyeStatus())
             "reply_end" -> { completed(event.getLong("head"), event.getInt("public_facts")); outputBusy = false; gate.interaction(); status(inputEyeStatus()) }
             "session_end" -> {
-                if (event.getString("reason") != "conversation_ended" || !imageScopeCurrent(event)) return
+                if (!SessionTermination.accepts(event.optString("reason"), active, permitted(), childBlocked,
+                    event.optLong("epoch",-1)==epoch && imageScopeCurrent(event))) return
+                PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.SESSION_END,diagnosticScope,
+                    source=if(event.optString("reason")=="session_expired")PinDiagnostic.FailSource.EXPIRED else PinDiagnostic.FailSource.NONE,
+                    wire=PinDiagnostic.WireKind.SESSION_END,point=PinDiagnostic.WirePoint.DISPATCH))
                 close(); sessionEnded()
             }
             "management" -> {
@@ -312,12 +326,14 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                         else helpScope.accept(event.getString("session"), event.getLong("turn"), epoch, gate.revision,
                             value.getInt("v"), value.getString("prompt_id"), value.getString("reason"))
                     }.getOrNull() ?: return // stale/malformed help must not close or lend authority to a newer turn
+                    PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CLIENT_FAIL,diagnosticScope,
+                        source=PinDiagnostic.FailSource.SERVER_SAFETY,wire=wireKind,point=wirePoint))
                     deliveringSafety=true
                     try { interrupt(); status("failure"); localHelp(help) }
                     finally { deliveringSafety=false }
-                } else { interrupt(); status("failure"); failed() }
+                } else { fail(ServerFailure.classify(event.optString("code")).localCode) }
             }
-            else -> error("unknown event")
+            else -> {wirePoint=PinDiagnostic.WirePoint.UNKNOWN_EVENT;error("unknown event")}
         }
     }
     private fun bindNormalScope(scope: ManagementScope) {
@@ -410,6 +426,9 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         send("stop", "intent" to intent) // Only after local native calls completed.
     }
     private fun fail(code: String) {
+        PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CLIENT_FAIL,diagnosticScope,
+            source=PinDiagnostic.failSource(code),wire=if(code=="protocol" || code.startsWith("server_"))wireKind else PinDiagnostic.WireKind.NONE,
+            point=if(code=="protocol" || code.startsWith("server_"))wirePoint else PinDiagnostic.WirePoint.NONE))
         PinDiagnostic.event(PinDiagnostic.Stage.PROTOCOL,when(code) {
             "incompatible"->PinDiagnostic.Reason.INCOMPATIBLE
             "closed"->PinDiagnostic.Reason.CLOSED
@@ -423,6 +442,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         if (!deliveringSafety) failed()
     }
     fun close() {
+        PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CLIENT_CLOSE_BEGIN,diagnosticScope))
         managementState.close(); entryGate.clear(); childVolume.clear(); childBlocked=true; managementPending=false
         images?.clear()
         active = false; isAwake = false; outputBusy = false; helpScope.clear()
@@ -431,5 +451,6 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         val old = socket; socket = null
         old?.cancel()
         closeTransport(); http.connectionPool.evictAll(); http.dispatcher.cancelAll()
+        PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CLIENT_CLOSE_END,diagnosticScope))
     }
 }

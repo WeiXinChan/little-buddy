@@ -21,7 +21,8 @@ internal interface ParentRecordFile {
 }
 
 /** Key creation is a one-shot transition after an empty record AND absent alias were observed.
- * ParentDomain reaches that first write only after consuming trusted INITIALIZE_PIN proof.
+ * Legacy PIN policy requires its issuer; explicit local-management policy migrates/initializes
+ * without a PIN. Both retain the same authenticated atomic persistence boundary.
  * Every later write requires an existing usable key and proves continuity against ciphertext
  * from the successful open/commit. Any failure permanently quarantines this store instance. */
 internal class SealedParentStore(private val file: ParentRecordFile,

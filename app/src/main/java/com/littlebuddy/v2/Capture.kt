@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 internal class Capture(private val assets: AssetManager, private val owner: Handler,
                        private val client: VoiceClient, private val allowed: () -> Boolean = { true },
-                       private val recording: (Boolean)->Unit = {}, private val failed: () -> Unit) {
+                       private val recording: (Boolean)->Unit = {},
+                       private val diagnosticScope:PinDiagnostic.Scope=PinDiagnostic.Scope(), private val failed: () -> Unit) {
     private val started=AtomicBoolean(false)
     private val cancelled = AtomicBoolean(false)
     @Volatile private var lease:RecorderLease?=null
@@ -29,18 +30,26 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         { !cancelled.get() && allowed() },{data,speech,at->client.frame(data,speech,at)},
         {requestCancel();owner.post{failed()}})
     @Volatile private var startupHandle:CaptureBootstrap?=null
+    @Volatile private var operation=PinDiagnostic.CaptureOperation.NONE
+    @Volatile private var workerJoined=false
     @Volatile private var thread: Thread? = null
     @Volatile var nativeProof = RecorderProof(); private set
     @Volatile var quarantined = false; private set
+    private fun diagnostic(stage:PinDiagnostic.RuntimeStage,joined:Boolean=workerJoined) {
+        PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(stage,diagnosticScope,cancelled=cancelled.get(),
+            allowed=runCatching{allowed()}.getOrDefault(false),stopRequested=stopRequested.get(),
+            nativeReleased=nativeProof.released,workerJoined=joined,operation=operation))
+    }
     fun start() {
         check(started.compareAndSet(false,true) && thread == null && !quarantined)
         lease=ProcessRecorders.acquire("child")
         if(lease==null){PinDiagnostic.event(PinDiagnostic.Stage.CAPTURE_NATIVE,PinDiagnostic.Reason.QUARANTINED);quarantined=true;owner.post{if(allowed())failed()};return}
+        diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_START)
         val hold=checkNotNull(lease)
         val worker=Thread({ record() }, "v2-capture");thread=worker
         try {
             worker.start()
-            Thread({worker.join();hold.workerFinished()},"v2-capture-join").start()
+            Thread({worker.join();hold.workerFinished();workerJoined=true;diagnostic(PinDiagnostic.RuntimeStage.WORKER_JOINED,true)},"v2-capture-join").start()
         } catch(_:Exception){quarantined=true;requestCancel()}
     }
     @SuppressLint("MissingPermission")
@@ -63,8 +72,10 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var ledger:NativeReadLedger?=null
         var startup:CaptureBootstrap?=null
         var uploadSamples = 0
+        var step=CaptureReadStep.NONE
         fun upload(batch: List<ShortArray>, speech: Boolean) {
             try {
+                step=CaptureReadStep.UPLOAD_ADMIT
                 checkNotNull(ledger).check()
                 val count=batch.sumOf{it.size}
                 if(uploadSamples+count>320000)error("input bound")
@@ -72,6 +83,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 check(uploads.offer(batch,speech,lastCapturedAt))
             }catch(failure:Exception){batch.forEach{it.fill(0)};throw failure}
         }
+        var timestampResult=CaptureTimestampResult.NOT_CALLED
+        fun context()=CaptureClockContext(diagnosticScope.activity,diagnosticScope.transport,diagnosticScope.capture,
+            step,cancelled.get(),runCatching{allowed()}.getOrDefault(false),stopRequested.get(),nativeProof.released,timestampResult)
         var diagnosticStage=PinDiagnostic.Stage.CAPTURE_NATIVE
         var attemptedNative=false
         var attemptedWake=false
@@ -101,10 +115,16 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             val timestamp=AudioTimestamp()
             val continuity=NativeReadLedger(nativeBytes/2,CaptureMonotonic::nowMs,
                 android.os.SystemClock::elapsedRealtime) {
-                if(native.getTimestamp(timestamp,AudioTimestamp.TIMEBASE_MONOTONIC)==AudioRecord.SUCCESS)
-                    CaptureStamp(timestamp.framePosition,timestamp.nanoTime) else null
+                timestampResult=CaptureTimestampResult.IN_FLIGHT
+                val oldOperation=operation;operation=PinDiagnostic.CaptureOperation.TIMESTAMP
+                val code=try {native.getTimestamp(timestamp,AudioTimestamp.TIMEBASE_MONOTONIC)}finally{operation=oldOperation}
+                timestampResult=when(code) {AudioRecord.SUCCESS->CaptureTimestampResult.SUCCESS
+                    AudioRecord.ERROR_INVALID_OPERATION->CaptureTimestampResult.UNAVAILABLE;else->CaptureTimestampResult.OTHER}
+                if(code==AudioRecord.SUCCESS) CaptureStamp(timestamp.framePosition,timestamp.nanoTime) else null
             }
             ledger=continuity
+            continuity.diagnostics { error -> CaptureClockDiagnostic.emit(CaptureClockFailure(error.reason,
+                continuity.diagnosticEvidence(),error.longWitness,context())) }
             val prefix=CaptureBootstrap(continuity);startup=prefix;startupHandle=prefix
             synchronized(nativeLock){
                 if(cancelled.get() || !allowed())return
@@ -115,23 +135,34 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             runCatching{recording(true)}
             diagnosticStage=PinDiagnostic.Stage.CAPTURE_STARTUP
             PinDiagnostic.event(diagnosticStage,PinDiagnostic.Reason.BEGIN)
-            prefix.prepare({target->native.read(target,0,target.size,AudioRecord.READ_NON_BLOCKING)},
+            step=CaptureReadStep.STARTUP
+            prefix.prepare({target->
+                operation=PinDiagnostic.CaptureOperation.NATIVE_READ
+                try{native.read(target,0,target.size,AudioRecord.READ_NON_BLOCKING)}finally{operation=PinDiagnostic.CaptureOperation.NONE}
+            },
                 {!cancelled.get() && allowed()},{Thread.sleep(5)})
             diagnosticStage=PinDiagnostic.Stage.CAPTURE_READ
             PinDiagnostic.event(diagnosticStage,PinDiagnostic.Reason.READY)
             while (!cancelled.get() && allowed()) {
                 diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
+                step=CaptureReadStep.PRE_ROOM
                 val room=continuity.remainingMs()
                 diagnosticStage=PinDiagnostic.Stage.CAPTURE_QUEUE
                 check(uploads.awaitRoom(frame.size,room)){"capture queue continuity"}
                 diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
+                step=CaptureReadStep.AFTER_ROOM
                 continuity.check()
                 diagnosticStage=PinDiagnostic.Stage.CAPTURE_READ
                 val replay=prefix.pending
-                val count=if(replay)prefix.take(frame) else native.read(frame,0,frame.size,AudioRecord.READ_NON_BLOCKING)
+                step=if(replay)CaptureReadStep.PREFIX_REPLAY else CaptureReadStep.NATIVE_READ
+                val count=if(replay)prefix.take(frame) else {
+                    operation=PinDiagnostic.CaptureOperation.NATIVE_READ
+                    try{native.read(frame,0,frame.size,AudioRecord.READ_NON_BLOCKING)}finally{operation=PinDiagnostic.CaptureOperation.NONE}
+                }
                 if(cancelled.get() || !allowed())break
                 check(count in 0..frame.size)
                 diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
+                step=CaptureReadStep.POST_READ
                 lastCapturedAt=if(replay)continuity.sampleTime(prefix.replayPosition) else continuity.read(count)
                 if (count == 0) { Thread.sleep(5); continue }
                 clockCheck(native.recordingState == AudioRecord.RECORDSTATE_RECORDING,CaptureClockReason.RECORDER_NOT_RECORDING)
@@ -148,7 +179,10 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if (!awake) {
                     if(cancelled.get() || !allowed())break
                     diagnosticStage=PinDiagnostic.Stage.CAPTURE_KWS
-                    val candidate=wake?.accept(frame,count)
+                    step=CaptureReadStep.KWS
+                    operation=PinDiagnostic.CaptureOperation.KWS
+                    val candidate=try{wake?.accept(frame,count)}finally{operation=PinDiagnostic.CaptureOperation.NONE}
+                    step=CaptureReadStep.POST_KWS
                     diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                     continuity.check()
                     val tail=candidate ?: continue
@@ -207,10 +241,12 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 if (uploadSamples >= 300000) error("input capacity")
             }
         } catch (error: Exception) {
-            if(error is CaptureClockFailure)CaptureClockDiagnostic.emit(error)
+            if(error is CaptureClockFailure)CaptureClockDiagnostic.emit(CaptureClockFailure(error.reason,error.evidence,error.longWitness,context()))
+            diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_FAILURE)
             if (!cancelled.get()) PinDiagnostic.runtimeError(diagnosticStage,error)
             if (!cancelled.get()) owner.post { if(!cancelled.get() && allowed())failed() }
         } finally {
+            step=CaptureReadStep.CLEANUP;operation=PinDiagnostic.CaptureOperation.CLEANUP
             uploads.cancel();frame.fill(0);startup?.clear();startupHandle=null;buffered.clear();runCatching{recording(false)}
             // Native stop/release precedes any potentially blocking model disposal.
             var released=!attemptedNative
@@ -231,6 +267,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 nativeHandle=null
             }
             if(released)lease?.nativeReleased()
+            diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_RELEASE)
             var disposed=!modelUncertain
             try { aec?.release() } catch(_:Exception){quarantined=true;disposed=false}
             // A blocked close retains the process lease even though native is already released.
@@ -243,12 +280,13 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
      * the shared lease includes its completion and the original model worker's completion. */
     fun requestCancel() {
         cancelled.set(true);startupHandle?.clear();uploads.cancel()
+        diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_CANCEL)
         if(!stopRequested.compareAndSet(false,true))return
         val hold=lease ?: return
         if(!hold.beginStop())return
-        Thread({try { synchronized(nativeLock) {
+        Thread({diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_STOP_BEGIN);try { synchronized(nativeLock) {
             nativeHandle?.let {if(it.recordingState==AudioRecord.RECORDSTATE_RECORDING)it.stop()}
-        }}catch(_:Exception){quarantined=true}finally{hold.endStop()}},"v2-capture-stop").start()
+        }}catch(_:Exception){quarantined=true}finally{hold.endStop();diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_STOP_END)}},"v2-capture-stop").start()
     }
     fun close() {
         requestCancel()
@@ -256,6 +294,6 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         old.join(500)
         if (old.isAlive) quarantined = true
         // Never permit another recorder when the original has no release confirmation.
-        if (!old.isAlive) {lease?.workerFinished();thread = null}
+        if (!old.isAlive) {lease?.workerFinished();workerJoined=true;thread = null}
     }
 }

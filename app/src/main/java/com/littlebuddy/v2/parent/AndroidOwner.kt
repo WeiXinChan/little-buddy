@@ -41,6 +41,17 @@ internal class AndroidOwner private constructor(val binding: String, private val
         private const val ALIAS = "little-buddy-v2-system-owner-v1"
         private var instance: AndroidOwner? = null
         private fun keys() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        fun existingAlias():Boolean { AndroidParentStore.worker();return keys().containsAlias(ALIAS) }
+        /** Public certificate only: does not open/sign with the auth-bound private key. */
+        fun existingBinding(): String? {
+            AndroidParentStore.worker()
+            val store=keys()
+            ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.LEGACY_ALIAS,
+                if(store.containsAlias(ALIAS)) ConfigurationDiagnostic.Reason.PRESENT else ConfigurationDiagnostic.Reason.ABSENT)
+            val certificate = store.getCertificate(ALIAS) ?: return null
+            return MessageDigest.getInstance("SHA-256").digest(certificate.publicKey.encoded)
+                .joinToString("") { "%02x".format(it) }
+        }
         @Synchronized fun open(activity: android.content.Context, create: Boolean = true): AndroidOwner {
             AndroidParentStore.worker()
             instance?.let { return it }

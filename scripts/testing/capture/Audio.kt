@@ -18,11 +18,12 @@ class AudioRecord(a:Int,b:Int,c:Int,d:Int,e:Int) {
  @Volatile var timestampDelayMs=0L
  @Volatile var stampAvailableAfterMs=0L
  var onRead:(Int)->Unit={}
+ var beforeTimestamp:()->Unit={}
  var beforeConstruct:()->Unit={}
  var beforeStart:()->Unit={}
  var afterStart:()->Unit={}
  fun getMinBufferSize(a:Int,b:Int,c:Int)=6400
- fun reset(n:Int) {check(active.get()==0);frames=n;timestampDelayMs=0;stampAvailableAfterMs=0;continuous=false;overwritten.set(0);droppedAfterRead=false;android.os.SystemClock.realtime=false;android.os.SystemClock.manualNow=100000;maximum.set(0);made.set(0);onRead={};beforeConstruct={};beforeStart={};afterStart={}}
+ fun reset(n:Int) {check(active.get()==0);frames=n;timestampDelayMs=0;stampAvailableAfterMs=0;continuous=false;overwritten.set(0);droppedAfterRead=false;android.os.SystemClock.realtime=false;android.os.SystemClock.manualNow=100000;maximum.set(0);made.set(0);onRead={};beforeTimestamp={};beforeConstruct={};beforeStart={};afterStart={}}
  }
  init{beforeConstruct()}
  var state=STATE_INITIALIZED
@@ -69,6 +70,7 @@ class AudioRecord(a:Int,b:Int,c:Int,d:Int,e:Int) {
   reads++;android.os.SystemClock.manualNow+=count/16;stampFrames+=count;stampTime=android.os.SystemClock.uptimeMillis()*1_000_000;output.fill(reads.toShort());onRead(reads);return count
  }
  fun getTimestamp(out:AudioTimestamp,timebase:Int):Int {
+  beforeTimestamp()
   val delay=timestampDelayMs;timestampDelayMs=0;if(delay>0)Thread.sleep(delay)
   if(android.os.SystemClock.uptimeMillis()-captureOriginNs/1_000_000<stampAvailableAfterMs)return ERROR_INVALID_OPERATION
   synchronized(nativeBuffer){out.framePosition=stampFrames;out.nanoTime=stampTime}
