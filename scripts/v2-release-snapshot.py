@@ -11,7 +11,7 @@ PUBLIC_TRANSPORT={
 def require(condition,reason):
  if not condition:raise AssertionError(reason)
 EXACT_FILES={'app/build.gradle.kts','app/v2-release.json','settings.gradle.kts','gradle.properties','gradlew',
-             'scripts/v2-build-metadata.py','scripts/v2-release-snapshot.py'}
+             'scripts/v2-build-metadata.py','scripts/v2-release-snapshot.py','scripts/v2-native-audit.py'}
 def selected(path):
  return path.startswith(('app/src/main/','app/src/debug/','app/src/v2Debug/','app/libs/','gradle/wrapper/','assets/v2-default/')) or path in EXACT_FILES
 def source_inventory(root):

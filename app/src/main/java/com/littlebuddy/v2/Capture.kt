@@ -9,7 +9,6 @@ import android.media.AudioTimestamp
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.os.Handler
-import com.littlebuddy.SherpaWake
 import com.littlebuddy.SpeechDetector
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -19,7 +18,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class Capture(private val assets: AssetManager, private val owner: Handler,
                        private val client: VoiceClient, private val allowed: () -> Boolean = { true },
                        private val recording: (Boolean)->Unit = {},
-                       private val diagnosticScope:PinDiagnostic.Scope=PinDiagnostic.Scope(), private val failed: () -> Unit) {
+                       private val diagnosticScope:PinDiagnostic.Scope=PinDiagnostic.Scope(),
+                       private val modelDirectory:java.io.File?=null, private val failed: () -> Unit) {
     private val started=AtomicBoolean(false)
     private val cancelled = AtomicBoolean(false)
     @Volatile private var lease:RecorderLease?=null
@@ -56,7 +56,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     private fun record() {
         var recorder: AudioRecord? = null
         var aec: AcousticEchoCanceler? = null
-        var wake: SherpaWake? = null
+        var wake: AbsoluteWake? = null
         val buffered = WakeSamples()
         val frame = ShortArray(320)
         var position = 0L
@@ -110,7 +110,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             diagnosticStage=PinDiagnostic.Stage.CAPTURE_MODEL
             PinDiagnostic.event(diagnosticStage,PinDiagnostic.Reason.BEGIN)
             attemptedWake=true
-            wake = SherpaWake(assets){!cancelled.get() && allowed()}
+            wake = AbsoluteWake(assets,modelDirectory){!cancelled.get() && allowed()}
+            wake.initialize()
             if (cancelled.get() || !allowed()) return
             val timestamp=AudioTimestamp()
             val continuity=NativeReadLedger(nativeBytes/2,CaptureMonotonic::nowMs,
@@ -174,7 +175,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     awake = false; voiced = false; uploadSamples = 0
                     detector = SpeechDetector(320, initialFloor = 36.0); wakeBase = wakeOrigin(position,count)
                     attemptedWake=true
-                    wake = SherpaWake(assets){!cancelled.get() && allowed()}
+                    wake = AbsoluteWake(assets,modelDirectory){!cancelled.get() && allowed()}
+                    wake.initialize()
                 }
                 if (!awake) {
                     if(cancelled.get() || !allowed())break
@@ -192,9 +194,15 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     wake = null
                     detector = SpeechDetector(320, initialFloor = 36.0)
                     continuity.check()
-                    val absoluteTail=(wakeBase+tail).coerceIn(0,position)
-                    val wakeBoundary=continuity.sampleTime(absoluteTail).coerceAtLeast(0)
-                    owner.post { if (!cancelled.get()) client.wake(wakeBoundary) }
+                    diagnosticStage=PinDiagnostic.Stage.CAPTURE_KWS
+                    val absoluteTail=Math.addExact(wakeBase,tail)
+                    check(tail>=0 && absoluteTail in wakeBase..position) {"keyword capture coordinate"}
+                    diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
+                    val wakeBoundary=continuity.sampleTime(absoluteTail)
+                    check(wakeBoundary>=0)
+                    val observedPosition=position
+                    val relativeWakeMs=wakeBoundary-continuity.sampleTime(0)
+                    owner.post { if (!cancelled.get() && allowed()) client.wake(wakeBoundary,absoluteTail,observedPosition,relativeWakeMs) }
                     // Absolute ring and KWS-local coordinates share a recorded origin.
                     lastSpeech = android.os.SystemClock.elapsedRealtime()
                     buffered.begin(absoluteTail)

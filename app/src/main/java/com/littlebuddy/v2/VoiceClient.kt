@@ -88,8 +88,16 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         override fun run() {
             if (!active) return
             if (!permitted()) { fail("lifecycle"); return }
-            try { if (!compatible) check(SystemClock.elapsedRealtime()<compatibilityDeadline)
-                managementState.checkDeadline(); if (compatible && !childBlocked) { gate.checkResponseDeadline(); player.tick(); gate.tick(outputBusy) } } catch (_: Exception) { fail("playback"); return }
+            var step=PinDiagnostic.PumpStep.COMPATIBILITY
+            try {
+                if (!compatible) check(SystemClock.elapsedRealtime()<compatibilityDeadline)
+                step=PinDiagnostic.PumpStep.MANAGEMENT_DEADLINE; managementState.checkDeadline()
+                if (compatible && !childBlocked) {
+                    step=PinDiagnostic.PumpStep.INPUT_RESPONSE_DEADLINE;gate.checkResponseDeadline()
+                    step=PinDiagnostic.PumpStep.PLAYER_TICK;player.tick()
+                    step=PinDiagnostic.PumpStep.ENDPOINT_TICK;gate.tick(outputBusy)
+                }
+            } catch (_: Exception) { fail("playback",step); return }
             handler.postDelayed(this, 10)
         }
     }
@@ -402,7 +410,14 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         send("input", "pcm" to Base64.encodeToString(bytes.array(), Base64.NO_WRAP), "speech" to speech, "age_ms" to age)
         bytes.array().fill(0)
     }
-    fun wake(observedAt: Long = SystemClock.elapsedRealtime()) { if (isAwake || !active || !compatible || !managementState.wake()) return; childBlocked=false; isAwake = true; gate.wake(observedAt); send("wake"); status("listening") }
+    fun wake(observedAt: Long = SystemClock.elapsedRealtime(),wakeTailFrame:Long=-1,captureFrame:Long=-1,wakeRelativeMs:Long=-1) {
+        if (isAwake || !active || !compatible || !permitted() || !managementState.wake()) return
+        childBlocked=false; isAwake = true; gate.wake(observedAt)
+        PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.WAKE_ACCEPTED,diagnosticScope,
+            wakeFrame=wakeTailFrame,readFrame=captureFrame,wakeRelativeMs=wakeRelativeMs,
+            wakeLagMs=SystemClock.elapsedRealtime()-observedAt))
+        send("wake"); status("listening")
+    }
     fun frame(samples: ShortArray, speech: Boolean, capturedAt: Long = SystemClock.elapsedRealtime()) {
         if (childBlocked || !managementState.mediaAllowed) { samples.fill(0); return }
         if (speech) gate.speech(capturedAt) else gate.quiet()
@@ -425,10 +440,10 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         if (!stopped.stopped || !stopped.released) { fail("release"); return }
         send("stop", "intent" to intent) // Only after local native calls completed.
     }
-    private fun fail(code: String) {
+    private fun fail(code: String,pumpStep:PinDiagnostic.PumpStep=PinDiagnostic.PumpStep.NONE) {
         PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CLIENT_FAIL,diagnosticScope,
             source=PinDiagnostic.failSource(code),wire=if(code=="protocol" || code.startsWith("server_"))wireKind else PinDiagnostic.WireKind.NONE,
-            point=if(code=="protocol" || code.startsWith("server_"))wirePoint else PinDiagnostic.WirePoint.NONE))
+            point=if(code=="protocol" || code.startsWith("server_"))wirePoint else PinDiagnostic.WirePoint.NONE,pump=pumpStep))
         PinDiagnostic.event(PinDiagnostic.Stage.PROTOCOL,when(code) {
             "incompatible"->PinDiagnostic.Reason.INCOMPATIBLE
             "closed"->PinDiagnostic.Reason.CLOSED

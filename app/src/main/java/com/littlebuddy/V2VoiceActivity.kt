@@ -344,7 +344,7 @@ class V2VoiceActivity : Activity() {
         capture=Capture(assets,owner,client,
             allowed={ foreground && focused && ticket==transportRevision && recorderTicket==captureRevision.get() && !managementRequested && !managementVisible },
             recording={active->publishEyes(ticket){state,key->state.recording(key,recorderTicket,active)}},
-            diagnosticScope=diagnosticScope(ticket,recorderTicket)) {
+            diagnosticScope=diagnosticScope(ticket,recorderTicket),modelDirectory=codeCacheDir) {
             runOnUiThread {
                 val currentTransport=transportRevision;val currentCapture=captureRevision.get()
                 val apply=CaptureFailureGate.current(ticket,recorderTicket,currentTransport,currentCapture,

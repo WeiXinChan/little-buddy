@@ -33,7 +33,7 @@ async def run():
   tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(out/'cert',out/'key')
   contract='v2-voice2-safety1-images2-volume1-management1-end1'
   negative='--negative-stale' in os.sys.argv
-  for mode in (['stale'] if negative else ['expire','conversation','stale','management','timeout']):
+  for mode in (['stale'] if negative else ['expire','conversation','stale','management','timeout','pump_endpoint']):
    async def peer(ws):
     assert ws.request.headers['Authorization']=='Bearer '+'A'*32
     async def send(kind,**kw):
@@ -44,6 +44,7 @@ async def run():
       print('FIXTURE_RECEIVED',mode,event['type'],flush=True)
       if event['type']!='scope':continue
       await send('scope',protocol_contract=contract,management_v=1,state='active')
+      if mode=='pump_endpoint':continue
       if mode=='stale':
        await send('scope',session='b'*32,protocol_contract=contract,management_v=1,state='active')
        for kw in [dict(session='a'*32),dict(turn=1),dict(revision=1),dict(epoch=1)]:
@@ -68,5 +69,5 @@ async def run():
     finally:
      if process.returncode is None:
       process.kill();await process.wait()
- print('REAL_CLIENT_TLS 5/5 scenarios; JVM Android ports, no device claims',flush=True)
+ print('REAL_CLIENT_TLS 6/6 scenarios (includes actual ENDPOINT_TICK failure); JVM Android ports, no device claims',flush=True)
 asyncio.run(run())

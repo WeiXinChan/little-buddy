@@ -1,0 +1,9 @@
+{
+  "tag": "v1.12.27",
+  "upstream_header_sha256": "748c95639d2222fdf0bcdbd9e8d5ca5a9eecc0603c3f8245f69fc9999590cdfb",
+  "patched_header_sha256": "f27e4404633f39eef17154a383a634561a4d00fc58deac60ddb610dd3512fa1f",
+  "android_26_jni_header_sha256": "b71b0a7bbe3ce424d263c45a88dc96e90d988e31ab1c2ae94a8e5c3656aca819",
+  "status": "HOST_REAL_KOTLIN_JNI_ONNX_PREFIX_0_30_90_VERIFIED",
+  "logic": "preserve-decoder-frame-offset-on-reset",
+  "ort_api_version": 17
+}
