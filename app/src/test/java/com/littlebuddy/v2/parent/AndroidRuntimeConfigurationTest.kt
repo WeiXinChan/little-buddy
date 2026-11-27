@@ -42,7 +42,9 @@ class AndroidRuntimeConfigurationTest {
                         Files.move(staging.toPath(),file.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE)}
                 },object:ParentKeyProvider {
                     override fun exists()=key!=null
-                    override fun existing()=ConfigurationDiagnostic.step(ConfigurationDiagnostic.Stage.KEY_LOAD){keyError?.let{throw it};key}
+                    override fun existing()=ConfigurationDiagnostic.step(ConfigurationDiagnostic.Stage.KEY_LOAD){keyError?.let{throw it};key}.also {
+                        ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.KEY_LOAD,if(it!=null)ConfigurationDiagnostic.Reason.PRESENT else ConfigurationDiagnostic.Reason.ABSENT)
+                    }
                     override fun create():SecretKey{creates++;return KeyGenerator.getInstance("AES").apply{init(256)}.generateKey().also{key=it}}
                 },aad(binding))
                 val store=object:ParentStore {
@@ -146,5 +148,11 @@ class AndroidRuntimeConfigurationTest {
         val b=ConfigurationEventBudget(false)
         repeat(128){assertTrue(b.general());assertTrue(b.configuration())}
         assertFalse(b.general());assertFalse(b.configuration())
+    }
+    @Test fun missingAesHandleCannotRegenerateKeyOrReplaceCiphertext()=Rig().use{r->
+        r.seed(ParentRecord(ByteArray(16),ByteArray(32),connection=r.issued));val bytes=r.file.readBytes();r.key=null
+        assertEquals(ConfigurationStatus.MIGRATION_FAILED,r.result().status)
+        assertTrue(r.seen(ConfigurationDiagnostic.Stage.KEY_LOAD,ConfigurationDiagnostic.Reason.ABSENT))
+        assertArrayEquals(bytes,r.file.readBytes());assertEquals(0,r.creates);assertEquals(0,r.writes)
     }
 }

@@ -149,6 +149,7 @@ internal class ConfigurationFailure(val stage:ConfigurationDiagnostic.Stage,val 
 internal class ConfigurationEventBudget(configurationOnly:Boolean) {
     private val general=AtomicInteger(if(configurationOnly)160 else 256)
     private val configuration=if(configurationOnly)AtomicInteger(96) else null
-    fun general()=general.getAndDecrement()>0
-    fun configuration()=(configuration?:general).getAndDecrement()>0
+    private fun admit(counter:AtomicInteger)=counter.getAndUpdate { if(it>0)it-1 else 0 }>0
+    fun general()=admit(general)
+    fun configuration()=admit(configuration?:general)
 }
