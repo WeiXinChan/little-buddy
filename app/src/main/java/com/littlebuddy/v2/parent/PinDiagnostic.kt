@@ -9,7 +9,7 @@ internal object PinDiagnostic {
     enum class Reason { BEGIN, SUCCESS, REJECTED, ERROR, MISSING, EXPIRED, NO_FOCUS, CANCEL,
         INVALIDATED, TICK_OWNER_INVALID, SAVE_IN_PROGRESS, EARLY_REJECT, CHALLENGE_REJECT,
         PIN_MISMATCH, STALE_CALLBACK, UNOWNED, LOCKED, AUTHORIZED, COOLDOWN, QUARANTINED,
-        SECURITY_ERROR, IO_ERROR, STATE_ERROR, OTHER_ERROR, TLS_HANDSHAKE, TLS_PEER, SSH_ERROR, TIMEOUT, ARGUMENT_ERROR, READY, SAVED_LOCAL, NO_CONFIG, HOLD, PARENT_RETRY, RETURN, NETWORK, CLOSED, PROTOCOL_FAILED, INCOMPATIBLE, CAPTURE_FAILED, RELEASE_FAILED, TLS_ERROR, AUTH_DENIED, HTTP_FAILED, CONNECT_FAILED, DNS_FAILED, SOCKET_ERROR, EOF_ERROR, INTERRUPTED_IO, SITE_MAP, SITE_CONNECT, SITE_OKHTTP_CONNECT, SITE_TLS, SITE_UNKNOWN, SITE_JAVA_SOCKET, SITE_CONSCRYPT, TARGET_UNRESOLVED, TARGET_HOST, TARGET_PORT, FORWARD_UNAVAILABLE }
+        SECURITY_ERROR, IO_ERROR, STATE_ERROR, OTHER_ERROR, TLS_HANDSHAKE, TLS_PEER, SSH_ERROR, TIMEOUT, ARGUMENT_ERROR, CONFIG_LOAD_FAILED, CONFIG_MIGRATION_FAILED, CONFIG_CHILD_MISSING, CONFIG_CONNECTION_MISSING, READY, SAVED_LOCAL, NO_CONFIG, HOLD, PARENT_RETRY, RETURN, NETWORK, CLOSED, PROTOCOL_FAILED, INCOMPATIBLE, CAPTURE_FAILED, RELEASE_FAILED, TLS_ERROR, AUTH_DENIED, HTTP_FAILED, CONNECT_FAILED, DNS_FAILED, SOCKET_ERROR, EOF_ERROR, INTERRUPTED_IO, SITE_MAP, SITE_CONNECT, SITE_OKHTTP_CONNECT, SITE_TLS, SITE_UNKNOWN, SITE_JAVA_SOCKET, SITE_CONSCRYPT, TARGET_UNRESOLVED, TARGET_HOST, TARGET_PORT, FORWARD_UNAVAILABLE }
     data class Scope(val activity:Long=0,val transport:Long=0,val capture:Long=0)
     enum class RuntimeStage { ACTIVITY_CREATE, ACTIVITY_RESUME, ACTIVITY_PAUSE, ACTIVITY_FOCUS_GAIN, ACTIVITY_FOCUS_LOSS, ACTIVITY_NEW_INTENT,
         CLIENT_FAIL, CLIENT_CLOSE_BEGIN, CLIENT_CLOSE_END, TRANSPORT_RETIRE, CAPTURE_START, CAPTURE_CANCEL,
@@ -102,4 +102,53 @@ internal object PinDiagnostic {
         is IllegalStateException -> Reason.STATE_ERROR
         else -> Reason.OTHER_ERROR
     })
+}
+
+/** Closed scalar vocabulary; never accepts a binding, key, endpoint, token or exception text. */
+internal object ConfigurationDiagnostic {
+    enum class Stage { WORKER, STORE_PRESENCE, LEGACY_ALIAS, LEGACY_CERT, MARKER_READ, BINDING, MARKER_WRITE,
+        DOMAIN_OPEN, STORE_READ, STORE_COMMIT, KEY_PRESENCE, KEY_LOAD, KEY_CREATE, PRESET, MIGRATION, CHILD_READ, COMPLETE }
+    enum class Reason { BEGIN, SUCCESS, PRESENT, ABSENT, BUSY, QUARANTINED, UNCHANGED,
+        REJECTED, EMPTY, NO_CONNECTION, SECURITY, BAD_TAG, INVALID_KEY, IO, STATE, ARGUMENT, OTHER }
+    data class Event(val attempt:Long,val stage:Stage,val reason:Reason)
+    private val sequence=java.util.concurrent.atomic.AtomicLong()
+    private val current=ThreadLocal<Long>()
+    @Volatile private var sink:((Event)->Unit)?=null
+    fun install(value:((Event)->Unit)?) { sink=value }
+    fun event(stage:Stage,reason:Reason) { try { sink?.invoke(Event(current.get()?:0,stage,reason)) } catch(_:Throwable){} }
+    fun <T> attempt(block:()->T):T {
+        val previous=current.get();current.set(sequence.incrementAndGet())
+        try{return block()}finally{if(previous==null)current.remove() else current.set(previous)}
+    }
+    fun category(error:Exception)=when(error) {
+        is javax.crypto.AEADBadTagException -> Reason.BAD_TAG
+        is java.security.InvalidKeyException, is java.security.UnrecoverableKeyException -> Reason.INVALID_KEY
+        is java.security.GeneralSecurityException, is SecurityException -> Reason.SECURITY
+        is java.io.IOException -> Reason.IO
+        is IllegalStateException -> Reason.STATE
+        is IllegalArgumentException -> Reason.ARGUMENT
+        else -> Reason.OTHER
+    }
+    /** Persistence must retain the exact exception type (especially revoked final commits). */
+    fun <T> observe(stage:Stage,block:()->T):T {
+        event(stage,Reason.BEGIN)
+        try{return block().also{event(stage,Reason.SUCCESS)}}
+        catch(error:Exception){event(stage,category(error));throw error}
+    }
+    fun <T> step(stage:Stage,block:()->T):T {
+        event(stage,Reason.BEGIN)
+        try {return block().also{event(stage,Reason.SUCCESS)}}
+        catch(error:ConfigurationFailure){throw error}
+        catch(error:Exception){val reason=category(error);event(stage,reason);throw ConfigurationFailure(stage,reason)}
+    }
+}
+internal class ConfigurationFailure(val stage:ConfigurationDiagnostic.Stage,val reason:ConfigurationDiagnostic.Reason):
+    IllegalStateException("configuration stage failed")
+
+/** Reserve configuration evidence inside the original total cap, never on top of it. */
+internal class ConfigurationEventBudget(configurationOnly:Boolean) {
+    private val general=AtomicInteger(if(configurationOnly)160 else 256)
+    private val configuration=if(configurationOnly)AtomicInteger(96) else null
+    fun general()=general.getAndDecrement()>0
+    fun configuration()=(configuration?:general).getAndDecrement()>0
 }

@@ -238,15 +238,26 @@ class V2VoiceActivity : Activity() {
         if (!retryGate.automaticAllowed || !foreground || !hasWindowFocus() || managementVisible || managementRequested || helpVisible) return
         val ticket = managementRevision
         configurationWorker.execute {
-            val configuration = runCatching { AndroidParentRuntime.load(this).childConfiguration() }.getOrNull()
+            val configResult = AndroidParentRuntime.configuration(this)
+            val configuration = configResult.configuration
             runOnUiThread {
                 if (!retryGate.automaticAllowed || ticket != managementRevision || !foreground || !hasWindowFocus() || managementVisible || managementRequested || helpVisible) return@runOnUiThread
                 if (configuration != null) execution = configuration.playback
                 val connection = configuration?.connection
-                PinDiagnostic.event(PinDiagnostic.Stage.CONFIG, if (connection==null) PinDiagnostic.Reason.NO_CONFIG else PinDiagnostic.Reason.READY)
+                PinDiagnostic.event(PinDiagnostic.Stage.CONFIG, when(configResult.status) {
+                    ConfigurationStatus.LOAD_FAILED -> PinDiagnostic.Reason.CONFIG_LOAD_FAILED
+                    ConfigurationStatus.MIGRATION_FAILED -> PinDiagnostic.Reason.CONFIG_MIGRATION_FAILED
+                    ConfigurationStatus.CHILD_MISSING -> PinDiagnostic.Reason.CONFIG_CHILD_MISSING
+                    ConfigurationStatus.NO_CONNECTION -> PinDiagnostic.Reason.CONFIG_CONNECTION_MISSING
+                    ConfigurationStatus.READY -> PinDiagnostic.Reason.READY
+                })
                 if (connection==null) {
-                    connectionNotice=if (configuration==null) "安全配置不可用或尚未初始化；请从家长验证检查，不会自动连接。"
-                        else "尚未连接，请在家长验证后选择连接瓦力。"
+                    connectionNotice=if (configuration==null) "连接配置暂不可用，请长按右下角查看管理状态。"
+                        else "本机连接尚未准备好，请长按右下角查看管理状态。"
+                    return@runOnUiThread
+                }
+                if (BuildConfig.CONFIGURATION_DIAGNOSTIC_ONLY) {
+                    connectionNotice="本次连接配置检查已完成，诊断版本暂不启动语音。"
                     return@runOnUiThread
                 }
                 connectionNotice="正在连接。"
@@ -255,7 +266,7 @@ class V2VoiceActivity : Activity() {
                     return@runOnUiThread
                 }
                 if (runCatching { connection.requireRunnable() }.isFailure) {
-                    connectionNotice="旧直连回环配置不可运行，请家长重新导入V2私有SSH配置。"; return@runOnUiThread
+                    connectionNotice="现有连接格式不可运行，请在管理中查看状态。"; return@runOnUiThread
                 }
                 execution = configuration.playback
                 startVoice(connection.address, connection.credential, connection.sshUser)

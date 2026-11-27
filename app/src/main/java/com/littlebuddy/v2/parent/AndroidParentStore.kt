@@ -40,7 +40,7 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
     }, AndroidParentKeys(), aad)
     override fun read(): ParentRecord? {
         worker()
-        return sealed.read()
+        return ConfigurationDiagnostic.step(ConfigurationDiagnostic.Stage.STORE_READ) { sealed.read() }
     }
     override fun write(record: ParentRecord, authorized: () -> Boolean) {
         worker()
@@ -48,7 +48,7 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
     }
     override fun commit(record: ParentRecord, transaction: ParentCommit) {
         worker()
-        sealed.commit(record, transaction)
+        ConfigurationDiagnostic.observe(ConfigurationDiagnostic.Stage.STORE_COMMIT) { sealed.commit(record, transaction) }
     }
     companion object {
         fun hasExistingDomain(context: Context): Boolean {
@@ -63,8 +63,12 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
 /** Creation is reachable only through SealedParentStore's one-shot fresh transition. */
 private class AndroidParentKeys : ParentKeyProvider {
     private fun store() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-    override fun exists() = store().containsAlias(ALIAS)
-    override fun existing() = store().getKey(ALIAS, null) as SecretKey?
+    override fun exists() = ConfigurationDiagnostic.step(ConfigurationDiagnostic.Stage.KEY_PRESENCE) { store().containsAlias(ALIAS) }.also {
+        ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.KEY_PRESENCE, if(it) ConfigurationDiagnostic.Reason.PRESENT else ConfigurationDiagnostic.Reason.ABSENT)
+    }
+    override fun existing() = ConfigurationDiagnostic.step(ConfigurationDiagnostic.Stage.KEY_LOAD) { store().getKey(ALIAS, null) as SecretKey? }.also {
+        ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.KEY_LOAD, if(it!=null) ConfigurationDiagnostic.Reason.PRESENT else ConfigurationDiagnostic.Reason.ABSENT)
+    }
     override fun create(): SecretKey {
         check(!exists()) { "parent alias already exists" }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {

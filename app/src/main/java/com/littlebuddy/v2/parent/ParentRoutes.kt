@@ -38,24 +38,29 @@ internal object AndroidParentRuntime {
         if (!AndroidParentStore.hasExistingDomain(context)) return null
         return local(context)
     }
-    fun load(activity: Activity): ParentDomain = local(activity)
-    private fun local(context: android.content.Context): ParentDomain {
-        AndroidParentStore.worker()
-        val existing = AndroidParentStore.hasExistingDomain(context)
-        // Preserve old AAD exactly. Never replace an unreadable existing record/key.
-        val marker = context.noBackupFilesDir.resolve("v2-local-management-binding-v1")
-        val binding = LocalManagementBinding.resolve(existing, AndroidOwner.existingBinding(),
-            if (marker.exists()) { check(marker.isFile && marker.length() == 1L); marker.readBytes() } else null)
-        if (!existing && binding == "v2-app-local-management-v1") {
-            java.io.FileOutputStream(marker).use { it.write(byteArrayOf(1)); it.fd.sync() }
+    fun load(activity: Activity): ParentDomain = ParentRuntimePath.load(platform(activity))
+    fun configuration(activity: Activity): ConfigurationResult = configuration(platform(activity))
+    internal fun configuration(platform: ParentRuntimePlatform): ConfigurationResult = ParentRuntimePath.configuration(platform)
+    private fun local(context: android.content.Context): ParentDomain = ParentRuntimePath.load(platform(context))
+    private fun platform(context: android.content.Context) = object : ParentRuntimePlatform {
+        override fun requireWorker() = AndroidParentStore.worker()
+        override fun existingStore() = AndroidParentStore.hasExistingDomain(context)
+        override fun legacyBinding() = AndroidOwner.existingBinding()
+        private val selector get() = context.noBackupFilesDir.resolve("v2-local-management-binding-v1")
+        override fun marker(): ByteArray? {
+            val marker=selector
+            if(!marker.exists())return null
+            check(marker.isFile && marker.length()==1L)
+            return marker.readBytes()
         }
-        val domain = AndroidParentDomain.open(context.applicationContext, binding)
-        val preset = AndroidDeviceConnectionPreset.load(context)?.let {
-            val token = it.tokenChars()
-            try { ParentConnection(it.address, String(token), it.user).also { c -> c.requireRunnable() } }
+        override fun createMarker() {
+            java.io.FileOutputStream(selector).use { it.write(byteArrayOf(1));it.fd.sync() }
+        }
+        override fun domain(binding:String) = AndroidParentDomain.open(context.applicationContext,binding)
+        override fun preset(): ParentConnection? = AndroidDeviceConnectionPreset.load(context)?.let {
+            val token=it.tokenChars()
+            try { ParentConnection(it.address,String(token),it.user).also{c->c.requireRunnable()} }
             finally { token.fill('\u0000') }
         }
-        check(domain.initializeLocal(preset)) { "local parent storage unavailable" }
-        return domain
     }
 }

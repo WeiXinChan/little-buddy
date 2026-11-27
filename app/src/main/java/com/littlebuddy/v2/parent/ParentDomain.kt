@@ -91,9 +91,11 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
      * settings/connection and removes obsolete PIN material. Existing transport keys are untouched. */
     fun initializeLocal(preset: ParentConnection? = null): Boolean {
         requireWorker()
-        if (!localManagement || worker.isHeldByCurrentThread || !worker.tryLock()) return false
+        if (!localManagement || worker.isHeldByCurrentThread || !worker.tryLock()) {
+            ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.MIGRATION,ConfigurationDiagnostic.Reason.BUSY); return false
+        }
         try {
-            if (quarantined) return false
+            if (quarantined) { ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.MIGRATION,ConfigurationDiagnostic.Reason.QUARANTINED); return false }
             val old = record
             val next = ParentRecord(ByteArray(0), ByteArray(0), volumeLimit = old?.volumeLimit ?: 60,
                 speechRate = old?.speechRate ?: 100, durationSeconds = old?.durationSeconds ?: 600,
@@ -324,7 +326,9 @@ internal class ParentDomain(private val store: ParentStore, private val now: () 
     /** Worker-only execution snapshot. Recheck authenticated storage/key presence before a new child session. */
     fun childConfiguration(): ParentChildConfiguration? {
         requireWorker()
-        if (worker.isHeldByCurrentThread || !worker.tryLock()) return null
+        if (worker.isHeldByCurrentThread || !worker.tryLock()) {
+            ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.CHILD_READ,ConfigurationDiagnostic.Reason.BUSY); return null
+        }
         try {
             val expected = synchronized(lock) { if (quarantined) return null; record } ?: return null
             val durable = checkNotNull(store.read())

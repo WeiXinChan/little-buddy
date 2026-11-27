@@ -44,7 +44,10 @@ internal class AndroidOwner private constructor(val binding: String, private val
         /** Public certificate only: does not open/sign with the auth-bound private key. */
         fun existingBinding(): String? {
             AndroidParentStore.worker()
-            val certificate = keys().getCertificate(ALIAS) ?: return null
+            val store=keys()
+            ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.LEGACY_ALIAS,
+                if(store.containsAlias(ALIAS)) ConfigurationDiagnostic.Reason.PRESENT else ConfigurationDiagnostic.Reason.ABSENT)
+            val certificate = store.getCertificate(ALIAS) ?: return null
             return MessageDigest.getInstance("SHA-256").digest(certificate.publicKey.encoded)
                 .joinToString("") { "%02x".format(it) }
         }
