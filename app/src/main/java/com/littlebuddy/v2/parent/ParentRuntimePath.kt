@@ -23,8 +23,11 @@ internal object ParentRuntimePath {
     private fun local(p:ParentRuntimePlatform):ParentDomain {
         val D=ConfigurationDiagnostic
         D.step(ConfigurationDiagnostic.Stage.WORKER){p.requireWorker()}
-        val isolatedMarker=D.step(ConfigurationDiagnostic.Stage.ISOLATED_MARKER){p.isolatedMarker()}
-        val isolatedExists=D.step(ConfigurationDiagnostic.Stage.ISOLATED_PRESENCE){p.isolatedExists()}
+        val selected=synchronized(recoveryInitialization) {
+            Pair(D.step(ConfigurationDiagnostic.Stage.ISOLATED_MARKER){p.isolatedMarker()},
+                D.step(ConfigurationDiagnostic.Stage.ISOLATED_PRESENCE){p.isolatedExists()})
+        }
+        val isolatedMarker=selected.first;val isolatedExists=selected.second
         if(isolatedMarker!=null || isolatedExists) {
             D.step(ConfigurationDiagnostic.Stage.ISOLATED_MARKER) {
                 check(isolatedMarker==null || isolatedMarker.contentEquals(byteArrayOf(1)))
