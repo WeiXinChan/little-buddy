@@ -1,0 +1,22 @@
+test_default_disabled_and_fixed_source (tests.v2.test_retain_diagnostic.Diagnostic.test_default_disabled_and_fixed_source) ... ok
+test_legacy_boolean_does_not_get_invented_new_cause (tests.v2.test_retain_diagnostic.Diagnostic.test_legacy_boolean_does_not_get_invented_new_cause) ... ok
+test_non_case_input_and_exception_messages_never_recorded (tests.v2.test_retain_diagnostic.Diagnostic.test_non_case_input_and_exception_messages_never_recorded) ... ok
+test_trace_adds_no_requests_to_successful_fixed_case (tests.v2.test_retain_diagnostic.Diagnostic.test_trace_adds_no_requests_to_successful_fixed_case) ... ok
+test_whole_segment_context_and_both_flags_preserved_without_fake_final_ack (tests.v2.test_retain_diagnostic.Diagnostic.test_whole_segment_context_and_both_flags_preserved_without_fake_final_ack) ... ok
+test_failed_first_reply_stops_before_second_input (tests.v2.test_retain_only_probe.Preparation.test_failed_first_reply_stops_before_second_input) ... ok
+test_only_single_case_no_all_memory_or_default_execution (tests.v2.test_retain_only_probe.Preparation.test_only_single_case_no_all_memory_or_default_execution) ... usage: python3 -m unittest [-h] --case {retain-only-change} [--execute]
+                           [--acknowledge-quota-not-live-verified]
+                           [--output OUTPUT]
+python3 -m unittest: error: argument --case: invalid choice: 'all' (choose from 'retain-only-change')
+ok
+test_production_single_format_repair_is_admitted_within_same_cap (tests.v2.test_retain_only_probe.Preparation.test_production_single_format_repair_is_admitted_within_same_cap) ... ok
+test_source_pin_matches_fixed_production_not_tool_self_hash (tests.v2.test_retain_only_probe.Preparation.test_source_pin_matches_fixed_production_not_tool_self_hash) ... ok
+test_total_model_limit_is_sixteen_and_no_fallback (tests.v2.test_retain_only_probe.Preparation.test_total_model_limit_is_sixteen_and_no_fallback) ... ok
+test_two_inputs_same_session_actual_ack_state_and_usage (tests.v2.test_retain_only_probe.Preparation.test_two_inputs_same_session_actual_ack_state_and_usage) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.140s
+
+OK
+{"status": "disabled", "source": "79ba62b3b7e8b16d15b43249039891e568de8672", "model_request_limit": 16, "cloud_calls": 0}
+{"status": "DISABLED_PLAN_ONLY", "source": "79ba62b3b7e8b16d15b43249039891e568de8672", "case": "retain-only-change", "cases": {"retain-only-change": ["我们玩会飞的东西，不重复。我已经说过小鸟和飞机，这些不能再用；这次我说蝴蝶，轮到你。", "只改成两个字，保留会飞和不重复，不重新开始；轮到你了。"]}, "limits": {"model_requests": 16, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "semantic_pass": null, "cloud_calls": 0}

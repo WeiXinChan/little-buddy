@@ -4,7 +4,7 @@ No real ASR, images, microphone or device playback. Never a semantic PASS oracle
 import argparse,asyncio,copy,hashlib,json,os,pathlib,signal,subprocess,sys,time
 from contextlib import asynccontextmanager
 ROOT=pathlib.Path(__file__).resolve().parent
-SOURCE='253ad055a87ca21103e3c95b729874aaeaa7ce28'
+SOURCE='79ba62b3b7e8b16d15b43249039891e568de8672'
 MODEL='deepseek-v4.1-flash-1017'
 WARMUP='我们轮流说水果，一次一个，不重复，我先说苹果。'
 ALL_CASES={'retain-only-change':('我们玩会飞的东西，不重复。我已经说过小鸟和飞机，这些不能再用；这次我说蝴蝶，轮到你。','只改成两个字，保留会飞和不重复，不重新开始；轮到你了。')}

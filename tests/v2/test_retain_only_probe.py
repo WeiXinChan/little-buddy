@@ -47,7 +47,7 @@ class Preparation(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(probe.main(['--case','retain-only-change','--execute']),2)
         with self.assertRaises(SystemExit):probe.main(['--case','all'])
     async def test_source_pin_matches_fixed_production_not_tool_self_hash(self):
-        self.assertEqual(probe.SOURCE,'253ad055a87ca21103e3c95b729874aaeaa7ce28')
+        self.assertEqual(probe.SOURCE,'79ba62b3b7e8b16d15b43249039891e568de8672')
         self.assertEqual(len(probe.verify_source()),64)
         from pathlib import Path
         pin=json.loads((Path(probe.__file__).parent/'v2_retain_only_probe_pin.json').read_text())
