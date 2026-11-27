@@ -63,7 +63,7 @@ internal class ParentPanelView(private val activity: Activity, private val model
         if (state.mode == PanelMode.SETTINGS) label(if (model.hasSavedConnection) "本机连接已保存" else "尚未连接",14f)
         if (state.mode == PanelMode.SETTINGS && model.hasSavedConnection) label(connectionNotice(),14f)
         label(if (state.notice == PanelNotice.NONE && state.mode == PanelMode.SETTINGS)
-            "已验证。退出或闲置后会锁定。" else notice(state.notice))
+            if (model.directManagement) "退出或闲置后关闭本次管理页面。" else "已验证。退出或闲置后会锁定。" else notice(state.notice))
         when (state.mode) {
             PanelMode.VERIFY -> {
                 val pin = pin(body, "6 位 PIN").apply { isEnabled = !state.busy && state.notice != PanelNotice.COOLDOWN }
@@ -93,7 +93,7 @@ internal class ParentPanelView(private val activity: Activity, private val model
                         button("连接瓦力") { model.requestSystemOwner(OwnerOperation.PROVISION_ENDPOINT) }
                     else label("此安装包尚未提供本机连接，请联系安装管理员。")
                 }
-                button("修改 PIN") { model.navigate(PanelMode.CHANGE_PIN) }
+
                 button("帮助与反馈") { model.navigate(PanelMode.FEEDBACK) }
             }
             PanelMode.CHANGE_PIN -> {
@@ -153,14 +153,14 @@ internal class ParentPanelView(private val activity: Activity, private val model
         return CharArray(text.length).also { TextUtils.getChars(text, 0, text.length, it, 0); text.clear() }
     }
     private fun notice(reason: PanelNotice) = when (reason) {
-        PanelNotice.NONE -> "请输入屏幕 PIN；语音不能代替验证。"
+        PanelNotice.NONE -> "管理设置"
         PanelNotice.LOADING -> "正在读取安全设置…"
         PanelNotice.UNCONFIGURED -> "本机系统认证暂不可用，请检查安全锁屏和兼容能力。"
         PanelNotice.UNOWNED -> "尚未设置本机家长PIN，请先通过系统认证再初始化。"
         PanelNotice.PIN_FORMAT -> "请输入 6 位数字。"
         PanelNotice.WRONG_PIN -> "PIN 不正确。"
         PanelNotice.COOLDOWN -> "尝试次数过多，请稍后再试。"
-        PanelNotice.LOCKED -> "已锁定，请重新验证。"
+        PanelNotice.LOCKED -> if (model.directManagement) "本次管理已结束，请退出后长按右下角重新进入。" else "已锁定，请重新验证。"
         PanelNotice.STORAGE -> "安全设置暂不可用。请退出后稍后再试。"
         PanelNotice.SAVED -> "已保存本地上限。"
         PanelNotice.INVALID_LIMIT -> "请输入 0 到 100 的整数。"

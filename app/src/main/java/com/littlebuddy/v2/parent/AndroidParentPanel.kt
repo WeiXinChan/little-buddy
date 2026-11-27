@@ -15,7 +15,6 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { run -> Thread(run, "v2-parent-io") }
     private lateinit var page: ParentPanelView
-    private lateinit var prompt: AndroidOwnerPrompt
     private var closed = false
     private var viewFocused = false
     private val preset = java.util.concurrent.atomic.AtomicReference<DeviceConnectionPreset?>()
@@ -24,28 +23,28 @@ internal class AndroidParentPanel(private val activity: Activity, leave: () -> U
         AndroidParentRuntime.load(activity)
     },
         { task -> worker.execute(task) }, { task -> main.post(task) }, { state -> pageChanged(state); page.render(state) }, leave,
-        { operation -> beginOwner(operation) }, AndroidParentRuntime::discard, securityRevoked, configurationSaved)
+        { operation -> beginOwner(operation) }, AndroidParentRuntime::discard, securityRevoked, configurationSaved, directManagement = true)
     private val tick = object : Runnable {
         override fun run() { if (!closed) { model.tick(); main.postDelayed(this, 500) } }
     }
     init {
         AndroidPinDiagnostic.enable()
         page = ParentPanelView(activity, model, connectionNotice = connectionNotice, savePublicKey = { savePublicKey(model) }, connectionPreset = { preset.get() })
-        prompt = AndroidOwnerPrompt(activity, { task -> worker.execute(task) }, { if (!closed && activity.hasWindowFocus()) open(force = true) })
+
     }
-    private fun beginOwner(operation: OwnerOperation) { securityRevoked(); model.pause { page.pause() }; prompt.begin(operation) }
+    private fun beginOwner(operation: OwnerOperation) { /* No system/PIN owner operations in local mode. */ }
     fun open(force: Boolean = false) {
         if (closed || (viewFocused && !force)) return
         viewFocused = true
-        model.open { prompt.take()?.let { (operation, approve) -> model.prepareOwner(operation, approve) } }
+        model.open()
         main.removeCallbacks(tick); main.post(tick)
     }
     fun localTouch() { model.localTouch() }
     fun focusLost() { PinDiagnostic.event(PinDiagnostic.Stage.PAGE, PinDiagnostic.Reason.NO_FOCUS); viewFocused = false; model.pause { page.pause() }; main.removeCallbacks(tick) }
-    fun pause() { focusLost(); prompt.cancel() }
-    fun exit() { model.exit(); prompt.cancel(); page.close(); main.removeCallbacks(tick) }
+    fun pause() { focusLost() }
+    fun exit() { model.exit(); page.close(); main.removeCallbacks(tick) }
     fun close() {
-        closed = true; model.close(); prompt.cancel(); page.close(); main.removeCallbacks(tick)
+        closed = true; model.close(); page.close(); main.removeCallbacks(tick)
         worker.shutdown()
     }
 }

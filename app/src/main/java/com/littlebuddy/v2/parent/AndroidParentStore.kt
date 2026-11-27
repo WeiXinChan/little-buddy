@@ -78,12 +78,12 @@ private class AndroidParentKeys : ParentKeyProvider {
     companion object { private const val ALIAS = "little-buddy-v2-parent-v1" }
 }
 
-/** One live domain per process/binding. Local system crypto is distinct from remote issuance. */
+/** One live domain per process/binding. Local management does not assert remote identity. */
 internal object AndroidParentDomain {
-    enum class Capability { SYSTEM_CRYPTO_ON_SUPPORTED_DEVICE, EXTERNAL_ISSUER_REQUIRED }
+    enum class Capability { APP_LOCAL_MANAGEMENT, EXTERNAL_ISSUER_REQUIRED }
     // Explicit integration status; PIN possession never implies endpoint issuance rights.
-    val firstOwnership = Capability.SYSTEM_CRYPTO_ON_SUPPORTED_DEVICE
-    val systemRecovery = Capability.SYSTEM_CRYPTO_ON_SUPPORTED_DEVICE
+    val firstOwnership = Capability.APP_LOCAL_MANAGEMENT
+    val systemRecovery = Capability.APP_LOCAL_MANAGEMENT
     val endpointIssuance = Capability.EXTERNAL_ISSUER_REQUIRED
     private var domain: ParentDomain? = null
     private var binding: String? = null
@@ -91,7 +91,7 @@ internal object AndroidParentDomain {
         AndroidParentStore.worker()
         check(binding == null || binding == deviceBinding)
         return domain ?: ParentDomain(AndroidParentStore(context.applicationContext, deviceBinding),
-            SystemClock::elapsedRealtime, AndroidParentStore::worker, owner, binding = deviceBinding).also {
+            SystemClock::elapsedRealtime, AndroidParentStore::worker, owner, binding = deviceBinding, localManagement = true).also {
             binding = deviceBinding; domain = it
         }
     }
