@@ -23,6 +23,7 @@ from backend.v2.dynamic_images import ImageScope, ImageFailure
 from backend.v2.image_descriptions import ExplicitImageRequest
 from backend.v2.image_wire import PublicImage, CHUNK_BYTES
 from backend.v2.protocol import CONTRACT
+from backend.v2 import timing as stage_timing
 
 
 class VoiceFault(Exception):
@@ -186,12 +187,19 @@ class VoicePeer:
         """
         if kind not in {'endpoint', 'plan', 'facts'}:
             raise ValueError('read request stage')
+        async def timed(function,*values,**options):
+            stage_timing.mark(kind+'_start',self,operation)
+            try:result=await self.owned(operation,function,*values,**options)
+            except BaseException:
+                stage_timing.mark(kind+'_end',self,operation,outcome='failed');raise
+            stage_timing.mark(kind+'_end',self,operation)
+            return result
         function = getattr(self.providers, kind)
         revision = self.revision
         snapshot=deepcopy(args) if kind=='plan' else args
         initial_args=deepcopy(snapshot) if kind=='plan' else args
         try:
-            result = await self.owned(operation, function, *initial_args)
+            result = await timed(function, *initial_args)
             if revision != self.revision:
                 raise StaleOperation()
             return result
@@ -217,9 +225,9 @@ class VoicePeer:
             async with asyncio.timeout(remaining):
                 retry_function=(self.providers.repair_plan_format if format_repair else self.providers.repair_plan) if repair else function
                 retry_args=deepcopy(snapshot) if kind=='plan' else args
-                if repair and format_repair:result=await self.owned(operation,retry_function,*retry_args,code='plan_anchors',detail=contract_detail(failure))
-                elif repair:result=await self.owned(operation,retry_function,*retry_args,sentence_limit=repair_limit)
-                else:result=await self.owned(operation,retry_function,*retry_args)
+                if repair and format_repair:result=await timed(retry_function,*retry_args,code='plan_anchors',detail=contract_detail(failure))
+                elif repair:result=await timed(retry_function,*retry_args,sentence_limit=repair_limit)
+                else:result=await timed(retry_function,*retry_args)
             if revision != self.revision:
                 raise StaleOperation()
             # An adapter swallowing cancellation or a changed clock cannot
@@ -230,9 +238,10 @@ class VoicePeer:
     @asynccontextmanager
     async def owned_resource(self, operation, factory, *args):
         operation.ensure()
-        async with self.resource(factory(*args)) as value:
-            operation.ensure()
-            yield value
+        with stage_timing.provider_marks(self,operation):
+            async with self.resource(factory(*args)) as value:
+                operation.ensure()
+                yield value
         operation.ensure()
 
     async def owned_items(self, operation, source):
@@ -286,8 +295,11 @@ class VoicePeer:
             fields.setdefault('session', self.session.session)
             fields.setdefault('turn', self.session.turn)
             fields.setdefault('revision', self.revision)
+        diagnostic=Operation(self,self.epoch,self.revision) if stage_timing.enabled() else None
         async with asyncio.timeout(2):
             await self.socket.send(json.dumps(dict(v=2, type=kind, epoch=self.epoch, **fields)))
+        stage={'endpoint':'endpoint_sent','decision':'decision_sent','open':'open_sent','bound':'bound_sent','audio':'first_audio_sent','reply_end':'reply_end','session_end':'session_end','failure':'failure'}.get(kind)
+        if stage:stage_timing.mark(stage,self,diagnostic)
 
     async def commands(self):
         session, epoch, turn = self.session, self.epoch, self.session.turn
@@ -576,6 +588,8 @@ class VoicePeer:
             raise WireError('sequence')
         self.sequence = seq
         if blocked:return
+        stage={'probe':'probe_received','seal':'seal_received','stop':'stop_received','bind':'bind_received','ack':'ack_received'}.get(kind)
+        if stage:stage_timing.mark(stage,self)
         if kind=='scope':
             live=self.session._live()
             state='expired' if not live else 'paused' if self.session.management_paused else 'waiting_wake' if self.waiting_wake else 'active'
@@ -759,8 +773,12 @@ class VoicePeer:
                     or type(event['stream']) is not int or not isinstance(event['segment'], str)
                     or not isinstance(event['player'], str)):
                 raise WireError('ack schema')
-            self.session.ack(identity, player=event['player'], stream=event['stream'],
+            diagnostic=Operation(self,self.epoch,self.revision) if stage_timing.enabled() else None
+            before_head=self.session.head;before_effective=self.session.response_confirmed
+            accepted=self.session.ack(identity, player=event['player'], stream=event['stream'],
                              segment=event['segment'], head=event['head'])
+            if accepted and self.session.head>before_head:stage_timing.mark('ack_progress',self,diagnostic,count=self.session.head-before_head)
+            if accepted and not before_effective and self.session.response_confirmed:stage_timing.mark('effective_ack',self,diagnostic)
             await self.commands()
 
     def analyze(self, pcm, epoch, revision):
@@ -773,10 +791,14 @@ class VoicePeer:
         try:
             operation.ensure()
             async with asyncio.timeout(operation.budget.remaining()):
+                stage_timing.mark('asr_open',self,operation)
                 async with self.owned_resource(operation, self.providers.recognize, 16000) as recognizer:
+                    stage_timing.mark('asr_ready',self,operation)
                     for offset in range(0, len(pcm), 6400):
                         await self.owned(operation, recognizer.write, pcm[offset:offset+6400])
                     text = await self.owned(operation, recognizer.finish)
+                    stage_timing.mark('asr_final',self,operation)
+                stage_timing.mark('asr_released',self,operation)
                 operation.ensure()
                 text = self.policy.input(text)
                 operation.ensure()
@@ -797,6 +819,7 @@ class VoicePeer:
         except StaleOperation:
             return
         except asyncio.CancelledError:
+            stage_timing.mark('cancel',self,operation,outcome='cancelled')
             raise
         except Exception:
             if operation.valid():
@@ -863,27 +886,35 @@ class VoicePeer:
         if not hasattr(self.providers, 'compact'):
             return
         if max(len(self.session.public), len(self.session.private)) < 40 and len(self.session.revealed) < 80 and len(json.dumps(self.session.context(), ensure_ascii=False).encode()) < 24000:
+            stage_timing.mark('compact_skipped',self,operation)
             return
+        stage_timing.mark('compact_start',self,operation)
         snapshot = self.session.memory_snapshot(private=self.session.private_mode)
         keep = await self.owned(operation, self.providers.compact, snapshot[-1])
         if epoch != self.epoch:
             raise WireError('stale summary')
         self.session.compact(snapshot, keep)
+        stage_timing.mark('compact_end',self,operation)
         if len(self.session.revealed) >= 80:
             # Replays remain rejected by exact pending-front ID and task sequence.
             self.session.revealed.intersection_update(s.name for s in self.session.pending)
 
-    async def review(self, operation, text, *, query=''):
+    async def review(self, operation, text, *, query='', phase='whole'):
         # Re-project current authoritative scope with this response's input,
         # never a frozen PLAN snapshot or the unapproved candidate sentence.
         operation.ensure()
+        stage_timing.mark(phase+'_start',self,operation)
         try:
             function=getattr(self.providers,'review',None) or self.providers.safe
             verdict = await self.owned(operation, function, text, operation.session.context(query=query))
         except SafetyFault:
+            stage_timing.mark(phase+'_end',self,operation,outcome='safety_denied')
             raise
         except Exception:
+            stage_timing.mark(phase+'_end',self,operation,outcome='failed')
             raise SafetyFault('review_unavailable') from None
+        outcome=('safety_denied' if not verdict.safety_allowed else 'quality_denied' if not verdict.quality_allowed else 'ok') if isinstance(verdict,ReviewDecision) else 'ok' if verdict is True else 'safety_denied' if verdict is False else 'failed'
+        stage_timing.mark(phase+'_end',self,operation,outcome=outcome)
         if isinstance(verdict,ReviewDecision):
             if not verdict.safety_allowed:raise SafetyFault('content_blocked')
             if not verdict.quality_allowed:raise QualityFault()
@@ -1012,6 +1043,7 @@ class VoicePeer:
                     return
                 stage = 'fact_commit'
                 accepted=True if ending else self.session.record_input(text, facts)
+                stage_timing.mark('fact_commit',self,operation,count=len(facts) if accepted is not False else 0,outcome='failed' if accepted is False else 'ok')
                 if accepted is False:
                     # A real storage bound is a normal conversational branch,
                     # not a provider failure or a license to invent recollection.
@@ -1077,7 +1109,7 @@ class VoicePeer:
                         for sentence in plan['sentences']:
                             if len(plan['sentences']) > 1:
                                 stage='safety'
-                                await self.review(operation, sentence, query=text or '')
+                                await self.review(operation, sentence, query=text or '', phase='segment')
                             yield sentence
                     yield items()
                 manager = planned()
@@ -1094,15 +1126,21 @@ class VoicePeer:
                     if not approved:
                         raise SafetyFault('content_blocked')
                     stage = 'synthesis'
+                    stage_timing.mark('tts_open',self,operation,count=sentence_number)
                     async with self.owned_resource(operation, self.providers.synthesize, approved, 24000) as chunks:
+                        stage_timing.mark('tts_ready',self,operation,count=sentence_number)
+                        diagnostic_chunks=0
                         # One-chunk lookahead marks the final chunk's public fact.
                         previous = None
                         async for chunk in self.owned_items(operation, chunks):
+                            diagnostic_chunks+=1
+                            if diagnostic_chunks<=2:stage_timing.mark('tts_first_pcm' if diagnostic_chunks==1 else 'tts_second_pcm',self,operation,count=sentence_number,bytes=len(chunk) if isinstance(chunk,bytes) else 0)
                             if not isinstance(chunk, bytes) or not chunk or len(chunk) % 2 or len(chunk) > 4800:
                                 raise WireError('pcm capacity')
                             if previous is not None:
                                 await self.audio(previous, '', epoch, operation=operation)
                             previous = chunk
+                        stage_timing.mark('tts_eof',self,operation,count=sentence_number)
                         if previous is None:
                             raise WireError('empty synthesis')
                         final_sentence=state is not None and sentence_number==len(plan['sentences'])
@@ -1112,6 +1150,7 @@ class VoicePeer:
                                          effect=image_effect if final_sentence else None,
                                          state=state if state is not None and sentence_number == len(plan['sentences']) else None,
                                          anchors=anchors, operation=operation)
+                    stage_timing.mark('tts_released',self,operation,count=sentence_number)
             while self.session.pending:
                 self.changed.clear()
                 if epoch != self.epoch or not self.session._output_live():
@@ -1132,6 +1171,7 @@ class VoicePeer:
         except StaleOperation:
             return
         except asyncio.CancelledError:
+            stage_timing.mark('cancel',self,operation,outcome='cancelled')
             raise
         except Exception as failure:
             if not operation.valid():
