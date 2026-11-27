@@ -31,10 +31,16 @@ internal enum class CaptureClockReason(val legacy: String) {
 internal data class CaptureClockEvidence(
     val frames:Long=0, val reads:Long=0, val deltaFrames:Long=0, val deltaNs:Long=0,
     val ageNs:Long=0, val checkGapMs:Long=0, val apiMs:Long=0, val bridgeMs:Long=0,
-    val capacity:Int=0)
+    val capacity:Int=0,val apiBeforeMs:Long=0,val apiAfterMs:Long=0,val stampNs:Long=0,
+    val stampReturned:Boolean=false,val phaseNs:Long=0,val conservativeAgeNs:Long=0,val maxAgeNs:Long=0,val starting:Boolean=false)
 internal data class CaptureLongWitness(val fromFrame:Long,val fromNs:Long,val toFrame:Long,val toNs:Long,val lowerBudget:Long,val upperBudget:Long)
+internal enum class CaptureReadStep { NONE, STARTUP, PRE_ROOM, AFTER_ROOM, NATIVE_READ, PREFIX_REPLAY, POST_READ, KWS, POST_KWS, UPLOAD_ADMIT, CLEANUP }
+internal enum class CaptureTimestampResult { NOT_CALLED, IN_FLIGHT, SUCCESS, UNAVAILABLE, OTHER }
+internal data class CaptureClockContext(val activity:Long=0,val transport:Long=0,val capture:Long=0,
+    val step:CaptureReadStep=CaptureReadStep.NONE,val cancelled:Boolean=false,val allowed:Boolean=false,
+    val stopRequested:Boolean=false,val nativeReleased:Boolean=false,val timestampResult:CaptureTimestampResult=CaptureTimestampResult.NOT_CALLED)
 internal class CaptureClockFailure(val reason:CaptureClockReason,
-    val evidence:CaptureClockEvidence=CaptureClockEvidence(),val longWitness:CaptureLongWitness?=null):IllegalStateException(reason.legacy)
+    val evidence:CaptureClockEvidence=CaptureClockEvidence(),val longWitness:CaptureLongWitness?=null,val context:CaptureClockContext?=null):IllegalStateException(reason.legacy)
 internal fun clockCheck(valid:Boolean, reason:CaptureClockReason) {
     if(!valid)throw CaptureClockFailure(reason)
 }

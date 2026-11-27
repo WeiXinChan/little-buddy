@@ -6,7 +6,7 @@ package com.littlebuddy.v2
  * Every pair >=500ms keeps the same rate interval and +/-2-frame allowance, with both
  * endpoint phase uncertainties propagated into the raw-pair time bound (not a new rate).
  */
-internal class CaptureClockEnvelope {
+internal class CaptureClockEnvelope(private val report:(CaptureClockFailure)->Unit=CaptureClockDiagnostic::emit) {
     companion object {
         const val PHASE_NS=2_000_000L
         const val STARTUP_PHASE_NS=500_000L
@@ -77,7 +77,7 @@ internal class CaptureClockEnvelope {
                 ?: minimumUpper?.takeIf{upper>it.upper+TWO_FRAMES}
             if(p!=null) {
                 reportedRawRejection=true
-                CaptureClockDiagnostic.emit(CaptureClockFailure(CaptureClockReason.LONG_RAW_REJECT_PHASE_FEASIBLE,longWitness=witness(p)))
+                try {report(CaptureClockFailure(CaptureClockReason.LONG_RAW_REJECT_PHASE_FEASIBLE,longWitness=witness(p)))}catch(_:Throwable){}
             }
         }
         clockCheck(pending.size<MAX_PENDING,CaptureClockReason.CLOCK_HISTORY_EXHAUSTED)

@@ -24,11 +24,16 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     private val maxAgeNs=minOf(100L,startupMs)*1_000_000
     private var checkedAt=monoOrigin
     private var observed:CaptureStamp?=null
-    private val clock=CaptureClockEnvelope()
+    private var report:(CaptureClockFailure)->Unit=CaptureClockDiagnostic::emit
+    private val clock=CaptureClockEnvelope {report(it)}
+    /** Install only before native start; observation carries no authority or timestamp renewal. */
+    fun diagnostics(value:(CaptureClockFailure)->Unit) {report=value}
+    fun diagnosticEvidence()=evidence()
     private var attempted:CaptureStamp?=null
     private var previous:CaptureStamp?=null
     private var gapMs=0L
     private var apiMs=0L
+    private var apiBeforeMs=monoOrigin
     private var bridgeMs=0L
     private var evidenceTime=monoOrigin
     private fun difference(a:Long,b:Long)=try { Math.subtractExact(a,b) } catch(_:ArithmeticException) { 0L }
@@ -38,7 +43,10 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
             if(value!=null && previous!=null)difference(value.frames,previous!!.frames) else 0,
             if(value!=null && previous!=null)difference(value.nanoTime,previous!!.nanoTime) else 0,
             if(value!=null)difference(evidenceTime*1_000_000,value.nanoTime) else 0,
-            gapMs,apiMs,bridgeMs,capacity)
+            gapMs,apiMs,bridgeMs,capacity,apiBeforeMs,evidenceTime,value?.nanoTime ?: 0,attempted!=null,
+            if(starting)CaptureClockEnvelope.STARTUP_PHASE_NS else CaptureClockEnvelope.PHASE_NS,
+            if(value!=null)(evidenceTime+1)*1_000_000-(value.nanoTime-(if(starting)CaptureClockEnvelope.STARTUP_PHASE_NS else CaptureClockEnvelope.PHASE_NS)) else 0,
+            maxAgeNs,starting)
     }
     private fun guard(valid:Boolean,reason:CaptureClockReason) {
         if(!valid)throw CaptureClockFailure(reason,evidence())
@@ -80,7 +88,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     catch(error:CaptureClockFailure) { throw CaptureClockFailure(error.reason,evidence(),error.longWitness) }
     private fun refreshChecked():Pair<CaptureStamp?,Long> {
         val before=mono()
-        previous=observed; attempted=null; gapMs=difference(before,checkedAt); apiMs=0
+        apiBeforeMs=before; previous=observed; attempted=null; gapMs=difference(before,checkedAt); apiMs=0
         evidenceTime=before
         guard(before>=checkedAt && before>=monoOrigin,CaptureClockReason.CLOCK_REGRESSED)
         val candidate=stamp() // JNI/provider time belongs to this same budget, never to the next read.

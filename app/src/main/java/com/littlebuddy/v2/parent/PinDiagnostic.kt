@@ -10,6 +10,37 @@ internal object PinDiagnostic {
         INVALIDATED, TICK_OWNER_INVALID, SAVE_IN_PROGRESS, EARLY_REJECT, CHALLENGE_REJECT,
         PIN_MISMATCH, STALE_CALLBACK, UNOWNED, LOCKED, AUTHORIZED, COOLDOWN, QUARANTINED,
         SECURITY_ERROR, IO_ERROR, STATE_ERROR, OTHER_ERROR, TLS_HANDSHAKE, TLS_PEER, SSH_ERROR, TIMEOUT, ARGUMENT_ERROR, READY, SAVED_LOCAL, NO_CONFIG, HOLD, PARENT_RETRY, RETURN, NETWORK, CLOSED, PROTOCOL_FAILED, INCOMPATIBLE, CAPTURE_FAILED, RELEASE_FAILED, TLS_ERROR, AUTH_DENIED, HTTP_FAILED, CONNECT_FAILED, DNS_FAILED, SOCKET_ERROR, EOF_ERROR, INTERRUPTED_IO, SITE_MAP, SITE_CONNECT, SITE_OKHTTP_CONNECT, SITE_TLS, SITE_UNKNOWN, SITE_JAVA_SOCKET, SITE_CONSCRYPT, TARGET_UNRESOLVED, TARGET_HOST, TARGET_PORT, FORWARD_UNAVAILABLE }
+    data class Scope(val activity:Long=0,val transport:Long=0,val capture:Long=0)
+    enum class RuntimeStage { ACTIVITY_CREATE, ACTIVITY_RESUME, ACTIVITY_PAUSE, ACTIVITY_FOCUS_GAIN, ACTIVITY_FOCUS_LOSS, ACTIVITY_NEW_INTENT,
+        CLIENT_FAIL, CLIENT_CLOSE_BEGIN, CLIENT_CLOSE_END, TRANSPORT_RETIRE, CAPTURE_START, CAPTURE_CANCEL,
+        CAPTURE_STOP_BEGIN, CAPTURE_STOP_END, CAPTURE_FAILURE, CAPTURE_RELEASE, WORKER_JOINED, FAILURE_UI_APPLY, FAILURE_UI_RETIRED }
+    enum class CaptureOperation { NONE, NATIVE_READ, TIMESTAMP, KWS, CLEANUP }
+    enum class FailSource { NONE, RECEIVE_PROTOCOL, PLAYBACK_PUMP, ROUTE, BACKPRESSURE, LIFECYCLE, MANAGEMENT, EXPIRED, INCOMPATIBLE, NETWORK, CLOSED, RELEASE, OTHER }
+    enum class WireKind { NONE, UNPARSED, SCOPE, OPEN, BOUND, AUDIO, DECISION, REVOKE, IMAGE, MANAGEMENT, FAILURE, SESSION_END, OTHER }
+    enum class WirePoint { NONE, ENVELOPE, JSON_PARSE, DISPATCH, SCOPE_BIND, PLAYER_BIND, AUDIO_VALIDATE, AUDIO_ENQUEUE, UNKNOWN_EVENT }
+    data class RuntimeEvent(val stage:RuntimeStage,val scope:Scope,val source:FailSource=FailSource.NONE,
+        val wire:WireKind=WireKind.NONE,val point:WirePoint=WirePoint.NONE,val cancelled:Boolean=false,
+        val allowed:Boolean=false,val stopRequested:Boolean=false,val nativeReleased:Boolean=false,val workerJoined:Boolean=false,
+        val operation:CaptureOperation=CaptureOperation.NONE,val currentTransport:Long=-1,val currentCapture:Long=-1,val restored:Boolean=false,val launcher:Boolean=false)
+    private val activitySequence=java.util.concurrent.atomic.AtomicLong()
+    fun nextActivity()=activitySequence.incrementAndGet()
+    @Volatile private var runtimeSink:((RuntimeEvent)->Unit)?=null
+    fun installRuntime(value:((RuntimeEvent)->Unit)?) {runtimeSink=value}
+    fun runtime(value:RuntimeEvent) {try{runtimeSink?.invoke(value)}catch(_:Throwable){}}
+    fun failSource(code:String)=when(code) {
+        "protocol"->FailSource.RECEIVE_PROTOCOL; "playback"->FailSource.PLAYBACK_PUMP
+        "route"->FailSource.ROUTE; "backpressure"->FailSource.BACKPRESSURE; "lifecycle"->FailSource.LIFECYCLE
+        "management"->FailSource.MANAGEMENT; "expired"->FailSource.EXPIRED; "incompatible"->FailSource.INCOMPATIBLE
+        "network"->FailSource.NETWORK; "closed"->FailSource.CLOSED; "release"->FailSource.RELEASE
+        else->FailSource.OTHER
+    }
+    fun wireKind(code:String)=when(code) {
+        "scope"->WireKind.SCOPE;"open"->WireKind.OPEN;"bound"->WireKind.BOUND;"audio"->WireKind.AUDIO
+        "decision","gate"->WireKind.DECISION;"revoke"->WireKind.REVOKE
+        "image_begin","image_chunk","image_ready","image_display","image_hide","image_unavailable","reveal"->WireKind.IMAGE
+        "management","management_state"->WireKind.MANAGEMENT;"failure"->WireKind.FAILURE;"session_end"->WireKind.SESSION_END
+        else->WireKind.OTHER
+    }
     private val sequence = AtomicInteger()
     @Volatile private var sink: ((Int, Long, Stage, Reason) -> Unit)? = null
     fun install(adapter: ((Int, Long, Stage, Reason) -> Unit)?) { sink = adapter }

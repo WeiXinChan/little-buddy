@@ -3,6 +3,7 @@ package com.littlebuddy
 import android.Manifest
 import android.app.Activity
 import android.app.KeyguardManager
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Build
@@ -26,6 +27,12 @@ class V2VoiceActivity : Activity() {
     private var eyesAttached = false
     @Volatile private var eyeRevision=0L
     private val captureRevision=java.util.concurrent.atomic.AtomicLong()
+    private val diagnosticActivity=PinDiagnostic.nextActivity()
+    private fun diagnosticScope(transport:Long=transportRevision,capture:Long=captureRevision.get())=
+        PinDiagnostic.Scope(diagnosticActivity,transport,capture)
+    private fun lifecycleDiagnostic(stage:PinDiagnostic.RuntimeStage,restored:Boolean=false,launcher:Boolean=false) {
+        PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(stage,diagnosticScope(),restored=restored,launcher=launcher))
+    }
     private var eyeView:V2EyesView?=null
     private val eyeState=EyeState()
     private fun resetEyes() {
@@ -218,6 +225,7 @@ class V2VoiceActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         AndroidPinDiagnostic.enable()
+        lifecycleDiagnostic(PinDiagnostic.RuntimeStage.ACTIVITY_CREATE,savedInstanceState!=null,intent?.action==Intent.ACTION_MAIN)
         help = LocalHelpOutput(this) {
             PinDiagnostic.event(PinDiagnostic.Stage.HELP, PinDiagnostic.Reason.RETURN)
             helpVisible = false; eyes(); resumeConfigured()
@@ -303,7 +311,7 @@ class V2VoiceActivity : Activity() {
                 sessionEnded = { runOnUiThread { if (ticket==transportRevision) {
                     managementRevision++; releaseAudio { quiet -> if (quiet && foreground) { eyes(); resumeConfigured() } }
                 } } }, requiredContract=ReleaseCompatibility.CONTRACT,
-                http=http, closeTransport={ ssh?.close() }, actualOutput={playing->
+                http=http, closeTransport={ ssh?.close() }, diagnosticScope=diagnosticScope(ticket,0), actualOutput={playing->
                     if(playing && foreground && focused && ticket==transportRevision && lastLog!=com.littlebuddy.v2.feedback.LogStage.PLAY) {
                         lastLog=com.littlebuddy.v2.feedback.LogStage.PLAY
                         com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this@V2VoiceActivity,com.littlebuddy.v2.feedback.LogStage.PLAY)
@@ -322,8 +330,16 @@ class V2VoiceActivity : Activity() {
         publishEyes(ticket){state,key->state.beginRecorder(key,recorderTicket)}
         capture=Capture(assets,owner,client,
             allowed={ foreground && focused && ticket==transportRevision && recorderTicket==captureRevision.get() && !managementRequested && !managementVisible },
-            recording={active->publishEyes(ticket){state,key->state.recording(key,recorderTicket,active)}}) {
-            runOnUiThread { if (ticket==transportRevision) showTechnicalFailure(PinDiagnostic.Reason.CAPTURE_FAILED) }
+            recording={active->publishEyes(ticket){state,key->state.recording(key,recorderTicket,active)}},
+            diagnosticScope=diagnosticScope(ticket,recorderTicket)) {
+            runOnUiThread {
+                val currentTransport=transportRevision;val currentCapture=captureRevision.get()
+                val apply=CaptureFailureGate.current(ticket,recorderTicket,currentTransport,currentCapture,
+                    foreground && focused && !managementRequested && !managementVisible && !helpVisible && voice===client)
+                PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(if(apply)PinDiagnostic.RuntimeStage.FAILURE_UI_APPLY else PinDiagnostic.RuntimeStage.FAILURE_UI_RETIRED,
+                    diagnosticScope(ticket,recorderTicket),currentTransport=currentTransport,currentCapture=currentCapture))
+                if(apply)showTechnicalFailure(PinDiagnostic.Reason.CAPTURE_FAILED)
+            }
         }.also { it.start() }
         owner.removeCallbacks(durationLimit); owner.postDelayed(durationLimit,250)
         releaseState="active"
@@ -347,6 +363,7 @@ class V2VoiceActivity : Activity() {
         }
     }
     private fun releaseAudio(done: (Boolean) -> Unit = {}) {
+        PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.TRANSPORT_RETIRE,diagnosticScope()))
         transportRevision++;cancelRecorders();resetEyes();imageRoute?.clear()
         owner.post {
         owner.removeCallbacks(durationLimit)
@@ -391,12 +408,18 @@ class V2VoiceActivity : Activity() {
             }
         }
     }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        lifecycleDiagnostic(PinDiagnostic.RuntimeStage.ACTIVITY_NEW_INTENT,launcher=intent.action==Intent.ACTION_MAIN)
+    }
     override fun onResume() {
-        super.onResume(); foreground = true
+        super.onResume()
+        lifecycleDiagnostic(PinDiagnostic.RuntimeStage.ACTIVITY_RESUME); foreground = true
         if (managementVisible && hasWindowFocus()) { panel?.open(); startExitCapture(managementRevision) }
         else if (!managementVisible && !helpVisible) { eyes(); resumeConfigured() }
     }
     override fun onPause() {
+        lifecycleDiagnostic(PinDiagnostic.RuntimeStage.ACTIVITY_PAUSE)
         foreground = false;cancelRecorders(); managementRevision++; managementRequested = false
         com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this,com.littlebuddy.v2.feedback.LogStage.CANCEL)
         publicKeyFile.focusLost(); panel?.pause(); helpVisible = false; help?.stop(); stopVoice(); super.onPause()
@@ -412,6 +435,7 @@ class V2VoiceActivity : Activity() {
     }
     @Deprecated("Deprecated in Java") override fun onBackPressed() { back() }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
+        lifecycleDiagnostic(if(hasFocus)PinDiagnostic.RuntimeStage.ACTIVITY_FOCUS_GAIN else PinDiagnostic.RuntimeStage.ACTIVITY_FOCUS_LOSS)
         super.onWindowFocusChanged(hasFocus)
         focused=hasFocus
         if (!hasFocus) {
