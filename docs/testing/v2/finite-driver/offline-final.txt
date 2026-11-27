@@ -1,0 +1,14 @@
+..usage: python3 -m unittest [-h] --case
+                           {body-danger,death-danger,shared-intent,cold-query}
+                           [--execute] [--acknowledge-quota-not-live-verified]
+                           [--output OUTPUT]
+python3 -m unittest: error: argument --case: invalid choice: 'all' (choose from 'body-danger', 'death-danger', 'shared-intent', 'cold-query')
+.....
+----------------------------------------------------------------------
+Ran 7 tests in 0.184s
+
+OK
+{"status": "disabled", "source": "8682f5a567ddadae1f717cab8d706d6b4ee52316", "case": "body-danger", "limits": {"model_requests": 8, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "cloud_calls": 0}
+{"status": "disabled", "source": "8682f5a567ddadae1f717cab8d706d6b4ee52316", "case": "death-danger", "limits": {"model_requests": 8, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "cloud_calls": 0}
+{"status": "disabled", "source": "8682f5a567ddadae1f717cab8d706d6b4ee52316", "case": "shared-intent", "limits": {"model_requests": 16, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "cloud_calls": 0}
+{"status": "disabled", "source": "8682f5a567ddadae1f717cab8d706d6b4ee52316", "case": "cold-query", "limits": {"model_requests": 8, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "cloud_calls": 0}
