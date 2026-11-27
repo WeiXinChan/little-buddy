@@ -7,12 +7,15 @@ from backend.v2.companion import UnifiedProviders
 class Preparation(unittest.IsolatedAsyncioTestCase):
     async def test_explicit_case_never_runs_other_groups_and_records_hidden(self):
         p.select_case('guess-object')
-        model=old.Model(old.plan());model.next_plan.update(action='change',mode='guess',secrets={'answer':'SYNTHETIC_ONLY_ANSWER'},sentences=['它可以装水。'])
+        model=old.Model(old.plan());model.next_plan.update(action='change',mode='guess',guess_role='setter',secrets={'answer':'SYNTHETIC_ONLY_ANSWER'},sentences=['它可以装水。'])
         result=await p.run_group(UnifiedProviders(old.Speech(),model));p.validate_result(result)
         self.assertEqual(len(result['cases']),1);self.assertEqual(len(result['cases'][0]['turns']),3)
         a,b,c=result['cases'][0]['turns']
         self.assertEqual(a['synthetic_hidden_before'],{})
         self.assertEqual(a['synthetic_hidden_after'],{'answer':'SYNTHETIC_ONLY_ANSWER'})
+        self.assertEqual(a['game_after']['guess_role'],'setter')
+        self.assertEqual(b['game_before']['guess_role'],'setter')
+        self.assertIn('guess_normalization',a)
         self.assertEqual(b['synthetic_hidden_before'],a['synthetic_hidden_after'])
         self.assertNotIn('SYNTHETIC_ONLY_ANSWER',str(a['actual_complete_ack_texts']))
         self.assertIsNone(result['semantic_pass'])
@@ -54,7 +57,7 @@ class Preparation(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(p.main(['--case','guess-object']),0)
             self.assertEqual(p.main(['--case','memory-compare','--execute']),2)
     async def test_source_pin_is_final_main(self):
-        self.assertEqual(p.SOURCE,'b568ef4730b0e30552bfc4577915bbec1afa6a61')
+        self.assertEqual(p.SOURCE,'ffd1dd9b946eece4cae8cd3eeea897467cd2f51e')
         self.assertEqual(len(p.verify_source()),64)
 
     async def test_production_sentence_repair_remains_admitted_and_metered(self):

@@ -1,0 +1,15 @@
+test_all_four_explicit_selectors_are_single_case (tests.v2.test_closeout_probe.Preparation.test_all_four_explicit_selectors_are_single_case) ... ok
+test_explicit_case_never_runs_other_groups_and_records_hidden (tests.v2.test_closeout_probe.Preparation.test_explicit_case_never_runs_other_groups_and_records_hidden) ... ok
+test_harness_third_plan_is_mechanical_denial_not_model_quality (tests.v2.test_closeout_probe.Preparation.test_harness_third_plan_is_mechanical_denial_not_model_quality) ... ok
+test_limit_refuses_third_model_and_default_never_reads_credentials (tests.v2.test_closeout_probe.Preparation.test_limit_refuses_third_model_and_default_never_reads_credentials) ... ok
+test_memory_only_two_production_plan_candidates_no_playback (tests.v2.test_closeout_probe.Preparation.test_memory_only_two_production_plan_candidates_no_playback) ... ok
+test_memory_pair_has_same_latest_facts_and_actual_compact (tests.v2.test_closeout_probe.Preparation.test_memory_pair_has_same_latest_facts_and_actual_compact) ... ok
+test_production_sentence_repair_remains_admitted_and_metered (tests.v2.test_closeout_probe.Preparation.test_production_sentence_repair_remains_admitted_and_metered) ... ok
+test_second_memory_failure_preserves_first_and_stops (tests.v2.test_closeout_probe.Preparation.test_second_memory_failure_preserves_first_and_stops) ... ok
+test_source_pin_is_final_main (tests.v2.test_closeout_probe.Preparation.test_source_pin_is_final_main) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.070s
+
+OK
+{"status": "DISABLED_PLAN_ONLY", "source": "ffd1dd9b946eece4cae8cd3eeea897467cd2f51e", "case": "guess-object", "cases": {"guess-object": ["猜家里的东西吧，你描述，我猜，不先说答案。", "是杯子吗？提示它有什么用。", "现在由我问你猜：能照亮房间的是什么？"]}, "limits": {"model_requests": 24, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "semantic_pass": null, "cloud_calls": 0}
