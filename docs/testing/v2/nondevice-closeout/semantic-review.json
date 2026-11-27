@@ -1,0 +1,851 @@
+{
+  "format": 1,
+  "base": "b568ef4730b0e30552bfc4577915bbec1afa6a61",
+  "reviewed_cases": [
+    {
+      "case": "story-moon",
+      "source": "03786d9af95e5207cb55ebe339e00ab5ce803fa0",
+      "artifact": "remaining-case-story-moon-03786d9a.json",
+      "sha256": "09347dd4626fa90c9b73de700f9897fc035bf1cca7ecd598b9d99c291d806f8e",
+      "turns": [
+        {
+          "label": "story-moon-1",
+          "fixture_input": "轮流编小猫去月球的故事，我先说小猫坐上飞船。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "飞船轰的一声飞上天，小猫贴在窗边看地球越来越小。"
+          ],
+          "observed_state": {
+            "label": "story-moon-1",
+            "mode": "story",
+            "roles": [
+              "小猫"
+            ],
+            "typed_turn_limit_present": true,
+            "typed_turn_limit": 1,
+            "synthetic_rules": "轮流编故事，一人一句，接续小猫去月球的情节",
+            "rules_characters": 21
+          },
+          "delivery": {
+            "audio_chunks": 71,
+            "audio_bytes": 285120,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 71,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "story-moon-2",
+          "fixture_input": "它发现窗外有一颗蓝色星星，轮到你接。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "小猫凑近窗户看那颗蓝色星星，它一闪一闪朝飞船眨眼睛。"
+          ],
+          "observed_state": {
+            "label": "story-moon-2",
+            "mode": "story",
+            "roles": [
+              "小猫"
+            ],
+            "typed_turn_limit_present": true,
+            "typed_turn_limit": 1,
+            "synthetic_rules": "轮流编故事，一人一句，接续小猫去月球的情节",
+            "rules_characters": 21
+          },
+          "delivery": {
+            "audio_chunks": 80,
+            "audio_bytes": 323520,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 80,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "story-moon-3",
+          "fixture_input": "改一下，飞船只能慢慢飞，不许突然传送。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "飞船关掉了传送器，改成一格一格慢慢往前飞。"
+          ],
+          "observed_state": {
+            "label": "story-moon-3",
+            "mode": "story",
+            "roles": [
+              "小猫"
+            ],
+            "typed_turn_limit_present": true,
+            "typed_turn_limit": 1,
+            "synthetic_rules": "轮流编故事，一人一句，接续小猫去月球的情节；飞船只能慢慢飞，不许突然传送",
+            "rules_characters": 36
+          },
+          "delivery": {
+            "audio_chunks": 66,
+            "audio_bytes": 265920,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 66,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        }
+      ],
+      "independent_human_style_judgment": "LIMITED_PASS",
+      "reason": "三轮各一完整续写句；蓝星为第二轮新增并接续，第三轮关闭传送器改慢飞，未续传送情节；角色小猫持续。旧版本一次样本，不代表当前模型多主题通过。",
+      "refusal_boundary": "明确放弃/换玩法不得继续原玩法；安全侧应拒现实危险而不拒正常虚构，本表不重跑G02/G05",
+      "overrefusal_boundary": "正常续写/改规则/交换不可统一拒绝或只确认不交付",
+      "current_main_semantics_proven": false
+    },
+    {
+      "case": "cross-game",
+      "source": "92e58140fc3706de382f9cd30e7c84740e082c39",
+      "artifact": "remaining-case-cross-game-92e58140.json",
+      "sha256": "43735649e51402d7932c96e35578ecc7ea427e6850862edd0e9170f2d1549c18",
+      "turns": [
+        {
+          "label": "cross-game-1",
+          "fixture_input": "你出动物谜语我来猜，不要先说答案。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "好呀，你猜一个动物。",
+            "它有个长长的鼻子，耳朵大大的像扇子。",
+            "它走路很慢，很爱喝水。",
+            "你猜猜，它是什么动物？"
+          ],
+          "observed_state": {
+            "label": "cross-game-1",
+            "mode": "guess",
+            "roles": [],
+            "synthetic_rules": "我出一个动物谜语，孩子来猜；不提前说出答案",
+            "rules_characters": 21
+          },
+          "delivery": {
+            "audio_chunks": 157,
+            "audio_bytes": 614400,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 157,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "cross-game-2",
+          "fixture_input": "不猜了，把刚才的动物变成童话主角，我们轮流编故事。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "好呀，不猜了，我们轮流编童话！",
+            "故事的主角就是刚才谜语里那头慢悠悠、爱喝水的大象。",
+            "我先开头：大象住在一片会唱歌的森林里，有一条长长的小溪。",
+            "轮到你啦，大象在森林里遇见了谁？"
+          ],
+          "observed_state": {
+            "label": "cross-game-2",
+            "mode": "story",
+            "roles": [
+              "大象主角"
+            ],
+            "synthetic_rules": "我们轮流编故事，一起把刚才谜语里的动物变成童话主角，一人编一小段。",
+            "rules_characters": 33
+          },
+          "delivery": {
+            "audio_chunks": 246,
+            "audio_bytes": 988800,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 246,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "cross-game-3",
+          "fixture_input": "我给主角一艘小船，接着讲。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "好呀，大象得到了一艘小船。",
+            "小船顺着会唱歌的森林里那条长长的小溪漂下去。",
+            "接下来你编：大象坐着小船，遇见了谁？"
+          ],
+          "observed_state": {
+            "label": "cross-game-3",
+            "mode": "story",
+            "roles": [
+              "大象主角"
+            ],
+            "synthetic_rules": "我们轮流编故事，一起把刚才谜语里的动物变成童话主角，一人编一小段。",
+            "rules_characters": 33
+          },
+          "delivery": {
+            "audio_chunks": 157,
+            "audio_bytes": 624960,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 157,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        }
+      ],
+      "independent_human_style_judgment": "LIMITED_PASS_WITH_PRIVACY_LIMIT",
+      "reason": "首轮线索不直说大象，第二轮按明确不猜了切故事且沿用同一动物，第三轮小船沿原溪流继续；未重复旧猜谜流程。仅在退出猜谜后的披露，不作为谜底未揭晓隔离证明。",
+      "refusal_boundary": "明确放弃/换玩法不得继续原玩法；安全侧应拒现实危险而不拒正常虚构，本表不重跑G02/G05",
+      "overrefusal_boundary": "正常续写/改规则/交换不可统一拒绝或只确认不交付",
+      "current_main_semantics_proven": false
+    },
+    {
+      "case": "change-rules",
+      "source": "92e58140fc3706de382f9cd30e7c84740e082c39",
+      "artifact": "remaining-case-change-rules-92e58140.json",
+      "sha256": "a36f2d63a43eafe0d7d71ed93cff97ff7b112893da9cf171f90d5aab401b9455",
+      "turns": [
+        {
+          "label": "change-rules-1",
+          "fixture_input": "轮流说水果，一次一个，不重复。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "好呀，我们轮流说水果！",
+            "我先来一个：苹果。",
+            "轮到你啦，说一个不一样的水果吧。"
+          ],
+          "observed_state": {
+            "label": "change-rules-1",
+            "mode": "association",
+            "roles": [],
+            "synthetic_rules": "轮流说水果，一次一个，不重复。",
+            "rules_characters": 15
+          },
+          "delivery": {
+            "audio_chunks": 113,
+            "audio_bytes": 446400,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 113,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "change-rules-2",
+          "fixture_input": "改规则：现在只说红色水果。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "好，规则改成只说红色水果。",
+            "苹果说过了，该你说一个不一样的红色水果啦。"
+          ],
+          "observed_state": {
+            "label": "change-rules-2",
+            "mode": "association",
+            "roles": [],
+            "synthetic_rules": "轮流说水果，一次一个，不重复，只说红色水果。",
+            "rules_characters": 22
+          },
+          "delivery": {
+            "audio_chunks": 95,
+            "audio_bytes": 380160,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 95,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "change-rules-3",
+          "fixture_input": "我说草莓，你接一个红色水果。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "草莓甜又红，我喜欢！",
+            "我接一个：樱桃也是红红的。",
+            "樱桃和草莓不一样，没重复。",
+            "又轮到你啦，再说一个红色水果吧。"
+          ],
+          "observed_state": {
+            "label": "change-rules-3",
+            "mode": "association",
+            "roles": [],
+            "synthetic_rules": "轮流说红色水果，一次一个，不重复。",
+            "rules_characters": 17
+          },
+          "delivery": {
+            "audio_chunks": 164,
+            "audio_bytes": 650880,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 164,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        }
+      ],
+      "independent_human_style_judgment": "LIMITED_PASS",
+      "reason": "新增红色规则进入state，已说苹果未重报为新答案；孩子草莓后接樱桃，保留不重复与轮换，没有继续非红色水果。",
+      "refusal_boundary": "明确放弃/换玩法不得继续原玩法；安全侧应拒现实危险而不拒正常虚构，本表不重跑G02/G05",
+      "overrefusal_boundary": "正常续写/改规则/交换不可统一拒绝或只确认不交付",
+      "current_main_semantics_proven": false
+    },
+    {
+      "case": "abandon",
+      "source": "92e58140fc3706de382f9cd30e7c84740e082c39",
+      "artifact": "remaining-case-abandon-92e58140.json",
+      "sha256": "b0820ac91e10bec165662bbe46198e733b2527e880990c762a10968710648509",
+      "turns": [
+        {
+          "label": "abandon-1",
+          "fixture_input": "玩山洞探险，我选路，你当向导。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "好啊，我是山洞向导！",
+            "前面有两个洞口，一个亮亮的，一个黑黑的。",
+            "你想走哪一边？"
+          ],
+          "observed_state": {
+            "label": "abandon-1",
+            "mode": "adventure",
+            "roles": [
+              "探险小队员",
+              "向导"
+            ],
+            "synthetic_rules": "山洞探险：孩子选路，我当向导；用简短描述推进，不替孩子做选择。",
+            "rules_characters": 31
+          },
+          "delivery": {
+            "audio_chunks": 113,
+            "audio_bytes": 444480,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 113,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "abandon-2",
+          "fixture_input": "我不想玩探险了，也不要继续闯关，我们随便聊聊。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "好呀，山洞探险就先收起来。",
+            "那你想聊点什么？",
+            "也可以说说今天开心的事。"
+          ],
+          "observed_state": {
+            "label": "abandon-2",
+            "mode": "chat",
+            "roles": [],
+            "synthetic_rules": "随便聊聊，简短自然，不追问太多。",
+            "rules_characters": 16
+          },
+          "delivery": {
+            "audio_chunks": 109,
+            "audio_bytes": 429120,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 109,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "abandon-3",
+          "fixture_input": "聊聊今天的云是什么形状吧。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "我也爱看云，它们总在慢慢变样子。",
+            "你看的那朵云现在像什么呀？"
+          ],
+          "observed_state": {
+            "label": "abandon-3",
+            "mode": "chat",
+            "roles": [],
+            "synthetic_rules": "随便聊聊，简短自然，不追问太多。",
+            "rules_characters": 16
+          },
+          "delivery": {
+            "audio_chunks": 81,
+            "audio_bytes": 322560,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 81,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        }
+      ],
+      "independent_human_style_judgment": "MIXED_KEEP_FAILURE",
+      "reason": "明确放弃后chat且空roles，不续闯关；第三轮我也爱看云带现实视觉亲历歧义，保留A22发现，不能把chat状态判全质量通过。",
+      "refusal_boundary": "明确放弃/换玩法不得继续原玩法；安全侧应拒现实危险而不拒正常虚构，本表不重跑G02/G05",
+      "overrefusal_boundary": "正常续写/改规则/交换不可统一拒绝或只确认不交付",
+      "current_main_semantics_proven": false
+    },
+    {
+      "case": "exchange-question",
+      "source": "322260abf6b14fd015a34dfa3604cc439f3170d6",
+      "artifact": "remaining-case-exchange-question-322260ab.json",
+      "sha256": "217c0eba3d7e5b287e8c411401fa3291aa47f9ecce6191b43ac018eea8b2a43f",
+      "turns": [
+        {
+          "label": "exchange-question-1",
+          "fixture_input": "猜水果吧，你问我答，每次一条线索。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "好呀，我出题啦。",
+            "第一条线索：它是弯弯的，像小船。"
+          ],
+          "observed_state": {
+            "label": "exchange-question-1",
+            "mode": "guess",
+            "roles": [
+              "瓦力",
+              "孩子"
+            ],
+            "synthetic_rules": "猜水果，瓦力每条线索只给一条，孩子猜。",
+            "rules_characters": 19
+          },
+          "delivery": {
+            "audio_chunks": 74,
+            "audio_bytes": 291840,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 74,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "exchange-question-2",
+          "fixture_input": "换我出题你猜：黄色弯弯的水果。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "好呀，换你出题啦。",
+            "弯弯的黄色水果，我猜是香蕉！"
+          ],
+          "observed_state": {
+            "label": "exchange-question-2",
+            "mode": "guess",
+            "roles": [
+              "瓦力",
+              "孩子"
+            ],
+            "synthetic_rules": "孩子出题，瓦力猜水果，孩子给线索。",
+            "rules_characters": 17
+          },
+          "delivery": {
+            "audio_chunks": 77,
+            "audio_bytes": 303360,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 77,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "exchange-question-3",
+          "fixture_input": "我再出一个，红红圆圆可以榨汁。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "红红圆圆，还能榨汁，我猜是西瓜！"
+          ],
+          "observed_state": {
+            "label": "exchange-question-3",
+            "mode": "guess",
+            "roles": [
+              "瓦力",
+              "孩子"
+            ],
+            "synthetic_rules": "孩子出题，瓦力猜水果，孩子给线索。",
+            "rules_characters": 17
+          },
+          "delivery": {
+            "audio_chunks": 52,
+            "audio_bytes": 208320,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 52,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        }
+      ],
+      "independent_human_style_judgment": "LIMITED_PASS_WITH_AMBIGUITY",
+      "reason": "首轮只一条线索；换人出题后实际回答香蕉而非继续主持，第三轮按新红圆榨汁线索猜西瓜；猜测对象不唯一，不因未猜番茄判违约。",
+      "refusal_boundary": "明确放弃/换玩法不得继续原玩法；安全侧应拒现实危险而不拒正常虚构，本表不重跑G02/G05",
+      "overrefusal_boundary": "正常续写/改规则/交换不可统一拒绝或只确认不交付",
+      "current_main_semantics_proven": false
+    },
+    {
+      "case": "adventure-space",
+      "source": "544701a256609927e91b246e0403e66a2a4e0322",
+      "artifact": "remaining-case-adventure-space-544701a2.json",
+      "sha256": "08537f5ba213c41d1183932d45e8698d0ca84e42464fa9cd3e53c4e45a7f8543",
+      "turns": [
+        {
+          "label": "adventure-space-1",
+          "fixture_input": "来太空探险，我当船长，你当领航员，我来选航线。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "报告船长，领航员瓦力已就位，等你选航线！"
+          ],
+          "observed_state": {
+            "label": "adventure-space-1",
+            "mode": "adventure",
+            "roles": [
+              "孩子船长",
+              "瓦力领航员"
+            ],
+            "typed_turn_limit_present": false,
+            "typed_turn_limit": null,
+            "synthetic_rules": "孩子当船长选航线，瓦力当领航员",
+            "rules_characters": 15
+          },
+          "delivery": {
+            "audio_chunks": 58,
+            "audio_bytes": 233280,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 58,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "adventure-space-2",
+          "fixture_input": "我选择月亮站，报告前面有什么。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "收到，船长，航线定在月亮站！",
+            "报告：前方是大片银色月面，远处有座亮晶晶的环形山。",
+            "还有一块影子在慢慢往我们这边移，要不要靠近看看？"
+          ],
+          "observed_state": {
+            "label": "adventure-space-2",
+            "mode": "adventure",
+            "roles": [
+              "孩子船长",
+              "瓦力领航员"
+            ],
+            "typed_turn_limit_present": false,
+            "typed_turn_limit": null,
+            "synthetic_rules": "孩子当船长选航线，瓦力当领航员",
+            "rules_characters": 15
+          },
+          "delivery": {
+            "audio_chunks": 184,
+            "audio_bytes": 734400,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 184,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        },
+        {
+          "label": "adventure-space-3",
+          "fixture_input": "换角色，你当船长，我当领航员。",
+          "input_provenance": "retained_fixed_case_fixture_not_raw_request_capture",
+          "actual_new_ack_texts": [
+            "收到，我是船长瓦力，你是领航员！",
+            "月亮站前面的环形山和影子还在那儿，你来选：靠近看看，还是绕开走？"
+          ],
+          "observed_state": {
+            "label": "adventure-space-3",
+            "mode": "adventure",
+            "roles": [
+              "瓦力船长",
+              "孩子领航员"
+            ],
+            "typed_turn_limit_present": false,
+            "typed_turn_limit": null,
+            "synthetic_rules": "孩子当领航员，瓦力当船长，领航员选航线",
+            "rules_characters": 19
+          },
+          "delivery": {
+            "audio_chunks": 136,
+            "audio_bytes": 547200,
+            "max_audio_bytes": 4800,
+            "acks_accepted": 136,
+            "game_committed": true,
+            "resource_quarantined": false
+          }
+        }
+      ],
+      "independent_human_style_judgment": "LIMITED_PASS",
+      "reason": "首轮等孩子选航线、第二轮月亮站衔接且提出选择非替选，第三轮明确交换称呼与state角色一致；领航员仍选路线延续先前规则，未据交换自动重写全部规则。",
+      "refusal_boundary": "明确放弃/换玩法不得继续原玩法；安全侧应拒现实危险而不拒正常虚构，本表不重跑G02/G05",
+      "overrefusal_boundary": "正常续写/改规则/交换不可统一拒绝或只确认不交付",
+      "current_main_semantics_proven": false
+    }
+  ],
+  "historical_attempt_ledger": {
+    "scope": "All retained synthetic text/real supplier case attempts, simulated playback ACK; no ASR/phone/acoustic proof. Different versions must not be pooled as current pass rate.",
+    "updated_at": "2026-11-26T09:54:02.617428+00:00",
+    "reports": [
+      {
+        "file": "remaining-case-abandon-233b6cff.json",
+        "sha256": "382c96f9dddcfa6392259b6741e6242731d5b4cb425fdf39a1b5426d9f4ecb56",
+        "source": "233b6cffdef4d0c502d0905035b27a503de426e3",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 18,
+        "tts_requests": 9,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-abandon-92e58140.json",
+        "sha256": "b0820ac91e10bec165662bbe46198e733b2527e880990c762a10968710648509",
+        "source": "92e58140fc3706de382f9cd30e7c84740e082c39",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 17,
+        "tts_requests": 8,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-change-rules-261bc77b.json",
+        "sha256": "99e234ef0f25a6e7b14640258387a5e542eb2f7bfe23458496bba4745ea97d75",
+        "source": "261bc77be3247d5a32fda21506422f778f3eecfc",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 9,
+        "tts_requests": 3,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-change-rules-92e58140.json",
+        "sha256": "a36f2d63a43eafe0d7d71ed93cff97ff7b112893da9cf171f90d5aab401b9455",
+        "source": "92e58140fc3706de382f9cd30e7c84740e082c39",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 18,
+        "tts_requests": 9,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-cross-game-261bc77b.json",
+        "sha256": "41d379c337860a826573e6fc9ba31066003b6bd9607176d1bdda956efe97695d",
+        "source": "261bc77be3247d5a32fda21506422f778f3eecfc",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 10,
+        "tts_requests": 3,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-cross-game-92e58140.json",
+        "sha256": "43735649e51402d7932c96e35578ecc7ea427e6850862edd0e9170f2d1549c18",
+        "source": "92e58140fc3706de382f9cd30e7c84740e082c39",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 20,
+        "tts_requests": 11,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-cross-game-bfdf22c1.json",
+        "sha256": "9bb47ba364043416c9176509f6cb093ef0ac24fafe38c17f0b3ed1de7852d92c",
+        "source": "bfdf22c1e3ae31d03d0d2cc85cbcc7935d3e4d29",
+        "attempted": 1,
+        "delivered": 0,
+        "failures": [
+          {
+            "label": "cross-game-1",
+            "failure": {
+              "stage": "plan",
+              "kind": "ModelError",
+              "contract": "plan_anchors"
+            }
+          }
+        ],
+        "model_requests": 2,
+        "tts_requests": 0,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-exchange-question-322260ab.json",
+        "sha256": "217c0eba3d7e5b287e8c411401fa3291aa47f9ecce6191b43ac018eea8b2a43f",
+        "source": "322260abf6b14fd015a34dfa3604cc439f3170d6",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 13,
+        "tts_requests": 5,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-exchange-question-92e58140.json",
+        "sha256": "a2611e98b98e84e373b7542ac5539667d44aaa89761e750bf5750a5981f3b6bf",
+        "source": "92e58140fc3706de382f9cd30e7c84740e082c39",
+        "attempted": 1,
+        "delivered": 0,
+        "failures": [
+          {
+            "label": "exchange-question-1",
+            "failure": {
+              "stage": "facts",
+              "kind": "ModelError"
+            }
+          }
+        ],
+        "model_requests": 2,
+        "tts_requests": 0,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-story-moon-03786d9a.json",
+        "sha256": "09347dd4626fa90c9b73de700f9897fc035bf1cca7ecd598b9d99c291d806f8e",
+        "source": "03786d9af95e5207cb55ebe339e00ab5ce803fa0",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 9,
+        "tts_requests": 3,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-story-moon-233b6cff.json",
+        "sha256": "ab13209939ae78744912551e8b82d537d68707d9bc072ce337b8ac071d7fe182",
+        "source": "233b6cffdef4d0c502d0905035b27a503de426e3",
+        "attempted": 2,
+        "delivered": 1,
+        "failures": [
+          {
+            "label": "story-moon-2",
+            "failure": {
+              "stage": "plan",
+              "kind": "ModelError"
+            }
+          }
+        ],
+        "model_requests": 5,
+        "tts_requests": 1,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-story-moon-46ce6426.json",
+        "sha256": "4d4b53d03ed3b0e909c002b11c88fdccb8c40e0819a1e6440292ad1a0728e686",
+        "source": "46ce6426a3eb99f2cb7c802cd1720b2c7343e870",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 9,
+        "tts_requests": 3,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-story-moon-5a56e4e9.json",
+        "sha256": "61632e31dc45af350c1f85410ebc205c1aedcb918b59dd4bb17e2c4cc3d2a031",
+        "source": "5a56e4e9e8138c64a34b103794095e27d25a98d8",
+        "attempted": 1,
+        "delivered": 0,
+        "failures": [
+          {
+            "label": "story-moon-1",
+            "failure": {
+              "stage": "facts",
+              "kind": "ModelError",
+              "contract": "fact_key"
+            }
+          }
+        ],
+        "model_requests": 2,
+        "tts_requests": 0,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-story-moon-92e58140.json",
+        "sha256": "6cb512f4a4b503e0a5718e39bd0df1424c4177bd58c996c389bb1dda5d918dad",
+        "source": "92e58140fc3706de382f9cd30e7c84740e082c39",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 19,
+        "tts_requests": 10,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-story-moon-c130bfdf.json",
+        "sha256": "6b6aab297a05a2b6add5312ed6f615954365b7cd20905f922cc3f28118531729",
+        "source": "c130bfdf9c1387891104d8e079dc401049d959e6",
+        "attempted": 1,
+        "delivered": 0,
+        "failures": [
+          {
+            "label": "story-moon-1",
+            "failure": {
+              "stage": "plan",
+              "kind": "ModelError",
+              "contract": "plan_sentence_limit"
+            }
+          }
+        ],
+        "model_requests": 2,
+        "tts_requests": 0,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      },
+      {
+        "file": "remaining-case-adventure-space-544701a2.json",
+        "sha256": "08537f5ba213c41d1183932d45e8698d0ca84e42464fa9cd3e53c4e45a7f8543",
+        "source": "544701a256609927e91b246e0403e66a2a4e0322",
+        "attempted": 3,
+        "delivered": 3,
+        "failures": [],
+        "model_requests": 14,
+        "tts_requests": 6,
+        "complete_result_received": true,
+        "supervisor_timeout": false,
+        "semantic_review_required": true,
+        "full_acceptance": false
+      }
+    ],
+    "latest_source": "544701a256609927e91b246e0403e66a2a4e0322",
+    "latest_source_case_results": {
+      "adventure-space": "3 delivered; root bounded positive; independent review pending"
+    },
+    "prior_story_fix": {
+      "source": "03786d9af95e5207cb55ebe339e00ab5ce803fa0",
+      "status": "3 delivered; independent bounded semantic positive; no repair branch in this case"
+    },
+    "original_failures_preserved": true,
+    "delivery_is_not_semantic_pass": true,
+    "full_acceptance": false
+  },
+  "full_acceptance": false,
+  "new_cloud_calls": 0
+}
