@@ -14,10 +14,10 @@ class Trace:
     def __init__(self,observer=None):
         if observer is not None and (not callable(observer) or inspect.iscoroutinefunction(observer)):raise ValueError('observer_sync_required')
         self.started=time.monotonic();self.rows=[];self.truncated=False;self.observer_failed=False
-        self.observer=observer;self.peer=None;self.session=None;self.session_id=None;self.connection=None;self.open=True;self.invalid_scope=0;self.audio_seen=False
+        self.observer=observer;self.peer=None;self.session=None;self.session_id=None;self.connection=None;self.open=True;self.invalid_scope=0;self.audio_seen=False;self.repeated={k:0 for k in ('ack_received','ack_progress','compact_skipped')}
     def report(self):
         return dict(round=1,records=[dict(r) for r in self.rows],truncated=self.truncated,
-                    observer_failed=self.observer_failed,invalid_scope=self.invalid_scope)
+                    observer_failed=self.observer_failed,invalid_scope=self.invalid_scope,repeated_counts=dict(self.repeated))
 
 def enabled():return _current.get() is not None
 
@@ -45,6 +45,9 @@ def mark(stage,peer,operation=None,*,count=0,bytes=0,outcome='ok'):
         if trace.peer is not peer or trace.session is not s or trace.session_id!=s.session or trace.connection!=s.connection:
             trace.invalid_scope=min(2**31-1,trace.invalid_scope+1);return
         if peer.closed or (not s.active and stage not in {'session_end','failure','cancel'}):return
+        if stage in trace.repeated:
+            trace.repeated[stage]=min(2**31-1,trace.repeated[stage]+1)
+            if trace.repeated[stage]>1:return
         if stage=='first_audio_sent':
             if trace.audio_seen:return
             trace.audio_seen=True

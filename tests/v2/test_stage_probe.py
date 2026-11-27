@@ -43,6 +43,11 @@ class Probe(unittest.IsolatedAsyncioTestCase):
                 class Rec:
                     async def finish(self):return 'PRIVATE_OTHER_INPUT'
                 yield Rec()
+            @asynccontextmanager
+            async def synthesize(self,text,rate):
+                async def frames():
+                    for _ in range(61):yield b'\x01\x00'*24
+                yield frames()
         meter=p.Allowance();speech=p.MeterSpeech(S(),meter)
         with self.assertRaises(p.GateError):
             async with speech.recognize(16000) as rec:await rec.finish()
@@ -55,6 +60,11 @@ class Probe(unittest.IsolatedAsyncioTestCase):
                     async def write(self,pcm):pass
                     async def finish(self):return '你好，请用一句话介绍你自己。'
                 yield Rec()
+            @asynccontextmanager
+            async def synthesize(self,text,rate):
+                async def frames():
+                    for _ in range(61):yield b'\x01\x00'*24
+                yield frames()
         meter=p.Allowance();speech=p.MeterSpeech(S(),meter)
         providers=UnifiedProviders(speech,p.MeterModel(Model(plan()),meter));p.forbid_images(providers,meter)
         with tempfile.TemporaryDirectory() as tmp:
@@ -68,3 +78,9 @@ class Probe(unittest.IsolatedAsyncioTestCase):
         stages=[e['stage'] for e in trace.rows]
         self.assertIn('effective_ack',stages);self.assertIn('asr_final',stages);self.assertIn('asr_released',stages)
         self.assertFalse(trace.truncated)
+        self.assertEqual(r['audio_chunks'],61)
+        self.assertEqual(trace.repeated['ack_received'],61)
+        self.assertEqual(trace.repeated['ack_progress'],61)
+        self.assertTrue({'tts_eof','tts_released','reply_end'}<=set(stages))
+        self.assertEqual(stages.count('effective_ack'),1)
+        self.assertLessEqual(len(trace.rows),128)

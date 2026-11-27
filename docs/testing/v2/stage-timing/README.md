@@ -21,3 +21,5 @@ bash scripts/with-build-lock sudo -n /usr/bin/python3 scripts/v2_stage_probe.py 
 ```
 
 无默认执行，无all/下组入口。完整loopback fixture、meter负控、scope/cancel/observer/safety、read retry/repair和既有释放/TTL定向结果见同目录日志。原本轮开发失败日志另保留，不把最终通过倒写成首次通过。
+
+计时采样收敛：ack_received/ack_progress/compact_skipped只各保存首次时间，另以三个固定key的饱和整数计数（上限2^31-1）统计；不保留scope集合，不提高128行。其余关键阶段仍按原门限记录。61块真实loopback TLS的合成provider对照已证明eof/released/reply_end仍可见，首次/effective ACK保留。原8e22唯一真实报告truncated=true不改、不重新执行；这个采样修正仅有离线证据。

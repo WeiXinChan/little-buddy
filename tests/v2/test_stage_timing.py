@@ -36,7 +36,7 @@ class Timing(unittest.IsolatedAsyncioTestCase):
         async def late():await go.wait();timing.mark('plan_end',self.peer)
         with timing.observe(trace):
             task=asyncio.create_task(late())
-            for _ in range(140):timing.mark('compact_skipped',self.peer)
+            for _ in range(140):timing.mark('plan_end',self.peer)
         go.set();await task
         self.assertEqual(len(trace.rows),128);self.assertTrue(trace.truncated)
     async def test_stale_epoch_revision_session_and_cancel_do_not_borrow_scope(self):
@@ -125,3 +125,14 @@ class Timing(unittest.IsolatedAsyncioTestCase):
         with timing.observe(trace):await self.turn('合成普通问候。')
         self.assertTrue(trace.observer_failed);self.assertTrue(self.peer.session.public)
         self.assertEqual(asyncio.current_task().cancelling(),0)
+
+    async def test_fixed_repeated_keys_saturate_without_hiding_terminal(self):
+        self.make();trace=timing.Trace()
+        with timing.observe(trace):
+            for _ in range(200):
+                for key in ('ack_received','ack_progress','compact_skipped'):timing.mark(key,self.peer)
+            for key in ('tts_eof','tts_released','reply_end'):timing.mark(key,self.peer)
+            trace.repeated['ack_received']=2**31-1;timing.mark('ack_received',self.peer)
+        self.assertEqual(len(trace.rows),6);self.assertFalse(trace.truncated)
+        self.assertEqual(trace.repeated['ack_received'],2**31-1)
+        self.assertEqual(set(trace.repeated),{'ack_received','ack_progress','compact_skipped'})

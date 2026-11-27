@@ -1,0 +1,7 @@
+...............Executing <Task pending name='Task-109' coro=<Probe.test_complete_real_loopback_tls_path_and_cleanup_with_synthetic_providers() running at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/stage-timing/tests/v2/test_stage_probe.py:75> wait_for=<_GatheringFuture pending cb=[Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/tasks.py:712> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.271 seconds
+.....
+----------------------------------------------------------------------
+Ran 20 tests in 1.581s
+
+OK
+disabled: explicit --execute required
