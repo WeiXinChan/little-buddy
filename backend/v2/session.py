@@ -60,6 +60,7 @@ class Session:
         self.heartbeat_deadline = clock() + lease
         self.deadline = 0
         self.active = True
+        self.expiry_reason = None
         self.management_paused = False
         self.public, self.private, self.secrets, self.game = [], [], {}, {}
         self.private_mode = False
@@ -78,6 +79,15 @@ class Session:
 
     def _live(self):
         if self.active and self.clock() >= min(self.expires, self.heartbeat_deadline):
+            # Latch the earliest failed safeguard before clear() erases scope.
+            # A delayed poll must not turn an earlier lease/reply failure into TTL.
+            response = (self.progress_deadline if self.response_confirmed else self.deadline) if self.deadline else float('inf')
+            if self.response_expired or response <= min(self.expires, self.heartbeat_deadline):
+                self.expiry_reason = 'response_timeout'
+            elif self.heartbeat_deadline <= self.expires:
+                self.expiry_reason = 'heartbeat_timeout'
+            else:
+                self.expiry_reason = 'management_expired' if self.management_paused else 'session_expired'
             self.clear()
         return self.active
 

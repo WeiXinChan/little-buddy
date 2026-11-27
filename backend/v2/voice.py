@@ -132,6 +132,7 @@ class VoicePeer:
         self.waiting_wake=False
         self.last_volume_scope=None
         self.settling_stop=None
+        self.expiry_notice_scope=None
 
     @asynccontextmanager
     async def resource(self, manager):
@@ -1199,6 +1200,61 @@ class VoicePeer:
         await self.send('audio', player=self.session.player, stream=self.session.stream,
                         segment=name, start=start, end=end, pcm=base64.b64encode(pcm).decode())
 
+    async def finish_session_expiry(self, scope):
+        session, epoch, revision, connection, turn, output = scope
+        def current():
+            return (self.session is session and self.epoch == epoch and self.revision == revision
+                    and session.connection == connection and session.turn == turn and session.output == output
+                    and not session.active and session.expiry_reason == 'session_expired' and not self.closed)
+        if not current():return False
+        if self.expiry_notice_scope is not None and self.expiry_notice_scope[0] is session:return True
+        # Claim before any await; no duplicate terminal event for this dead session.
+        self.expiry_notice_scope=scope
+        self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+        self.awaiting_input=False;self.waiting_wake=False;self.settling_stop=None
+        self.management_receipt=None;self.management_scope=None;self.management_ready=False
+        self.ack_identity=None
+        self.invalidate_visual()
+        tasks=set(self.retired_tasks)
+        recognition=self.recognition
+        try:
+            await self.commands()
+            if not current():return False
+            await self.cancel_generation()
+            if not current() or self.generation is not None:return False
+            await self.cancel_recognition()
+            if not current() or self.recognition is not recognition:return False
+            deadline=asyncio.get_running_loop().time()+.5
+            while True:
+                tasks.update(self.retired_tasks)
+                pending={t for t in tasks if not t.done()}
+                # Closing tasks must finish, not be cancelled and counted released.
+                remaining=deadline-asyncio.get_running_loop().time()
+                if pending and remaining>0:await asyncio.wait(pending,timeout=remaining)
+                await asyncio.sleep(0)
+                if not current():return False
+                tasks.update(self.retired_tasks)
+                pending={t for t in tasks if not t.done()}
+                if not pending:break
+                if asyncio.get_running_loop().time()>=deadline:
+                    self.quarantined=True
+                    break
+            if any(t.done() and not t.cancelled() and t.exception() is not None for t in tasks):self.quarantined=True
+        except WireError:
+            self.quarantined=True
+        if not current() or self.generation is not None or self.recognition is not recognition:return False
+        if self.quarantined:
+            await self.send('failure',code='voice')
+            await self.close_quarantined()
+        else:
+            # Ignore buffered intake that arrived during bounded old-task close.
+            self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+            self.awaiting_input=False
+            self.recognition=None
+            self.generation_scopes.clear();self.recognition_scopes.clear()
+            await self.send('session_end',reason='session_expired',session=session.session,turn=turn,revision=revision)
+        return True
+
     async def monitor(self):
         while not self.closed:
             await asyncio.sleep(.1)
@@ -1228,8 +1284,13 @@ class VoicePeer:
                       self.session.player is None and not self.session.pending and
                       (self.generation is None or token is not None and self.generation is token['generation']) and
                       (self.prepared is None or self.prepared[3]==self.revision and self.prepared[1]==self.input_budget.deadline))
-            if settling or incoming:self.session._live() # TTL/heartbeat still expire
-            else:self.session.poll()
+            session,epoch,revision=self.session,self.epoch,self.revision
+            if settling or incoming:session._live() # TTL/heartbeat still expire
+            else:session.poll()
+            expired_scope=(session,epoch,revision,session.connection,session.turn,session.output)
+            if not session.active and session.expiry_reason == 'session_expired':
+                if await self.finish_session_expiry(expired_scope):return
+                continue
             await self.commands()
             await self.poll_visual()
             if not self.session.active or self.session.response_expired:
@@ -1241,7 +1302,12 @@ class VoicePeer:
         monitor = asyncio.create_task(self.monitor())
         receiver = None
         try:
-            while self.session.active:
+            while not self.closed:
+                if not self.session.active:
+                    # handle(heartbeat/scope) can discover expiry before monitor.
+                    # Let the same scoped monitor emit the terminal event first.
+                    if self.session.expiry_reason is not None:await monitor
+                    break
                 receiver = asyncio.create_task(self.socket.recv())
                 done, _ = await asyncio.wait({receiver, monitor}, return_when=asyncio.FIRST_COMPLETED)
                 if monitor in done:
