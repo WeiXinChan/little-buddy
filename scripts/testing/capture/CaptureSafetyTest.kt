@@ -145,11 +145,11 @@ class CaptureSafetyTest {
   var now=1000L;var stamp=CaptureStamp(0,1_000_000_000)
   val ledger=NativeReadLedger(3200,{now},{now}){stamp}
   ledger.check();now=1040;stamp=CaptureStamp(640,1_040_000_000);val end=ledger.read(640)
-  assertEquals(1037L,end)
+  assertEquals(1037L-1-CaptureClockBridge.LIMIT_MS,end)
   val jobs=mutableListOf<Runnable>();val seen=mutableListOf<Long>()
   val q=CaptureUploads({jobs+=it;true},{now},{true},{_,_,at->seen+=at},{fail("unexpected")})
   q.offer(batch(2),true,end);jobs.single().run()
-  assertEquals(listOf(996L,1016L),seen)
+  assertEquals(listOf(996L,1016L).map{it-1-CaptureClockBridge.LIMIT_MS},seen)
   assertTrue(seen[0]<=ledger.sampleTime(0));assertTrue(seen[1]<=ledger.sampleTime(320))
   var delivered=0;var failures=0;jobs.clear()
   val expired=CaptureUploads({jobs+=it;true},{now},{true},{_,_,_->delivered++},{failures++})

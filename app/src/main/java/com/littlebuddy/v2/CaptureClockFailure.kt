@@ -11,6 +11,7 @@ internal enum class CaptureClockReason(val legacy: String) {
     STARTUP_ORIGIN_UNPROVEN("capture startup origin unproven"),
     CLOCK_REGRESSED("capture clock regressed"),
     CLOCK_REGRESSED_DURING_TIMESTAMP("capture clock regressed during timestamp"),
+    TIMEBASE_UNCERTAIN("capture timebase measurement uncertain"),
     TIMEBASE_CHANGED("capture timebase changed"),
     INVALID_CAPTURE_TIMESTAMP("invalid capture timestamp"),
     TIMESTAMP_REGRESSED("capture timestamp regressed"),
@@ -32,7 +33,11 @@ internal data class CaptureClockEvidence(
     val frames:Long=0, val reads:Long=0, val deltaFrames:Long=0, val deltaNs:Long=0,
     val ageNs:Long=0, val checkGapMs:Long=0, val apiMs:Long=0, val bridgeMs:Long=0,
     val capacity:Int=0,val apiBeforeMs:Long=0,val apiAfterMs:Long=0,val stampNs:Long=0,
-    val stampReturned:Boolean=false,val phaseNs:Long=0,val conservativeAgeNs:Long=0,val maxAgeNs:Long=0,val starting:Boolean=false)
+    val stampReturned:Boolean=false,val phaseNs:Long=0,val conservativeAgeNs:Long=0,val maxAgeNs:Long=0,val starting:Boolean=false,
+    val bridgeOriginBeforeMs:Long=0,val bridgeOriginBootMs:Long=0,val bridgeOriginAfterMs:Long=0,
+    val bridgeBeforeMs:Long=0,val bridgeBootMs:Long=0,val bridgeAfterMs:Long=0,
+    val bridgeOriginLowerMs:Long=0,val bridgeOriginUpperMs:Long=0,val bridgeLowerMs:Long=0,val bridgeUpperMs:Long=0,
+    val bridgeAttempts:Int=0)
 internal data class CaptureLongWitness(val fromFrame:Long,val fromNs:Long,val toFrame:Long,val toNs:Long,val lowerBudget:Long,val upperBudget:Long)
 internal enum class CaptureReadStep { NONE, STARTUP, PRE_ROOM, AFTER_ROOM, NATIVE_READ, PREFIX_REPLAY, POST_READ, KWS, POST_KWS, UPLOAD_ADMIT, CLEANUP }
 internal enum class CaptureTimestampResult { NOT_CALLED, IN_FLIGHT, SUCCESS, UNAVAILABLE, OTHER }

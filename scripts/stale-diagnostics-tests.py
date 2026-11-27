@@ -15,8 +15,8 @@ assert (fixture/'oppo-cadence-151.tsv').read_text()==expected
 base=Path(os.environ.get('LEDGER_SOURCE_BASE',str(root/'app/src/main/java/com/littlebuddy/v2')))
 helper=base/'CaptureClockEnvelope.kt'
 if not helper.exists():helper=root/'app/src/main/java/com/littlebuddy/v2/CaptureClockEnvelope.kt'
-sources=[root/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['CaptureClockFailure','CaptureClockEnvelope','NativeReadLedger','RuntimeRetryGate']]
-sources += [root/'app/src/main/java/com/littlebuddy/v2/parent/PinDiagnostic.kt',root/'app/src/test/java/com/littlebuddy/v2/StaleDiagnosticsTest.kt']
+sources=[(base if n=='NativeReadLedger' else root/'app/src/main/java/com/littlebuddy/v2')/(n+'.kt') for n in ['CaptureClockFailure','CaptureClockEnvelope','NativeReadLedger','RuntimeRetryGate']]
+sources += [root/'app/src/main/java/com/littlebuddy/v2/parent/PinDiagnostic.kt',root/'app/src/test/java/com/littlebuddy/v2/StaleDiagnosticsTest.kt',root/'app/src/test/java/com/littlebuddy/v2/ClockBridgeTest.kt']
 with tempfile.TemporaryDirectory(dir=root,prefix='clock-tests-') as out:
  subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-classpath',os.pathsep.join(runtime),'-d',out,*map(str,sources)],check=True)
- subprocess.run(['java','-Xmx256m','-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.v2.StaleDiagnosticsTest'],check=True)
+ subprocess.run(['java','-Xmx256m','-cp',os.pathsep.join([out,*runtime]),'org.junit.runner.JUnitCore','com.littlebuddy.v2.StaleDiagnosticsTest','com.littlebuddy.v2.ClockBridgeTest'],check=True)

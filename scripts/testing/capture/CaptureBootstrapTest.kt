@@ -30,7 +30,8 @@ class CaptureBootstrapTest {
   val all=mutableListOf<Short>();val frame=ShortArray(320)
   while(s.prefix.pending){val n=s.prefix.take(frame);repeat(n){all+=frame[it]};frame.fill(0)}
   assertEquals((0 until s.read.toInt()).map{(it%30000+1).toShort()},all)
-  assertTrue(s.ledger.sampleTime(0) in s.origin-4..s.origin)
+  // Sample0 coordinate is unchanged; BOOTTIME estimate now charges six extra ms.
+  assertTrue(s.ledger.sampleTime(0)+1+CaptureClockBridge.LIMIT_MS in s.origin-4..s.origin)
   assertEquals(s.read,s.prefix.replayPosition);assertTrue(s.references.all{f->f.all{it==0.toShort()}})
  }
  @Test fun missingStampStopsWithinFixed500msAndWipesEverything(){

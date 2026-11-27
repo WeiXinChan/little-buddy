@@ -31,7 +31,9 @@ class ClockDiagnosticTest {
   run(CaptureClockReason.PHASE_RATE_MODEL_EXHAUSTED,CaptureStamp(640,35_000_000))
   run(CaptureClockReason.TIMESTAMP_REGRESSED,CaptureStamp(319,40_000_000))
   run(CaptureClockReason.TIMESTAMP_RELABELED,CaptureStamp(320,40_000_000))
-  run(CaptureClockReason.TIMEBASE_CHANGED,CaptureStamp(640,40_000_000),6)
+  // 6ms point difference gives possible true displacement[4,8]ms with floor
+  // clock windows: still reject, but report uncertainty rather than proven change.
+  run(CaptureClockReason.TIMEBASE_UNCERTAIN,CaptureStamp(640,40_000_000),6)
  }
  @Test fun detailSinkFailureCannotReplaceOriginalFailureOrThrow() {
   val e=CaptureClockFailure(CaptureClockReason.LONG_RATE_OUTSIDE_BOUND,CaptureClockEvidence(frames=640,reads=320))

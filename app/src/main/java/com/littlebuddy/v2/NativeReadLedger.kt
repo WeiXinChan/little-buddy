@@ -17,8 +17,10 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         private const val MAX_RATE=16016L
         fun durationMs(samples:Long)=(samples*1000+MIN_RATE-1)/MIN_RATE
     }
-    private val bootOrigin=boot() // BOOT before MONOTONIC: conservative earliest clock bridge
-    private val monoOrigin=mono()
+    private val bridge=CaptureClockBridge(mono,boot)
+    private val monoOrigin=bridge.origin.after
+    // Earliest BOOTTIME mapping, including the unchanged 5ms admissible bridge displacement.
+    private val bootOrigin=bridge.earliestBoot(monoOrigin)
     private val reserve=320L
     private val startupMs=(capacity-reserve)/16
     private val maxAgeNs=minOf(100L,startupMs)*1_000_000
@@ -34,6 +36,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     private var gapMs=0L
     private var apiMs=0L
     private var apiBeforeMs=monoOrigin
+    private var apiAfterMs=monoOrigin
     private var bridgeMs=0L
     private var evidenceTime=monoOrigin
     private fun difference(a:Long,b:Long)=try { Math.subtractExact(a,b) } catch(_:ArithmeticException) { 0L }
@@ -43,10 +46,12 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
             if(value!=null && previous!=null)difference(value.frames,previous!!.frames) else 0,
             if(value!=null && previous!=null)difference(value.nanoTime,previous!!.nanoTime) else 0,
             if(value!=null)difference(evidenceTime*1_000_000,value.nanoTime) else 0,
-            gapMs,apiMs,bridgeMs,capacity,apiBeforeMs,evidenceTime,value?.nanoTime ?: 0,attempted!=null,
+            gapMs,apiMs,bridgeMs,capacity,apiBeforeMs,apiAfterMs,value?.nanoTime ?: 0,attempted!=null,
             if(starting)CaptureClockEnvelope.STARTUP_PHASE_NS else CaptureClockEnvelope.PHASE_NS,
             if(value!=null)(evidenceTime+1)*1_000_000-(value.nanoTime-(if(starting)CaptureClockEnvelope.STARTUP_PHASE_NS else CaptureClockEnvelope.PHASE_NS)) else 0,
-            maxAgeNs,starting)
+            maxAgeNs,starting,bridge.origin.before,bridge.origin.boot,bridge.origin.after,
+            bridge.last.before,bridge.last.boot,bridge.last.after,bridge.origin.lower,bridge.origin.upper,
+            bridge.last.lower,bridge.last.upper,bridge.attempts)
     }
     private fun guard(valid:Boolean,reason:CaptureClockReason) {
         if(!valid)throw CaptureClockFailure(reason,evidence())
@@ -93,10 +98,15 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         guard(before>=checkedAt && before>=monoOrigin,CaptureClockReason.CLOCK_REGRESSED)
         val candidate=stamp() // JNI/provider time belongs to this same budget, never to the next read.
         attempted=candidate
-        val time=mono();val elapsed=boot()-bootOrigin
-        evidenceTime=time;apiMs=difference(time,before);bridgeMs=elapsed-(time-monoOrigin)
-        guard(time>=before,CaptureClockReason.CLOCK_REGRESSED_DURING_TIMESTAMP)
-        guard(kotlin.math.abs(elapsed-(time-monoOrigin))<=5,CaptureClockReason.TIMEBASE_CHANGED)
+        apiAfterMs=mono();apiMs=difference(apiAfterMs,before);evidenceTime=apiAfterMs
+        guard(apiAfterMs>=before,CaptureClockReason.CLOCK_REGRESSED_DURING_TIMESTAMP)
+        // Boot reads are not atomic with mono reads. Bound both sampling windows. At most one
+        // additional measurement may resolve a scheduling-wide window; every elapsed ms is charged.
+        try {bridge.check(apiAfterMs)} finally {
+            evidenceTime=bridge.last.after
+            bridgeMs=bridge.last.boot-bridge.origin.boot-(bridge.last.before-bridge.origin.after)
+        }
+        val time=bridge.last.after
         checkedAt=time
         if(starting)softwareRoom(time)
         if(candidate!=null) {
@@ -163,6 +173,49 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         val rate=if(delta<0)MIN_RATE else MAX_RATE
         // Earliest feasible model time (including phase uncertainty), and 1ms bridge rounding.
         val nativeNs=clock.earliestNs+Math.floorDiv(delta*1_000_000_000,rate)
-        return bootOrigin+Math.floorDiv(nativeNs-monoOrigin*1_000_000,1_000_000)-1
+        return bridge.earliestBoot(Math.floorDiv(nativeNs,1_000_000))-1
     }
+}
+
+/** Bracket BOOTTIME with MONOTONIC. Both callbacks return floor milliseconds.
+ * For m0 <= actual mono at boot read < m1+1, offset is in [b-m1-1,b-m0+1].
+ * No point estimate can remove scheduling uncertainty. An unresolved window fails closed.
+ */
+internal class CaptureClockBridge(private val mono:()->Long,private val boot:()->Long) {
+    companion object {const val LIMIT_MS=5L;private const val ATTEMPTS=2}
+    internal data class Window(val before:Long,val boot:Long,val after:Long) {
+        val lower get()=boot-after-1
+        val upper get()=boot-before+1
+    }
+    var last=Window(0,0,0);private set
+    var attempts=0;private set
+    val origin:Window
+    init {
+        var selected:Window?=null;var floor:Long?=null
+        for(i in 1..ATTEMPTS){
+            val w=sample(floor);floor=w.after
+            if(w.upper-w.lower<=3){selected=w;break}
+        }
+        origin=selected ?: throw CaptureClockFailure(CaptureClockReason.TIMEBASE_UNCERTAIN,
+            CaptureClockEvidence(bridgeBeforeMs=last.before,bridgeBootMs=last.boot,
+                bridgeAfterMs=last.after,bridgeLowerMs=last.lower,bridgeUpperMs=last.upper,bridgeAttempts=attempts))
+    }
+    private fun sample(notBefore:Long?=null):Window {
+        val a=mono();val b=boot();val c=mono();last=Window(a,b,c);attempts++
+        clockCheck(a>=0 && b>=0 && c>=a && (notBefore==null || a>=notBefore),CaptureClockReason.CLOCK_REGRESSED)
+        return last
+    }
+    fun check(notBefore:Long) {
+        attempts=0;var floor=notBefore
+        for(i in 1..ATTEMPTS){
+            val w=sample(floor);floor=w.after
+            val low=w.lower-origin.upper;val high=w.upper-origin.lower
+            // Every offset compatible with the observations must be within the original 5ms.
+            if(low>=-LIMIT_MS && high<=LIMIT_MS)return
+            if(low>LIMIT_MS || high< -LIMIT_MS)throw CaptureClockFailure(CaptureClockReason.TIMEBASE_CHANGED)
+        }
+        throw CaptureClockFailure(CaptureClockReason.TIMEBASE_UNCERTAIN)
+    }
+    // Never move an audio timestamp forward using the latest BOOTTIME observation.
+    fun earliestBoot(monoMs:Long)=monoMs+origin.lower-LIMIT_MS
 }
