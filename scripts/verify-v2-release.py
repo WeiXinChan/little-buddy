@@ -40,8 +40,8 @@ def inspect(apk, pin_init_diagnostics=False, private_device_preset=False):
             meta['private_device_preset'] != private_device_preset or meta['diagnostics_enabled'] != pin_init_diagnostics or
             ('assets/v2-device-preset.bin' in names) != private_device_preset):
             raise ValueError('explicit_build_mode_mismatch')
-        expected_name='2.0.0-rc9.diagnostic1' + ('.integrated1.device1' if private_device_preset else '')
-        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=24 or meta['version_name']!=expected_name:
+        expected_name='2.0.0-rc9.diagnostic2' + ('.integrated1.device1' if private_device_preset else '')
+        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=25 or meta['version_name']!=expected_name:
             raise ValueError('candidate_version_mismatch')
         if meta['resources_manifest_sha256']!=RC9_RESOURCES_MANIFEST:
             raise ValueError('candidate_resources_mismatch')
@@ -66,7 +66,7 @@ def inspect(apk, pin_init_diagnostics=False, private_device_preset=False):
                 raise ValueError('source_snapshot_mismatch')
         canonical=_snapshot.canonical(trusted);digest=hashlib.sha256(canonical).hexdigest()
         if raw!=canonical or digest!=meta['source_content_sha256']:raise ValueError('source_inventory_mismatch')
-        if meta['build_id']!='v2-24-'+digest[:16]:raise ValueError('source_build_id_mismatch')
+        if meta['build_id']!='v2-25-'+digest[:16]:raise ValueError('source_build_id_mismatch')
         if hashlib.sha256(resource_raw).hexdigest()!=RC9_RESOURCES_MANIFEST:raise ValueError('candidate_resources_mismatch')
         if z.read('assets/v2-default/manifest.json')!=resource_raw:raise ValueError('apk_resources_mismatch')
         expected=set(pngs)|{'assets/v2-default/manifest.json'}

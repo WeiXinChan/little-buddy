@@ -1,8 +1,8 @@
 {
   "format": 1,
-  "version_code": 24,
-  "version_name": "2.0.0-rc9.diagnostic1",
+  "version_code": 25,
+  "version_name": "2.0.0-rc9.diagnostic2",
   "application_id": "com.littlebuddy.sim.v2",
   "protocol_contract": "v2-voice2-safety1-images2-volume1-management1-end1",
-  "source_base": "60d83a50b5d8cd54ff78bcda30460907265488aa"
+  "source_base": "681d9cbb4beb0e74c6acb355bb1b9a43cde0af41"
 }

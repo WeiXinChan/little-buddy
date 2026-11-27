@@ -55,11 +55,11 @@ class RC9Preparation(unittest.TestCase):
      warnings.simplefilter('ignore',UserWarning);z.writestr(duplicate,b'DUPLICATE UNIT FIXTURE')
   with patch.object(verify,'__file__',str(self.root/'scripts/verify-v2-release.py')):return verify.inspect(archive,diagnostics,private)
  def test_strict_rc9_identity_with_corrected_resources(self):
-  meta=self.inspect();self.assertEqual((24,'2.0.0-rc9.diagnostic1','com.littlebuddy.sim.v2'),(meta['version_code'],meta['version_name'],meta['application_id']))
-  self.assertTrue(meta['build_id'].startswith('v2-24-'));self.assertEqual(gen.RC9_RESOURCES_MANIFEST,meta['resources_manifest_sha256'])
+  meta=self.inspect();self.assertEqual((25,'2.0.0-rc9.diagnostic2','com.littlebuddy.sim.v2'),(meta['version_code'],meta['version_name'],meta['application_id']))
+  self.assertTrue(meta['build_id'].startswith('v2-25-'));self.assertEqual(gen.RC9_RESOURCES_MANIFEST,meta['resources_manifest_sha256'])
  def test_generator_refuses_old_or_mislabeled_identity(self):
   p=self.root/'app/v2-release.json';original=json.loads(p.read_text())
-  for code,name in [(22,'2.0.0-rc8'),(23,'2.0.0-rc8'),(24,'2.0.0-rc10')]:
+  for code,name in [(22,'2.0.0-rc8'),(23,'2.0.0-rc8'),(25,'2.0.0-rc10')]:
    p.write_text(json.dumps(dict(original,version_code=code,version_name=name)))
    with self.assertRaises(AssertionError):self.generate()
  def test_generator_refuses_old_library_even_with_rc9_version(self):
@@ -67,13 +67,13 @@ class RC9Preparation(unittest.TestCase):
   with self.assertRaises(AssertionError):self.generate()
  def test_inspector_refuses_old_or_mislabeled_identity(self):
   meta=self.generate()
-  for code,name in [(22,'2.0.0-rc8'),(23,'2.0.0-rc8'),(24,'2.0.0-rc10')]:
+  for code,name in [(22,'2.0.0-rc8'),(23,'2.0.0-rc8'),(25,'2.0.0-rc10')]:
    with self.assertRaisesRegex(ValueError,'candidate_version_mismatch'):self.inspect(dict(meta,version_code=code,version_name=name))
  def test_inspector_refuses_old_images_relabelled_rc9(self):
   meta=self.generate();old=self.old_resource;(self.root/'assets/v2-default/manifest.json').write_bytes(old)
   # Negative fixture only: coherent receipts cannot override the independent RC9 resource pin.
   raw=gen._snapshot.canonical(gen.source_inventory(self.root));digest=hashlib.sha256(raw).hexdigest()
-  meta.update(resources_manifest_sha256=hashlib.sha256(old).hexdigest(),source_content_sha256=digest,build_id='v2-24-'+digest[:16])
+  meta.update(resources_manifest_sha256=hashlib.sha256(old).hexdigest(),source_content_sha256=digest,build_id='v2-25-'+digest[:16])
   with self.assertRaisesRegex(ValueError,'candidate_resources_mismatch'):self.inspect(meta,inventory=raw,resource=old)
  def test_inventory_tampering_and_local_source_drift_still_rejected(self):
   meta=self.generate();raw=(self.output/'v2-source-inventory.json').read_bytes()
@@ -97,9 +97,9 @@ class RC9Preparation(unittest.TestCase):
    elif mutation=='extra_key':receipt['trusted']=True
    else:receipt['size']=True
    raw=gen._snapshot.canonical(inventory);digest=hashlib.sha256(raw).hexdigest()
-   changed=dict(meta,source_content_sha256=digest,build_id='v2-24-'+digest[:16])
+   changed=dict(meta,source_content_sha256=digest,build_id='v2-25-'+digest[:16])
    with self.assertRaises(ValueError):self.inspect(changed,inventory=raw)
-  with self.assertRaisesRegex(ValueError,'source_build_id_mismatch'):self.inspect(dict(meta,build_id='v2-24-'+('0'*16)))
+  with self.assertRaisesRegex(ValueError,'source_build_id_mismatch'):self.inspect(dict(meta,build_id='v2-25-'+('0'*16)))
  def test_inspector_rejects_added_tracked_selected_source(self):
   meta=self.generate();(self.root/'app/src/main/Added.kt').write_text('// ADDED\n')
   subprocess.run(['git','add','app/src/main/Added.kt'],cwd=self.root,check=True)
@@ -147,7 +147,7 @@ class RC9Preparation(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'candidate_config_mismatch'):self.inspect(dict(meta,source_base='f'*40))
  def test_private_candidate_requires_explicit_mode_and_has_rc9_identity(self):
   meta=self.generate(private=True,diagnostics=True)
-  self.assertEqual((24,'2.0.0-rc9.diagnostic1.integrated1.device1'),(meta['version_code'],meta['version_name']))
+  self.assertEqual((25,'2.0.0-rc9.diagnostic2.integrated1.device1'),(meta['version_code'],meta['version_name']))
   self.assertEqual('private_registered_device',self.inspect(meta,private=True,diagnostics=True,payload=True)['distribution'])
   with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(meta,payload=True)
  def test_missing_or_unexpected_private_payload_refused(self):
@@ -157,13 +157,13 @@ class RC9Preparation(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(public,payload=True)
  def test_diagnostic_flag_does_not_resurrect_obsolete_rc8_packaging(self):
   meta=self.generate(diagnostics=True)
-  self.assertEqual('2.0.0-rc9.diagnostic1',meta['version_name'])
+  self.assertEqual('2.0.0-rc9.diagnostic2',meta['version_name'])
   self.assertTrue(self.inspect(meta,diagnostics=True)['diagnostics_enabled'])
   with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(meta)
  def test_private_mode_cannot_bypass_exact_source_inventory(self):
   meta=self.generate(private=True);claimed=json.loads((self.output/'v2-source-inventory.json').read_bytes())
   del claimed['app/src/main/Sentinel.kt'];raw=gen._snapshot.canonical(claimed);digest=hashlib.sha256(raw).hexdigest()
-  meta.update(source_content_sha256=digest,build_id='v2-24-'+digest[:16])
+  meta.update(source_content_sha256=digest,build_id='v2-25-'+digest[:16])
   with self.assertRaisesRegex(ValueError,'source_inventory_set_mismatch'):self.inspect(meta,inventory=raw,private=True,payload=True)
  def test_private_mode_cannot_bypass_png_set_or_identity(self):
   meta=self.generate(private=True);images=self.pngs();del images['assets/v2-default/png/star-bunny.png']
