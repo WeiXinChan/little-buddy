@@ -1,0 +1,51 @@
+{
+  "source": "8e22de6bd01ddc9106c0fbe348e27c3b990afe41",
+  "result_sha256": "a544d5c3ebd1c1d66e3265731e8147a0f9cb15a038c9d01d8cf95b55fd39dddf",
+  "first_audio_after_synthetic_input_end_ms": 3844.877,
+  "input_end_to_seal_ms": 1704.645,
+  "seal_to_first_audio_received_ms": 2140.232,
+  "phases_ms": {
+    "input_end_to_probe": 301.528,
+    "asr_enter": 251.627,
+    "asr_finish_send_to_final": 349.049,
+    "asr_release": 151.46,
+    "endpoint": 646.545,
+    "plan": 901.133,
+    "facts_overlapped": 565.188,
+    "whole": 673.953,
+    "tts_open_to_connected": 178.905,
+    "tts_connected_to_task_ready": 56.619,
+    "tts_resource_ready_to_first_pcm": 312.954,
+    "lookahead": 0.767,
+    "first_audio_send_to_receive": 1.2
+  },
+  "counts": {
+    "asr": 1,
+    "text": 4,
+    "tts": 1
+  },
+  "stage_counts": {
+    "endpoint": 1,
+    "plan": 1,
+    "facts": 1,
+    "review": 1
+  },
+  "trace_records": 128,
+  "truncated": true,
+  "tail_timing": "NOT_OBSERVED_AFTER_TRACE_CAP",
+  "cleanup": {
+    "confirmed": true,
+    "pending": 0,
+    "quarantined": false
+  },
+  "provider_release": {
+    "failed": false,
+    "pending": 0,
+    "last": {
+      "confirmed": true,
+      "aborted": false,
+      "pending_tasks": 0
+    }
+  },
+  "claim": "single instrumented synthetic diagnostic, not phone/P12/P15 acceptance"
+}
