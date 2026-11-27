@@ -247,7 +247,8 @@ class Session:
                 or any(s.name == name for s in self.pending)):
             return False
         if state is not None:
-            if (not isinstance(state, dict) or set(state) not in ({'mode','rules','roles','secrets'}, {'mode','rules','roles','secrets','turn_limit'}) or
+            if (not isinstance(state, dict) or set(state)-{'guess_role'} not in ({'mode','rules','roles','secrets'}, {'mode','rules','roles','secrets','turn_limit'})
+                    or ('guess_role' in state and (state['mode']!='guess' or state['guess_role'] not in ('setter','guesser') or state['guess_role']=='guesser' and state['secrets'])) or
                     ('turn_limit' in state and (state['mode']!='story' or
                         state['turn_limit'] is not None and (type(state['turn_limit']) is not int or not 1<=state['turn_limit']<=4))) or
                     not isinstance(state['rules'], str) or not isinstance(state['roles'], list) or

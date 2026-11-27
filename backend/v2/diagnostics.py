@@ -1,7 +1,7 @@
 """Content-free exception metadata; unknown values are never serialized."""
 CONTRACT_FAILURES=frozenset({
     'plan_structure','plan_action','plan_mode','plan_rules','plan_roles',
-    'plan_secrets','plan_sentences','plan_anchors','plan_tool_schema','plan_sentence_limit',
+    'plan_secrets','plan_guess_answer_changed','plan_guess_role','plan_sentences','plan_anchors','plan_tool_schema','plan_sentence_limit',
     'json_type','json_capacity','json_encoding','json_syntax','json_duplicate',
     'upstream_capacity','upstream_json','upstream_structure','upstream_unknown',
     'facts_structure','facts_list_type','facts_count','fact_structure',

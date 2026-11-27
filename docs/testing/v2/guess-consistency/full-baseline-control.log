@@ -1,0 +1,31 @@
+test_package_cannot_label_old_model_source_as_new_default (test_flash_text_config.Flash.test_package_cannot_label_old_model_source_as_new_default) ... Executing <Task finished name='Task-2' coro=<Flash.test_package_cannot_label_old_model_source_as_new_default() done, defined at /home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/nondevice-closeout/tests/v2/test_flash_text_config.py:131> exception=AssertionError('"release_source_model_mismatch" does not match "release_log_policy_missing"') created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.328 seconds
+FAIL
+
+======================================================================
+FAIL: test_package_cannot_label_old_model_source_as_new_default (test_flash_text_config.Flash.test_package_cannot_label_old_model_source_as_new_default)
+----------------------------------------------------------------------
+ValueError: release_log_policy_missing
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/nondevice-closeout/tests/v2/test_flash_text_config.py", line 135, in test_package_cannot_label_old_model_source_as_new_default
+    with self.assertRaisesRegex(ValueError,'release_source_model_mismatch'):
+AssertionError: "release_source_model_mismatch" does not match "release_log_policy_missing"
+
+----------------------------------------------------------------------
+Ran 1 test in 0.332s
+
+FAILED (failures=1)
