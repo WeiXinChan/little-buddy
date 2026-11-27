@@ -58,10 +58,11 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     @Volatile var inputSerial = 0L; private set
     private var outputBusy = false
     private var responseRevision = -1L
+    private val phases=if(ClientPhasePort.enabled())ClientPhases(diagnosticScope,SystemClock::elapsedRealtime) else null
     private val gate: InputGate = InputGate(waits, SystemClock::elapsedRealtime,
         { version -> entryGate.clear(); childVolume.clear(); images?.inputChanged(); send("advance", "revision" to version); candidate();status("listening") },
-        { version -> send("probe", "revision" to version) },
-        { version -> send("seal", "revision" to version); inputSerial++ ; outputBusy = true;status("thinking") },
+        { version -> val seq=sequence;if(send("probe", "revision" to version))phase(ClientPhase.PROBE_SENT,version,seq=seq) },
+        { version -> val seq=sequence;if(send("seal", "revision" to version))phase(ClientPhase.SEAL_SENT,version,seq=seq); inputSerial++ ; outputBusy = true;status("thinking") },
         { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true;status("thinking") },
         { send("thinking_prompt", "revision" to gateVersion()); status("waiting_thinking") },
         { isAwake = false; idleSerial++; interrupt(); status("wake") })
@@ -73,7 +74,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var ackIdentity: JSONObject? = null
     private var ackSequence = 0L
     private var playerName: String? = null
-    private val player = Playback({ AndroidTrack(handler, com.littlebuddy.v2.parent.ParentPlaybackSettings(childVolume.value,playbackSettings.rate,playbackSettings.durationSeconds)) { fail("route") } },
+    private val player = Playback({ createTrack() },
         SystemClock::elapsedRealtime) { ack ->
         observed(ack)
         if (ack.completed && responseRevision == gate.revision && ack.binding.epoch == epoch) gate.effectivePlayed()
@@ -83,7 +84,27 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         val sent = send("ack", "identity" to copy, "player" to ack.binding.player,
              "stream" to ack.binding.stream, "segment" to ack.segment, "head" to ack.head)
         if (sent) recordImageAck(ack)
-    }.also { it.observeOutput { playing->actualOutput(playing && permitted() && !childBlocked) } }
+    }.also { it.observeOutput(::outputObserved) }
+    private fun phase(kind:ClientPhase,version:Long=gateVersion(),seq:Long=-1,receivedBoot:Long=-1,accepted:Boolean=true) {
+        try {if(phases!=null && active && !childBlocked && permitted())
+            phases.event(kind,epoch,gate.revision,gate.capturedLastSpeechBootMs,version,seq,receivedBoot,accepted)
+        }catch(_:Throwable){}
+    }
+    private fun createTrack():AndroidTrack {
+        val key=phases?.bindingKey
+        return AndroidTrack(handler,com.littlebuddy.v2.parent.ParentPlaybackSettings(childVolume.value,playbackSettings.rate,playbackSettings.durationSeconds),
+            phase=if(key==null)null else {metric->
+                if(active && !childBlocked && permitted() && epoch==key.epoch && gate.revision==key.revision)
+                    phases?.track(key,metric,gate.capturedLastSpeechBootMs)
+            }) { fail("route") }
+    }
+    private fun outputObserved(playing:Boolean) {
+        val actual=playing && permitted() && !childBlocked
+        try{if(actual && active && responseRevision==gate.revision)player.binding?.let {
+            phases?.firstHead(it.epoch,gate.revision,it.stream,gate.capturedLastSpeechBootMs)
+        }}catch(_:Throwable){}
+        actualOutput(actual)
+    }
     private val pump = object : Runnable {
         override fun run() {
             if (!active) return
@@ -128,9 +149,11 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 } else { compatible=true; status("wake"); ready() }
                 pump.run(); heartbeat.run()
             } }
-            override fun onMessage(webSocket: WebSocket, text: String) { handler.post {
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                val receivedBoot=if(phases!=null)SystemClock.elapsedRealtime() else -1L
+                handler.post {
                 if (socket !== webSocket || !active) return@post
-                try { receive(text) } catch (error: Exception) { PinDiagnostic.runtimeError(PinDiagnostic.Stage.PROTOCOL,error); fail("protocol") }
+                try { receive(text,receivedBoot) } catch (error: Exception) { PinDiagnostic.runtimeError(PinDiagnostic.Stage.PROTOCOL,error); fail("protocol") }
             } }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 handler.post { if (socket === webSocket && active) {
@@ -155,7 +178,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         if (current.queueSize() > 64000 || !current.send(message.toString())) { fail("backpressure"); return false }
         return true
     }
-    private fun receive(text: String) {
+    private fun receive(text: String,receivedBoot:Long=-1) {
         if (!permitted()) { close(); return }
         wirePoint=PinDiagnostic.WirePoint.ENVELOPE;wireKind=PinDiagnostic.WireKind.UNPARSED
         require(text.length <= 16000 && text.toByteArray(Charsets.UTF_8).size <= 16000)
@@ -208,19 +231,27 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             }
             "endpoint" -> {
                 val completion=Completion.valueOf(event.getString("completion").uppercase())
-                if(gate.decision(event.getLong("revision"),completion))status(completion.eyeStatus())
+                val version=event.getLong("revision")
+                var accepted=false
+                try{accepted=gate.decision(version,completion)}finally{
+                    phase(ClientPhase.ENDPOINT_RECEIVED,version,receivedBoot=receivedBoot,accepted=accepted)
+                }
+                if(accepted)status(completion.eyeStatus())
             }
             "open" -> {
-                if (event.getLong("revision") != gate.revision) return
+                if (event.getLong("revision") != gate.revision) {phase(ClientPhase.OPEN_RECEIVED,event.getLong("revision"),receivedBoot=receivedBoot,accepted=false);return}
                 if (event.has("session") && event.has("turn")) {
                     bindNormalScope(managementScope(event))
                 }
                 outputBusy = true
                 responseRevision = gate.revision
                 check(player.binding == null)
+                phase(ClientPhase.OPEN_RECEIVED,receivedBoot=receivedBoot)
                 playerName = UUID.randomUUID().toString()
-                if (images != null) send("bind", "player" to checkNotNull(playerName), "features" to org.json.JSONArray().put("images_v2"), "image_contract" to ReleaseCompatibility.CONTRACT)
+                val seq=sequence
+                val sent=if (images != null) send("bind", "player" to checkNotNull(playerName), "features" to org.json.JSONArray().put("images_v2"), "image_contract" to ReleaseCompatibility.CONTRACT)
                 else send("bind", "player" to checkNotNull(playerName))
+                if(sent)phase(ClientPhase.BIND_SENT,seq=seq)
             }
             "bound" -> {
                 wirePoint=PinDiagnostic.WirePoint.PLAYER_BIND
@@ -228,6 +259,9 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 if (event.has("revision") && event.getLong("revision") != gate.revision) return
                 ackIdentity = event.getJSONObject("identity"); ackSequence = 0
                 bindNormalScope(ManagementScope(ackIdentity!!.getString("session"),ackIdentity!!.getLong("turn"),epoch,gate.revision))
+                try{if(active && !childBlocked && permitted() && responseRevision==gate.revision && player.binding==null)
+                    phases?.bound(epoch,gate.revision,event.getInt("stream"),gate.capturedLastSpeechBootMs,receivedBoot)
+                }catch(_:Throwable){}
                 player.bind(Binding(epoch, checkNotNull(playerName), event.getInt("stream")))
                 images?.bind(ImageScope(ackIdentity!!.getString("session"), ackIdentity!!.getLong("turn"), epoch, gate.revision))
             }
@@ -239,8 +273,11 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(pcm)
                 val binding = Binding(epoch, event.getString("player"), event.getInt("stream"))
                 wirePoint=PinDiagnostic.WirePoint.AUDIO_ENQUEUE
-                player.enqueue(AudioPacket(binding, event.getString("segment"), event.getLong("start"),
+                val enqueued=player.enqueue(AudioPacket(binding, event.getString("segment"), event.getLong("start"),
                                            event.getLong("end"), pcm))
+                try{if(enqueued && binding==player.binding && responseRevision==gate.revision && active && !childBlocked && permitted())
+                    phases?.firstAudio(epoch,gate.revision,binding.stream,gate.capturedLastSpeechBootMs,receivedBoot)
+                }catch(_:Throwable){}
                 data.fill(0); status("speaking")
             }
             "decision" -> {
@@ -355,11 +392,13 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private fun managementScope(event: JSONObject) = ManagementScope(event.getString("session"), event.getLong("turn"),
         event.getLong("epoch"),event.getLong("revision"))
     private fun moveManagementEpoch(scope: ManagementScope) {
+        phases?.clear()
         epoch=scope.epoch; sequence=0; gate.managementWaiting(scope.revision)
         ackIdentity=null; playerName=null; helpScope.clear(); entryGate.clear(); childVolume.clear(); images?.clear()
     }
     /** Caller has already stopped the children's recorder; no network action until native release confirms. */
     fun stopForManagement(): Boolean {
+        phases?.clear()
         childBlocked=true; isAwake=false; idleSerial++; images?.clear(); hideImage()
         val stopped=player.stop(); ackIdentity=null; playerName=null; outputBusy=false
         if (!stopped.stopped || !stopped.released) { fail("release"); return false }
@@ -433,6 +472,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
     fun interrupt(intent: String = "", preservePublicImage: Boolean = false) {
         if(preservePublicImage)images?.inputChanged() else images?.clear()
+        phases?.clear()
         val stopped = player.stop() // First: local mute, generation revoke, flush, stop/release.
         ackIdentity = null; playerName = null; outputBusy = false
         hideImage()
@@ -458,6 +498,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
     fun close() {
         PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CLIENT_CLOSE_BEGIN,diagnosticScope))
+        phases?.clear()
         managementState.close(); entryGate.clear(); childVolume.clear(); childBlocked=true; managementPending=false
         images?.clear()
         active = false; isAwake = false; outputBusy = false; helpScope.clear()

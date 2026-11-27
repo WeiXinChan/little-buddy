@@ -19,7 +19,7 @@ def compile_client(out,negative,timer_negative=False):
     assert android and Path(android).is_file(),'ANDROID_JAR must point at the already approved SDK'
     runtime.append(android)
     base=ROOT/'app/src/main/java/com/littlebuddy/v2'
-    names=['VoiceClient','InputGate','Playback','NativeEvidence','AndroidTrack','ManagementState','ManagementEntryGate',
+    names=['ClientPhases','VoiceClient','InputGate','Playback','NativeEvidence','AndroidTrack','ManagementState','ManagementEntryGate',
            'ReleaseCompatibility','LocalHelpScope','ImageGate','ChildVolume','PngAssembly','AndroidImageRoute']
     parent=['ParentDomain','ParentCodec','ParentEnvelope','ParentCommit','ParentPanelModel','ParentConfiguration']
     sources=[base/(n+'.kt') for n in names]+[base/'parent'/(n+'.kt') for n in parent]

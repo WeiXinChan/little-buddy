@@ -21,7 +21,10 @@ class AudioTrack:AudioRouting {
     var playbackHeadPosition=0;var playbackParams=PlaybackParams();override val routedDevice=AudioDeviceInfo()
     var volume=1f;var plays=0;var volumeCalls=0
     fun setVolume(n:Float):Int {volume=n;volumeCalls++;return SUCCESS}
-    fun setStartThresholdInFrames(n:Int){}
+    val bufferSizeInFrames=2400
+    private var threshold=2400
+    val startThresholdInFrames get()=threshold
+    fun setStartThresholdInFrames(n:Int){threshold=n}
     fun addOnRoutingChangedListener(l:AudioRouting.OnRoutingChangedListener,h:android.os.Handler){}
     fun removeOnRoutingChangedListener(l:AudioRouting.OnRoutingChangedListener){}
     fun write(a:ShortArray,off:Int,n:Int,mode:Int):Int {playbackHeadPosition+=n;return n}

@@ -34,6 +34,7 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
         completion = null; responsePending = false; thinkingAt = null; prompted = false; soloSent = false
     }
     private var lastSpeech = 0L
+    val capturedLastSpeechBootMs:Long get()=lastSpeech // Read-only: original capture boundary, never a phase timestamp.
     private var lastInteraction = 0L
     private var wakeAt = 0L
     private var speaking = false
