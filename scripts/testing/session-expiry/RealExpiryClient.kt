@@ -22,16 +22,21 @@ private fun runExpiry(args:Array<String>) {
     try {
         check(done.await(6,TimeUnit.SECONDS)){"bounded fixture completion missing"}
         check(errors.isEmpty())
+        val terminal=diagnostics.filter{it.stage==PinDiagnostic.RuntimeStage.SESSION_END}
         if(mode=="timeout" || mode=="management") {
+            check(terminal.isEmpty()) {"rejected event recorded normal terminal"}
             check(ended==0 && failed==1){"terminal/failure counts differ"}
             val expected=if(mode=="timeout")PinDiagnostic.FailSource.SERVER_TIMEOUT else PinDiagnostic.FailSource.MANAGEMENT
             check(diagnostics.any{it.stage==PinDiagnostic.RuntimeStage.CLIENT_FAIL && it.source==expected})
             if(mode=="timeout")check(diagnostics.any{it.source==expected && it.wire==PinDiagnostic.WireKind.FAILURE && it.point==PinDiagnostic.WirePoint.DISPATCH})
         } else {
+            check(terminal.size==1 && terminal.single().wire==PinDiagnostic.WireKind.SESSION_END &&
+                terminal.single().point==PinDiagnostic.WirePoint.DISPATCH)
+            check(terminal.single().source==if(mode=="conversation")PinDiagnostic.FailSource.NONE else PinDiagnostic.FailSource.EXPIRED)
             check(ended==1 && failed==0){"close/onClosed/duplicate changed terminal outcome"}
             if(mode=="stale")check(barriers==1){"stale frames ended before wire barrier"}
         }
-        println("REAL_EXPIRY mode=$mode ended=$ended failed=$failed barriers=$barriers")
+        println("REAL_EXPIRY mode=$mode ended=$ended failed=$failed barriers=$barriers normal_stages=${terminal.size}")
     } finally {
         val closed=CountDownLatch(1);owner.post{client.close();closed.countDown()}
         check(closed.await(1,TimeUnit.SECONDS));owner.close();PinDiagnostic.installRuntime(null)

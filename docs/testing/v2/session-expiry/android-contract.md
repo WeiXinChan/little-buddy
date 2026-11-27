@@ -47,3 +47,8 @@ A negative run with --negative-stale compiles a temporary gate mutant removing o
 currentScope; unchanged stale/barrier assertion must fail. No mutation enters app.
 The host runner explicitly exits after cleanup to avoid OkHttp idle dispatcher threads
 extending fixture lifetime; subprocess timeout also kills/joins its exact test child.
+
+Accepted terminal emits RuntimeStage.SESSION_END before close, scope=current diagnosticScope,
+wire=SESSION_END, point=DISPATCH, source=EXPIRED for expiry and NONE for conversation end.
+Rejected/stale/management events emit no normal-end stage; this is not CLIENT_FAIL.
+Final static compatibility manifest is deployed backend0329097, not the older b568 reference.

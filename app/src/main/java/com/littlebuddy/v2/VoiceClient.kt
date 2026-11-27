@@ -304,6 +304,9 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
             "session_end" -> {
                 if (!SessionTermination.accepts(event.optString("reason"), active, permitted(), childBlocked,
                     event.optLong("epoch",-1)==epoch && imageScopeCurrent(event))) return
+                PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.SESSION_END,diagnosticScope,
+                    source=if(event.optString("reason")=="session_expired")PinDiagnostic.FailSource.EXPIRED else PinDiagnostic.FailSource.NONE,
+                    wire=PinDiagnostic.WireKind.SESSION_END,point=PinDiagnostic.WirePoint.DISPATCH))
                 close(); sessionEnded()
             }
             "management" -> {
