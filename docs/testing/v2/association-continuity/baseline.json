@@ -1,0 +1,20 @@
+{
+  "source": "f587dc1069f1feb891151c1ecada11b0464acb75",
+  "verdict": "NOT_PASS_rule_retention_repeat_needs_resolution",
+  "findings": [
+    "third reply repeats 飞机 from earlier input while final rules retain 不重复",
+    "我先 may imply restart; clarify requirements rather than assume success"
+  ],
+  "full_device_acceptance": false,
+  "usage": {
+    "requests": 9,
+    "failures": 0,
+    "prompt_tokens": 22106,
+    "completion_tokens": 329
+  },
+  "result": "closeout-association-flying-f587dc10-once/result.json",
+  "cleanup_confirmed": true,
+  "quota_live_verified": false,
+  "previous_failures_preserved": true,
+  "review_sha256": "a60935e29238b6da1bdfeb89953f5fce6567f88c4dc6b6618ef9e0b45a7f09c9"
+}
