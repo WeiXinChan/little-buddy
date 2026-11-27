@@ -1,0 +1,36 @@
+test_compact_query_preserves_roles_rules_clue_plot_negation_and_new_fact (tests.v2.test_nondevice_closeout.CoexistingMemory.test_compact_query_preserves_roles_rules_clue_plot_negation_and_new_fact) ... ok
+test_real_tls_fragmented_upload_cancel_withdraw_and_restart_rejects_replay (tests.v2.test_nondevice_closeout.FeedbackIsolation.test_real_tls_fragmented_upload_cancel_withdraw_and_restart_rejects_replay) ... ok
+test_scheduler_failure_disables_then_restart_recovers_original_deadline (tests.v2.test_nondevice_closeout.FeedbackIsolation.test_scheduler_failure_disables_then_restart_recovers_original_deadline) ... ERROR
+
+======================================================================
+ERROR: test_scheduler_failure_disables_then_restart_recovers_original_deadline (tests.v2.test_nondevice_closeout.FeedbackIsolation.test_scheduler_failure_disables_then_restart_recovers_original_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/nondevice-closeout/tests/v2/test_nondevice_closeout.py", line 53, in test_scheduler_failure_disables_then_restart_recovers_original_deadline
+    async with configured_feedback(runtime,token) as restarted:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/nondevice-closeout/backend/v2/feedback_receiver.py", line 124, in configured_feedback
+    store = FeedbackStore(runtime.database)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/nondevice-closeout/backend/v2/feedback_store.py", line 139, in __init__
+    raise FeedbackError('storage') from None
+backend.v2.feedback_store.FeedbackError: storage
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.179s
+
+FAILED (errors=1)

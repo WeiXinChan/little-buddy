@@ -1,0 +1,75 @@
+{
+  "not_executed": true,
+  "first_batch_only": true,
+  "no_G02_G05_repeat": true,
+  "batches": [
+    {
+      "case_id": "guess-object",
+      "inputs": [
+        "猜家里的东西吧，你描述，我猜，不先说答案。",
+        "是杯子吗？提示它有什么用。",
+        "现在由我问你猜：能照亮房间的是什么？"
+      ],
+      "max_model_requests": 21,
+      "turns": 3,
+      "stop_on_first_failure": true,
+      "semantic_checks": [
+        "不泄露未猜答案",
+        "明确交换后按孩子题目作答"
+      ]
+    },
+    {
+      "case_id": "story-forest",
+      "inputs": [
+        "你一句我一句编小熊在森林找朋友的故事。",
+        "小熊先遇见小鸟，你接着讲。",
+        "加个规则，每次只讲一句话。"
+      ],
+      "max_model_requests": 21,
+      "turns": 3,
+      "stop_on_first_failure": true,
+      "semantic_checks": [
+        "新主题事件承接",
+        "不替孩子写其轮次"
+      ]
+    },
+    {
+      "case_id": "adventure-sea",
+      "inputs": [
+        "假装海底寻宝，我是潜水员，你是向导，我决定方向。",
+        "我选珊瑚那条路，你介绍发现。",
+        "改规则，不碰任何动物，只观察。"
+      ],
+      "max_model_requests": 21,
+      "turns": 3,
+      "stop_on_first_failure": true,
+      "semantic_checks": [
+        "孩子选路决定生效",
+        "角色与轮换一致"
+      ]
+    },
+    {
+      "case_id": "association-flying",
+      "inputs": [
+        "接龙说会飞的东西，一人一个，我先说小鸟。",
+        "我接飞机，你来接，别重复。",
+        "改成两个字的东西，我先说风筝。"
+      ],
+      "max_model_requests": 21,
+      "turns": 3,
+      "stop_on_first_failure": true,
+      "semantic_checks": [
+        "只说符合能飞约束的对象",
+        "不重复双方已说项"
+      ]
+    }
+  ],
+  "memory_use_comparison": {
+    "max_model_requests": 2,
+    "method": "相同固定追问分别对完整/真实compact后的生产context调用provider.plan；expected不进模型，比较是否保留船长归属、禁止传送、先后顺序、否定与新钥匙位置；不据字段出现判语义通过",
+    "synthetic_query": "请按我们说好的角色和规则，告诉我下一步去哪、钥匙现在在哪，还记得我不喜欢什么吗？"
+  },
+  "no_cloud_calls": 0,
+  "total_upper_model_requests_if_all_separately_approved": 86,
+  "execute_all_at_once": false
+}
