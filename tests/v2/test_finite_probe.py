@@ -1,3 +1,4 @@
+from tests.v2.pin_objects import assert_git_pin,assert_rejects_changed_copy
 import copy,json,unittest
 from unittest.mock import patch
 from scripts import v2_finite_probe as p
@@ -12,7 +13,12 @@ class Finite(unittest.IsolatedAsyncioTestCase):
             p.select(name);self.assertEqual(p.base.LIMITS['model_requests'],cap);self.assertEqual(len(p.base.CASES),1)
         with self.assertRaises(SystemExit):p.main(['--case','all'])
         self.assertEqual(p.main(['--case','body-danger','--execute']),2)
-        p.verify()
+        assert_git_pin(self,p,'v2_finite_probe_pin.json')
+        pin=json.loads((p.ROOT/'scripts/v2_finite_probe_pin.json').read_text())
+        tool_files={'scripts/v2_cold_query_preparation.py','scripts/v2_finite_probe.py'}
+        self.assertEqual(set(pin['file_sources']),set(pin['files']))
+        for name,source in pin['file_sources'].items():
+            self.assertEqual(source,'e9f5d9461823052dbde812e62840ceb9812a9911' if name in tool_files else p.SOURCE)
     async def test_danger_has_no_provider_calls_and_help_not_played(self):
         for name in ('body-danger','death-danger'):
             model=old.Model(old.plan());r=await p.run(UnifiedProviders(old.Speech(),model),name);p.validate(r,name)
@@ -65,3 +71,7 @@ class Finite(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(model.requests),4)
         with self.assertRaises(ValueError):await trace.complete('提取孩子',{'text':'OUT_OF_SCOPE_CANARY'},schema={'properties':{'facts':{}}})
         self.assertEqual(len(model.requests),4);self.assertNotIn('OUT_OF_SCOPE_CANARY',str(trace.rows))
+
+    async def test_local_byte_mismatch_still_rejected_by_real_admission(self):
+        for name in ('backend/v2/voice.py','scripts/v2_finite_probe.py'):
+            assert_rejects_changed_copy(self,p,'v2_finite_probe_pin.json',name)
