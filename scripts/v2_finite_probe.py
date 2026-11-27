@@ -32,12 +32,12 @@ class Trace:
     async def complete(self,instruction,data,*,schema=None):
         props=(schema or {}).get('properties',{})
         kind='plan' if 'mode' in props else 'review' if 'allow' in props else 'facts' if 'facts' in props else 'other'
-        if kind=='plan':
+        if kind in {'plan','facts'}:
             if data.get('text') not in CASES[self.name]:raise ValueError('synthetic_scope')
             turn=CASES[self.name].index(data['text'])+1
-            if turn!=self.turn:self.turn=turn;self.reviews=0
+            if kind=='plan' and turn!=self.turn:self.turn=turn;self.reviews=0
         if kind=='other':raise ValueError('undeclared_stage')
-        row=dict(kind=kind,turn=self.turn,outcome='incomplete')
+        row=dict(kind=kind,turn=turn if kind in {'plan','facts'} else self.turn,outcome='incomplete')
         if kind=='plan':row.update(input=data['text'],context=copy.deepcopy(data.get('context')),constraints=copy.deepcopy(data.get('server_constraints')))
         if kind=='review':
             row.update(phase='whole' if self.reviews==0 else 'segment',candidate=copy.deepcopy(data.get('segment')),context=copy.deepcopy(data.get('context')));self.reviews+=1

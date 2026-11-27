@@ -112,6 +112,6 @@
     "scripts/verify-v2-release.py": "8f88c68764e3032c1043dbd8add3c23f1a5de1ee157ad98ea58e9e555c0f69c5",
     "scripts/v2_closeout_probe.py": "e07d631fbad84c9eaff3c059df6707c87d65a53f80b8fa68f6c3e28c99966da0",
     "scripts/v2_cold_query_preparation.py": "671a4ad40180d211118d27ac3ba1260336abdcaa581f9b56fb000d92db40d4ba",
-    "scripts/v2_finite_probe.py": "a0b23b3b09214e100c85cd7a98eaccab3523f4168280359c1c6671fc693bd8be"
+    "scripts/v2_finite_probe.py": "b2f873a83a2e02c1fa6378a60964e994f26c7512ae373242375983c3b5068a35"
   }
 }

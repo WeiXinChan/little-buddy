@@ -22,7 +22,7 @@ python3 -I -B scripts/v2_finite_probe.py --case body-danger --execute --acknowle
 
 cold-query：ColdPeer只在构造阶段接收 prepare 返回的**同一个Session对象**，之后由生产VoicePeer、heartbeat、bind、PLAN/FACTS、review、ACK推进。70个背景是合成seed，不计模型完成/云工作。seed保留归档目标完整记录及archive哈希、实际hot facts/recent/heard、压缩与来源计数。query不含答案；trace保留实际PLAN context中的精确source_id/source_text，父验证同Session绑定、来源不在hot/recent/heard、实际审核通过及最终ACK。不会重填答案或将expected发模型。语义是否正确使用否定/偏好仍须人工判读。
 
-离线6项PASS：默认禁用/拒all/pin；两个危险第二轮0provider；首安全失败不跑后续；真正冷档同Session→PLAN→整段/逐句审核→最终ACK及来源/绑定篡改负控；生产一次repair仍可用、额外第三PLAN被Meter阻止；复用原safety负控禁止任何audio。初次5项有1FAIL：测试误要求单句重复逐句审核；原日志保留，改双句fixture证明实际整段+逐句记录，未改产品审核。脚本化模型仅证明接线/契约，不声称真实语义已通过。
+离线7项PASS：默认禁用/拒all/pin；两个危险第二轮0provider；首安全失败不跑后续；真正冷档同Session→PLAN→整段/逐句审核→最终ACK及来源/绑定篡改负控；生产一次repair仍可用、额外第三PLAN被Meter阻止；复用原safety负控禁止任何audio；FACTS按自身固定data.text归属轮次（先FACTS后PLAN两轮/未知输入负控），不依赖最近PLAN。初次5项有1FAIL：测试误要求单句重复逐句审核；原日志保留，改双句fixture证明实际整段+逐句记录，未改产品审核。脚本化模型仅证明接线/契约，不声称真实语义已通过。
 
 离线命令：
 

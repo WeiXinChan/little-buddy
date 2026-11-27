@@ -50,3 +50,14 @@ class Finite(unittest.IsolatedAsyncioTestCase):
         for _ in range(2):await meter.complete('synthetic',{},schema={'properties':{'mode':{}}})
         with self.assertRaises(RuntimeError):await meter.complete('synthetic',{},schema={'properties':{'mode':{}}})
         self.assertEqual(len(guard.model),2);self.assertEqual(guard.denials[-1]['reason'],'declared_read_stage_cap')
+
+    async def test_facts_before_plan_uses_own_fixed_input_not_last_plan(self):
+        model=old.Model(old.plan());trace=p.Trace(model,'shared-intent')
+        for number,text in enumerate(p.CASES['shared-intent'],1):
+            await trace.complete('提取孩子',{'text':text},schema={'properties':{'facts':{}}})
+            self.assertEqual(trace.rows[-1]['turn'],number)
+            await trace.complete('PLAN',{'text':text,'context':{}},schema={'properties':{'mode':{}}})
+        self.assertEqual([(r['kind'],r['turn']) for r in trace.rows],[('facts',1),('plan',1),('facts',2),('plan',2)])
+        self.assertEqual(len(model.requests),4)
+        with self.assertRaises(ValueError):await trace.complete('提取孩子',{'text':'OUT_OF_SCOPE_CANARY'},schema={'properties':{'facts':{}}})
+        self.assertEqual(len(model.requests),4);self.assertNotIn('OUT_OF_SCOPE_CANARY',str(trace.rows))
