@@ -17,17 +17,21 @@ private fun runExpiry(args:Array<String>) {
     client=VoiceClient(owner,{status->if(status=="listening")barriers++},{},{_,_->error("no images")},
         failed={failed++;finish()},sessionEnded={ended++;finish()},
         requiredContract=ReleaseCompatibility.CONTRACT,
-        ready={if(mode=="management")check(client.stopForManagement())})
+        ready={if(mode=="management")check(client.stopForManagement()) else if(mode=="pump_endpoint")client.wake(android.os.SystemClock.elapsedRealtime()-60000)})
     owner.post{try{client.connect(args[0],"A".repeat(32))}catch(t:Throwable){errors.add(t);done.countDown()}}
     try {
         check(done.await(6,TimeUnit.SECONDS)){"bounded fixture completion missing"}
         check(errors.isEmpty())
         val terminal=diagnostics.filter{it.stage==PinDiagnostic.RuntimeStage.SESSION_END}
-        if(mode=="timeout" || mode=="management") {
+        if(mode=="timeout" || mode=="management" || mode=="pump_endpoint") {
             check(terminal.isEmpty()) {"rejected event recorded normal terminal"}
             check(ended==0 && failed==1){"terminal/failure counts differ"}
-            val expected=if(mode=="timeout")PinDiagnostic.FailSource.SERVER_TIMEOUT else PinDiagnostic.FailSource.MANAGEMENT
+            val expected=if(mode=="timeout")PinDiagnostic.FailSource.SERVER_TIMEOUT else if(mode=="pump_endpoint")PinDiagnostic.FailSource.PLAYBACK_PUMP else PinDiagnostic.FailSource.MANAGEMENT
             check(diagnostics.any{it.stage==PinDiagnostic.RuntimeStage.CLIENT_FAIL && it.source==expected})
+            if(mode=="pump_endpoint") {
+                check(diagnostics.single{it.stage==PinDiagnostic.RuntimeStage.CLIENT_FAIL}.pump==PinDiagnostic.PumpStep.ENDPOINT_TICK)
+                check(diagnostics.any{it.stage==PinDiagnostic.RuntimeStage.WAKE_ACCEPTED && it.wakeLagMs>=60000})
+            }
             if(mode=="timeout")check(diagnostics.any{it.source==expected && it.wire==PinDiagnostic.WireKind.FAILURE && it.point==PinDiagnostic.WirePoint.DISPATCH})
         } else {
             check(terminal.size==1 && terminal.single().wire==PinDiagnostic.WireKind.SESSION_END &&

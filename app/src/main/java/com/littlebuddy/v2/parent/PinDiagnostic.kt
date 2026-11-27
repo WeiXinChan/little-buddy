@@ -12,8 +12,9 @@ internal object PinDiagnostic {
         SECURITY_ERROR, IO_ERROR, STATE_ERROR, OTHER_ERROR, TLS_HANDSHAKE, TLS_PEER, SSH_ERROR, TIMEOUT, ARGUMENT_ERROR, CONFIG_LOAD_FAILED, CONFIG_MIGRATION_FAILED, CONFIG_CHILD_MISSING, CONFIG_CONNECTION_MISSING, READY, SAVED_LOCAL, NO_CONFIG, HOLD, PARENT_RETRY, RETURN, NETWORK, CLOSED, PROTOCOL_FAILED, INCOMPATIBLE, CAPTURE_FAILED, RELEASE_FAILED, TLS_ERROR, AUTH_DENIED, HTTP_FAILED, CONNECT_FAILED, DNS_FAILED, SOCKET_ERROR, EOF_ERROR, INTERRUPTED_IO, SITE_MAP, SITE_CONNECT, SITE_OKHTTP_CONNECT, SITE_TLS, SITE_UNKNOWN, SITE_JAVA_SOCKET, SITE_CONSCRYPT, TARGET_UNRESOLVED, TARGET_HOST, TARGET_PORT, FORWARD_UNAVAILABLE }
     data class Scope(val activity:Long=0,val transport:Long=0,val capture:Long=0)
     enum class RuntimeStage { ACTIVITY_CREATE, ACTIVITY_RESUME, ACTIVITY_PAUSE, ACTIVITY_FOCUS_GAIN, ACTIVITY_FOCUS_LOSS, ACTIVITY_NEW_INTENT,
-        SESSION_END, CLIENT_FAIL, CLIENT_CLOSE_BEGIN, CLIENT_CLOSE_END, TRANSPORT_RETIRE, CAPTURE_START, CAPTURE_CANCEL,
+        WAKE_ACCEPTED, SESSION_END, CLIENT_FAIL, CLIENT_CLOSE_BEGIN, CLIENT_CLOSE_END, TRANSPORT_RETIRE, CAPTURE_START, CAPTURE_CANCEL,
         CAPTURE_STOP_BEGIN, CAPTURE_STOP_END, CAPTURE_FAILURE, CAPTURE_RELEASE, WORKER_JOINED, FAILURE_UI_APPLY, FAILURE_UI_RETIRED }
+    enum class PumpStep { NONE, COMPATIBILITY, MANAGEMENT_DEADLINE, INPUT_RESPONSE_DEADLINE, PLAYER_TICK, ENDPOINT_TICK }
     enum class CaptureOperation { NONE, NATIVE_READ, TIMESTAMP, KWS, CLEANUP }
     enum class FailSource { NONE, RECEIVE_PROTOCOL, PLAYBACK_PUMP, ROUTE, BACKPRESSURE, LIFECYCLE, MANAGEMENT, EXPIRED, INCOMPATIBLE, NETWORK, CLOSED, RELEASE, SERVER_TIMEOUT, SERVER_QUOTA, SERVER_VOICE, SERVER_SAFETY, SERVER_AUTH, SERVER_UNAVAILABLE, SERVER_UNKNOWN, OTHER }
     enum class WireKind { NONE, UNPARSED, SCOPE, OPEN, BOUND, AUDIO, DECISION, REVOKE, IMAGE, MANAGEMENT, FAILURE, SESSION_END, OTHER }
@@ -21,7 +22,8 @@ internal object PinDiagnostic {
     data class RuntimeEvent(val stage:RuntimeStage,val scope:Scope,val source:FailSource=FailSource.NONE,
         val wire:WireKind=WireKind.NONE,val point:WirePoint=WirePoint.NONE,val cancelled:Boolean=false,
         val allowed:Boolean=false,val stopRequested:Boolean=false,val nativeReleased:Boolean=false,val workerJoined:Boolean=false,
-        val operation:CaptureOperation=CaptureOperation.NONE,val currentTransport:Long=-1,val currentCapture:Long=-1,val restored:Boolean=false,val launcher:Boolean=false)
+        val operation:CaptureOperation=CaptureOperation.NONE,val currentTransport:Long=-1,val currentCapture:Long=-1,val restored:Boolean=false,val launcher:Boolean=false,val pump:PumpStep=PumpStep.NONE,
+        val wakeFrame:Long=-1,val readFrame:Long=-1,val wakeRelativeMs:Long=-1,val wakeLagMs:Long=-1)
     private val activitySequence=java.util.concurrent.atomic.AtomicLong()
     fun nextActivity()=activitySequence.incrementAndGet()
     @Volatile private var runtimeSink:((RuntimeEvent)->Unit)?=null

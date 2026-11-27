@@ -8,7 +8,7 @@ class VoiceClient {
  val capturedTimes=mutableListOf<Long>()
  fun frame(a:ShortArray,b:Boolean,c:Long){order+="frame";capturedTimes+=c;received+=a.copyOf()}
  fun quiet(){}
- fun wake(t:Long){order+="wake";wakes+=t}
+ fun wake(t:Long,wakeTailFrame:Long=-1,captureFrame:Long=-1,wakeRelativeMs:Long=-1){order+="wake";wakes+=t}
 }
 
 internal object CaptureMonotonic {fun nowMs()=android.os.SystemClock.uptimeMillis()}

@@ -1,0 +1,103 @@
+{
+  "csukuangfj/kaldi-native-fbank": {
+    "tag": "v1.22.3",
+    "sha256": "9176cc66fc7ce1edf85cf355b06e320c57db6297df74277f575183468893cf61",
+    "bytes": 71144
+  },
+  "k2-fsa/kaldi-decoder": {
+    "tag": "v0.2.11",
+    "sha256": "85ca462535592541eb5ba6d21843009cf34738f51b28b71f84882a3694b528bf",
+    "bytes": 51743
+  },
+  "kaldifst": {
+    "tag": "v1.7.16",
+    "sha256": "f338135a3d137b7a8c287e2ca2e0918e1394e1c08bad53b26e7be03a5d4a1066"
+  },
+  "openfst": {
+    "tag": "sherpa-onnx-2024-06-13",
+    "sha256": "f10a71c6b64d89eabdc316d372b956c30c825c7c298e2f20c780320e8181ffb6"
+  },
+  "kissfft": {
+    "tag": "febd4caeed32e33ad8b2e0bb5ea77542c40f18ec",
+    "sha256": "497103e664168ebe39580b757adbe616f6cf85a16572af581ca7bc42d0ab13fd"
+  },
+  "eigen": {
+    "tag": "3.4.1",
+    "sha256": "b93c667d1b69265cdb4d9f30ec21f8facbbe8b307cf34c0b9942834c6d4fdbe2"
+  },
+  "simple-sentencepiece": {
+    "tag": "v0.7",
+    "sha256": "1748a822060a35baa9f6609f84efc8eb54dc0e74b9ece3d82367b7119fdc75af"
+  },
+  "sherpa-onnx": {
+    "url": "https://codeload.github.com/k2-fsa/sherpa-onnx/tar.gz/refs/tags/v1.12.27",
+    "bytes": 9260251,
+    "sha256": "e115e6115b51f38cec71cf659a1b39b5a592bb8a9d7fa312f8c8981acea14ac5"
+  },
+  "ort_headers": {
+    "version": "1.17.1",
+    "publisher_commit": "f2fcebd1d5560f75d2793af52e13b156cae55c1b",
+    "reason": "publisher headers for the original AAR runtime version; no new runtime binary",
+    "files": [
+      {
+        "file": "onnxruntime_c_api.h",
+        "url": "https://huggingface.co/csukuangfj/android-onnxruntime-libs/resolve/f2fcebd1d5560f75d2793af52e13b156cae55c1b/v1.17.1/headers/onnxruntime_c_api.h",
+        "bytes": 206358,
+        "sha256": "7e47eb78563da119f740dc0ddfda96800e779e0bcbd169a9a49e9c10746c4cd5"
+      },
+      {
+        "file": "onnxruntime_cxx_api.h",
+        "url": "https://huggingface.co/csukuangfj/android-onnxruntime-libs/resolve/f2fcebd1d5560f75d2793af52e13b156cae55c1b/v1.17.1/headers/onnxruntime_cxx_api.h",
+        "bytes": 107925,
+        "sha256": "5cfb60c7222086b89724d3168267ab25af9951e15864bf54a8fdf7429b771021"
+      },
+      {
+        "file": "onnxruntime_cxx_inline.h",
+        "url": "https://huggingface.co/csukuangfj/android-onnxruntime-libs/resolve/f2fcebd1d5560f75d2793af52e13b156cae55c1b/v1.17.1/headers/onnxruntime_cxx_inline.h",
+        "bytes": 76150,
+        "sha256": "d8b059c29ef378eee31c0b4d54347489a0e3abe1a4135c7a19c49b32661bfbc3"
+      },
+      {
+        "file": "onnxruntime_float16.h",
+        "url": "https://huggingface.co/csukuangfj/android-onnxruntime-libs/resolve/f2fcebd1d5560f75d2793af52e13b156cae55c1b/v1.17.1/headers/onnxruntime_float16.h",
+        "bytes": 18154,
+        "sha256": "ecdcb4a53176c8b3bbcf674788fcf5ec923fb2b5c762c3f6cfb56fdb6c259aa1"
+      },
+      {
+        "file": "onnxruntime_session_options_config_keys.h",
+        "url": "https://huggingface.co/csukuangfj/android-onnxruntime-libs/resolve/f2fcebd1d5560f75d2793af52e13b156cae55c1b/v1.17.1/headers/onnxruntime_session_options_config_keys.h",
+        "bytes": 16702,
+        "sha256": "dacc5b8a417f9fe9dc9452255dabad408772e94d6d981d5fc463f90cf52f0438"
+      },
+      {
+        "file": "onnxruntime_run_options_config_keys.h",
+        "url": "https://huggingface.co/csukuangfj/android-onnxruntime-libs/resolve/f2fcebd1d5560f75d2793af52e13b156cae55c1b/v1.17.1/headers/onnxruntime_run_options_config_keys.h",
+        "bytes": 1622,
+        "sha256": "25b0d8e767fc72d560532541537ac07d404a8bf94dffaf78f3069fc20240b76e"
+      },
+      {
+        "file": "cpu_provider_factory.h",
+        "url": "https://huggingface.co/csukuangfj/android-onnxruntime-libs/resolve/f2fcebd1d5560f75d2793af52e13b156cae55c1b/v1.17.1/headers/cpu_provider_factory.h",
+        "bytes": 397,
+        "sha256": "0de52d129c718c07ee71a16b4953d8d483df019746a11caad77a0650a2f4ed47"
+      },
+      {
+        "file": "nnapi_provider_factory.h",
+        "url": "https://huggingface.co/csukuangfj/android-onnxruntime-libs/resolve/f2fcebd1d5560f75d2793af52e13b156cae55c1b/v1.17.1/headers/nnapi_provider_factory.h",
+        "bytes": 2646,
+        "sha256": "49f7e0952e57b7e2942f69d8df61a9d99836f05b49a89700e1f5a16278c945e2"
+      }
+    ]
+  },
+  "ndk": {
+    "url": "https://dl.google.com/android/repository/android-ndk-r27c-linux.zip",
+    "archive_bytes": 663987688,
+    "selection_expanded_bytes": 33876965,
+    "whole_archive_sha_verified": false,
+    "selected_transport": "HTTPS Range + per-entry CRC/size/SHA receipt",
+    "compiler": "Ubuntu clang18.1.3 with existing LLVM18 host libraries/approved SDK lld",
+    "cache_budget_bytes": 314572800,
+    "build_memory_limit_bytes": 2147483648,
+    "parallel_compilers": 1
+  }
+}

@@ -13,6 +13,8 @@ RC9_RESOURCES_MANIFEST='d649ac79bc5203373ff44ebdd547bdd16772663467a22115fa75f589
 
 _spec=importlib.util.spec_from_file_location('v2_release_snapshot',Path(__file__).with_name('v2-release-snapshot.py'))
 _snapshot=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(_snapshot)
+_native_spec=importlib.util.spec_from_file_location('v2_native_audit',Path(__file__).with_name('v2-native-audit.py'))
+_native=importlib.util.module_from_spec(_native_spec);_native_spec.loader.exec_module(_native)
 selected=_snapshot.selected
 source_inventory=_snapshot.source_inventory
 
@@ -21,13 +23,14 @@ def generate(output, pin_init_diagnostics=False, private_device_preset=False, co
     config=json.loads((ROOT/'app/v2-release.json').read_text())
     assert set(config)=={'format','version_code','version_name','application_id','protocol_contract','source_base'}
     assert len(config['source_base'])==40 and all(c in '0123456789abcdef' for c in config['source_base'])
-    assert config['format']==1 and config['version_code']==29 and config['version_name']=='2.0.0-rc9.nopin.expiry1'
+    assert config['format']==1 and config['version_code']==30 and config['version_name']=='2.0.0-rc9.nopin.wake1'
     assert config['application_id']=='com.littlebuddy.sim.v2' and config['protocol_contract']==CONTRACT
     if private_device_preset: config['version_name'] += '.integrated1.device1'
     resource_raw,pngs=_snapshot.resource_files(ROOT)
     manifest=hashlib.sha256(resource_raw).hexdigest()
     assert manifest==RC9_RESOURCES_MANIFEST, 'RC9 reviewed resource manifest required'
     inventory=source_inventory(ROOT)
+    _native.validate_source(ROOT)
     _snapshot.bind_resources(inventory,resource_raw,pngs)
     canonical=_snapshot.canonical(inventory)
     digest=hashlib.sha256(canonical).hexdigest()

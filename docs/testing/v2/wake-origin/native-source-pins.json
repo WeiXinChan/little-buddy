@@ -1,0 +1,8 @@
+{
+  "tag": "v1.12.27",
+  "upstream_header_sha256": "748c95639d2222fdf0bcdbd9e8d5ca5a9eecc0603c3f8245f69fc9999590cdfb",
+  "patched_header_sha256": "f27e4404633f39eef17154a383a634561a4d00fc58deac60ddb610dd3512fa1f",
+  "public_c_header_sha256": "f6b88279516f606e20b6805f9305306c7ee5622a8af6fedd94cc3809aaf245bb",
+  "android_26_jni_header_sha256": "b71b0a7bbe3ce424d263c45a88dc96e90d988e31ab1c2ae94a8e5c3656aca819",
+  "status": "SOURCE_CANDIDATE_NOT_YET_REAL_MODEL_VERIFIED"
+}

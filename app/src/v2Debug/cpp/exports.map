@@ -1,0 +1,1 @@
+{ global: JNI_OnLoad; Java_com_littlebuddy_v2_V2KwsNative_*; local: *; };

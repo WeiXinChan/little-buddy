@@ -1,0 +1,11 @@
+--- a/sherpa-onnx/csrc/keyword-spotter-transducer-impl.h
++++ b/sherpa-onnx/csrc/keyword-spotter-transducer-impl.h
+@@ -194 +194,7 @@
+-  void Reset(OnlineStream *s) const override { InitOnlineStream(s); }
++  void Reset(OnlineStream *s) const override {
++    // Features remain at the same stream-global cursor. Preserve the decoder's
++    // matching global output-frame origin while clearing hypotheses/model state.
++    const auto frame_offset = s->GetKeywordResult().frame_offset;
++    InitOnlineStream(s);
++    s->GetKeywordResult().frame_offset = frame_offset;
++  }
