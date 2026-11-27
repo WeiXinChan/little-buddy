@@ -15,3 +15,6 @@ main保留项：全部backend、V1代码、androidTest工具、source-snapshot�
 验证范围：定向release门禁、PIN/owner tick/连接/公钥清理与手势/安全帮助、真实合成TLS loopback、必要Android构建、源码完整性与配对。复用fix9已验时钟/Capture/Sherpa证据并核其源文件逐字一致，不重复老全集。设备安装、实际90秒采音/长稳、童声唤醒、用户体验仍未验，今日不要求用户操作。APK资源与RC9离线backend manifest配对仅静态兼容，不表示当前已部署服务与该候选同源，也不表示已部署。
 
 构建：scripts/with-build-lock 下，--offline --no-daemon --max-workers=1 --no-build-cache --no-configuration-cache -PpinInitDiagnostics=true -PprivateDevicePreset=true :app:assembleV2Debug。默认公共构建无私有asset/诊断。无需设备或云。
+
+
+PR130 CI fixture接线修复：原head2e4ee8b/CI45974136093的Debug、V2均缺loopback.p12属性导致NPE，原日志/XML保留。现在src/test中的LoopbackTlsFixture使用当前JDK keytool生成仅本次测试的RSA2048/127.0.0.1 SAN/1天PKCS12，固定20秒进程预算和5秒终止等待；JUnit TemporaryFolder.assureDeletion负责成功/异常时清理。不接受外部fixture路径，不再需要-Dloopback.p12或openssl脚本注入。fixture仅test源码/系统临时目录，不是测试资源或生产assets；生成/释放失败为真实失败，不skip。标准testDebugUnitTest及testV2DebugUnitTest的V2TransportTest均真实执行相同TLS/WebSocket upgrade。未改生产源码、版本或协议；重建产物的生产库存/buildId可能与原候选相同，外部identity另绑定修复后的精确source SHA/tree，不通过改版本强造不同APK。

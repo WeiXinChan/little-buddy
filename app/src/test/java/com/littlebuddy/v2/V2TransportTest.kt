@@ -12,6 +12,8 @@ import java.net.Proxy
 import java.util.Properties
 
 class V2TransportTest {
+    @get:org.junit.Rule
+    val tlsFiles = org.junit.rules.TemporaryFolder.builder().assureDeletion().build()
     @Test fun realLoopbackUsesMappedSocketThroughOkHttp() {
         val server=java.net.ServerSocket(0,1,java.net.InetAddress.getByName("127.0.0.1"))
         server.soTimeout=2000
@@ -65,9 +67,7 @@ class V2TransportTest {
         } finally { PinDiagnostic.install(null) }
     }
     @Test fun realTlsWebSocketUpgradeThroughMappedSocket() {
-        val keys=java.security.KeyStore.getInstance("PKCS12").apply {
-            File(System.getProperty("loopback.p12")).inputStream().use { load(it,"fixture".toCharArray()) }
-        }
+        val keys = LoopbackTlsFixture.create(tlsFiles.newFolder("tls"))
         val km=javax.net.ssl.KeyManagerFactory.getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm()).apply { init(keys,"fixture".toCharArray()) }
         val tm=javax.net.ssl.TrustManagerFactory.getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm()).apply { init(keys) }
         val trust=tm.trustManagers.filterIsInstance<javax.net.ssl.X509TrustManager>().single()
