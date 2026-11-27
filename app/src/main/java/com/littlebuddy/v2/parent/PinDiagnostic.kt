@@ -107,9 +107,9 @@ internal object PinDiagnostic {
 /** Closed scalar vocabulary; never accepts a binding, key, endpoint, token or exception text. */
 internal object ConfigurationDiagnostic {
     enum class Stage { WORKER, STORE_PRESENCE, LEGACY_ALIAS, LEGACY_CERT, MARKER_READ, BINDING, MARKER_WRITE,
-        DOMAIN_OPEN, STORE_READ, STORE_COMMIT, KEY_PRESENCE, KEY_LOAD, KEY_CREATE, PRESET, MIGRATION, CHILD_READ, COMPLETE }
+        ISOLATED_MARKER, ISOLATED_PRESENCE, ISOLATED_OPEN, ISOLATED_COMMIT_MARKER, DOMAIN_OPEN, STORE_READ, STORE_COMMIT, KEY_PRESENCE, KEY_LOAD, KEY_CREATE, PRESET, MIGRATION, CHILD_READ, COMPLETE }
     enum class Reason { BEGIN, SUCCESS, PRESENT, ABSENT, BUSY, QUARANTINED, UNCHANGED,
-        REJECTED, EMPTY, NO_CONNECTION, SECURITY, BAD_TAG, INVALID_KEY, IO, STATE, ARGUMENT, OTHER }
+        REJECTED, EMPTY, NO_CONNECTION, LEGACY_UNREADABLE_ISOLATED, SECURITY, BAD_TAG, INVALID_KEY, IO, STATE, ARGUMENT, OTHER }
     data class Event(val attempt:Long,val stage:Stage,val reason:Reason)
     private val sequence=java.util.concurrent.atomic.AtomicLong()
     private val current=ThreadLocal<Long>()

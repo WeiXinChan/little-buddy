@@ -1,8 +1,8 @@
 {
   "format": 1,
-  "version_code": 27,
-  "version_name": "2.0.0-rc9.nopin.diag2",
+  "version_code": 28,
+  "version_name": "2.0.0-rc9.nopin.recovery1",
   "application_id": "com.littlebuddy.sim.v2",
   "protocol_contract": "v2-voice2-safety1-images2-volume1-management1-end1",
-  "source_base": "bfd329f03e881910ed7c50f6745252a97782b102"
+  "source_base": "9da75bead4a40256d92aa3d32022f5bfa383649b"
 }

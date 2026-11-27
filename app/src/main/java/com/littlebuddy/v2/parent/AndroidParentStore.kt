@@ -13,9 +13,9 @@ import javax.crypto.SecretKey
 /** Entire record (including limits and retry reservations) is authenticated, in noBackup.
  * Distinct from V1 aliases/files. A lost key or missing record with an existing key fails closed.
  * Root/data rollback and uninstall+keystore deletion are outside this local threat boundary. */
-internal class AndroidParentStore(context: Context, binding: String) : ParentStore {
-    private val file = AtomicFile(context.noBackupFilesDir.resolve("v2-parent-v1"))
-    private val aad = "little-buddy:v2:parent:1:$binding".toByteArray(Charsets.UTF_8)
+internal class AndroidParentStore(context: Context, binding: String, private val isolated: Boolean = false) : ParentStore {
+    private val file = AtomicFile(context.noBackupFilesDir.resolve(if(isolated) LOCAL_FILE else "v2-parent-v1"))
+    private val aad = (if(isolated) LOCAL_AAD else "little-buddy:v2:parent:1:$binding").toByteArray(Charsets.UTF_8)
     init { require(binding.isNotBlank() && binding.length <= 512) }
     private val sealed = SealedParentStore(object : ParentRecordFile {
         override fun read(): ByteArray? = try { file.readFully() }
@@ -37,7 +37,7 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
                 file.finishWrite(output)
             } catch (e: Exception) { file.failWrite(output); throw e }
         }
-    }, AndroidParentKeys(), aad)
+    }, AndroidParentKeys(if(isolated) LOCAL_ALIAS else "little-buddy-v2-parent-v1"), aad)
     override fun read(): ParentRecord? {
         worker()
         return ConfigurationDiagnostic.step(ConfigurationDiagnostic.Stage.STORE_READ) { sealed.read() }
@@ -51,6 +51,14 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
         ConfigurationDiagnostic.observe(ConfigurationDiagnostic.Stage.STORE_COMMIT) { sealed.commit(record, transaction) }
     }
     companion object {
+        const val LOCAL_FILE="v2-parent-local-v1"
+        const val LOCAL_ALIAS="little-buddy-v2-parent-local-v1"
+        const val LOCAL_AAD="little-buddy:v2:parent-local:1"
+        fun hasIsolatedDomain(context:Context):Boolean {
+            worker()
+            return listOf(LOCAL_FILE,"$LOCAL_FILE.bak","$LOCAL_FILE.new").any { context.noBackupFilesDir.resolve(it).exists() } ||
+                KeyStore.getInstance("AndroidKeyStore").apply{load(null)}.containsAlias(LOCAL_ALIAS)
+        }
         fun hasExistingDomain(context: Context): Boolean {
             worker()
             return listOf("v2-parent-v1", "v2-parent-v1.bak", "v2-parent-v1.new").any { context.noBackupFilesDir.resolve(it).exists() } ||
@@ -61,25 +69,24 @@ internal class AndroidParentStore(context: Context, binding: String) : ParentSto
 }
 
 /** Creation is reachable only through SealedParentStore's one-shot fresh transition. */
-private class AndroidParentKeys : ParentKeyProvider {
+private class AndroidParentKeys(private val alias:String) : ParentKeyProvider {
     private fun store() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-    override fun exists() = ConfigurationDiagnostic.step(ConfigurationDiagnostic.Stage.KEY_PRESENCE) { store().containsAlias(ALIAS) }.also {
+    override fun exists() = ConfigurationDiagnostic.step(ConfigurationDiagnostic.Stage.KEY_PRESENCE) { store().containsAlias(alias) }.also {
         ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.KEY_PRESENCE, if(it) ConfigurationDiagnostic.Reason.PRESENT else ConfigurationDiagnostic.Reason.ABSENT)
     }
-    override fun existing() = ConfigurationDiagnostic.step(ConfigurationDiagnostic.Stage.KEY_LOAD) { store().getKey(ALIAS, null) as SecretKey? }.also {
+    override fun existing() = ConfigurationDiagnostic.step(ConfigurationDiagnostic.Stage.KEY_LOAD) { store().getKey(alias, null) as SecretKey? }.also {
         ConfigurationDiagnostic.event(ConfigurationDiagnostic.Stage.KEY_LOAD, if(it!=null) ConfigurationDiagnostic.Reason.PRESENT else ConfigurationDiagnostic.Reason.ABSENT)
     }
     override fun create(): SecretKey {
         check(!exists()) { "parent alias already exists" }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
-            init(KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256).build())
             generateKey()
         }
     }
-    companion object { private const val ALIAS = "little-buddy-v2-parent-v1" }
 }
 
 /** One live domain per process/binding. Local management does not assert remote identity. */
@@ -98,5 +105,16 @@ internal object AndroidParentDomain {
             SystemClock::elapsedRealtime, AndroidParentStore::worker, owner, binding = deviceBinding, localManagement = true).also {
             binding = deviceBinding; domain = it
         }
+    }
+}
+
+/** Independent local namespace. Never opens the legacy ciphertext or reuses its AES alias. */
+internal object AndroidIsolatedParentDomain {
+    private var domain:ParentDomain?=null
+    @Synchronized fun open(context:Context):ParentDomain {
+        AndroidParentStore.worker()
+        return domain?:ParentDomain(AndroidParentStore(context.applicationContext,"isolated-local",true),
+            SystemClock::elapsedRealtime,AndroidParentStore::worker,binding="isolated-local",localManagement=true)
+            .also{domain=it}
     }
 }

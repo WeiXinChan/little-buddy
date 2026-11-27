@@ -14,6 +14,8 @@ class AndroidRuntimeConfigurationTest {
         val dir=Files.createTempDirectory("runtime-config-").toFile()
         val file=dir.resolve("record");val selector=dir.resolve("selector")
         var certificate:String?="synthetic-public-binding";var certificateError:Exception?=null
+        var aliasOverride:Boolean?=null
+        override fun legacyAliasPresent()=aliasOverride?: (certificate!=null)
         var key:SecretKey?=KeyGenerator.getInstance("AES").apply{init(256)}.generateKey()
         var keyError:Exception?=null;var failCommit=false;var creates=0;var writes=0;var opens=0
         var cached:ParentDomain?=null;var reads=0;var failChildRead=false
@@ -84,7 +86,7 @@ class AndroidRuntimeConfigurationTest {
         assertEquals(ConfigurationStatus.LOAD_FAILED,r.result().status);assertEquals(0,r.opens);assertEquals(0,r.creates);assertEquals(0,r.writes)
         assertArrayEquals(bytes,r.file.readBytes());assertFalse(r.selector.exists())
         assertTrue(r.seen(ConfigurationDiagnostic.Stage.LEGACY_CERT,ConfigurationDiagnostic.Reason.ABSENT))
-        assertTrue(r.seen(ConfigurationDiagnostic.Stage.BINDING,ConfigurationDiagnostic.Reason.STATE))
+        assertTrue(r.seen(ConfigurationDiagnostic.Stage.ISOLATED_OPEN,ConfigurationDiagnostic.Reason.STATE))
     }
     @Test fun certificateApiFailureDoesNotLeakBodyOrAttemptMigration()=Rig().use{r->
         r.certificateError=SecurityException("never publish synthetic private body")

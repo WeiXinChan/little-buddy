@@ -41,6 +41,7 @@ internal class AndroidOwner private constructor(val binding: String, private val
         private const val ALIAS = "little-buddy-v2-system-owner-v1"
         private var instance: AndroidOwner? = null
         private fun keys() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        fun existingAlias():Boolean { AndroidParentStore.worker();return keys().containsAlias(ALIAS) }
         /** Public certificate only: does not open/sign with the auth-bound private key. */
         fun existingBinding(): String? {
             AndroidParentStore.worker()
