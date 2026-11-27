@@ -32,7 +32,7 @@ class Flash(unittest.IsolatedAsyncioTestCase):
             body=json.loads(request.content);calls.append(body)
             instruction=body['messages'][0]['content'];data=json.loads(body['messages'][1]['content'])
             if bad=='quota':return httpx.Response(403,json={'error':{'code':'AllocationQuota.FreeTierOnly'}})
-            if '审核下一个' in instruction:value={'allow':False if bad=='deny' else True}
+            if '审核下一个' in instruction:value={'allow':False if bad=='deny' else True,'quality':True}
             elif '提取孩子' in instruction:value={'facts':[{'key':'rule','value':'FORGED' if bad=='facts' else data['text']}]}
             else:
                 value={'action':'continue','mode':'story','rules':'轮流编故事','roles':['小猫'],'secrets':{},

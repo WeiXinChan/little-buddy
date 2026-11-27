@@ -19,7 +19,7 @@ class Contracts(unittest.IsolatedAsyncioTestCase):
             body=json.loads(request.content);calls.append(body);instruction=body['messages'][0]['content']
             if '提取孩子' in instruction:facts_ready.set()
             elif wait_facts and '严格字段' in instruction:await facts_ready.wait()
-            value=({'facts':[]} if '提取孩子' in instruction else {'allow':allow} if '审核下一个' in instruction else
+            value=({'facts':[]} if '提取孩子' in instruction else {'allow':allow,'quality':True} if '审核下一个' in instruction else
                    {'keep':[]} if '只返回JSON {"keep"' in instruction else
                    {'completion':'complete','meaning':'new_turn'} if 'completion:' in instruction else proposal)
             return httpx.Response(200,json={'choices':[{'message':{'content':json.dumps(value,ensure_ascii=False)}}],
@@ -32,7 +32,7 @@ class Contracts(unittest.IsolatedAsyncioTestCase):
         p,calls=await self.make()
         await p.endpoint('合成输入',{});await p.plan('合成输入',{});await p.facts('合成输入');await p.safe('合成回应',{});await p.compact([])
         self.assertEqual(len(calls),5)
-        for body,schema in zip(calls,(schemas.ENDPOINT,schemas.PLAN,schemas.FACTS,schemas.SAFETY,schemas.COMPACT)):
+        for body,schema in zip(calls,(schemas.ENDPOINT,schemas.PLAN,schemas.FACTS,schemas.REVIEW,schemas.COMPACT)):
             instruction=body['messages'][0]['content']
             self.assertEqual(instruction.count('输出契约JSON Schema：'),1)
             self.assertEqual(json.loads(instruction.split('输出契约JSON Schema：',1)[1]),schema)
@@ -56,11 +56,13 @@ class Contracts(unittest.IsolatedAsyncioTestCase):
                 case={'id':'anchors-fixture','turns':[{'label':str(i),'input':'你出动物谜语我猜，不要先说答案。','expect':{'mode':'guess','terms':[]}} for i in range(3)]}
                 report=await run_case(case,p,observer=lambda label,s:seen.append(s))
                 self.assertEqual(report['peer_failure'],{'stage':'plan','kind':'ModelError','contract':'plan_anchors','detail':detail})
-                self.assertEqual(report['tts_requests'],0);self.assertEqual(report['model_requests'],2)
+                self.assertEqual(report['tts_requests'],0)
+                repairable=detail in ('anchor_index_type','anchor_index_range')
+                self.assertEqual(report['model_requests'],3 if repairable else 2)
                 self.assertEqual(seen[0]['heard'],());self.assertEqual(dict(seen[0]['game']),{})
                 self.assertFalse(report['turns'][0]['delivery_metadata']['game_committed'])
                 self.assertNotIn('UNREVEALED_CANARY',json.dumps(report))
-                self.assertEqual(len([c for c in calls if '严格字段' in c['messages'][0]['content']]),1)
+                self.assertEqual(len([c for c in calls if '严格字段' in c['messages'][0]['content']]),2 if repairable else 1)
 
     async def test_last_actual_index_is_valid_and_bounds_are_not_global_capacity(self):
         for sentences,anchors in [(['第一句。'],{'clue.current':0}),(['第一句。','第二句。'],{'plot.main':0,'clue.current':1}),

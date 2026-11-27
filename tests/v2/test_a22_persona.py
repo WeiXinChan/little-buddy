@@ -33,7 +33,7 @@ class Scripted(Model):
             return json.dumps(self.outputs[data['text']],ensure_ascii=False)
         if '审核下一个' in instruction:
             self.requests.append((instruction,deepcopy(data)))
-            return '{"allow":"yes"}' if self.malformed else json.dumps({'allow':data['segment'] not in self.denied})
+            return '{"allow":"yes"}' if self.malformed else json.dumps({'allow':data['segment'] not in self.denied,'quality':True})
         return await super().complete(instruction,data,schema=schema)
 
 def proposal(sentence,mode='chat',action='continue',roles=None):
