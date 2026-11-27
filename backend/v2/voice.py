@@ -872,10 +872,13 @@ class VoicePeer:
             # Replays remain rejected by exact pending-front ID and task sequence.
             self.session.revealed.intersection_update(s.name for s in self.session.pending)
 
-    async def review(self, operation, text):
+    async def review(self, operation, text, *, query=''):
+        # Re-project current authoritative scope with this response's input,
+        # never a frozen PLAN snapshot or the unapproved candidate sentence.
+        operation.ensure()
         try:
             function=getattr(self.providers,'review',None) or self.providers.safe
-            verdict = await self.owned(operation, function, text, operation.session.context())
+            verdict = await self.owned(operation, function, text, operation.session.context(query=query))
         except SafetyFault:
             raise
         except Exception:
@@ -1019,7 +1022,7 @@ class VoicePeer:
                     else:plan.pop('guess_role',None)
                 if ending:plan.update(tools=[],anchors={})
                 stage = 'safety'
-                await self.review(operation, ''.join(plan['sentences']))
+                await self.review(operation, ''.join(plan['sentences']), query=text or '')
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
                 if plan['mode']=='guess' and 'guess_role' in plan:state['guess_role']=plan['guess_role']
                 if state['mode']=='story':
@@ -1073,7 +1076,7 @@ class VoicePeer:
                         for sentence in plan['sentences']:
                             if len(plan['sentences']) > 1:
                                 stage='safety'
-                                await self.review(operation, sentence)
+                                await self.review(operation, sentence, query=text or '')
                             yield sentence
                     yield items()
                 manager = planned()

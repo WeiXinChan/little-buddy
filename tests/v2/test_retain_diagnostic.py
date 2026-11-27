@@ -1,3 +1,4 @@
+from tests.v2.pin_objects import assert_git_pin,assert_rejects_changed_copy
 import json,unittest
 from copy import deepcopy
 from unittest.mock import patch
@@ -56,4 +57,4 @@ class Diagnostic(unittest.IsolatedAsyncioTestCase):
         with patch.object(diagnostic.base,'verify_source',side_effect=AssertionError('no credentials')):
             self.assertEqual(diagnostic.main(['--case','retain-only-change']),0)
             self.assertEqual(diagnostic.main(['--case','retain-only-change','--execute']),2)
-        self.assertEqual(len(diagnostic.base.verify_source()),64)
+        assert_git_pin(self,diagnostic.base,'v2_retain_only_probe_pin.json')

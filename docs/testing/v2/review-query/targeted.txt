@@ -1,0 +1,12 @@
+................usage: python3 -m unittest [-h] --case {retain-only-change} [--execute]
+                           [--acknowledge-quota-not-live-verified]
+                           [--output OUTPUT]
+python3 -m unittest: error: argument --case: invalid choice: 'all' (choose from 'retain-only-change')
+..............
+----------------------------------------------------------------------
+Ran 30 tests in 1.077s
+
+OK
+{"status": "DISABLED_PLAN_ONLY", "source": "fe49b63561a31ea5452a6693ff8be0e7c36704f4", "case": "guess-object", "cases": {"guess-object": ["猜家里的东西吧，你描述，我猜，不先说答案。", "是杯子吗？提示它有什么用。", "现在由我问你猜：能照亮房间的是什么？"]}, "limits": {"model_requests": 24, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "semantic_pass": null, "cloud_calls": 0}
+{"status": "disabled", "source": "79ba62b3b7e8b16d15b43249039891e568de8672", "model_request_limit": 16, "cloud_calls": 0}
+{"status": "DISABLED_PLAN_ONLY", "source": "79ba62b3b7e8b16d15b43249039891e568de8672", "case": "retain-only-change", "cases": {"retain-only-change": ["我们玩会飞的东西，不重复。我已经说过小鸟和飞机，这些不能再用；这次我说蝴蝶，轮到你。", "只改成两个字，保留会飞和不重复，不重新开始；轮到你了。"]}, "limits": {"model_requests": 16, "tts_requests": 12, "tts_characters": 1440, "execution_seconds": 45, "case_cleanup_seconds": 0.25, "supervisor_seconds": 55, "request_bytes": 32768, "planning_model_cny": 5.0}, "semantic_pass": null, "cloud_calls": 0}

@@ -1,3 +1,4 @@
+from tests.v2.pin_objects import assert_git_pin,assert_rejects_changed_copy
 import unittest,json,tempfile
 from unittest.mock import patch,AsyncMock
 from scripts import v2_closeout_probe as p
@@ -58,7 +59,7 @@ class Preparation(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(p.main(['--case','memory-compare','--execute']),2)
     async def test_source_pin_is_final_main(self):
         self.assertEqual(p.SOURCE,'fe49b63561a31ea5452a6693ff8be0e7c36704f4')
-        self.assertEqual(len(p.verify_source()),64)
+        assert_git_pin(self,p,'v2_closeout_probe_pin.json')
 
     async def test_production_sentence_repair_remains_admitted_and_metered(self):
         from tests.v2.test_plan_repair import RepairModel
@@ -81,3 +82,6 @@ class Preparation(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(model.requests),2)
         self.assertEqual(guard.denials[-1]['reason'],'declared_read_stage_cap')
         self.assertFalse(guard.denials[-1]['network_started'])
+
+    async def test_execution_admission_still_rejects_changed_local_source(self):
+        assert_rejects_changed_copy(self,p,'v2_closeout_probe_pin.json')
