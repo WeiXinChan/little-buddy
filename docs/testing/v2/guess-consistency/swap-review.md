@@ -1,0 +1,11 @@
+后继PR136：保留原guess-object否认失败及a3ed0ea实测分项。新根证据swap-baseline.json：猜中牙刷确认已PASS；第三轮孩子已给照亮房间题，实际只索题且secret=灯，角色交换结构虽对但当前意图未交付。无新云/部署/设备/长测。
+
+此次生成/审核共享契约明确“交换+已有线索同轮必须给出合理猜测”，不能只确认交换再索取已给材料；仅交换未给题才请出题，歧义允许“我猜可能是”不假称唯一解。对象开放，不硬编码灯/该句或题库。不添加precheck模型请求。
+
+guess_role是可选模型PLAN结构字段（setter/guesser，指瓦力当前职责），不是设备身份/权限/新wire。旧无字段PLAN/Session继续兼容；非guess带字段拒绝；list/dict/bool/未知值以plan_guess_role固定诊断拒绝，不抛未分类TypeError。continue未返回字段时只继承当前guess_role，明确change不强继承旧角色。guesser必须无主持secret；模型返回非空secrets时明确规范化清空，并以plan内部固定_guess_normalization=guesser_secrets_cleared（无正文）及peer.last_guess_normalization记录，不谎称模型没返错；每次respond重置标记。setter同题显式换谜底仍拒绝，猜中确认规则不回退。语义角色由模型理解，不能凭结构字段声称本次真实漏答已修。
+
+贯穿：VoicePeer将guess_role放入最终state，Session.send验证mode/类型及guesser无secret，最终ACK才提交game；无ACK/取消不提交。context深拷贝game保留；memory_snapshot仍只控制extractive材料写回、不重写game，真实compact检查保留角色。private最终state不提交公共game，公共重规划走原shared投影；定向测试保证私事回应不更改旧公共角色。held-current容量拒绝回复从原game恢复guess_role/无旧字段则去掉，避免模型guesser污染旧setter。图片control比较state==dict(currentgame,secrets)本来就是全字典，新增字段两侧由同一continue继承/最终state构造提供；不改媒体wire或图权限。离开非guess不携带字段。
+
+验证：全量非联网V2 unittest一次624执行，623PASS/1FAIL/0SKIP（full-offline.log）。失败Flash旧发行来源测试在新日志策略前置即拒绝，期望model mismatch没达到；未含本轮修改的b568基线也同失败（full-baseline-control.log），root另在51fa复现。按root要求只补该测试fixture：将当前既有日志策略文件注入旧ref库存，旧模型/source实际git字节不变，生产校验不改；仍严格断言release_source_model_mismatch且无包。重跑受影响Flash9+guess state16+private5=30PASS（fixture-and-state.log），不再重复全624。原FAIL不删除/改写，不把“全量全绿”写入结果。测试生成的temporary-preflight.json只恢复本次改动，不进提交。
+
+新增不同对象（兔/鱼）交换同轮猜测、无题澄清、旧主持secret不恢复到guesser、raw Session非法guesser-secret拒绝、无ACK不提交、非法字段类型、compact、private、held-current等离线反例只证明契约与状态门禁；真实模型同轮完整交付需root审后唯一目标复验。后续工具需独立提交pin到本生产固定head，报告guess_role及规范化码，不把旧工具输出套用新源码。保留24请求/45秒/55秒/生产单次repair，不增额外人工precheck请求。

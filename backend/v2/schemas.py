@@ -20,6 +20,7 @@ PLAN = obj(dict(
     mode=enum('chat','guess','story','adventure','association'),
     rules=string(2000),
     roles=dict(type='array',items=string(80),maxItems=8),
+    guess_role=enum('setter','guesser'),
     secrets=dict(type='object',additionalProperties=string(999),maxProperties=8,propertyNames=string(79)),
     sentences=dict(type='array',items=dict(type='string',minLength=1,maxLength=120),minItems=1,maxItems=4),
     anchors=dict(type='object',additionalProperties=dict(type='integer',minimum=0,maximum=3),maxProperties=16,

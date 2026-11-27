@@ -1,0 +1,8 @@
+test_compact_query_preserves_roles_rules_clue_plot_negation_and_new_fact (tests.v2.test_nondevice_closeout.CoexistingMemory.test_compact_query_preserves_roles_rules_clue_plot_negation_and_new_fact) ... ok
+test_real_tls_fragmented_upload_cancel_withdraw_and_restart_rejects_replay (tests.v2.test_nondevice_closeout.FeedbackIsolation.test_real_tls_fragmented_upload_cancel_withdraw_and_restart_rejects_replay) ... ok
+test_scheduler_failure_disables_then_restart_recovers_original_deadline (tests.v2.test_nondevice_closeout.FeedbackIsolation.test_scheduler_failure_disables_then_restart_recovers_original_deadline) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.156s
+
+OK

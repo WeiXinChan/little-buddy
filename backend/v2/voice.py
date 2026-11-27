@@ -886,6 +886,7 @@ class VoicePeer:
         owner = asyncio.current_task()
         self.generation_scopes[owner] = operation
         stage = 'bind'
+        self.last_guess_normalization=None
         response_revision = self.revision
         fact_prefetch = None
         prefetch_retired = False
@@ -936,6 +937,7 @@ class VoicePeer:
                     fact_prefetch = asyncio.create_task(prefetch_facts())
                     self.track_retired(fact_prefetch)
                 plan = await self.read_request(operation, 'plan', text, context)
+                self.last_guess_normalization=plan.get('_guess_normalization')
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 shared_replanned = self.session.private_mode and plan['action'] in {'change', 'leave'}
@@ -945,6 +947,7 @@ class VoicePeer:
                     # final plan may decide the action and publication scope.
                     plan = await self.read_request(operation, 'plan', text,
                         operation.session.context(shared=True, query=text or ''), allow_plan_repair=False)
+                    self.last_guess_normalization=plan.get('_guess_normalization')
                     operation.ensure()
                 action = plan['action']
                 ending=action=='end'
@@ -1004,10 +1007,13 @@ class VoicePeer:
                     plan.update(mode=self.session.game.get('mode','chat'),
                                 rules=self.session.game.get('rules',''),roles=self.session.game.get('roles',[]),
                                 secrets=dict(self.session.secrets))
+                    if 'guess_role' in self.session.game:plan['guess_role']=self.session.game['guess_role']
+                    else:plan.pop('guess_role',None)
                 if ending:plan.update(tools=[],anchors={})
                 stage = 'safety'
                 await self.review(operation, ''.join(plan['sentences']))
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
+                if plan['mode']=='guess' and 'guess_role' in plan:state['guess_role']=plan['guess_role']
                 if state['mode']=='story':
                     if accepted is False and 'turn_limit' in self.session.game:
                         state['turn_limit']=self.session.game['turn_limit']

@@ -1,0 +1,19 @@
+{
+  "source": "a3ed0ea2b42bb3a341cecc7e27f6d71d14e0ede9",
+  "driver": "502aaa1c55b708fd605faea22e9a1210656bbb49",
+  "result": "guess-confirm-a3ed0ea2-once/result.json",
+  "overall": "FAIL_ROLE_SWAP_CURRENT_QUESTION_OMITTED",
+  "first_turn": "PASS this sample: 牙刷 hidden, appropriate clue, no early answer",
+  "second_turn": "PASS this sample: actual 牙刷 guess confirmed and use explained; complete ACK",
+  "third_turn": "FAIL: child already asked 能照亮房间的是什么; actual ACK only 好呀，我来猜，你出题!; asks for already provided clue; new secret 灯 despite AI guesser role",
+  "cleanup_confirmed": true,
+  "full_device_acceptance": false,
+  "usage": {
+    "requests": 11,
+    "prompt_tokens": 24576,
+    "completion_tokens": 366
+  },
+  "quota_live_verified": false,
+  "rerun": false,
+  "review_sha256": "f3d17c3741f002654088353db269ec614bb6782480bf3d2751673587a3898898"
+}
