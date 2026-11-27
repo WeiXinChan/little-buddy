@@ -1,0 +1,13 @@
+基于当前main 68b463753564a966c3bbf1e1cd76f7f774ee992f（PR134已合），独立分支。无模型更换、协议/Android/VoicePeer/预算/部署修改；本批未云/设备/长测。
+
+原失败：root唯一guess-object三轮，source b568ef47，9模型请求，首轮hidden杯子且喝水线索；第二轮猜杯子，hidden杯子却完整ACK“不是杯子…装热汤/当帽子”；第三轮换角色正确且清空hidden，运输/清理正常。baseline.json保留原review及hash/原result hash或权限边界，原件不改、不重跑刷绿。
+
+源码证据：Session.context包含unrevealed，UnifiedProviders.plan将完整context交request；VoicePeer以session.context(query=当前输入)调用。新增实际VoicePeer用例捕获模型收到的生产payload确认answer在内。没有本地“猜中不得确认”的门禁；旧SYSTEM和PLAN只强调隐藏/不得公开、同题保留，缺少“孩子猜中时应确认，不能为保密否认”的明确例外与跨句特征一致性。原始模型PLAN JSON未保存，不能断言供应商本次忽略了哪句提示、是否曾返回新谜底；实际输出/state矛盾则已证。旧代码在continue后无条件把secrets覆盖回context原值，即使模型返回另一谜底也会把不一致的正文掩盖在“状态正确”之下；这是源码可证的旁路风险，不反推本次原始返回。
+
+最小修复：共享GUESS_CONSISTENCY进入PLAN和safe，GUESS_REVIEW用于整段/逐句既有安全审核。明确当前出题者/猜题者及unrevealed固定对象，猜中可以如实确认，未猜中不提前揭底且新增线索必须与谜底及已播线索相容；否定/引用/多候选不能靠字面子串当猜中。不硬编码杯子/实际错误句，不添题库或本地猜词分类器，不改模型。明确换出题者须按孩子新题处理并清旧secret，handoff边界不变。
+
+严格本地增量：仅同题guess continue时，如模型显式返回非空且不同的secrets，直接固定plan_guess_answer_changed拒播，不再悄悄覆盖新谜底。空secrets仍按既有兼容规则保留当前答案，不因漏填而泄底或续错题；明确change/角色交换仍可清空。新固定diagnostic不含谜底正文，拒绝不添加重试。对“secret仍正确但正文否认/线索矛盾”的一般语义，依赖增强的真实PLAN/safe契约，不能声称本地字符串检查已保证；需root一次真实目标复验确认，若仍错保留FAIL并继续定位，不能以离线绿冒称语义修好。
+
+验证：新增7方法，以风筝/气球等不同合成对象而非杯子：实际PLAN收到当前hidden且正确确认能完整ACK；未猜中线索持续、不播答案；显式换谜底直调拒绝及actualVoicePeer拒播不提交；角色交换清旧secret并提交新角色；safe拒绝门禁保持；否定/引用/多候选提示边界。合成模型只证明输入契约/门禁/提交行为，不证明它实际理解了猜中。另复用private_replan5/G02六/G05六，总24方法PASS/0SKIP，offline.log。尚未真实复验、不会启动其它主题/memory云测试。产品真实语义缺口仍HOLD直到root审后单次复验。
+
+一次最小复验建议：复用原guess-object，仅前2轮（原出题+原猜测）即可看当前谜底/线索/猜中确认；原工具默认三轮，如root沿旧唯一三轮命令执行则保留已知角色交换对照。正常response预算与共享单次repair不变。不要为匹配原杯子硬塞指定谜底给模型，审计记录新的实际合成hidden及ACK即可；若首轮新谜底不同，第二轮固定杯子只能评价错误猜测不泄底，不能假称猜中确认已测，可由root先审实际对象后安排同会话定向猜测，禁止author自行额外云请求。

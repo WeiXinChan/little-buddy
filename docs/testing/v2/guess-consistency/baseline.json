@@ -1,0 +1,20 @@
+{
+  "status": "FAIL_SYNTHETIC_SEMANTIC",
+  "source": "b568ef4730b0e30552bfc4577915bbec1afa6a61",
+  "evidence": "closeout-guess-object-b568ef47-once/result.json",
+  "turn1": "hidden answer 杯子; first clue does not reveal answer",
+  "turn2": "hidden answer remains 杯子 but fully ACKed output says 它不是杯子哦; contradiction",
+  "turn3": "roles swapped; old hidden answer cleared; answered 灯; scoped pass",
+  "transport": "3 complete replies, cleanup confirmed; no transport failure",
+  "usage": {
+    "requests": 9,
+    "prompt_tokens": 18075,
+    "completion_tokens": 344
+  },
+  "free_quota_live_verified": false,
+  "full_device_acceptance": false,
+  "next": "Stop other topics; diagnose and repair hidden-answer consistency; preserve original failure.",
+  "original_review_sha256": "f2426d9607e2c6f8fddf3dd414f0e1341b791cc29e2ef5db37a980fcb3ced4b1",
+  "original_result_sha256": null,
+  "raw_result_read": "permission_denied_not_bypassed"
+}
