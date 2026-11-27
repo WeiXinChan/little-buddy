@@ -1,0 +1,13 @@
+{
+  "inputs_sha256": "8cd4397a0fb9d26868c450cc39076cae638bef608c9f231bd91eeabeffa749e0",
+  "results": [
+    {
+      "mutation": "shutdown.active=true",
+      "accepted": false
+    },
+    {
+      "mutation": "shutdown.quarantined=true",
+      "accepted": false
+    }
+  ]
+}

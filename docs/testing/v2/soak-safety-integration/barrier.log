@@ -1,0 +1,10 @@
+test_actual_paced_hook_arms_down_before_ack_without_blocking_up (tests.v2.test_half_open_barrier.DriverBarrier.test_actual_paced_hook_arms_down_before_ack_without_blocking_up) ... ok
+test_normal_hook_does_not_pause_relay (tests.v2.test_half_open_barrier.DriverBarrier.test_normal_hook_does_not_pause_relay) ... ok
+test_arm_downstream_before_first_ack_then_block_next_chunk (tests.v2.test_half_open_barrier.Reproduction.test_arm_downstream_before_first_ack_then_block_next_chunk) ... ok
+test_pause_after_two_received_chunks_cannot_prove_blocked_without_new_bytes (tests.v2.test_half_open_barrier.Reproduction.test_pause_after_two_received_chunks_cannot_prove_blocked_without_new_bytes) ... ok
+test_pause_before_next_read_has_a_real_block_witness (tests.v2.test_half_open_barrier.Reproduction.test_pause_before_next_read_has_a_real_block_witness) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.265s
+
+OK

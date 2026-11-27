@@ -1,0 +1,30 @@
+{
+  "layer": "metadata_fixture_only_not_native",
+  "complete_positive": "PASS",
+  "duration": 90,
+  "connections": 2,
+  "turns": 12,
+  "samples": 69,
+  "timing": {
+    "elapsed_seconds": 90.4,
+    "declared_input_seconds": 71.04,
+    "sent_input_seconds": 71.06,
+    "simulated_ack_playback_seconds": 18.1,
+    "wall_seconds": {
+      "input": 71.04,
+      "playback": 18.1,
+      "processing": 0.6,
+      "network": 0.05,
+      "cleanup": 0.5,
+      "idle": 0.1099999999999981
+    }
+  },
+  "cutoff": {
+    "owner": "outer_work_window",
+    "expired": true,
+    "deadline_elapsed": 90,
+    "observed_elapsed": 90.3
+  },
+  "original_fixture_sha256": "04474b2968eca30bc956b1d2586b03c46fd1f83d5f1028def6a29302745f6c98",
+  "code_sha256": "cf95982d3172e1ac6cd8f438398cb3369c0a8442baffe0199f13d35f5fbef51a"
+}
