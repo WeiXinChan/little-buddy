@@ -60,7 +60,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private var responseRevision = -1L
     private val phases=if(ClientPhasePort.enabled())ClientPhases(diagnosticScope,SystemClock::elapsedRealtime) else null
     private val gate: InputGate = InputGate(waits, SystemClock::elapsedRealtime,
-        { version -> entryGate.clear(); childVolume.clear(); images?.inputChanged(); send("advance", "revision" to version); candidate();status("listening") },
+        { version -> phases?.clear();entryGate.clear(); childVolume.clear(); images?.inputChanged(); send("advance", "revision" to version); candidate();status("listening") },
         { version -> val seq=sequence;if(send("probe", "revision" to version))phase(ClientPhase.PROBE_SENT,version,seq=seq) },
         { version -> val seq=sequence;if(send("seal", "revision" to version))phase(ClientPhase.SEAL_SENT,version,seq=seq); inputSerial++ ; outputBusy = true;status("thinking") },
         { send("wake_solo", "age_ms" to (15000L - (gateDeadline() - SystemClock.elapsedRealtime()))); outputBusy = true;status("thinking") },
@@ -294,7 +294,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 else -> status("clarify") // Unknown recognition never resumes audio.
             }
             }
-            "revoke" -> { images?.outputRevoked(); player.stop(); ackIdentity = null; hideImage() }
+            "revoke" -> { phases?.clear();images?.outputRevoked(); player.stop(); ackIdentity = null; hideImage() }
             "volume" -> {
                 if(!imageScopeCurrent(event) || wireInt(event,"control_v")!=1 || !managementState.mediaAllowed ||
                     SystemClock.elapsedRealtime()>=gate.responseDeadline) return

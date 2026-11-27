@@ -64,7 +64,7 @@ internal object AndroidPinDiagnostic {
                     queue.offer("mono_ms=${System.nanoTime()/1_000_000} stage=RUNTIME_${event.stage.name} source=${event.source.name} activity=${c.activity} transport=${c.transport} capture=${c.capture} scope_known=${c.activity>0} wire=${event.wire.name} point=${event.point.name} $detail")
                 }
             }
-            PinDiagnostic.installPhase { e ->
+            com.littlebuddy.v2.ClientPhasePort.install { e ->
                 if(budget.phase()) {
                     queue.offer(e.format(System.nanoTime()/1_000_000))
                 }
