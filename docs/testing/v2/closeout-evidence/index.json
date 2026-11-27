@@ -1,0 +1,16 @@
+{
+  "base": "67ac8405f672b59985c198263f0b89c95719244e",
+  "audit_sha256": "0f0efeaaaa9f27540269bf2f0aa8b70c3886317f84ac92e48916fb6e52b7f81c",
+  "new_methods": 3,
+  "unique_executed_methods": 22,
+  "executions": 25,
+  "passed": 25,
+  "failed": 0,
+  "skipped": 0,
+  "cloud_calls": 0,
+  "device_operations": 0,
+  "heavy_lock_used": false,
+  "production_changes": false,
+  "long_run_interference": false,
+  "full_acceptance": false
+}

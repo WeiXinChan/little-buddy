@@ -1,0 +1,16 @@
+test_same_session_cold_sources_and_played_unplayed_after_compaction (tests.v2.test_closeout_boundaries.MemoryBoundaries.test_same_session_cold_sources_and_played_unplayed_after_compaction) ... ok
+test_one_leaves_then_any_speaker_stop_then_all_end (tests.v2.test_closeout_boundaries.WireBoundaries.test_one_leaves_then_any_speaker_stop_then_all_end) ... ok
+test_private_and_hidden_answer_across_modes_and_shared_replan (tests.v2.test_closeout_boundaries.WireBoundaries.test_private_and_hidden_answer_across_modes_and_shared_replan) ... ok
+test_revision_change_discards_finished_facts_without_commit (tests.v2.test_fact_prefetch.Prefetch.test_revision_change_discards_finished_facts_without_commit) ... ok
+test_epoch_revoke_discards_finished_prefetch (tests.v2.test_fact_prefetch.Prefetch.test_epoch_revoke_discards_finished_prefetch) ... ok
+test_cancel_stubborn_prefetch_is_bounded_retained_and_cannot_publish (tests.v2.test_fact_prefetch.Prefetch.test_cancel_stubborn_prefetch_is_bounded_retained_and_cannot_publish) ... ok
+test_end_final_action_closes_after_ack (tests.v2.test_private_replan.PrivateReplan.test_end_final_action_closes_after_ack) ... ok
+test_handoff_final_action_replaces_and_clears_session (tests.v2.test_private_replan.PrivateReplan.test_handoff_final_action_replaces_and_clears_session) ... ok
+test_private_final_action_never_publishes_reply (tests.v2.test_private_replan.PrivateReplan.test_private_final_action_never_publishes_reply) ... ok
+test_replan_failure_preserves_private_scope (tests.v2.test_private_replan.PrivateReplan.test_replan_failure_preserves_private_scope) ... ok
+test_shared_continue_publishes_without_old_private_context (tests.v2.test_private_replan.PrivateReplan.test_shared_continue_publishes_without_old_private_context) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.675s
+
+OK
