@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit
 
 /** Actual VoiceClient/Playback/AndroidTrack source with JVM platform ports, real TLS peer. */
 fun main(args:Array<String>) {
+    Thread.setDefaultUncaughtExceptionHandler{_,_->System.err.println("PHASE_FIXTURE_UNCAUGHT");kotlin.system.exitProcess(1)}
     val enabled=args[1]=="on";val owner=Handler();val done=CountDownLatch(1)
     val seen=java.util.concurrent.CopyOnWriteArrayList<ClientPhaseEvent>()
     val failures=java.util.concurrent.atomic.AtomicInteger()
