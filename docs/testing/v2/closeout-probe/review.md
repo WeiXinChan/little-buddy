@@ -24,3 +24,11 @@ python3 -I -B scripts/v2_closeout_probe.py --case memory-compare --execute --ack
 修订：旧准备head4684353限制第二PLAN过严，现后继提交取消该限制；不修改旧G02/G05脚本/17call实测，不重复执行。N02对照保持直接providers.plan两次（非VoicePeer响应），不增加repair或播放。admission no_automatic_retry指harness不自行重跑，另production_shared_retry_preserved=true如实标明产品一次机会保留。24次*1400输出token理论上限33600，不等账单硬上限。
 
 当前首批执行切换为story-forest单组；guess-object原失败和guess-confirm后继PASS仅引用已保留实测，不再重跑。root已确认生产521c6cd7后的猜中冰箱/交换直接猜灯/guesser且hidden空，无规范化；main ffd1dd9b已包含修复并部署，author未复验云或部署。审计game使用实际set白名单加入guess_role，逐轮记录固定规范化码；N02两份最新facts相同的full/compact对照及2PLAN上限不变。
+
+当前唯一待root执行的是memory-compare，工具merge并严格pin至main fe49b63561a31ea5452a6693ff8be0e7c36704f4；上述玩法命令仅历史准备记录，不再运行guess/story/adventure/association。root一次retain-diagnostic-79ba两轮目标通过：气球→小蜂，不重复/两字且完整ACK/state、无help；whole allow/quality均true，未命中真实deny分支，原失败原因仍不反推。在服版本由root控制，本工具不部署。
+
+剩余唯一命令（新输出目录，不覆盖历史失败）：
+```sh
+python3 -I -B scripts/v2_closeout_probe.py --case memory-compare --execute --acknowledge-quota-not-live-verified --output /home/ubuntu/tech/v2-delivery/closeout-memory-pair-fe49b635-once
+```
+仍同一生产Session，最新绿色钥匙来源先于两份context，facts/game/query相同，full→真实compact，记录全部两payload/hash/revision/heard数量供root核查。最多2次直接严格PLAN候选，不走VoicePeer repair、不调用safe/合成或播放、不把expected喂模型，无新case/对比组。候选与实际已听严格区分，semantic_pass=null，缺usage保持unknown，额度ack不伪称实时余额。当前main9项离线重新通过；仅准备，author无云/部署/长测/设备。

@@ -57,7 +57,7 @@ class Preparation(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(p.main(['--case','guess-object']),0)
             self.assertEqual(p.main(['--case','memory-compare','--execute']),2)
     async def test_source_pin_is_final_main(self):
-        self.assertEqual(p.SOURCE,'ffd1dd9b946eece4cae8cd3eeea897467cd2f51e')
+        self.assertEqual(p.SOURCE,'fe49b63561a31ea5452a6693ff8be0e7c36704f4')
         self.assertEqual(len(p.verify_source()),64)
 
     async def test_production_sentence_repair_remains_admitted_and_metered(self):

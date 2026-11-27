@@ -4,7 +4,7 @@ No real ASR, images, microphone or device playback. Never a semantic PASS oracle
 import argparse,asyncio,copy,hashlib,json,os,pathlib,signal,subprocess,sys,time
 from contextlib import asynccontextmanager
 ROOT=pathlib.Path(__file__).resolve().parent
-SOURCE='ffd1dd9b946eece4cae8cd3eeea897467cd2f51e'
+SOURCE='fe49b63561a31ea5452a6693ff8be0e7c36704f4'
 MODEL='deepseek-v4.1-flash-1017'
 WARMUP='我们轮流说水果，一次一个，不重复，我先说苹果。'
 ALL_CASES={'guess-object': ('猜家里的东西吧，你描述，我猜，不先说答案。', '是杯子吗？提示它有什么用。', '现在由我问你猜：能照亮房间的是什么？'), 'story-forest': ('你一句我一句编小熊在森林找朋友的故事。', '小熊先遇见小鸟，你接着讲。', '加个规则，每次只讲一句话。'), 'adventure-sea': ('假装海底寻宝，我是潜水员，你是向导，我决定方向。', '我选珊瑚那条路，你介绍发现。', '改规则，不碰任何动物，只观察。'), 'association-flying': ('接龙说会飞的东西，一人一个，我先说小鸟。', '我接飞机，你来接，别重复。', '改成两个字的东西，我先说风筝。')}
