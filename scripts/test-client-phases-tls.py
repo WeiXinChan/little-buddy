@@ -19,7 +19,7 @@ async def run():
  print('PRODUCTION_VOICECLIENT_SOURCE_SHA256',hashlib.sha256((ROOT/'app/src/main/java/com/littlebuddy/v2/VoiceClient.kt').read_bytes()).hexdigest(),flush=True)
  with tempfile.TemporaryDirectory(dir=ROOT,prefix='expiry-tls-') as folder:
   out=Path(folder);ports=ROOT/'scripts/testing/media'
-  owner_port=out/'OwnerPorts.kt';owner_port.write_text((ports/'OwnerPorts.kt').read_text().replace('executor.execute(r);return true','executor.execute{try{r.run()}catch(t:Throwable){t.printStackTrace();throw t}};return true'))
+  owner_port=out/'OwnerPorts.kt';owner_port.write_text((ports/'OwnerPorts.kt').read_text().replace('executor.execute(r);return true','if(executor.isShutdown)return false;return try{executor.execute{try{r.run()}catch(t:Throwable){t.printStackTrace();throw t}};true}catch(_:RejectedExecutionException){false}'))
   sources=[owner_port]+[ports/(n+'.kt') for n in ['Base64Port','JsonPort','MediaPorts']]+[ROOT/'scripts/testing/client-phases/RealPhaseClient.kt']
   sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['VoiceClient','InputGate','AndroidTrack','ClientPhases']]
   sources += [ROOT/'app/src/main/java/com/littlebuddy/v2/parent/PinDiagnostic.kt']
