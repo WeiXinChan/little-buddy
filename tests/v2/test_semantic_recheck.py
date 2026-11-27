@@ -43,3 +43,23 @@ class Offline(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(r.main(['--execute']),2)
     async def test_pin_matches_requested_production_source(self):
         self.assertEqual(len(r.verify_source()),64)
+
+    async def test_admission_records_unknown_quota_without_false_live_assertion(self):
+        a=r.admission()
+        self.assertFalse(a['account_quota_verified'])
+        self.assertFalse(a['historical_user_evidence']['live_verified'])
+        self.assertTrue(a['historical_user_evidence']['free_tier_exhaustion_stop_enabled'])
+        self.assertTrue(a['no_fallback']);self.assertTrue(a['planning_budget_not_bill'])
+        self.assertFalse(a['real_asr_tts_images_allowed'])
+        self.assertNotIn('operator_asserted_free_tier_only',a)
+        self.assertEqual(a['model'],'deepseek-v4.1-flash-1017')
+
+    async def test_new_acknowledgement_admits_worker_without_live_quota_check(self):
+        from unittest.mock import patch,AsyncMock
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(r,'verify_source',return_value='pinned'),patch.dict(r.os.environ,{'V2_RECHECK_PARENT':str(r.os.getppid())}),patch.object(r,'live',new_callable=AsyncMock) as live,patch.object(r.asyncio,'run') as run:
+                self.assertEqual(r.main(['--execute','--acknowledge-quota-not-live-verified','--_worker','--output',d]),0)
+                coroutine=run.call_args.args[0]
+                coroutine.close() # test never enters async live/config/network
+                self.assertEqual(live.call_count,1)
+                self.assertEqual(r.LIMITS['model_requests'],21)

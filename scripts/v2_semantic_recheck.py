@@ -227,22 +227,31 @@ async def live(out):
         result=await run_group(p,progress=lambda r:save(out/'result.json',r))
         save(out/'result.json',result)
 
+def admission():
+    return dict(source=SOURCE,model=MODEL,no_fallback=True,no_automatic_retry=True,
+        quota_not_live_verified_acknowledged=True,account_quota_verified=False,
+        authorization='existing_user_authorization_for_bounded_text_recheck',
+        historical_user_evidence=dict(model=MODEL,free_tokens_shown=999070,
+            free_tier_exhaustion_stop_enabled=True,live_verified=False),
+        preference='free_quota_first',planning_budget_not_bill=True,
+        allowed_network='deepseek_1017_text_only',real_asr_tts_images_allowed=False)
+
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--execute',action='store_true');parser.add_argument('--confirm-free-tier-only',action='store_true')
+    parser.add_argument('--execute',action='store_true');parser.add_argument('--acknowledge-quota-not-live-verified',action='store_true')
     parser.add_argument('--output',type=pathlib.Path);parser.add_argument('--_worker',action='store_true',help=argparse.SUPPRESS)
     args=parser.parse_args(argv)
     if not args.execute:
         print(json.dumps(dict(status='DISABLED_PLAN_ONLY',source=SOURCE,cases=TURNS,limits=LIMITS,semantic_pass=None,cloud_calls=0),ensure_ascii=False));return 0
-    if not args.confirm_free_tier_only or args.output is None:return 2
+    if not args.acknowledge_quota_not_live_verified or args.output is None:return 2
     verify_source()
     if args._worker:
         # Internal worker is explicit opt-in; parent PID check is not a security boundary.
         if os.environ.get('V2_RECHECK_PARENT')!=str(os.getppid()):return 2
         asyncio.run(live(args.output));return 0
     out=args.output.resolve();out.mkdir(exist_ok=False,mode=0o700)
-    save(out/'admission.json',dict(source=SOURCE,no_fallback=True,no_automatic_retry=True,operator_asserted_free_tier_only=True,account_quota_verified=False))
-    command=[sys.executable,'-I','-B',str(pathlib.Path(__file__).resolve()),'--execute','--confirm-free-tier-only','--_worker','--output',str(out)]
+    save(out/'admission.json',admission())
+    command=[sys.executable,'-I','-B',str(pathlib.Path(__file__).resolve()),'--execute','--acknowledge-quota-not-live-verified','--_worker','--output',str(out)]
     child=subprocess.Popen(command,env={**os.environ,'V2_RECHECK_PARENT':str(os.getpid())},start_new_session=True,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     forced=False;code=None
     try:code=child.wait(timeout=LIMITS['supervisor_seconds'])
