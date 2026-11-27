@@ -17,6 +17,7 @@ from uuid import uuid4
 from backend.v2.session import Identity, Session
 from backend.v2.budget import ResponseBudget
 from backend.v2.safety import SafetyFault, local_help
+from backend.v2.review import ReviewDecision,QualityFault
 from backend.v2.images import revealable
 from backend.v2.dynamic_images import ImageScope, ImageFailure
 from backend.v2.image_descriptions import ExplicitImageRequest
@@ -199,10 +200,11 @@ class VoicePeer:
                 raise StaleOperation()
             from backend.v2.companion import ModelError
             repair_limit=getattr(failure,'repair_sentence_limit',None)
-            repair=(type(repair_limit) is int and 1<=repair_limit<=4 and isinstance(failure,ModelError) and allow_plan_repair and kind=='plan' and contract_code(failure)=='plan_sentence_limit' and
+            sentence_repair=(type(repair_limit) is int and 1<=repair_limit<=4 and contract_code(failure)=='plan_sentence_limit' and callable(getattr(self.providers,'repair_plan',None)))
+            format_repair=(contract_code(failure)=='plan_anchors' and contract_detail(failure) in ('anchor_index_type','anchor_index_range') and callable(getattr(self.providers,'repair_plan_format',None)))
+            repair=((sentence_repair or format_repair) and isinstance(failure,ModelError) and allow_plan_repair and kind=='plan' and
                     len(snapshot)==2 and isinstance(snapshot[1],dict) and not self.session.private_mode and not snapshot[1].get('private') and
-                    self.prepared is None and not self.waiting_wake and
-                    operation.budget is self.input_budget and callable(getattr(self.providers,'repair_plan',None)))
+                    self.prepared is None and not self.waiting_wake and operation.budget is self.input_budget)
             transient=isinstance(failure,VoiceFault) and failure.code in {'network','timeout'}
             if not repair and not transient:raise
             budget = operation.budget
@@ -212,9 +214,10 @@ class VoicePeer:
             remaining = budget.remaining()
             budget.read_retry_revision = revision  # reserve before the next await
             async with asyncio.timeout(remaining):
-                retry_function=self.providers.repair_plan if repair else function
+                retry_function=(self.providers.repair_plan_format if format_repair else self.providers.repair_plan) if repair else function
                 retry_args=deepcopy(snapshot) if kind=='plan' else args
-                if repair:result=await self.owned(operation,retry_function,*retry_args,sentence_limit=repair_limit)
+                if repair and format_repair:result=await self.owned(operation,retry_function,*retry_args,code='plan_anchors',detail=contract_detail(failure))
+                elif repair:result=await self.owned(operation,retry_function,*retry_args,sentence_limit=repair_limit)
                 else:result=await self.owned(operation,retry_function,*retry_args)
             if revision != self.revision:
                 raise StaleOperation()
@@ -871,12 +874,17 @@ class VoicePeer:
 
     async def review(self, operation, text):
         try:
-            verdict = await self.owned(operation, self.providers.safe, text, operation.session.context())
+            function=getattr(self.providers,'review',None) or self.providers.safe
+            verdict = await self.owned(operation, function, text, operation.session.context())
         except SafetyFault:
             raise
         except Exception:
             raise SafetyFault('review_unavailable') from None
-        if verdict is not True:
+        if isinstance(verdict,ReviewDecision):
+            if not verdict.safety_allowed:raise SafetyFault('content_blocked')
+            if not verdict.quality_allowed:raise QualityFault()
+        elif verdict is not True:
+            # Legacy injected boolean safety providers remain fail-closed.
             raise SafetyFault('content_blocked' if verdict is False else 'review_unavailable')
 
     def respond(self, text, epoch):
@@ -1061,8 +1069,10 @@ class VoicePeer:
                 @asynccontextmanager
                 async def planned():
                     async def items():
+                        nonlocal stage
                         for sentence in plan['sentences']:
                             if len(plan['sentences']) > 1:
+                                stage='safety'
                                 await self.review(operation, sentence)
                             yield sentence
                     yield items()

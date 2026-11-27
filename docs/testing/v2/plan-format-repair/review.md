@@ -1,0 +1,11 @@
+基于main ffd1dd9b946eece4cae8cd3eeea897467cd2f51e的独立生产修复，不改协议/Android/供应商/模型/预算/部署。原story-forest已由root一次通过不重跑；adventure-sea原首轮plan_anchors/anchor_index_type、0TTS/ACK/state保留baseline.json及原review哈希，child cleanup成功但未完成三轮artifact_valid=false不改写。
+
+选择最小格式白名单：只plan_anchors且detail为anchor_index_type或anchor_index_range。原schema/local validation继续严格，既不转数字/猜索引，也不修补旧draft。不开放anchor键名/数量/容器、JSON语法/FACTS/安全拒绝/guess偷换等其它错误。已存在ModelError固定code/detail才匹配，不看异常message或任意上游文本。索引错误可以请求模型重新生成完整当前PLAN，不能证明本次错误具体是字符串/bool或1-based（原raw PLAN未存）。
+
+VoicePeer.read_request保留原scope guards：仅plan且allow_plan_repair、非private/非shared重规划、无prepared/waiting_wake、原operation.budget身份、无pending/已确认response，原revision/operation ensure；共享read_retry_revision在await前CAS预留，继续原remaining deadline。格式repair与网络/句数repair/FACTS读取竞争同一个机会，不递归、不新增额度；第二失败直接终止。新provider.repair_plan_format只接受两固定标签，重新以同一text/context快照请求plan；server_constraints只添correction=plan_anchors/format_detail，不传坏draft/异常/新秘密。提示已修“仅story_sentences_max限story”，格式修复可适用本获准的非story PLAN，语义/隐私与全部检查仍生效。
+
+返回PLAN经过全部原校验/事实提交位置/整段与逐句safe/TTS/full ACK，坏候选从未提交。取消/新revision/原预算过期无法落地，无ACK最终state不提交。private/shared投影路径不借格式repair扩散私事。没有任何harness循环/自动重跑或额外precheck请求。
+
+证据：offline.log为初批52方法PASS（新format7、原repair10、prefetch14、guess16、private5）。后续补format→sentence共享终止、bool/range确切标签、非story冒险实际修复，added-boundaries.log最终format10PASS；合计55个不同方法已执行，不以重复分母冲淡失败。初次fixture 16PASS/1FAIL（快失败时FACTS预取尚未启动即被取消，实际0不是预期1）保留initial-fixture-failure.log；只在该负控明确等待fact_seen以验证“已开始的FACTS不重做”，断言仍精确1，未改变生产调度。未重复全量/云/长测/设备/部署。
+
+仍需root一次目标adventure-sea真实复验。此修复增加在原预算内的容错，不证明任意模型格式/语义都能恢复，不把原失败清成PASS。外层单组24请求仍足够：每轮初次PLAN+FACTS2、共享一次read至多1、whole+最多4segment safe5，总8*3。N02直接双PLAN候选对照无VoicePeer repair依然最多2，不因新端口自动扩预算。复验工具应独立固定生产source pin，仅读既有1017V2授权，免费优先/额度未知语义不改。

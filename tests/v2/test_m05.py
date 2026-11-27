@@ -30,7 +30,7 @@ class Model:
         self.allowed = True
     async def complete(self, instruction, data, *, schema=None):
         self.requests.append((instruction, data))
-        if '审核下一个' in instruction: result = dict(allow=self.allowed)
+        if '审核下一个' in instruction: result = dict(allow=self.allowed,quality=True)
         elif '提取孩子' in instruction: result = dict(facts=[{k:f[k] for k in ('key','value')} for f in self.extracted])
         elif '只返回JSON {"keep"' in instruction: result = dict(keep=self.keep)
         elif 'completion:' in instruction:

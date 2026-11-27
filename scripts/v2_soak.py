@@ -196,7 +196,7 @@ class BackendTransport:
 class OfflineModel:
     async def complete(self,instruction,data,*,schema=None):
         if '提取孩子' in instruction:return '{"facts":[]}'
-        if '审核下一个' in instruction:return '{"allow":true}'
+        if '审核下一个' in instruction:return '{"allow":true,"quality":true}'
         if '只返回JSON {"keep"' in instruction:return '{"keep":[]}'
         text=data.get('text','');mode='story' if '故事' in text else 'guess' if '谜语' in text else 'adventure' if '探险' in text else 'association' if '水果' in text else 'chat'
         return json.dumps(dict(action='change',mode=mode,rules='合成轮流规则',roles=[],secrets={},sentences=['小猫慢慢出发。'],anchors={}),ensure_ascii=False)
