@@ -24,6 +24,28 @@ class OriginalCaptureTest {
   try {await{a.nativeProof.frames>=640};Thread.sleep(50);h.drain();assertEquals(2,c.wakes.size);assertTrue("first fed sample at start+320/16ms; conservative bridge bound",c.wakes[1]+1+CaptureClockBridge.LIMIT_MS in (origin+320/16-4)..(origin+320/16))}finally{a.close();h.drain()}
  }
 
+ @Test fun slowRearmCannotResetLedgerOrHideNativeLoss(){
+  AudioRecord.reset(3);SherpaWake.detectAfter=1
+  AbsoluteWake.rearmHook={android.os.SystemClock.manualNow+=1399}
+  val h=Handler();val c=VoiceClient();var errors=0
+  AudioRecord.onRead={if(it==2)c.idleSerial++}
+  val cap=Capture(AssetManager(),h,c,{true}){errors++};cap.start()
+  try{await{cap.nativeProof.released};h.drain();assertTrue(errors>0);assertEquals(1,c.wakes.size)}
+  finally{cap.close();h.drain();AbsoluteWake.rearmHook={}}
+ }
+ @Test fun cancelledInFlightRearmKeepsRecorderLeaseUntilWorkerEnds(){
+  AudioRecord.reset(3);SherpaWake.detectAfter=1
+  val entered=CountDownLatch(1);val release=CountDownLatch(1)
+  AbsoluteWake.rearmHook={entered.countDown();release.await()}
+  val h=Handler();val c=VoiceClient();AudioRecord.onRead={if(it==2)c.idleSerial++}
+  val cap=Capture(AssetManager(),h,c,{true}){};cap.start()
+  val second=Capture(AssetManager(),h,VoiceClient(),{true}){}
+  try{assertTrue(entered.await(2,java.util.concurrent.TimeUnit.SECONDS));cap.close()
+   second.start();assertEquals(1,AudioRecord.made.get());assertEquals(0,AudioRecord.active.get())
+   release.countDown();cap.close();h.drain();assertTrue(cap.nativeProof.released);assertTrue(c.wakes.isEmpty())
+  }finally{release.countDown();cap.close();second.close();h.drain();AbsoluteWake.rearmHook={}}
+ }
+
  @Test fun childAndManagementNeverOwnNativeRecorderTogether(){AudioRecord.reset(1);SherpaWake.detectAfter=100
   val h=Handler();val m=ManagementCapture(AssetManager(),h,{true},{},{})
   val c=Capture(AssetManager(),h,VoiceClient(),{true}){}

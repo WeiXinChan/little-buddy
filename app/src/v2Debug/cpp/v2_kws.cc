@@ -55,6 +55,14 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_littlebuddy_v2_V2KwsNative_create
     p->stream=stream.release();p->spotter=spotter.release();return JNI_TRUE;
   } catch(...) {fail(e);return JNI_FALSE;}
 }
+// Retain the ONNX sessions; a genuinely new stream starts its own feature/frame origin at zero.
+extern "C" JNIEXPORT void JNICALL Java_com_littlebuddy_v2_V2KwsNative_newStream(JNIEnv *e,jobject,jobject b) {
+  auto p=context(e,b);if(!p || !p->spotter || !p->stream){fail(e);return;}
+  try {
+    auto stream=p->spotter->CreateStream();if(!stream){fail(e);return;}
+    delete p->stream;p->stream=stream.release();
+  }catch(...){fail(e);}
+}
 struct WaveChunk {
   jshort pcm[320]{};float samples[320]{};
   ~WaveChunk(){for(volatile auto &s:pcm)s=0;for(volatile auto &s:samples)s=0;}

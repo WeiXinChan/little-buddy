@@ -137,7 +137,7 @@ class AndroidRuntimeConfigurationTest {
     }
     @Test fun configurationReservationSurvivesGeneralNoiseWithinTotal256Rows()=Rig().use{r->
         val budget=ConfigurationEventBudget(true)
-        assertEquals(160,(1..1000).count{budget.general()})
+        assertEquals(112,(1..1000).count{budget.general()})
         val admitted=mutableListOf<ConfigurationDiagnostic.Event>()
         ConfigurationDiagnostic.install{if(budget.configuration())admitted.add(it)}
         r.seed(ParentRecord(ByteArray(16),ByteArray(32),connection=r.issued))
@@ -148,8 +148,10 @@ class AndroidRuntimeConfigurationTest {
     }
     @Test fun normalDiagnosticBudgetStillSharesOriginal256Rows() {
         val b=ConfigurationEventBudget(false)
-        repeat(128){assertTrue(b.general());assertTrue(b.configuration())}
+        repeat(104){assertTrue(b.general());assertTrue(b.configuration())}
         assertFalse(b.general());assertFalse(b.configuration())
+        repeat(16){assertTrue(b.critical())};assertFalse(b.critical())
+        repeat(32){assertTrue(b.operation())};assertFalse(b.operation())
     }
     @Test fun missingAesHandleCannotRegenerateKeyOrReplaceCiphertext()=Rig().use{r->
         r.seed(ParentRecord(ByteArray(16),ByteArray(32),connection=r.issued));val bytes=r.file.readBytes();r.key=null

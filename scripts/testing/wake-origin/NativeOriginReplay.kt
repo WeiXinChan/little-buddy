@@ -52,6 +52,25 @@ fun main(args:Array<String>) {
                 println("NATIVE_ORIGIN prefix_s=$prefix fed=$fed native_tail=$real lag_samples=${fed-real} boot_relative_ms=${real/16} response_deadline_delta=${gate.responseDeadline-now} solo=$solos")
             } finally {frame.fill(0);model.close();model.close()}
         }
+        val retained=AbsoluteWake(assets,directory){true};val frame=ShortArray(320)
+        try {
+            retained.initialize()
+            for(cycle in 0..1) {
+                if(cycle>0)retained.rearm()
+                var fed=0L;var hit:Long?=null
+                val prefix=if(cycle==0)0 else 30
+                repeat(prefix*50){check(retained.accept(frame,320)==null);fed+=320}
+                var cursor=0
+                while(hit==null && cursor<pcm.size+32000) {
+                    frame.fill(0);for(i in frame.indices)if(cursor+i<pcm.size)frame[i]=pcm[cursor+i]
+                    try {hit=retained.accept(frame,320)}finally{frame.fill(0)}
+                    fed+=320;cursor+=320
+                }
+                val tail=checkNotNull(hit)
+                check(tail>prefix*16000L && tail<=fed && fed-tail<16000)
+                println("NATIVE_REARM cycle=$cycle prefix_s=$prefix fed=$fed stream_tail=$tail model_owner_reused=true")
+            }
+        }finally{frame.fill(0);retained.close()}
         val stored=File(directory,"v2-kws-1.12.27-model1/tokens.txt")
         val before=stored.readBytes();stored.writeBytes(ByteArray(before.size))
         val corrupt=AbsoluteWake(assets,directory){true}
