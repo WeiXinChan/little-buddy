@@ -1,0 +1,15 @@
+本批依赖未合PR140生产253ad05，独立修复；在服ffd1dd9b不变。原retain-only-change完整ACK首句后SafetyFault/local_help、无final ACK/state提交保留baseline.json与root review哈希。不知道被拒的后句/原始理由，不断言雨点或某条新规则导致该次false；supervisor artifact_valid不能替代语义通过。
+
+离线可证路径：ASSOCIATION_CONTINUITY质量规则进入safe，旧SAFETY只有allow，VoicePeer对任何false转content_blocked→local_help。whole review在任何播放前读Session.context；多句每段再次review，后段会读到前段真实ACK后更新的heard/recent，不是同一冻结快照；当前计划的最终game只在末段ACK后提交。新增实际VoicePeer反例重现whole允许、首段允许并ACK、后段质量拒绝，保留已听前句但不提交无效最终state。原stage在播放后保持synthesis，即使后句review抛错也会这样标；现分段review前明确设safety阶段，不假报供应商TTS错误。
+
+最小明确分离：同一次模型review返回严格双布尔JSON {allow,quality}。allow只判内容安全/隐私/危险/依赖/虚假能力；quality判普通玩法重复、字数、漏答与角色/线索一致。Safety优先：allow=false无论quality真假都SafetyFault并保留原安全求助；allow=true/quality=false为QualityFault，经原scope撤销/取消后普通failure code=voice（无local_help），Android现有普通failed()路径，不导向危险求助。缺字段/类型错/未知结构/超时仍review_unavailable安全fail-closed，不能把未知安全解释为质量。模型语义分类本身仍需真实验证，不以结构类型保证它永不误判。
+
+不删除或跳过whole/逐句审核，不一律allow，不弱化字面安全guard。不增模型调用或自动重规划；质量失败选择有界普通故障反馈，未播不出音/不提交，播后保留实际ACK前缀但绝不补写final ACK/reply_end。故16cap/原45秒/55秒/共享read repair/CAS/单轮deadline全不变。合理不重复接话仍依赖生成/质量判定，当前只是明确分离并防质量降级误求助，不声称正常接龙语义已解决。
+
+兼容边界：真实UnifiedProviders.review使用schemas.REVIEW双字段，DashScopeModel实际HTTP MockTransport证明当前1017/json_object/nonthinking/max_tokens1400及模型可见required双字段；旧单字段JSON不可伪装新分类，fail-closed。VoicePeer对既有注入型仅safe方法仍支持严格bool：True允许、False保守SafetyFault，1/字符串等不是True；没有从旧false推断质量。UnifiedProviders.safe直接兼容入口仍返回bool聚合值，不能用于推断拒绝类别；生产VoicePeer优先调用typed review。UnifiedProviders.answer直接入口使用typed review，质量抛QualityFault，安全仍SafetyFault。review.py属于release.selected通用backend/v2/*.py范围，实际固定提交后包库存需核模块在内。
+
+测试与失败原件：新9个核心方法覆盖whole quality拒绝0音频、后段拒绝只保留已ACK前缀、safety优先/两false不可降级、缺项/非法分类、全部分段门禁、legacy bool、直接safe/answer、实际HTTP/schema/包选择。初次全量因旧OfflineModel单字段触发测试等待首音频无界，明确只中断本次own测试PID，日志initial-full-interrupted.log保留；无服务/长测受影响。更新合法JSON mocks双字段后完整执行650项，8FAIL/1ERROR（包含anchors type/range子例失败事件）原日志full-before-fixture-fixes.log保留，不算PASS。发现漏更新两组合法review fixture，以及已合格式repair的旧单次请求数期望：只对type/range精确允许初次+repair=3总模型/2PLAN，其它detail仍2总/1PLAN，并保持无audio/state/终止；不无差别+1，不改安全负控。negative bypass测试改patch实际review端口，而非已不使用的safe端口，仍证明绕过安全可被检测。
+
+第三次全量启动后收到root停止广跑指导，随即只中断该own测试PID，third-run-stopped-on-guidance.log保留，绝不计完整。最终只跑visible_model_contracts/facts_safety_help/review_separation/M10/safety_help，47项PASS/0SKIP（final-targeted.log）。未删断言、未skip、未变生产校验为迎合fixture；不声称650全绿。temporary-preflight.json仅恢复本轮测试改动，不提交。脚本OfflineModel仅更新固定合成review返回双字段，未执行长测。
+
+后续固定合成诊断工具应pin本提交后再生成。只这一个新建retain合成Session，记录模型候选、whole/segment各实际context、allow/quality固定分类（无自由异常/理由正文）；旧单字段结果只记invalid/legacy，不补猜旧原因。可留作root一次修复验收，不先随机额外云跑诊断。root随后判实际有效接话/不重复/最终ACK；若质量失败普通结束仍非语义PASS。author0云/手机/长测/部署，memory继续暂停。

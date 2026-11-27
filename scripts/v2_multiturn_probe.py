@@ -83,7 +83,7 @@ class SpeechMeter:
 
 FAILURE_CODES=frozenset({'voice','timeout','network','quota','safety'})
 FAILURE_STAGES=frozenset({'bind','input_policy','plan','facts','fact_commit','safety','synthesis'})
-FAILURE_KINDS=frozenset({'WireError','VoiceFault','TimeoutError','ModelError','SafetyFault','ProbeLimit','CancelledError'})
+FAILURE_KINDS=frozenset({'WireError','VoiceFault','TimeoutError','ModelError','SafetyFault','QualityFault','ProbeLimit','CancelledError'})
 
 def peer_failure(peer):
     failure=getattr(peer,'last_failure',None)

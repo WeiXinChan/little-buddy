@@ -33,7 +33,7 @@ class Model:
             if self.hook:self.hook()
             if self.fault:raise self.fault
             return self.raw
-        if 'allow' in props:return '{"allow":true}'
+        if 'allow' in props:return '{"allow":true,"quality":true}'
         value=plan();value.update(mode=self.mode,sentences=['先不要跳，马上呼叫能安全帮助你的大人。'] if self.mode=='chat' else ['纸龙从积木塔飞向月亮。'])
         return json.dumps(value,ensure_ascii=False)
 async def exercise(model,*,text=TEXT,private=False,providers_hook=None):

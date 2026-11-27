@@ -1,0 +1,30 @@
+{
+  "source": "253ad055a87ca21103e3c95b729874aaeaa7ce28",
+  "status": "FAIL_PARTIAL_GAME_REPLY_WITH_LOCAL_HELP_NO_FINAL_ACK",
+  "result": "retain-only-change-253ad05-once/result.json",
+  "findings": [
+    "first turn wind-kite valid and ACKed",
+    "second turn only 雨点会飞吗？我想想。 fully ACKed; subsequent synthesis SafetyFault",
+    "no final ACK or new rules commit",
+    "reject candidate and provider review rationale were not retained; cause not proven"
+  ],
+  "local_help": [
+    {
+      "prompt_id": "safety_support_v1",
+      "reason": "content_blocked",
+      "protocol_emitted": true,
+      "device_playback_confirmed": false
+    }
+  ],
+  "supervisor_valid_is_not_semantic_pass": true,
+  "full_device_acceptance": false,
+  "usage": {
+    "requests": 8,
+    "failures": 0,
+    "prompt_tokens": 21425,
+    "completion_tokens": 265
+  },
+  "quota_live_verified": false,
+  "cleanup_confirmed": true,
+  "review_sha256": "86e9f2272178e0b76a400eee44f48226923e5e092329a50a6982b48d4ce6a566"
+}
