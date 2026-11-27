@@ -55,7 +55,7 @@ class RC9Preparation(unittest.TestCase):
      warnings.simplefilter('ignore',UserWarning);z.writestr(duplicate,b'DUPLICATE UNIT FIXTURE')
   with patch.object(verify,'__file__',str(self.root/'scripts/verify-v2-release.py')):return verify.inspect(archive,diagnostics,private)
  def test_strict_rc9_identity_with_corrected_resources(self):
-  meta=self.inspect();self.assertEqual((26,'2.0.0-rc9.local1','com.littlebuddy.sim.v2'),(meta['version_code'],meta['version_name'],meta['application_id']))
+  meta=self.inspect();self.assertEqual((26,'2.0.0-rc9.nopin1','com.littlebuddy.sim.v2'),(meta['version_code'],meta['version_name'],meta['application_id']))
   self.assertTrue(meta['build_id'].startswith('v2-26-'));self.assertEqual(gen.RC9_RESOURCES_MANIFEST,meta['resources_manifest_sha256'])
  def test_generator_refuses_old_or_mislabeled_identity(self):
   p=self.root/'app/v2-release.json';original=json.loads(p.read_text())
@@ -147,7 +147,7 @@ class RC9Preparation(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'candidate_config_mismatch'):self.inspect(dict(meta,source_base='f'*40))
  def test_private_candidate_requires_explicit_mode_and_has_rc9_identity(self):
   meta=self.generate(private=True,diagnostics=True)
-  self.assertEqual((26,'2.0.0-rc9.local1.integrated1.device1'),(meta['version_code'],meta['version_name']))
+  self.assertEqual((26,'2.0.0-rc9.nopin1.integrated1.device1'),(meta['version_code'],meta['version_name']))
   self.assertEqual('private_registered_device',self.inspect(meta,private=True,diagnostics=True,payload=True)['distribution'])
   with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(meta,payload=True)
  def test_missing_or_unexpected_private_payload_refused(self):
@@ -157,7 +157,7 @@ class RC9Preparation(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(public,payload=True)
  def test_diagnostic_flag_does_not_resurrect_obsolete_rc8_packaging(self):
   meta=self.generate(diagnostics=True)
-  self.assertEqual('2.0.0-rc9.local1',meta['version_name'])
+  self.assertEqual('2.0.0-rc9.nopin1',meta['version_name'])
   self.assertTrue(self.inspect(meta,diagnostics=True)['diagnostics_enabled'])
   with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(meta)
  def test_private_mode_cannot_bypass_exact_source_inventory(self):

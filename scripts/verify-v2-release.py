@@ -40,7 +40,7 @@ def inspect(apk, pin_init_diagnostics=False, private_device_preset=False):
             meta['private_device_preset'] != private_device_preset or meta['diagnostics_enabled'] != pin_init_diagnostics or
             ('assets/v2-device-preset.bin' in names) != private_device_preset):
             raise ValueError('explicit_build_mode_mismatch')
-        expected_name='2.0.0-rc9.local1' + ('.integrated1.device1' if private_device_preset else '')
+        expected_name='2.0.0-rc9.nopin1' + ('.integrated1.device1' if private_device_preset else '')
         if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=26 or meta['version_name']!=expected_name:
             raise ValueError('candidate_version_mismatch')
         if meta['resources_manifest_sha256']!=RC9_RESOURCES_MANIFEST:

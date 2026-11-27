@@ -1,7 +1,7 @@
 {
   "format": 1,
   "version_code": 26,
-  "version_name": "2.0.0-rc9.local1",
+  "version_name": "2.0.0-rc9.nopin1",
   "application_id": "com.littlebuddy.sim.v2",
   "protocol_contract": "v2-voice2-safety1-images2-volume1-management1-end1",
   "source_base": "8849ecfeaef2d1d51788175c8f89e170fcded581"
