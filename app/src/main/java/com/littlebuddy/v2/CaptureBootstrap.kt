@@ -6,14 +6,16 @@ package com.littlebuddy.v2
 internal class CaptureBootstrap(private val ledger:NativeReadLedger) {
     private val closed=java.util.concurrent.atomic.AtomicBoolean(false)
     private val pcm=ShortArray(NativeReadLedger.STARTUP_SAMPLES)
+    private val readScratch=ShortArray(320) // Allocate both buffers before native start.
     private var size=0
     private var cursor=0
     private var admitted=false
+    var cachedSamplesTotal=0;private set
     var replayPosition=0L;private set
     val pending get()=!closed.get() && admitted && cursor<size
     init {ledger.beginStartup()}
     fun prepare(read:(ShortArray)->Int,allowed:()->Boolean,pause:()->Unit) {
-        val frame=ShortArray(320)
+        val frame=readScratch
         fun valid(){check(!closed.get() && allowed()){"capture startup cancelled"}}
         try {
             while(true) {
@@ -24,7 +26,7 @@ internal class CaptureBootstrap(private val ledger:NativeReadLedger) {
                     valid();ledger.stageRead(n);valid()
                     synchronized(pcm){
                         valid();check(size+n<=pcm.size){"capture startup cache exhausted"}
-                        frame.copyInto(pcm,size,0,n);size+=n
+                        frame.copyInto(pcm,size,0,n);size+=n;cachedSamplesTotal+=n
                     };n
                 }finally{frame.fill(0)}
                 if(count==0){pause();valid()}

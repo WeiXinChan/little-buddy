@@ -56,18 +56,28 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
     private fun guard(valid:Boolean,reason:CaptureClockReason) {
         if(!valid)throw CaptureClockFailure(reason,evidence())
     }
+    private var startupOrigin=monoOrigin
+    private var nativeStartArmed=false
     private var starting=false
     private var startupPairs=0
     val startupAnchored get()=starting && startupPairs>=2
     fun beginStartup() {check(!starting && observed==null && readSamples==0L);clock.beginStartup();starting=true}
-    private fun softwareUpper(time:Long)=((time-monoOrigin+1)*MAX_RATE+999)/1000
+    /** One boundary BEFORE native start, after allocations/admission. Never reset after JNI.
+     * The whole unknown start/JNI interval still counts as potentially producing samples. */
+    fun armNativeStart():Long {
+        check(starting && !nativeStartArmed && observed==null && readSamples==0L)
+        val time=mono();guard(time>=checkedAt,CaptureClockReason.CLOCK_REGRESSED)
+        nativeStartArmed=true;startupOrigin=time;checkedAt=time;evidenceTime=time
+        return time
+    }
+    private fun softwareUpper(time:Long)=((time-startupOrigin+1)*MAX_RATE+999)/1000
     private fun softwareRoom(time:Long):Long {
-        guard(time-monoOrigin<STARTUP_LIMIT_MS,CaptureClockReason.STARTUP_DEADLINE)
+        guard(time-startupOrigin<STARTUP_LIMIT_MS,CaptureClockReason.STARTUP_DEADLINE)
         val left=capacity-reserve-maxOf(0,softwareUpper(time)-readSamples)
         guard(left>0,CaptureClockReason.STARTUP_NATIVE_CONTINUITY_EXHAUSTED)
         val room=left*1000/MAX_RATE
         guard(room>0,CaptureClockReason.STARTUP_NATIVE_ROOM_EXHAUSTED)
-        return minOf(room,STARTUP_LIMIT_MS-(time-monoOrigin))
+        return minOf(room,STARTUP_LIMIT_MS-(time-startupOrigin))
     }
     fun stageRead(count:Int) {
         require(count>=0);check(starting)
@@ -121,7 +131,7 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
             if(starting) {
                 guard(candidate.frames<=softwareUpper(time),CaptureClockReason.STARTUP_COUNTER_OUTSIDE_BOUND)
                 val origin=clock.earliestNs-Math.floorDiv(candidate.frames*1_000_000_000+MIN_RATE-1,MIN_RATE)
-                guard(origin>=monoOrigin*1_000_000-1_000_000,CaptureClockReason.STARTUP_ORIGIN_UNPROVEN)
+                guard(origin>=startupOrigin*1_000_000-1_000_000,CaptureClockReason.STARTUP_ORIGIN_UNPROVEN)
                 if(candidate.frames>0) {
                     if(old==null || old.frames==0L)startupPairs=1
                     else if(candidate.frames>old.frames)startupPairs++

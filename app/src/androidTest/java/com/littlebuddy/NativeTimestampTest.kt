@@ -174,7 +174,7 @@ internal class ProbeControl(private val lease:RecorderLease,private val meta:Pro
     private var native:AudioRecord?=null
     @Volatile private var stopper:Thread?=null
     fun install(value:AudioRecord){synchronized(lock){native=value}}
-    fun start(){synchronized(lock){check(!cancelled.get());checkNotNull(native).startRecording()}}
+    fun start(beforeNative:()->Unit={}){synchronized(lock){check(!cancelled.get());beforeNative();checkNotNull(native).startRecording()}}
     fun cancel(){
         startup.cancel()
         if(!stopOnce.compareAndSet(false,true) || !lease.beginStop())return
@@ -311,7 +311,7 @@ class NativeTimestampTest {
                     val prefix=CaptureBootstrap(ledger)
                     cancellation.installStartup(prefix)
                     meta.phase="native_start";meta.startCallMs=SystemClock.elapsedRealtime()
-                    cancellation.start();meta.startDurationMs=SystemClock.elapsedRealtime()-meta.startCallMs
+                    cancellation.start{ledger.armNativeStart()};meta.startDurationMs=SystemClock.elapsedRealtime()-meta.startCallMs
                     if(native.recordingState!=AudioRecord.RECORDSTATE_RECORDING)dependency("DEPENDENCY_NATIVE_START_RESTRICTED");meta.started=true
                     meta.phase="timestamp_startup"
                     try {
