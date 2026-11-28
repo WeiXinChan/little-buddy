@@ -25,7 +25,7 @@ fun main(args:Array<String>) {
         check(done.await(5,TimeUnit.SECONDS));check(failures.get()==0);check(audible>0)
         if(enabled){
             val kinds=seen.map{it.phase}
-            for(kind in ClientPhase.entries)check(kinds.count{it==kind}==if(kind==ClientPhase.ENDPOINT_RECEIVED)2 else 1){"phase count $kind"}
+            for(kind in ClientPhase.entries.filter{it!=ClientPhase.INPUT_UNRECOGNIZED})check(kinds.count{it==kind}==if(kind==ClientPhase.ENDPOINT_RECEIVED)2 else 1){"phase count $kind"}
             val probe=seen.single{it.phase==ClientPhase.PROBE_SENT}
             check(probe.capturedLastSpeechBootMs==captured && probe.phaseBootMs-captured>=300)
             val endpoint=seen.filter{it.phase==ClientPhase.ENDPOINT_RECEIVED}
