@@ -42,6 +42,7 @@ async def run():
   if os.environ.get('UNKNOWN_CASE'):
    assert os.environ['UNKNOWN_CASE'] in modes;modes=[os.environ['UNKNOWN_CASE']]
   for mode in modes:
+   peer_errors=[];peer_facts=[]
    async def peer(ws):
     revision=0;epoch=0;stream=0;prepared=False;resolved=False;solo_ended=False;old_acks=0
     async def send(kind,**kw):
@@ -86,9 +87,10 @@ async def run():
       elif kind=='resume_noise':await send('thinking_wait')
     except Exception as e:
      from websockets.exceptions import ConnectionClosed
-     if not isinstance(e,ConnectionClosed):raise
+     if not isinstance(e,ConnectionClosed):peer_errors.append(type(e).__name__);raise
     finally:
-     if mode in {'unknown','unknown_complete','empty'}:assert old_acks==0,'old stream ACK after terminal unknown'
+     peer_facts.append(dict(old_acks_after_resolution=old_acks))
+     if mode in {'unknown','unknown_complete','empty'} and old_acks!=0:peer_errors.append('OLD_STREAM_ACK')
    async with serve(peer,'127.0.0.1',0,ssl=tls) as server:
     port=server.sockets[0].getsockname()[1]
     process=await asyncio.create_subprocess_exec('java','-Xmx256m','-Djavax.net.ssl.trustStore='+str(out/'trust.p12'),'-Djavax.net.ssl.trustStorePassword=fixture-only','-cp',os.pathsep.join([str(out/'classes'),*runtime]),'com.littlebuddy.v2.RealUnknownClientKt',f'wss://localhost:{port}/v2/voice',mode)
@@ -96,5 +98,7 @@ async def run():
     finally:
      if process.returncode is None:
       process.kill();await process.wait()
+   assert not peer_errors and len(peer_facts)==1,(mode,'peer/ACK proof failed')
+   print('UNKNOWN_PEER mode='+mode+' old_acks_after_resolution='+str(peer_facts[0]['old_acks_after_resolution']),flush=True)
  print('UNKNOWN_TLS complete; controlled BOOT jumps retain production15s; no provider/phone/model',flush=True)
 asyncio.run(run())
