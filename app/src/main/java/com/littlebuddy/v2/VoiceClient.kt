@@ -48,6 +48,9 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private fun checkImportDeadline(){importWakeBoot?.let{check(SystemClock.elapsedRealtime()<it+15000)}}
     fun nativeProof() = player.nativeProof()
     private var controlQuarantined=false
+    var endedByExpiry=false;private set
+    val idleForCaptureRestart get()=active && compatible && !isAwake && !childBlocked && !managementPending &&
+        managementState.mediaAllowed && !outputBusy && !player.suspended && player.binding==null && !quarantined && permitted()
     private var trustedVoiceFailure=false
     private var serverScope:ManagementScope?=null
     private var deliveringSafety=false // handler-owned: an accepted safety event must still show text if stop fails
@@ -192,7 +195,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 !address.contains('@') && !address.contains('?') && !address.contains('#'))
         require(token.matches(Regex("[a-zA-Z0-9]{32,256}")))
         PinDiagnostic.event(PinDiagnostic.Stage.WSS,PinDiagnostic.Reason.BEGIN)
-        active = true
+        active = true;endedByExpiry=false
         epoch = 0; sequence = 0; helpScope.clear(); serverScope=null
         val request = Request.Builder().url(address).header("Authorization", "Bearer $token").build()
         socket = http.newWebSocket(request, object : WebSocketListener() {
@@ -426,6 +429,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.SESSION_END,diagnosticScope,
                     source=if(event.optString("reason")=="session_expired")PinDiagnostic.FailSource.EXPIRED else PinDiagnostic.FailSource.NONE,
                     wire=PinDiagnostic.WireKind.SESSION_END,point=PinDiagnostic.WirePoint.DISPATCH))
+                endedByExpiry=event.optString("reason")=="session_expired"
                 close(); sessionEnded()
             }
             "management" -> {

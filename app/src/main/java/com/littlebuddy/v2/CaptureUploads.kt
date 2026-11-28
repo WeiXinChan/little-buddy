@@ -12,7 +12,7 @@ internal class CaptureUploads(private val post:(Runnable)->Boolean, private val 
     private var cancelled=false
     private val drain=Runnable { drain() }
     @Synchronized fun nativeRoom(bytes:Int) {
-        require(bytes in 6400..32000);maxAgeMs=1000L+bytes/32
+        require(bytes in 6400..32000);maxAgeMs=minOf(NativeCaptureBuffer.UPLOAD_MAX_AGE_MS,1000L+bytes/32)
     }
     /** Wait before another native read, bounded below the actual configured native buffer.
      * A stalled owner cannot silently overwrite a full ring or retain unbounded PCM. */

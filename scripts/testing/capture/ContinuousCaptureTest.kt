@@ -38,7 +38,8 @@ class ContinuousCaptureTest {
 
  @Test fun delayedStartUsesHardwareCountAndRejectsBufferFilledInsideBlockedStart(){
   for(phase in 0..3)continuous({0},configure={
-   when(phase){0->AudioRecord.beforeStart={Thread.sleep(60)};1->AudioRecord.afterStart={Thread.sleep(300)};2->AudioRecord.timestampDelayMs=80;else->AudioRecord.beforeStart={Thread.sleep(300)}}
+   // Keep the original3200-frame physical negative; new larger storage has separate loss controls.
+   when(phase){0->AudioRecord.beforeStart={Thread.sleep(60)};1->{AudioRecord.actualFramesOverride=3200;AudioRecord.afterStart={Thread.sleep(300)}};2->AudioRecord.timestampDelayMs=80;else->{AudioRecord.actualFramesOverride=3200;AudioRecord.beforeStart={Thread.sleep(300)}}}
   }){cap,h,client,failures->
    val end=System.nanoTime()+2_000_000_000
    if(phase!=1 && phase!=3){

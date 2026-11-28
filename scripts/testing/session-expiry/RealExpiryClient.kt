@@ -25,6 +25,7 @@ private fun runExpiry(args:Array<String>) {
         val terminal=diagnostics.filter{it.stage==PinDiagnostic.RuntimeStage.SESSION_END}
         if(mode=="timeout" || mode=="management" || mode=="pump_endpoint") {
             check(terminal.isEmpty()) {"rejected event recorded normal terminal"}
+            check(!client.endedByExpiry)
             check(ended==0 && failed==1){"terminal/failure counts differ"}
             val expected=if(mode=="timeout")PinDiagnostic.FailSource.SERVER_TIMEOUT else if(mode=="pump_endpoint")PinDiagnostic.FailSource.PLAYBACK_PUMP else PinDiagnostic.FailSource.MANAGEMENT
             check(diagnostics.any{it.stage==PinDiagnostic.RuntimeStage.CLIENT_FAIL && it.source==expected})
@@ -37,6 +38,7 @@ private fun runExpiry(args:Array<String>) {
             check(terminal.size==1 && terminal.single().wire==PinDiagnostic.WireKind.SESSION_END &&
                 terminal.single().point==PinDiagnostic.WirePoint.DISPATCH)
             check(terminal.single().source==if(mode=="conversation")PinDiagnostic.FailSource.NONE else PinDiagnostic.FailSource.EXPIRED)
+            check(client.endedByExpiry==(mode!="conversation"))
             check(ended==1 && failed==0){"close/onClosed/duplicate changed terminal outcome"}
             if(mode=="stale")check(barriers==1){"stale frames ended before wire barrier"}
         }

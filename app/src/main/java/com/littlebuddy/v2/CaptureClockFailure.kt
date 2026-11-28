@@ -44,7 +44,10 @@ internal enum class CaptureTimestampResult { NOT_CALLED, IN_FLIGHT, SUCCESS, UNA
 internal data class CaptureClockContext(val activity:Long=0,val transport:Long=0,val capture:Long=0,
     val step:CaptureReadStep=CaptureReadStep.NONE,val cancelled:Boolean=false,val allowed:Boolean=false,
     val stopRequested:Boolean=false,val nativeReleased:Boolean=false,val timestampResult:CaptureTimestampResult=CaptureTimestampResult.NOT_CALLED,
-    val lastOperation:Int=0,val operationBeforeNs:Long=0,val operationAfterNs:Long=0)
+    val lastOperation:Int=0,val operationBeforeNs:Long=0,val operationAfterNs:Long=0,
+    val nativeStartBeforeMs:Long=-1,val nativeStartAfterMs:Long=-1,
+    val nativeReadCalls:Long=0,val nativeReturnedSamples:Long=0,val lastNativeReadCount:Int=-1,
+    val prefixCachedSamplesTotal:Int=0,val requestedNativeFrames:Int=0,val actualNativeFrames:Int=0)
 internal class CaptureClockFailure(val reason:CaptureClockReason,
     val evidence:CaptureClockEvidence=CaptureClockEvidence(),val longWitness:CaptureLongWitness?=null,val context:CaptureClockContext?=null):IllegalStateException(reason.legacy)
 internal fun clockCheck(valid:Boolean, reason:CaptureClockReason) {
