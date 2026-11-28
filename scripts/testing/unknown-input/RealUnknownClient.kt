@@ -75,7 +75,7 @@ fun main(args:Array<String>) {
     },{},{_,_->},failed={failed++;done.countDown()},requiredContract=ReleaseCompatibility.CONTRACT,
         diagnosticScope=PinDiagnostic.Scope(10,20,0),permitted={allowed},
         playbackSettings=com.littlebuddy.v2.parent.ParentPlaybackSettings(35,100,180),
-        clarification={if(mode=="asset_late","track_late")SystemClock.advance(15001);ShortArray(48000){(it%31).toShort()}},
+        clarification={if(mode=="asset_late")SystemClock.advance(15001);ShortArray(48000){(it%31).toShort()}},
         ready={client.wake();SystemClock.advance(600)},
         completed={_,_->if(!firstRequest){firstRequest=true;newSpeech()}else{ordinaryComplete=true}})
     owner.post{client.connect(args[0],"A".repeat(32))}
