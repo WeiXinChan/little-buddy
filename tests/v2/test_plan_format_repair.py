@@ -21,6 +21,10 @@ class FormatModel(fixture.Model):
                 self.entered.set()
                 if self.release:await self.release.wait()
             value=fixture.plan();value.update(mode='story',rules='每人一句',anchors={'plot.current':'INVALID_SECRET_CANARY'} if self.always_bad or self.calls==1 or self.network else {'plot.current':0},sentences=['小船顺着河流慢慢前进。'])
+            if correction=='plan_anchors':
+                value.pop('anchors')
+                value['sentences']=[dict(text=t,anchors=[False] if self.always_bad else ['plot.current'] if i==0 else [])
+                    for i,t in enumerate(value['sentences'])]
             return json.dumps(value,ensure_ascii=False)
         return await super().complete(instruction,data,schema=schema)
 
@@ -86,7 +90,7 @@ class Format(unittest.IsolatedAsyncioTestCase):
             async def complete(self,instruction,data,*,schema=None):
                 raw=await super().complete(instruction,data,schema=schema)
                 if '严格字段' in instruction and self.calls==2:
-                    value=json.loads(raw);value['sentences']=['合成第一句。','合成第二句。'];return json.dumps(value,ensure_ascii=False)
+                    value=json.loads(raw);value['sentences']=[dict(text='合成第一句。',anchors=['plot.current']),dict(text='合成第二句。',anchors=[])];return json.dumps(value,ensure_ascii=False)
                 return raw
         m=SecondCount();self.make(m);await (await self.start())
         self.assertEqual(m.calls,2);self.assertFalse(self.peer.session.public)

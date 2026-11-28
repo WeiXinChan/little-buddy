@@ -146,7 +146,8 @@ class FailureTLS(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(rows),1)
                 self.assertEqual(t.peer.session.game,before_game);self.assertEqual(t.peer.session.public,before_public)
                 self.assertFalse(t.peer.session.pending)
-                expected={'plan':('plan','ModelError','plan_anchors'),'facts':('facts','ModelError','fact_source_mismatch'),
+                # The fixture repeats the legacy numeric DTO despite the inline repair schema.
+                expected={'plan':('plan','ModelError','plan_structure'),'facts':('facts','ModelError','fact_source_mismatch'),
                           'review':('safety','SafetyFault','unknown'),'tts':('synthesis','RuntimeError','unknown')}
                 self.assertEqual(tuple(rows[0][k] for k in ('stage','kind','contract')),expected[injection])
                 self.assertNotIn('stage',failure);self.assertNotIn('contract',failure)

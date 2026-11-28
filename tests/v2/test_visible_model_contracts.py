@@ -60,7 +60,10 @@ class Contracts(unittest.IsolatedAsyncioTestCase):
                 p,calls=await self.make(value,wait_facts=True);seen=[]
                 case={'id':'anchors-fixture','turns':[{'label':str(i),'input':'你出动物谜语我猜，不要先说答案。','expect':{'mode':'guess','terms':[]}} for i in range(3)]}
                 report=await run_case(case,p,observer=lambda label,s:seen.append(s))
-                self.assertEqual(report['peer_failure'],{'stage':'plan','kind':'ModelError','contract':'plan_anchors','detail':detail})
+                repairable=detail in ('anchor_index_type','anchor_index_range')
+                expected={'stage':'plan','kind':'ModelError','contract':'plan_structure'} if repairable else {'stage':'plan','kind':'ModelError','contract':'plan_anchors','detail':detail}
+                self.assertEqual(report['peer_failure'],expected)
+                if repairable:self.assertEqual(report['turns'][0]['plan_format_repair'],dict(initial_detail=detail,encoding='sentence_labels',validated=False))
                 self.assertEqual(report['tts_requests'],0)
                 repairable=detail in ('anchor_index_type','anchor_index_range')
                 self.assertEqual(report['model_requests'],3 if repairable else 2)
