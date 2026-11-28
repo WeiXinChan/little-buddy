@@ -91,7 +91,7 @@ class Asset(unittest.IsolatedAsyncioTestCase):
     def test_smoke_does_not_load_credentials_or_call_generate(self):
         # Actual wrapper counterpart executes in a separate real systemd cgroup.
         with tempfile.TemporaryDirectory() as temp:
-            out=Path(temp)/'run';out.mkdir(mode=0o700)
+            out=Path(temp)/'run';out.mkdir(mode=0o700);tool.save(out/'purpose.json',dict(purpose='clarification',tool_source='fixed'))
             with patch.object(tool,'source_guard'),patch.object(tool,'supervisor_guard',return_value={'build_cgroup':True}),patch.object(tool,'parent_guard'),patch.object(tool,'load_config',side_effect=AssertionError('no config')),patch.object(tool,'generate',side_effect=AssertionError('no provider')):
                 self.assertEqual(tool.main(['--admission-smoke','--worker','--tool-source','fixed','--output',str(out),'--parent-pid',str(os.getppid()),'--parent-start','fixed']),0)
             value=json.loads((out/'admission.json').read_text());self.assertEqual(value['calls'],dict(tts=0,asr=0,llm=0,image=0))
@@ -113,3 +113,24 @@ class Asset(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.returncode,0);return result
             with patch.object(tool,'ROOT',root),patch.object(tool.subprocess,'run',git_object):
                 with self.assertRaises(tool.GuardError):tool.source_guard(tool.SOURCE)
+
+class Purpose(unittest.TestCase):
+    def test_default_and_service_are_distinct_fixed_material(self):
+        self.assertEqual(tool.plan()['text'],tool.TEXT)
+        self.assertEqual(tool.plan('service-failure')['text'],'刚才没能回答，你可以再叫我一次。')
+        self.assertEqual(tool.plan('service-failure')['filename'],'service-failure.pcm')
+        with self.assertRaises(tool.GuardError):tool.plan('other')
+    def test_service_cannot_synthesize_old_or_arbitrary_text(self):
+        s=tool.AssetSpeech(None,key='SYNTHETIC',workspace='synthetic',region='cn-beijing',asr='unused',llm='unused',tts=tool.MODEL,voice=tool.VOICE,purpose='service-failure')
+        for text in [tool.TEXT,'arbitrary']:
+            with self.assertRaises(tool.GuardError):s.synthesize(text,24000)
+        self.assertEqual(s.attempts,0)
+    def test_worker_rejects_cross_purpose_before_generate(self):
+        with tempfile.TemporaryDirectory() as t:
+            out=Path(t);tool.save(out/'purpose.json',dict(purpose='clarification',tool_source='fixed'))
+            with patch.object(tool,'source_guard'),patch.object(tool,'supervisor_guard'),patch.object(tool,'generate',side_effect=AssertionError('no call')):
+                with self.assertRaises(tool.GuardError):tool.main(['--admission-smoke','--worker','--tool-source','fixed','--purpose','service-failure','--output',t])
+    def test_parent_validates_expected_purpose(self):
+        with tempfile.TemporaryDirectory() as t:
+            out=Path(t);tool.save(out/'result.json',dict(tool.plan('clarification'),tool_source='fixed'))
+            self.assertFalse(tool.validate_result(out,'fixed','service-failure')[0])
