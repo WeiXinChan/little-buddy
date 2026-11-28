@@ -14,8 +14,8 @@ class NoTextModel(UnifiedProviders):
     def synthesize(self,text,rate):self.spoken.append(text);return super().synthesize(text,rate)
 
 class AnimalCards(unittest.IsolatedAsyncioTestCase):
-    def peer(self):
-        wire=Socket();p=VoicePeer(wire,NoTextModel(),CompanionPolicy(),clock=lambda:100,animal_cards_enabled=True);wire.peer=p
+    def peer(self,wide=False):
+        wire=Socket();p=VoicePeer(wire,NoTextModel(),CompanionPolicy(),clock=lambda:100,animal_cards_enabled=True,wide_audio_window=wide);wire.peer=p
         return p
 
     async def turn(self,p,text,ack=True):
@@ -29,9 +29,9 @@ class AnimalCards(unittest.IsolatedAsyncioTestCase):
         else:await asyncio.wait_for(p.generation,1)
 
     async def test_three_actual_peer_turns_repeat_without_any_model_verdict(self):
-        for _ in range(5):
+        for i in range(5):
             for guess,feedback in [('兔子',CARDS[0].correct),('大象',CARDS[0].another_clue)]:
-                p=self.peer()
+                p=self.peer(wide=bool(i%2))
                 for text in (OPEN,guess,NEW):await self.turn(p,text)
                 self.assertEqual(p.providers.spoken,[CARDS[0].clue,feedback,CARDS[1].clue]);self.assertFalse(p.providers.text_calls)
                 self.assertEqual(list(p.session.public),p.providers.spoken);self.assertEqual(p.session.secrets,{'answer':'大象'})
