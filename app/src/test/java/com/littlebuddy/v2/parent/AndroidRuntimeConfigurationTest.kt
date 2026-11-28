@@ -137,7 +137,8 @@ class AndroidRuntimeConfigurationTest {
     }
     @Test fun configurationReservationSurvivesGeneralNoiseWithinTotal256Rows()=Rig().use{r->
         val budget=ConfigurationEventBudget(true)
-        assertEquals(64,(1..1000).count{budget.general()})
+        assertEquals(62,(1..1000).count{budget.general()})
+        assertEquals(2,(1..1000).count{budget.failure()})
         val admitted=mutableListOf<ConfigurationDiagnostic.Event>()
         ConfigurationDiagnostic.install{if(budget.configuration())admitted.add(it)}
         r.seed(ParentRecord(ByteArray(16),ByteArray(32),connection=r.issued))
