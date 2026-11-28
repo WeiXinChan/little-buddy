@@ -3,10 +3,11 @@
 Requires matching unchanged production dependencies from normal compileV2DebugKotlin (UNKNOWN_INPUT_CLASSES optional). All changed classes are compiled from current source. No device/provider/production credentials.
 Run under scripts/with-build-lock. Temporary self-signed key never enters app resources.
 """
-import asyncio,os,ssl,subprocess,tempfile,json,hashlib
+import asyncio,os,ssl,subprocess,tempfile,json,hashlib,sys
 from pathlib import Path
 from websockets.asyncio.server import serve
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
 CACHE=Path.home()/'.gradle/caches/modules-2/files-2.1'
 def jar(g,n,v):return str(next((CACHE/g/n/v).glob('*/*.jar')))
 async def run():
@@ -16,8 +17,9 @@ async def run():
  runtime=[str(main),compiler[1],jar('com.squareup.okhttp3','okhttp','4.12.0'),jar('com.squareup.okio','okio-jvm','3.6.0'),jar('com.google.code.gson','gson','2.11.0'),os.environ['ANDROID_JAR']]
  # Compile the actual current VoiceClient source against the same Kotlin JSON ports.
  # Other production dependencies come from the matching normal Android compile.
+ client_source=Path(os.environ.get('RECOVERY_VOICECLIENT_SOURCE',str(ROOT/'app/src/main/java/com/littlebuddy/v2/VoiceClient.kt'))).resolve()
  print('WORKTREE_RECOVERY_DRIVER_SHA256',hashlib.sha256((ROOT/'scripts/testing/recovery/RealRecoveryClient.kt').read_bytes()).hexdigest(),flush=True)
- print('WORKTREE_VOICECLIENT_SOURCE_SHA256',hashlib.sha256((ROOT/'app/src/main/java/com/littlebuddy/v2/VoiceClient.kt').read_bytes()).hexdigest(),flush=True)
+ print('WORKTREE_VOICECLIENT_SOURCE_SHA256',hashlib.sha256(client_source.read_bytes()).hexdigest(),flush=True)
  with tempfile.TemporaryDirectory(dir=ROOT,prefix='expiry-tls-') as folder:
   out=Path(folder);ports=ROOT/'scripts/testing/media'
   owner_port=out/'OwnerPorts.kt';owner_port.write_text((ports/'OwnerPorts.kt').read_text().replace('executor.execute(r);return true','if(executor.isShutdown)return false;return try{executor.execute{try{r.run()}catch(t:Throwable){t.printStackTrace();throw t}};true}catch(_:RejectedExecutionException){false}'))
@@ -25,7 +27,7 @@ async def run():
   owner_port.write_text(text)
   media=out/'MediaPorts.kt';media.write_text((ports/'MediaPorts.kt').read_text().replace('val instances=','@JvmField var releaseFails=false;val instances=').replace('fun release(){state=0}','fun release(){if(releaseFails)error("fixture release");state=0}').replace('fun addOnRoutingChangedListener(l:AudioRouting.OnRoutingChangedListener,h:android.os.Handler){}','var savedRoute:AudioRouting.OnRoutingChangedListener?=null;fun addOnRoutingChangedListener(l:AudioRouting.OnRoutingChangedListener,h:android.os.Handler){savedRoute=l}').replace('override val routedDevice=AudioDeviceInfo()','override var routedDevice=AudioDeviceInfo()').replace('val instances=','@JvmField var advanceOnBuild=false;val instances=').replace('fun build()=AudioTrack()','fun build():AudioTrack{if(advanceOnBuild){advanceOnBuild=false;android.os.SystemClock.advance(15001)};return AudioTrack()}'))
   sources=[owner_port]+[media]+[ports/(n+'.kt') for n in ['Base64Port','JsonPort']]+[ROOT/'scripts/testing/unknown-input/RealUnknownClient.kt']
-  sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['VoiceClient','InputGate','SessionTermination','AndroidTrack','ClientPhases','Playback','OutputSlot']]
+  sources += [client_source if n=='VoiceClient' else ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['VoiceClient','InputGate','SessionTermination','AndroidTrack','ClientPhases','Playback','OutputSlot']]
   sources += [ROOT/'app/src/main/java/com/littlebuddy/v2/parent/PinDiagnostic.kt']
   capture=ROOT/'scripts/testing/capture'
   sources=[p for p in sources if p.name!='RealUnknownClient.kt']
@@ -36,19 +38,22 @@ async def run():
   sources += [audio]
   media.write_text(media.read_text().replace('const val CHANNEL_OUT_MONO=1;','const val CHANNEL_IN_MONO=1;const val CHANNEL_OUT_MONO=1;'))
   owner_port.write_text(owner_port.read_text().replace('object SystemClock {@JvmField var now=100000L;@JvmStatic fun elapsedRealtime()=now;@JvmStatic fun advance(ms:Long){now+=ms}}', 'object SystemClock {@JvmField var realtime=true;@JvmField var manualNow=100000L;@JvmStatic fun elapsedRealtime()=if(realtime)System.nanoTime()/1_000_000 else manualNow;@JvmStatic fun uptimeMillis()=elapsedRealtime();@JvmStatic fun advance(ms:Long){manualNow+=ms}}'))
-  sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['Capture','CaptureSessionPort','RecoveryHandoff','RecoveryEpisode','CaptureUploads','RecorderLease','WakeSamples','NativeReadLedger','CaptureBootstrap','CaptureClockEnvelope','CaptureClockFailure','CaptureMonotonic','WakeOrigin','NativeEvidence']]
+  sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['Capture','CaptureSessionPort','RecoveryHandoff','RecoveryEpisode','CaptureUploads','RecorderLease','WakeSamples','NativeReadLedger','CaptureBootstrap','CaptureClockEnvelope','CaptureClockFailure','CaptureMonotonic','WakeOrigin','NativeEvidence','NativeCaptureBuffer']]
   subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-Xfriend-paths='+str(main),'-classpath',os.pathsep.join(runtime),'-d',str(out/'classes'),*map(str,sources)],check=True)
   subprocess.run(['openssl','req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:P-256','-nodes','-days','1','-subj','/CN=localhost','-addext','subjectAltName=DNS:localhost,IP:127.0.0.1','-keyout',str(out/'key'),'-out',str(out/'cert')],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
   subprocess.run(['keytool','-importcert','-noprompt','-alias','fixture','-file',str(out/'cert'),'-keystore',str(out/'trust.p12'),'-storetype','PKCS12','-storepass','fixture-only'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
   tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(out/'cert',out/'key')
-  selected=os.environ.get('RECOVERY_CASES','success,slow,stale_scope,quota,auth,timeout,timeout_slow,timeout_idle,timeout_stale,safety,unknown').split(',')
-  assert selected and set(selected)<=set(['success','slow','stale_scope','quota','auth','timeout','timeout_slow','timeout_idle','timeout_stale','safety','unknown'])
+  modes='success,slow,stale_scope,quota,auth,timeout,timeout_slow,timeout_idle,timeout_stale,safety,unknown,unscoped,production_quality,production_quality_stream'.split(',')
+  selected=os.environ.get('RECOVERY_CASES',','.join(modes)).split(',')
+  assert selected and set(selected)<=set(modes)
   for mode in selected:
    connections=[];wire=[]
    async def peer(ws):
     index=len(connections);connections.append(index);epoch=0;revision=0;count=0;player=None;session=('a' if index==0 else 'b')*32
     async def send(kind,**kw):
-     event=dict(v=2,type=kind,epoch=epoch,session=session,turn=0,revision=revision);event.update(kw);await ws.send(json.dumps(event))
+     event=dict(v=2,type=kind,epoch=epoch,session=session,turn=0,revision=revision);event.update(kw)
+     if kind=='failure' and mode=='unscoped':event={k:event[k] for k in ('v','type','epoch','code')}
+     await ws.send(json.dumps(event))
     try:
      async for raw in ws:
       event=json.loads(raw);kind=event['type'];wire.append((index,kind))
@@ -74,6 +79,33 @@ async def run():
     except Exception as e:
      from websockets.exceptions import ConnectionClosed
      if not isinstance(e,ConnectionClosed):raise
+   if mode.startswith('production_quality'):
+    from backend.v2.voice import VoicePeer
+    from backend.v2.companion import UnifiedProviders,CompanionPolicy
+    from tests.v2.test_post_solo_probe import SpeechFixture,EndpointModel
+    async def peer(ws):
+     index=len(connections);connections.append(index)
+     class ObservedWire:
+      async def recv(self):
+       raw=await ws.recv();wire.append((index,json.loads(raw)['type']));return raw
+      async def send(self,raw):
+       event=json.loads(raw)
+       if event['type']=='failure':
+        assert index==0 and event['code']=='voice'
+        assert {'session','turn','revision'}<=set(event),'missing recovery scope'
+       await ws.send(raw)
+      async def close(self,*args):await ws.close(*args)
+     model=EndpointModel();complete=model.complete
+     async def quality(instruction,data,*,schema=None):
+      if index==0 and '审核下一个' in instruction:return json.dumps({'allow':True,'quality':False})
+      return await complete(instruction,data,schema=schema)
+     model.complete=quality
+     actual=VoicePeer(ObservedWire(),UnifiedProviders(SpeechFixture(),model),CompanionPolicy(),stream_asr=mode.endswith('_stream'))
+     try:await actual.run()
+     except Exception as error:
+      from websockets.exceptions import ConnectionClosed
+      if not isinstance(error,ConnectionClosed):raise
+     assert actual.closed and not actual.quarantined
    async with serve(peer,'127.0.0.1',0,ssl=tls) as server:
     port=server.sockets[0].getsockname()[1]
     process=await asyncio.create_subprocess_exec('java','-Xmx256m','-Djavax.net.ssl.trustStore='+str(out/'trust.p12'),'-Djavax.net.ssl.trustStorePassword=fixture-only','-cp',os.pathsep.join([str(out/'classes'),*runtime]),'com.littlebuddy.v2.RealRecoveryClientKt',f'wss://localhost:{port}/v2/voice',mode)
@@ -85,7 +117,7 @@ async def run():
      assert code==0,mode
     finally:
      if process.returncode is None:process.kill();await process.wait()
-   assert len(connections)==(2 if mode in ('success','slow','timeout','timeout_slow') else 1),connections
+   assert len(connections)==(2 if mode in ('success','slow','timeout','timeout_slow','production_quality','production_quality_stream') else 1),connections
    assert not any(i==0 and k=='ack' for i,k in wire),'failed generation ACK'
    print('RECOVERY_PEER',mode,'connections',len(connections),'PASS',flush=True)
 asyncio.run(run())

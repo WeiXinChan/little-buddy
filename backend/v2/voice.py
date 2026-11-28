@@ -116,6 +116,8 @@ class VoicePeer:
         self.input_budget = ResponseBudget(clock)
         self.awaiting_input = False
         self.generation = None
+        self.response_scope = None
+        self.generation_cancel_deadlines = {}
         self.recognition = None
         self.recognition_handoff = None
         self.next_probe = None
@@ -666,11 +668,15 @@ class VoicePeer:
 
     async def cancel_generation_task(self,task):
         if task is not None:
-            scope = self.generation_scopes.get(task)
-            if scope is not None:
-                scope.cancelled = True
-            task.cancel()
-            done, _ = await asyncio.wait({task}, timeout=.5)
+            deadline=self.generation_cancel_deadlines.get(task)
+            if deadline is None:
+                deadline=asyncio.get_running_loop().time()+.5
+                self.generation_cancel_deadlines[task]=deadline
+                task.add_done_callback(lambda done:self.generation_cancel_deadlines.pop(done,None))
+                scope = self.generation_scopes.get(task)
+                if scope is not None:scope.cancelled = True
+                task.cancel()
+            done, _ = await asyncio.wait({task}, timeout=max(0,deadline-asyncio.get_running_loop().time()))
             if not done:
                 # Never reuse an unconfirmed provider resource. Connection closes;
                 # caller/service owns eventual shutdown, no unbounded new attempts.
@@ -982,7 +988,8 @@ class VoicePeer:
             # Observe that same task within the original .5s, never grant another .5s.
             if generation is not None and not generation.done():
                 try:
-                    done,_=await asyncio.wait({generation},timeout=max(0,.5-(asyncio.get_running_loop().time()-close_started)))
+                    deadline=self.generation_cancel_deadlines.get(generation,close_started+.5)
+                    done,_=await asyncio.wait({generation},timeout=max(0,deadline-asyncio.get_running_loop().time()))
                 except asyncio.CancelledError:done=set()
                 if not done:
                     self.quarantined=True;self.track_retired(generation)
@@ -1188,14 +1195,16 @@ class VoicePeer:
             raise SafetyFault('content_blocked' if verdict is False else 'review_unavailable')
 
     def respond(self, text, epoch):
-        return self._respond(text, epoch, Operation(self, epoch))
+        operation=Operation(self,epoch)
+        operation.response_revision=self.revision
+        return self._respond(text, epoch, operation)
 
     async def _respond(self, text, epoch, operation):
         owner = asyncio.current_task()
         self.generation_scopes[owner] = operation
         stage = 'bind'
         self.last_guess_normalization=None
-        response_revision = self.revision
+        response_revision = getattr(operation,'response_revision',self.revision)
         fact_prefetch = None
         prefetch_retired = False
         async def prefetch_facts():
@@ -1216,6 +1225,9 @@ class VoicePeer:
             return bool(done)
         try:
             operation.ensure()
+            if self.generation is owner:
+                self.response_scope=(self.session,self.session.connection,self.session.turn,epoch,response_revision)
+            if response_revision != self.revision:raise StaleOperation()
             while self.session.player is None:
                 self.changed.clear()
                 if not self.session._output_live():
@@ -1441,7 +1453,9 @@ class VoicePeer:
             stage_timing.mark('cancel',self,operation,outcome='cancelled')
             raise
         except Exception as failure:
-            if not operation.valid():
+            # A suspended response may still close after a newer expression
+            # advances revision. Its error cannot revoke/fail that new input.
+            if not operation.valid() or self.revision != response_revision:
                 return
             try:self.last_failure = failure_observer.metadata(stage,failure)
             except BaseException:self.last_failure = dict(stage='unknown',kind='unknown',contract='unknown')
@@ -1449,7 +1463,9 @@ class VoicePeer:
             # Exception messages may contain provider content/credentials: never emit.
             self.session.interrupt()
             await self.commands()
-            if self.session is not operation.session or epoch != self.epoch or self.session.turn != operation.turn:
+            if (self.session is not operation.session or epoch != self.epoch or
+                    self.session.turn != operation.turn or self.revision != response_revision or
+                    self.closed):
                 return
             # Required facts/context failed closed: no candidate or fabricated
             # evidence may be spoken. Preserve the original last_failure above,
@@ -1473,7 +1489,16 @@ class VoicePeer:
             else:
                 if isinstance(failure,TimeoutError) or isinstance(failure,VoiceFault) and failure.code=='timeout':
                     failure_observer.timeout(self,'output_generation')
-                await self.send('failure', code=failure.code if isinstance(failure, VoiceFault) else 'timeout' if isinstance(failure, TimeoutError) else 'voice')
+                # Recovery authority requires the prefetch close proof too.
+                await retire_prefetch()
+                if (self.session is not operation.session or epoch != self.epoch or
+                        self.session.turn != operation.turn or self.revision != response_revision or self.closed):return
+                if not self.session._live() or self.session.management_paused or self.session.response_expired:return
+                # Current, confirmed response failure can use the client's
+                # existing bounded SERVER_VOICE recovery. Quarantine grants none.
+                scope={} if self.quarantined else dict(session=operation.session_id,
+                    turn=operation.turn,revision=response_revision)
+                await self.send('failure', code=failure.code if isinstance(failure, VoiceFault) else 'timeout' if isinstance(failure, TimeoutError) else 'voice',**scope)
             if self.quarantined:
                 await self.close_quarantined()
         finally:
@@ -1564,6 +1589,39 @@ class VoicePeer:
             await self.send('session_end',reason='session_expired',session=session.session,turn=turn,revision=revision)
         return True
 
+    async def retire_expired_output_for_input(self):
+        """Discard expired older output, never the newer expression's budget.
+
+        Candidate speech only suspends old playback (noise can resume it). Once
+        that old output expires, it is no longer resumable; revoke/close it within
+        the existing .5s and keep the independently live incoming expression.
+        """
+        s=self.session;budget=self.input_budget;owner=self.response_scope
+        now=s.clock()
+        if (owner is None or owner[:4]!=(s,s.connection,s.turn,self.epoch) or
+            owner[4]>=self.revision or not self.suspended or
+            not self.awaiting_input or budget.anchor is None or
+            not (self.capture or self.prepared is not None and self.prepared[0] is not None) or
+            self.closed or self.quarantined or s.management_paused or not s.active or
+            now>=min(s.expires,s.heartbeat_deadline) or
+            budget.thinking_at is None and now>=budget.deadline or not s.deadline):return False
+        limit=s.progress_deadline if s.response_confirmed else s.deadline
+        if not s.response_expired and now<limit:return False
+        old=self.generation;revision=self.revision;epoch=self.epoch;anchor=budget.anchor;private=s.private_mode
+        s.interrupt() # no ACK, fact/game commit, capture clear, or new turn
+        s.deadline=s.progress_deadline=0
+        s.response_confirmed=s.response_expired=False
+        output=s.output
+        # One existing cancellation deadline; unconfirmed close quarantines.
+        await self.cancel_generation_task(old)
+        if (self.session is not s or self.epoch!=epoch or self.revision!=revision or
+            self.input_budget is not budget or budget.anchor!=anchor or
+            self.response_scope!=owner or s.connection!=owner[1] or s.turn!=owner[2] or
+            s.private_mode!=private or s.output!=output or self.closed):return True
+        if self.generation is old:self.generation=None
+        await self.commands()
+        return True
+
     async def monitor(self):
         while not self.closed:
             await asyncio.sleep(.1)
@@ -1583,6 +1641,13 @@ class VoicePeer:
                     await self.cancel_recognition()
                     await self.send('failure', code='timeout')
                     return
+            try:
+                await self.retire_expired_output_for_input()
+            except WireError:
+                if not self.quarantined:raise
+                await self.send('failure',code='voice')
+                await self.close_quarantined()
+                return
             token=self.settling_stop
             current=(self.session,self.epoch,self.revision,self.session.connection,self.session.turn,self.session.output)
             timing=(self.session.deadline,self.session.progress_deadline,self.session.response_confirmed,self.session.response_expired)
