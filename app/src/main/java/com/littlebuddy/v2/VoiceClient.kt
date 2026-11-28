@@ -51,7 +51,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     var endedByExpiry=false;private set
     val idleForCaptureRestart get()=active && compatible && !isAwake && !childBlocked && !managementPending &&
         managementState.mediaAllowed && !outputBusy && !player.suspended && player.binding==null && !quarantined && permitted()
-    private var trustedVoiceFailure=false
+    private var trustedServiceFailure=false
     private var serverScope:ManagementScope?=null
     private var deliveringSafety=false // handler-owned: an accepted safety event must still show text if stop fails
     val quarantined get() = player.quarantined || controlQuarantined
@@ -456,7 +456,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                     finally { deliveringSafety=false }
                 } else {
                     val classification=ServerFailure.classify(event.optString("code"))
-                    trustedVoiceFailure=classification==ServerFailure.VOICE && failureScopeCurrent(event) && active && permitted() && !childBlocked
+                    trustedServiceFailure=classification.wakeRecoveryCandidate && (classification!=ServerFailure.TIMEOUT || gate.awaitingResponse) && failureScopeCurrent(event) && active && permitted() && !childBlocked
                     fail(classification.localCode)
                 }
             }
@@ -571,7 +571,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     private fun fail(code: String,pumpStep:PinDiagnostic.PumpStep=PinDiagnostic.PumpStep.NONE) {
         PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CLIENT_FAIL,diagnosticScope,
             source=PinDiagnostic.failSource(code),wire=if(code=="protocol" || code.startsWith("server_"))wireKind else PinDiagnostic.WireKind.NONE,
-            point=if(code=="protocol" || code.startsWith("server_"))wirePoint else PinDiagnostic.WirePoint.NONE,pump=pumpStep))
+            point=if(code=="protocol" || code.startsWith("server_"))wirePoint else PinDiagnostic.WirePoint.NONE,pump=pumpStep,
+            recoveryEligible=trustedServiceFailure && ServerFailure.entries.any{it.localCode==code && it.wakeRecoveryCandidate}))
         PinDiagnostic.event(PinDiagnostic.Stage.PROTOCOL,when(code) {
             "incompatible"->PinDiagnostic.Reason.INCOMPATIBLE
             "closed"->PinDiagnostic.Reason.CLOSED
@@ -582,7 +583,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         val pending=childBlocked
         if (pending && code!="expired") controlQuarantined=true
         val service=ServerFailure.entries.firstOrNull{it.localCode==code}
-        close();failureClassified(if(service==ServerFailure.VOICE && !trustedVoiceFailure)null else service);trustedVoiceFailure=false; if (pending) managed(ManagementState.Phase.DEAD); status(code)
+        close();failureClassified(if(service?.wakeRecoveryCandidate==true && !trustedServiceFailure)null else service);trustedServiceFailure=false; if (pending) managed(ManagementState.Phase.DEAD); status(code)
         if (!deliveringSafety) failed()
     }
     fun close() {

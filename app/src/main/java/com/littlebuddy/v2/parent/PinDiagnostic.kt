@@ -30,7 +30,7 @@ internal object PinDiagnostic {
         val episode:Long=-1,val generation:Long=-1,val wakeBootMs:Long=-1,
         val operationNs:Long=-1,val wakeFrame:Long=-1,val readFrame:Long=-1,val wakeRelativeMs:Long=-1,val wakeLagMs:Long=-1,
         val requestedNativeFrames:Int=0,val actualNativeFrames:Int=0,val creditedNativeFrames:Int=0,
-        val captureStage:Stage=Stage.CAPTURE_NATIVE,val capturePredicate:CapturePredicate=CapturePredicate.NONE,val clockReason:CaptureClockReason?=null,
+        val recoveryEligible:Boolean=false,val captureStage:Stage=Stage.CAPTURE_NATIVE,val capturePredicate:CapturePredicate=CapturePredicate.NONE,val clockReason:CaptureClockReason?=null,
         val uploadSamples:Int=0,val nativeReturnedSamples:Long=0,val nativeReadCalls:Long=0,
         val inputSerial:Long=0,val sealedSerial:Long=0,val readStep:CaptureReadStep=CaptureReadStep.NONE)
     private val activitySequence=java.util.concurrent.atomic.AtomicLong()
