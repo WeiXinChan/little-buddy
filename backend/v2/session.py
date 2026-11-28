@@ -42,7 +42,7 @@ class Session:
     ACK coordinates are engineering playback evidence, never acoustic evidence.
     Settings/pairing belong outside this object and survive clear().
     """
-    def __init__(self, clock, *, ttl=600, lease=15, budget=15, capacity=2, progress_timeout=60):
+    def __init__(self, clock, *, ttl=600, lease=15, budget=15, capacity=2, progress_timeout=60, audio_capacity=None):
         if any(not math.isfinite(x) or x <= 0 for x in (ttl, lease, budget, progress_timeout)):
             raise ValueError('invalid duration')
         if type(capacity) is not int or capacity < 1:
@@ -54,6 +54,7 @@ class Session:
         self.progress_deadline = 0
         self.last_head_progress = clock()
         self.capacity = capacity
+        self.audio_capacity = capacity if audio_capacity is None else audio_capacity
         self.connection = self.turn = self.output = self.stream = self.topic = 0
         self.session = uuid.uuid4().hex
         self.expires = clock() + ttl
@@ -245,7 +246,7 @@ class Session:
     def send(self, event, *, name, public, end, approved, answer=None, effect=None,
              effective=True, state=None, anchors=()):
         if (not self._live() or approved is not True or self.player is None or type(end) is not int
-                or end <= self.sent_end or len(self.pending) >= self.capacity
+                or end <= self.sent_end or len(self.pending) >= self.audio_capacity
                 or not all(isinstance(v, str) for v in (name, public))
                 or (answer is not None and not isinstance(answer, str))
                 or sum(len(v) for v in self.public) + sum(len(s.public) + len(s.answer or '') for s in self.pending)
