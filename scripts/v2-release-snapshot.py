@@ -81,3 +81,12 @@ def bind_resources(inventory,manifest,pngs):
   require(inventory.get(path)=={'sha256':hashlib.sha256(data).hexdigest(),'size':len(data)},'resource_snapshot_changed')
  for row in json.loads(manifest):
   require(inventory.get('assets/v2-default/'+row['source'],{}).get('sha256')==row['source_sha256'],'resource_snapshot_changed')
+
+def clarification_files(root):
+ root=Path(root)
+ directory=root/'app/src/v2Debug/assets'
+ pcm=(directory/'v2-local-clarify.pcm').read_bytes()
+ receipt=(directory/'v2-local-clarify.sha256').read_bytes()
+ require(480<=len(pcm)<=288000 and len(pcm)%2==0,'clarification_pcm_bounds')
+ require(receipt==hashlib.sha256(pcm).hexdigest().encode()+b'\n','clarification_hash')
+ return {'assets/v2-local-clarify.pcm':pcm,'assets/v2-local-clarify.sha256':receipt}

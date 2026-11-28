@@ -1,0 +1,15 @@
+# V2 bounded local clarification (code34)
+
+Base main19215a5; server schema unchanged. Legal `decision/unknown` is still accepted only by the existing epoch/revision/deadline gate. After original interrupt's mute/stop/release proof and epoch migration, one local-purpose ticket may acquire the same Playback native slot. It has no server Binding, ACK, effectivePlayed, context/fact commit or P12 valid-answer credit. This is clarification, not a repair or success claim for SERVER_VOICE.
+
+Audio contract: root-supplied fixed system phrase, PCM16 little-endian mono24k, 240..144000 samples (maximum6s); pinned `v2-local-clarify.pcm` and SHA256 file in v2Debug assets. No synthesis/network/paths/text accepted by client. Tests inject bounded PCM via constructor only; no fixture audio enters the APK. Missing real asset blocks release. PCM copied for each local purpose and zeroed on failure, cancellation and completion. Parent volume and rate are inherited through the existing AndroidTrack factory. Nonblocking native writes run on the existing audio owner. The10s local resource ceiling accommodates6s at the minimum supported85% rate; it does not renew the original15s admission deadline or TTL and is not a user-response budget. Loading must also finish before original admission deadline.
+
+New speech/candidate, accepted normal response, management, route failure, focus/background/lock permission loss or close retires this local ticket; native release must confirm before another purpose. Stale scope cannot update the new one. Completion restores listening only if the captured epoch/revision/ticket, active permission and management gate remain current. Recorder evidence is unchanged. No resumed old output or automatic local replay. Duplicate unknown cannot re-enter after gate terminal clear.
+
+LOCAL_CLARIFY_BEGIN/HEAD/END/CANCEL are CLIENT_PHASE enum markers using the existing48-row phase reservation (original total256/15min unchanged), separate from FIRST_AUDIO_ACCEPTED/FIRST_NATIVE_HEAD_PROGRESS. HEAD requires actual native playback head progress. Capture/critical reservations unchanged. Management/background cancellation may suppress the now-disallowed diagnostic callback; native cleanup remains mandatory and tests assert release independently.
+
+Run `scripts/with-build-lock python3 scripts/test-local-clarification.py` for actual Playback ownership/callback/deadline paths. Run `scripts/with-build-lock env ANDROID_JAR=<cached android.jar> python3 scripts/test-unknown-input-tls.py` for actual current VoiceClient/Playback/AndroidTrack over loopback TLS with controlled platform ports, not a replicated client. No phone/provider. Original650 negative remains available with `--baseline`; original code33 logs are retained outside this directory. Local audio tests do not establish audible/child/device success.
+
+No installation/deployment is performed by the author. Real fixed asset is158400bytes/79200samples/3.3s; SHA256/provenance in asset.json. It was generated once by root, unmodified; not a fixture or proof of device playback.
+
+Root reviews one canonical private same-signer code34 APK before any device action.

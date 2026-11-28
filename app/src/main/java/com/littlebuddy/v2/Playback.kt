@@ -27,7 +27,56 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
     private var releasedBinding: Binding? = null
     private var lastStop: StopResult? = null
     fun nativeProof() = PlayerProof(binding, head, releasedBinding, lastStop)
-    val hasPending get() = queue.isNotEmpty()
+    private data class Local(val ticket:Long,val pcm:ShortArray,val deadline:Long,
+        val head:()->Unit,val finished:()->Unit,val cancelled:()->Unit,val allowed:()->Boolean,var offset:Int=0,var progressed:Boolean=false)
+    private var local:Local?=null
+    private var stopping=false
+    val localActive get()=local!=null
+    val hasPending get() = queue.isNotEmpty() || local!=null
+
+    /** A distinct purpose in the SAME native slot; never a server Binding or ACK. Takes ownership of PCM. */
+    fun clarify(ticket:Long,pcm:ShortArray,onHead:()->Unit,onFinished:()->Unit,onCancelled:()->Unit,allowed:()->Boolean={true}) {
+        try {
+            check(!stopping && !quarantined && binding==null && track==null && local==null)
+            require(pcm.size in 240..144000) // mono24k, at most6s; no arbitrary path or duration
+        } catch(error:Throwable){pcm.fill(0);throw error} // never stop another purpose on rejected acquisition
+        try {
+            local=Local(ticket,pcm,now()+10000,onHead,onFinished,onCancelled,allowed)
+            track=factory(); written=0;head=0;started=false;progress=now()
+        } catch(error:Throwable) {pcm.fill(0);stop();throw error}
+    }
+    private fun localAllowed(value:Local):Boolean {
+        if(value.allowed())return true
+        val proof=stop();check(proof.stopped && proof.released)
+        return false
+    }
+    private fun tickLocal(value:Local) {
+        if(!localAllowed(value))return
+        check(now()<value.deadline)
+        val native=checkNotNull(track)
+        val position=native.head
+        if(!localAllowed(value))return // permission may change while a native accessor is in flight
+        check(now()<value.deadline && position>=head && position<=written)
+        head=position
+        if(position>0 && !value.progressed){value.progressed=true;reportOutput(true);value.head()}
+        if(local!==value || track!==native)return // synchronous cancellation wins over this tick
+        if(value.offset==value.pcm.size && position==value.pcm.size.toLong()) {
+            local=null // revoke before fallible release or callback
+            value.pcm.fill(0)
+            val proof=stop()
+            check(proof.stopped && proof.released)
+            value.finished();return
+        }
+        if(value.offset<value.pcm.size) {
+            if(!localAllowed(value))return
+            val count=native.write(value.pcm,value.offset)
+            check(count in 0..value.pcm.size-value.offset)
+            value.offset+=count;written+=count
+            if(!localAllowed(value))return
+            if(count>0 && !started){native.play();started=true}
+        }
+        check(now()<value.deadline)
+    }
     var binding: Binding? = null; private set
     var quarantined = false; private set
     var suspended = false; private set
@@ -45,7 +94,7 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
     private var reported = -1L
 
     fun bind(value: Binding) {
-        check(!quarantined && binding == null && track == null)
+        check(!stopping && !quarantined && binding == null && track == null && local==null)
         reportOutput(false)
         val native = factory()
         track = native
@@ -66,6 +115,7 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
     fun tick() {
         val native = track ?: return
         try {
+            local?.let { tickLocal(it);return }
             // Reject an expired owner tick before reading a late native head, writing
             // samples or acknowledging anything. The old deadline is authoritative.
             if (queue.isNotEmpty()) check(now() - progress < 60_000)
@@ -95,7 +145,7 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
             }
             // Writes, duplicate ACKs, network pings and pauses never renew this clock.
             if (queue.isNotEmpty()) check(now() - progress < 60_000)
-        } catch (failure: Exception) {
+        } catch (failure: Throwable) {
             stop()
             throw failure
         }
@@ -112,25 +162,33 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
     fun resumeConfirmedNoise() { check(suspended); track?.play(); suspended = false }
 
     fun stop(): StopResult {
-        // Revoke before any fallible native call. Late ACK/audio cannot bind again.
-        reportOutput(false)
-        val previousBinding = binding
-        binding = null
-        val native = track
-        track = null
-        queue.forEach { it.pcm.fill(0) }; queue.clear(); offset = 0
-        suspended = false
-        if (native == null) return StopResult(!quarantined, !quarantined)
-        var stopped = true
-        var released = true
-        // Each step is attempted even if an earlier step throws.
-        for (action in listOf<() -> Unit>(native::mute, native::pause, native::flush, native::stop)) {
-            try { action() } catch (_: Exception) { stopped = false }
-        }
-        try { native.release() } catch (_: Exception) { released = false }
-        quarantined = quarantined || !stopped || !released
-        val result = StopResult(stopped, released)
-        releasedBinding = previousBinding; lastStop = result
-        return result
+        if(stopping)return StopResult(false,false) // no reentrant acquisition during cleanup/notification
+        stopping=true
+        val retiredLocal=local
+        local=null
+        retiredLocal?.pcm?.fill(0)
+        val previousBinding=binding
+        binding=null
+        val native=track
+        track=null
+        queue.forEach{it.pcm.fill(0)};queue.clear();offset=0;suspended=false
+        try {
+            var stopped=!quarantined
+            var released=!quarantined
+            if(native!=null) {
+                stopped=true;released=true
+                // No observer executes before all independent native cleanup attempts.
+                for(action in listOf<()->Unit>(native::mute,native::pause,native::flush,native::stop)) {
+                    try{action()}catch(_:Exception){stopped=false}
+                }
+                try{native.release()}catch(_:Exception){released=false}
+                quarantined=quarantined || !stopped || !released
+            }
+            val result=StopResult(stopped,released)
+            if(native!=null){releasedBinding=previousBinding;lastStop=result}
+            try{reportOutput(false)}catch(_:Throwable){}
+            try{retiredLocal?.cancelled?.invoke()}catch(_:Throwable){}
+            return result
+        } finally {stopping=false}
     }
 }

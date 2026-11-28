@@ -324,6 +324,7 @@ class V2VoiceActivity : Activity() {
                     releaseAudio { quiet -> if (quiet && ticket+1==transportRevision && page==managementRevision && foreground && focused &&
                         !managementRequested && !managementVisible && !helpVisible) { eyes(); resumeConfigured() } }
                 } } }, requiredContract=ReleaseCompatibility.CONTRACT,
+                clarification={com.littlebuddy.v2.ClarificationAsset.load(assets)},
                 http=http, closeTransport={ ssh?.close() }, diagnosticScope=diagnosticScope(ticket,0), actualOutput={playing->
                     if(playing && foreground && focused && ticket==transportRevision && lastLog!=com.littlebuddy.v2.feedback.LogStage.PLAY) {
                         lastLog=com.littlebuddy.v2.feedback.LogStage.PLAY

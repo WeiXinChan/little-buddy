@@ -46,8 +46,8 @@ def inspect(apk, pin_init_diagnostics=False, private_device_preset=False, config
             meta['configuration_diagnostic_only'] != configuration_diagnostic_only or
             (configuration_diagnostic_only and not (pin_init_diagnostics and private_device_preset))):
             raise ValueError('configuration_diagnostic_mode_mismatch')
-        expected_name='2.0.0-rc9.nopin.unknown1' + ('.integrated1.device1' if private_device_preset else '')
-        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=33 or meta['version_name']!=expected_name:
+        expected_name='2.0.0-rc9.nopin.clarify1' + ('.integrated1.device1' if private_device_preset else '')
+        if meta['application_id']!='com.littlebuddy.sim.v2' or meta['version_code']!=34 or meta['version_name']!=expected_name:
             raise ValueError('candidate_version_mismatch')
         if meta['resources_manifest_sha256']!=RC9_RESOURCES_MANIFEST:
             raise ValueError('candidate_resources_mismatch')
@@ -72,7 +72,7 @@ def inspect(apk, pin_init_diagnostics=False, private_device_preset=False, config
                 raise ValueError('source_snapshot_mismatch')
         canonical=_snapshot.canonical(trusted);digest=hashlib.sha256(canonical).hexdigest()
         if raw!=canonical or digest!=meta['source_content_sha256']:raise ValueError('source_inventory_mismatch')
-        if meta['build_id']!='v2-33-'+digest[:16]:raise ValueError('source_build_id_mismatch')
+        if meta['build_id']!='v2-34-'+digest[:16]:raise ValueError('source_build_id_mismatch')
         if hashlib.sha256(resource_raw).hexdigest()!=RC9_RESOURCES_MANIFEST:raise ValueError('candidate_resources_mismatch')
         if z.read('assets/v2-default/manifest.json')!=resource_raw:raise ValueError('apk_resources_mismatch')
         expected=set(pngs)|{'assets/v2-default/manifest.json'}
@@ -80,6 +80,9 @@ def inspect(apk, pin_init_diagnostics=False, private_device_preset=False, config
         if actual!=expected:raise ValueError('apk_resource_set_mismatch')
         for name,data in pngs.items():
             if z.read(name)!=data:raise ValueError('apk_resource_payload_mismatch')
+        clip=_snapshot.clarification_files(root)
+        if {name for name in names if name.startswith('assets/v2-local-clarify')}!=set(clip):raise ValueError('clarification_asset_set')
+        if any(z.read(name)!=data for name,data in clip.items()):raise ValueError('clarification_asset_bytes')
         _native.validate_apk(root,z)
         return meta
 

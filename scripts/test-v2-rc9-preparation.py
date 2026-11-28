@@ -36,6 +36,8 @@ class RC9Preparation(unittest.TestCase):
   for path in (ROOT/'app/src/v2Debug/cpp').rglob('*'):
    if path.is_file():files[path.relative_to(ROOT).as_posix()]=path.read_bytes()
   files['app/src/v2Debug/jniLibs/arm64-v8a/libwali-v2-kws.so']=(ROOT/'app/src/v2Debug/jniLibs/arm64-v8a/libwali-v2-kws.so').read_bytes()
+  for name in ['v2-local-clarify.pcm','v2-local-clarify.sha256']:
+   files['app/src/v2Debug/assets/'+name]=(ROOT/'app/src/v2Debug/assets'/name).read_bytes()
   for name,data in files.items():
    p=self.root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data)
   shutil.copytree(ROOT/'assets/v2-default',self.root/'assets/v2-default',dirs_exist_ok=True)
@@ -44,11 +46,14 @@ class RC9Preparation(unittest.TestCase):
   self.output=self.root/'generated'
  def generate(self,private=False,diagnostics=False,configuration_only=False):
   with patch.object(gen,'ROOT',self.root):return gen.generate(self.output,diagnostics,private,configuration_only)
- def inspect(self,metadata=None,inventory=None,resource=None,images=None,duplicate=None,private=False,diagnostics=False,payload=False,configuration_only=False,native_missing=False,native_extra=False,native_payload=None):
+ def inspect(self,metadata=None,inventory=None,resource=None,images=None,duplicate=None,private=False,diagnostics=False,payload=False,configuration_only=False,native_missing=False,native_extra=False,native_payload=None,clip_missing=False,clip_extra=False,clip_payload=None):
   meta=self.generate(private,diagnostics) if metadata is None else metadata
   raw=(self.output/'v2-source-inventory.json').read_bytes() if inventory is None else inventory
   archive=self.root/'NOT_AN_INSTALLABLE_APK.zip'
   with zipfile.ZipFile(archive,'w') as z:
+   for name,data in gen._snapshot.clarification_files(self.root).items():
+    if not clip_missing:z.writestr(name,clip_payload if name.endswith('.pcm') and clip_payload is not None else data)
+   if clip_extra:z.writestr('assets/v2-local-clarify-extra.pcm',b'WRONG EXTRA AUDIO')
    if payload:z.writestr('assets/v2-device-preset.bin',b'SYNTHETIC PRIVATE BUILD FIXTURE ONLY')
    if not native_missing:z.writestr('lib/arm64-v8a/libwali-v2-kws.so',(self.root/'app/src/v2Debug/jniLibs/arm64-v8a/libwali-v2-kws.so').read_bytes() if native_payload is None else native_payload)
    if native_extra:z.writestr('lib/x86_64/libwali-v2-kws.so',b'WRONG ABI FIXTURE')
@@ -60,6 +65,20 @@ class RC9Preparation(unittest.TestCase):
     with warnings.catch_warnings():
      warnings.simplefilter('ignore',UserWarning);z.writestr(duplicate,b'DUPLICATE UNIT FIXTURE')
   with patch.object(verify,'__file__',str(self.root/'scripts/verify-v2-release.py')):return verify.inspect(archive,diagnostics,private,configuration_only)
+ def test_fixed_clarification_apk_missing_extra_or_changed_is_rejected(self):
+  for kwargs in [dict(clip_missing=True),dict(clip_extra=True)]:
+   with self.assertRaisesRegex(ValueError,'clarification_asset_set'):self.inspect(**kwargs)
+  with self.assertRaisesRegex(ValueError,'clarification_asset_bytes'):self.inspect(clip_payload=b'CHANGED FIXTURE')
+ def test_fixed_clarification_missing_bad_hash_or_unbounded_cannot_build(self):
+  pcm=self.root/'app/src/v2Debug/assets/v2-local-clarify.pcm';receipt=pcm.with_suffix('.sha256')
+  original=pcm.read_bytes();original_hash=receipt.read_bytes()
+  pcm.unlink()
+  with self.assertRaises(FileNotFoundError):self.generate()
+  pcm.write_bytes(original)
+  receipt.write_bytes(b'0'*64+b'\n')
+  with self.assertRaisesRegex(AssertionError,'clarification_hash'):self.generate()
+  receipt.write_bytes(original_hash);pcm.write_bytes(b'0'*288002)
+  with self.assertRaisesRegex(AssertionError,'clarification_pcm_bounds'):self.generate()
  def test_native_source_change_cannot_reuse_prebuilt_receipt(self):
   path=self.root/'app/src/v2Debug/cpp/v2_kws.cc';path.write_bytes(path.read_bytes()+b'// stale binary negative\n')
   with self.assertRaisesRegex(ValueError,'native_source_binding'):self.generate()
@@ -72,8 +91,8 @@ class RC9Preparation(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'native_apk_set'):self.inspect(native_extra=True)
   with self.assertRaisesRegex(ValueError,'native_apk_bytes'):self.inspect(native_payload=b'WRONG BINARY FIXTURE')
  def test_strict_rc9_identity_with_corrected_resources(self):
-  meta=self.inspect();self.assertEqual((33,'2.0.0-rc9.nopin.unknown1','com.littlebuddy.sim.v2'),(meta['version_code'],meta['version_name'],meta['application_id']))
-  self.assertTrue(meta['build_id'].startswith('v2-33-'));self.assertEqual(gen.RC9_RESOURCES_MANIFEST,meta['resources_manifest_sha256'])
+  meta=self.inspect();self.assertEqual((34,'2.0.0-rc9.nopin.clarify1','com.littlebuddy.sim.v2'),(meta['version_code'],meta['version_name'],meta['application_id']))
+  self.assertTrue(meta['build_id'].startswith('v2-34-'));self.assertEqual(gen.RC9_RESOURCES_MANIFEST,meta['resources_manifest_sha256'])
  def test_generator_refuses_old_or_mislabeled_identity(self):
   p=self.root/'app/v2-release.json';original=json.loads(p.read_text())
   for code,name in [(22,'2.0.0-rc8'),(23,'2.0.0-rc8'),(30,'2.0.0-rc10')]:
@@ -90,7 +109,7 @@ class RC9Preparation(unittest.TestCase):
   meta=self.generate();old=self.old_resource;(self.root/'assets/v2-default/manifest.json').write_bytes(old)
   # Negative fixture only: coherent receipts cannot override the independent RC9 resource pin.
   raw=gen._snapshot.canonical(gen.source_inventory(self.root));digest=hashlib.sha256(raw).hexdigest()
-  meta.update(resources_manifest_sha256=hashlib.sha256(old).hexdigest(),source_content_sha256=digest,build_id='v2-33-'+digest[:16])
+  meta.update(resources_manifest_sha256=hashlib.sha256(old).hexdigest(),source_content_sha256=digest,build_id='v2-34-'+digest[:16])
   with self.assertRaisesRegex(ValueError,'candidate_resources_mismatch'):self.inspect(meta,inventory=raw,resource=old)
  def test_inventory_tampering_and_local_source_drift_still_rejected(self):
   meta=self.generate();raw=(self.output/'v2-source-inventory.json').read_bytes()
@@ -114,9 +133,9 @@ class RC9Preparation(unittest.TestCase):
    elif mutation=='extra_key':receipt['trusted']=True
    else:receipt['size']=True
    raw=gen._snapshot.canonical(inventory);digest=hashlib.sha256(raw).hexdigest()
-   changed=dict(meta,source_content_sha256=digest,build_id='v2-33-'+digest[:16])
+   changed=dict(meta,source_content_sha256=digest,build_id='v2-34-'+digest[:16])
    with self.assertRaises(ValueError):self.inspect(changed,inventory=raw)
-  with self.assertRaisesRegex(ValueError,'source_build_id_mismatch'):self.inspect(dict(meta,build_id='v2-33-'+('0'*16)))
+  with self.assertRaisesRegex(ValueError,'source_build_id_mismatch'):self.inspect(dict(meta,build_id='v2-34-'+('0'*16)))
  def test_inspector_rejects_added_tracked_selected_source(self):
   meta=self.generate();(self.root/'app/src/main/Added.kt').write_text('// ADDED\n')
   subprocess.run(['git','add','app/src/main/Added.kt'],cwd=self.root,check=True)
@@ -173,7 +192,7 @@ class RC9Preparation(unittest.TestCase):
   self.assertTrue(checked['configuration_diagnostic_only'])
  def test_private_candidate_requires_explicit_mode_and_has_rc9_identity(self):
   meta=self.generate(private=True,diagnostics=True)
-  self.assertEqual((33,'2.0.0-rc9.nopin.unknown1.integrated1.device1'),(meta['version_code'],meta['version_name']))
+  self.assertEqual((34,'2.0.0-rc9.nopin.clarify1.integrated1.device1'),(meta['version_code'],meta['version_name']))
   self.assertEqual('private_registered_device',self.inspect(meta,private=True,diagnostics=True,payload=True)['distribution'])
   with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(meta,payload=True)
  def test_missing_or_unexpected_private_payload_refused(self):
@@ -183,13 +202,13 @@ class RC9Preparation(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(public,payload=True)
  def test_diagnostic_flag_does_not_resurrect_obsolete_rc8_packaging(self):
   meta=self.generate(diagnostics=True)
-  self.assertEqual('2.0.0-rc9.nopin.unknown1',meta['version_name'])
+  self.assertEqual('2.0.0-rc9.nopin.clarify1',meta['version_name'])
   self.assertTrue(self.inspect(meta,diagnostics=True)['diagnostics_enabled'])
   with self.assertRaisesRegex(ValueError,'explicit_build_mode_mismatch'):self.inspect(meta)
  def test_private_mode_cannot_bypass_exact_source_inventory(self):
   meta=self.generate(private=True);claimed=json.loads((self.output/'v2-source-inventory.json').read_bytes())
   del claimed['app/src/main/Sentinel.kt'];raw=gen._snapshot.canonical(claimed);digest=hashlib.sha256(raw).hexdigest()
-  meta.update(source_content_sha256=digest,build_id='v2-33-'+digest[:16])
+  meta.update(source_content_sha256=digest,build_id='v2-34-'+digest[:16])
   with self.assertRaisesRegex(ValueError,'source_inventory_set_mismatch'):self.inspect(meta,inventory=raw,private=True,payload=True)
  def test_private_mode_cannot_bypass_png_set_or_identity(self):
   meta=self.generate(private=True);images=self.pngs();del images['assets/v2-default/png/star-bunny.png']
