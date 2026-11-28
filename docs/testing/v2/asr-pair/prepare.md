@@ -25,7 +25,7 @@ sudo -n scripts/with-build-lock python3 -I -B scripts/v2_asr_pair.py --admission
 sudo -n scripts/with-build-lock python3 -I -B scripts/v2_asr_pair.py --execute --tool-source TOOL_SHA --output /home/ubuntu/tech/v2-delivery/asr-pair-once-TOOL_SHA
 ```
 
-prepare只读配置/固定fixture，不读key/不联网；smoke不读配置、key、fixture，不进入execute；真实原wrapper下验证父子准入。pureoffline测试不证明云任务接受节奏、完整性、价格和真实收益。原始23项验证中15项工具、8项原V2Speech释放；首轮存在测试小数舍入断言失败（0.0005ms），修改断言容差0.001ms，保留原日志，未改任何生产时间。
+prepare只读配置/固定fixture，不读key/不联网；smoke不读配置、key、fixture，不进入execute；真实原wrapper下验证父子准入。pureoffline测试不证明云任务接受节奏、完整性、价格和真实收益。24项验证中16项工具（含实际PairSpeech/Recognition本地假socket协议）、8项原V2Speech释放；首轮存在测试小数舍入断言失败（0.0005ms），修改断言容差0.001ms，保留原日志，未改任何生产时间。
 
 ## whole + first segment 审核并行：只设计，不实施
 

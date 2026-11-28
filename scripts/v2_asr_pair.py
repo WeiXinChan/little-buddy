@@ -53,7 +53,7 @@ class RealClock:
 class Ledger:
     def __init__(self,save_report):self.save_report=save_report;self.calls=0;self.stopped=False
     def reserve(self,row):
-        if self.stopped or self.calls>=2:raise GuardError('cap')
+        if self.stopped or self.calls>=2 or row.get('socket_attempts',0)!=0:raise GuardError('cap')
         self.calls+=1;row['socket_attempts']=1
         # Must finish durable checkpoint before DNS/TLS/run-task I/O, never retry reservation.
         self.save_report()

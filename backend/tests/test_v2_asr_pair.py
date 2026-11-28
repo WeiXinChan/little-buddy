@@ -89,6 +89,37 @@ class PairTest(unittest.IsolatedAsyncioTestCase):
         task=asyncio.create_task(p.pair(PCM,r,factory,lambda:None,clock))
         await entered.wait();task.cancel();self.assertEqual(await task,1)
         self.assertEqual(len(made),1);self.assertTrue(r['trials'][0]['cleanup_confirmed'])
+    async def test_actual_pair_adapter_reader_protocol_offline(self):
+        import asyncio
+        class Socket:
+            def __init__(self):self.queue=asyncio.Queue();self.pcm=bytearray();self.actions=[]
+            async def send(self,value):
+                if isinstance(value,bytes):self.pcm.extend(value);return
+                obj=json.loads(value);action=obj['header']['action'];self.actions.append(action);ident=obj['header']['task_id']
+                def event(kind,payload=None):return json.dumps(dict(header=dict(task_id=ident,event=kind),payload=payload or {}))
+                if action=='run-task':await self.queue.put(event('task-started'))
+                elif action=='finish-task':
+                    await self.queue.put(event('result-generated',{'output':{'sentence':{'sentence_end':True,'text':p.REFERENCE}},'usage':{'duration':3.088}}))
+                    await self.queue.put(event('task-finished',{'usage':{'duration':3.088}}))
+                else:raise AssertionError('unexpected command')
+            async def recv(self):return await self.queue.get()
+            def __aiter__(self):return self
+            async def __anext__(self):return await self.recv()
+        class Local(p.PairSpeech):
+            @asynccontextmanager
+            async def speech_socket(self):
+                try:yield socket
+                finally:self.last_release={'confirmed':True}
+        socket=Socket();clock=Clock();row=p.new_row('new');ledger=p.Ledger(lambda:None);captured=[]
+        def factory(row,stamp):
+            value=Local(None,workspace='synthetic',region='cn-beijing',key='SYNTHETIC_ONLY',asr=p.MODEL,llm='qwen4-max',tts='fake',voice='fake',ledger=ledger,row=row,checkpoint=lambda:None,stamp=stamp)
+            captured.append(value);return value
+        text=await p.trial('new',PCM,row,factory,clock)
+        self.assertEqual(text,p.REFERENCE);self.assertEqual(bytes(socket.pcm),PCM)
+        self.assertEqual(socket.actions,['run-task','finish-task']);self.assertEqual(ledger.calls,1)
+        self.assertTrue(row['cleanup_confirmed']);self.assertEqual(row['readtaskpending'],0)
+        self.assertTrue(captured[0].reader.done());self.assertEqual(row['usage_final'],{'duration':3.088})
+        self.assertNotIn('task_id',json.dumps(row));self.assertNotIn(p.REFERENCE,json.dumps(row))
     async def test_usage_validation_cumulative_no_strings(self):
         row=p.new_row('old');task=p.MeasuredTask(None,row,lambda:None,lambda n:None)
         def event(v,kind='result-generated',ident=None):return json.dumps({'header':{'task_id':task.id if ident is None else ident,'event':kind},'payload':{'usage':{'duration':v,'secret':'body'}}})
@@ -103,6 +134,8 @@ class GuardTest(unittest.TestCase):
         rows=[];ledger=p.Ledger(lambda:rows.append(ledger.calls));ledger.reserve({});ledger.reserve({})
         self.assertEqual(rows,[1,2])
         with self.assertRaises(p.GuardError):ledger.reserve({})
+        row=p.new_row('old');single=p.Ledger(lambda:None);single.reserve(row)
+        with self.assertRaises(p.GuardError):single.reserve(row)
         ledger=p.Ledger(lambda:None);ledger.stopped=True
         with self.assertRaises(p.GuardError):ledger.reserve({})
     def test_private_output_exclusive(self):
