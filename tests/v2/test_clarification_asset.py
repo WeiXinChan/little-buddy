@@ -96,8 +96,20 @@ class Asset(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(tool.main(['--admission-smoke','--worker','--tool-source','fixed','--output',str(out),'--parent-pid',str(os.getppid()),'--parent-start','fixed']),0)
             value=json.loads((out/'admission.json').read_text());self.assertEqual(value['calls'],dict(tts=0,asr=0,llm=0,image=0))
     def test_production_source_files_pin_original_git_objects(self):
-        # Tool commit is provided after freeze; production identity is independent.
+        # Historical identity is independent of future production working trees.
         import subprocess
-        for name in tool.PRODUCTION:
+        expected={'backend/dashscope.py': 'b90f68944b7de1bef32da3e0a962599027b713fb8ae7718a62d6af78ccb269e2', 'backend/timing.py': 'fad4a5646e2fd4e53c1bc1f3cb18fe2ac4e5a44d3344d3409b3f38b996850e95', 'backend/v2/speech.py': '79ed4eb773e4c2e61341835197bdc1936a50f0094fa664c24a5ca280f7c630d2', 'backend/v2/runtime.py': '585a4b4b5b19513c8fa9a0452d7304594f9c56b00de3a6d14977e42d672607f4', 'backend/v2/files.py': 'ddabea2536e80877c8ebaf19b7b8ba641a7c551bf9690cd73765ddd6ddb26b99'}
+        for name,sha in expected.items():
             raw=subprocess.check_output(['git','show',tool.SOURCE+':'+name],cwd=tool.ROOT)
-            self.assertEqual(raw,(tool.ROOT/name).read_bytes())
+            self.assertEqual(tool.digest(raw),sha)
+    def test_execution_source_guard_still_rejects_modified_local_bytes(self):
+        import subprocess
+        real=tool.ROOT;original=subprocess.run
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);name=tool.PRODUCTION[0];(root/name).parent.mkdir(parents=True)
+            (root/name).write_bytes(b'SYNTHETIC_CHANGED_SOURCE')
+            def git_object(*args,**kwargs):
+                kwargs['cwd']=real;result=original(*args,**kwargs)
+                self.assertEqual(result.returncode,0);return result
+            with patch.object(tool,'ROOT',root),patch.object(tool.subprocess,'run',git_object):
+                with self.assertRaises(tool.GuardError):tool.source_guard(tool.SOURCE)
