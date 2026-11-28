@@ -1,0 +1,53 @@
+async def _analyze(self, pcm, operation):
+        owner = asyncio.current_task()
+        self.recognition_scopes[owner] = operation
+        try:
+            operation.ensure()
+            if operation.private_mode!=operation.session.private_mode:raise StaleOperation()
+            async with asyncio.timeout(operation.budget.remaining()):
+                stage_timing.mark('asr_open',self,operation)
+                async with self.owned_resource(operation, self.providers.recognize, 16000) as recognizer:
+                    stage_timing.mark('asr_ready',self,operation)
+                    for offset in range(0, len(pcm), 6400):
+                        await self.owned(operation, recognizer.write, pcm[offset:offset+6400])
+                    text = await self.owned(operation, recognizer.finish)
+                    stage_timing.mark('asr_final',self,operation)
+                stage_timing.mark('asr_released',self,operation)
+                operation.ensure()
+                text = self.policy.input(text)
+                operation.ensure()
+                if operation.private_mode!=operation.session.private_mode:raise StaleOperation()
+                # Only this operation's authorised session may supply context.
+                context = operation.session.context()
+                result = await self.read_request(operation, 'endpoint', text, context)
+                if (not isinstance(result, dict) or set(result) != {'completion', 'meaning'}
+                        or result['completion'] not in {'complete', 'incomplete', 'thinking'}
+                        or result['meaning'] not in {'new_turn', 'stop', 'noise', 'backchannel', 'thinking', 'unknown','management','volume_up','volume_down'}):
+                    raise WireError('endpoint schema')
+                operation.ensure()
+                operation.budget.remaining()
+                if result['completion'] == 'thinking':
+                    operation.budget.pause_thinking()
+                if operation.private_mode!=operation.session.private_mode:raise StaleOperation()
+                self.analysis = (operation.revision, text, result['completion'], result['meaning'])
+                await self.owned(operation, self.send, 'endpoint',
+                                 revision=operation.revision, completion=result['completion'])
+        except StaleOperation:
+            return
+        except asyncio.CancelledError:
+            stage_timing.mark('cancel',self,operation,outcome='cancelled')
+            raise
+        except Exception:
+            if operation.valid():
+                await self.owned(operation, self.send, 'decision', meaning='unknown',
+                                 intent='', revision=operation.revision)
+        finally:
+            pcm = b''
+            self.recognition_scopes.pop(owner, None)
+            # An old finally must not consume a newer owner's pending probe.
+            pending = self.next_probe
+            if self.recognition_handoff is None and self.recognition is owner and pending is not None and pending[2] is owner:
+                self.next_probe = None
+                data, following, _ = pending
+                if following.valid() and not operation.cancelled and not owner.cancelling():
+                    self.recognition = asyncio.create_task(self._analyze(data, following))

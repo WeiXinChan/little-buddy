@@ -50,6 +50,7 @@ class Operation:
         self.connection, self.turn = self.session.connection, self.session.turn
         self.epoch, self.revision = epoch, revision
         self.budget = peer.input_budget
+        self.input_anchor = self.budget.anchor
         self.output = None
         self.private_mode = self.session.private_mode
         self.cancelled = False
@@ -112,6 +113,7 @@ class VoicePeer:
         self.prepared = None
         self.revision = 0
         self.analysis = None
+        self.input_resolution = None
         self.prompted_revision = None
         self.quarantined = False
         self.suspended = False
@@ -707,6 +709,13 @@ class VoicePeer:
                     # Confirmed stopped old reply, not a session/lease renewal.
                     session.deadline=session.progress_deadline=0
                     session.response_confirmed=session.response_expired=False
+                    # Follow only the client's adjacent stop barrier for this
+                    # already-resolved input; a new revision still admits speech.
+                    key=self.input_resolution_key()
+                    prior=self.input_resolution
+                    if (not event['intent'] and prior is not None and
+                        prior[:3]==key[:3] and prior[4]==key[4] and prior[3]+1==key[3] and
+                        budget.anchor is None):self.input_resolution=key
             finally:
                 if self.settling_stop is token:self.settling_stop=None
         elif kind == 'end':
@@ -733,6 +742,7 @@ class VoicePeer:
             speech, age = event.get('speech', True), event.get('age_ms', 0)
             if type(speech) is not bool or type(age) is not int or not 0 <= age <= 20000:
                 raise WireError('capture boundary')
+            if self.input_resolution==self.input_resolution_key():return
             if speech:
                 self.input_budget.speech(age)
                 self.awaiting_input = True
@@ -762,6 +772,7 @@ class VoicePeer:
             self.session.valid_interaction()
             # Snapshot analysis can finish, but its old version cannot take effect.
         elif kind == 'probe':
+            if self.input_resolution==self.input_resolution_key():return
             if event['revision'] != self.revision or not self.capture:
                 return
             self.input_budget.resume()
@@ -824,6 +835,76 @@ class VoicePeer:
             if accepted and not before_effective and self.session.response_confirmed:stage_timing.mark('effective_ack',self,diagnostic)
             await self.commands()
 
+    def input_resolution_key(self):
+        return (self.session.session,self.session.connection,self.session.turn,self.epoch,self.revision)
+
+    async def finish_input_analysis(self,operation,*,outcome=None,failure=None):
+        def ensure_current():
+            operation.ensure()
+            if (operation.private_mode!=operation.session.private_mode or
+                self.input_budget is not operation.budget or self.input_budget.anchor!=operation.input_anchor):
+                raise StaleOperation()
+            session=operation.session
+            if session.response_expired:raise StaleOperation()
+            if session.deadline and (session.player is not None or session.pending):
+                if not session._output_live():raise StaleOperation()
+        ensure_current()
+        key=self.input_resolution_key()
+        if self.input_resolution==key:return
+        # An already-expired expression remains a timeout with its original
+        # boundary. Do not consume it through the finite unknown resolution.
+        if failure is not None and operation.budget.deadline is not None and operation.session.clock()>=operation.budget.deadline:
+            await self.owned(operation,self.send,'failure',code='timeout',revision=operation.revision)
+            return
+        if failure is None:
+            if outcome not in {'asr_empty','semantic_unknown'}:raise ValueError('analysis outcome')
+            operation.budget.remaining()
+        generation=self.generation
+        close_started=asyncio.get_running_loop().time()
+        try:await self.cancel_generation_task(generation)
+        except asyncio.CancelledError:
+            # A superseding input may cancel this analysis while old output exits.
+            # Observe that same task within the original .5s, never grant another .5s.
+            if generation is not None and not generation.done():
+                try:
+                    done,_=await asyncio.wait({generation},timeout=max(0,.5-(asyncio.get_running_loop().time()-close_started)))
+                except asyncio.CancelledError:done=set()
+                if not done:
+                    self.quarantined=True;self.track_retired(generation)
+            raise
+        ensure_current()
+        if self.generation is not generation:raise StaleOperation()
+        if failure is None:operation.budget.remaining()
+        self.generation=None
+        self.session.interrupt()
+        self.session.deadline=self.session.progress_deadline=0
+        self.session.response_confirmed=self.session.response_expired=False
+        self.input_resolution=key
+        self.awaiting_input=False
+        self.capture.clear();self.analysis=self.prepared=self.next_probe=None
+        self.input_budget=ResponseBudget(self.session.clock) # inactive, NOT a new 15s grant
+        inactive_budget=self.input_budget
+        def ensure_resolved():
+            operation.ensure()
+            if (operation.private_mode!=operation.session.private_mode or
+                self.input_budget is not inactive_budget or inactive_budget.anchor is not None):raise StaleOperation()
+        await self.commands()
+        ensure_resolved()
+        fields=dict(session=operation.session_id,turn=operation.turn,revision=operation.revision)
+        await self.owned(operation,self.send,'scope',management_v=1,state='active',**fields)
+        ensure_resolved()
+        if failure is None:
+            await self.owned(operation,self.send,'decision',meaning='unknown',intent='',revision=operation.revision)
+        else:
+            from backend.dashscope import SpeechTaskError
+            if isinstance(failure,(VoiceFault,SafetyFault)):code=failure.code
+            elif isinstance(failure,TimeoutError):code='timeout'
+            elif isinstance(failure,SpeechTaskError) and failure.code in {'insufficient_quota','AllocationQuota.FreeTierOnly'}:code='quota'
+            elif isinstance(failure,OSError):code='network'
+            else:code='voice'
+            if isinstance(failure,SafetyFault):fields['local_help']=local_help(failure.reason)
+            await self.owned(operation,self.send,'failure',code=code,**fields)
+
     def analyze(self, pcm, epoch, revision):
         # Bind on invocation, before create_task can be delayed until a handoff.
         return self._analyze(pcm, Operation(self, epoch, revision))
@@ -844,6 +925,9 @@ class VoicePeer:
                     stage_timing.mark('asr_final',self,operation)
                 stage_timing.mark('asr_released',self,operation)
                 operation.ensure()
+                if isinstance(text,str) and not text.strip():
+                    await self.finish_input_analysis(operation,outcome='asr_empty')
+                    return
                 text = self.policy.input(text)
                 operation.ensure()
                 if operation.private_mode!=operation.session.private_mode:raise StaleOperation()
@@ -867,10 +951,10 @@ class VoicePeer:
         except asyncio.CancelledError:
             stage_timing.mark('cancel',self,operation,outcome='cancelled')
             raise
-        except Exception:
-            if operation.valid():
-                await self.owned(operation, self.send, 'decision', meaning='unknown',
-                                 intent='', revision=operation.revision)
+        except Exception as failure:
+            if operation.valid() and operation.private_mode==operation.session.private_mode:
+                try:await self.finish_input_analysis(operation,failure=failure)
+                except StaleOperation:return
         finally:
             pcm = b''
             self.recognition_scopes.pop(owner, None)
@@ -883,6 +967,9 @@ class VoicePeer:
                     self.recognition = asyncio.create_task(self._analyze(data, following))
 
     async def decision(self, text, meaning, revision, deadline):
+        if meaning=='unknown':
+            await self.finish_input_analysis(Operation(self,self.epoch,revision),outcome='semantic_unknown')
+            return
         if meaning in {'volume_up','volume_down'}:
             session,epoch,turn,connection=self.session,self.epoch,self.session.turn,self.session.connection
             key=(session.session,connection,turn,epoch,revision)
