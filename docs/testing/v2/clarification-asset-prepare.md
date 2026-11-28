@@ -12,6 +12,8 @@ API复用 `backend/dashscope.py:276–296` 与 V2Speech：同一既有workspace 
 
 输出目录0700、文件0600：成功有clarification.pcm、result.json及supervisor.json；失败可保留partial.pcm，不能入APK。记录原PCM SHA256、bytes/samples/duration、文本SHA、采样格式、模型/音色、生产和工具source、工具SHA、实际尝试、累计usage、退出与清理证明。supervisor同时记录result.json的SHA，可独立核对元数据。只在task-finished+真实资源退出确认+完整非空偶数字节PCM通过时标asset_generated_not_auditioned，仍apk_approved=false。固定素材不含家庭内容，但不自动公开；root试听/字词及长度核对后才交Android打包，后续本地播放无需每次云调用。
 
+客户端素材契约（按root本轮审阅）：24kHz/PCM16LE/mono，原始samples最多144000，即6秒（不是当前WIP的72000/3秒）。Android需同步该资源上限，不能裁字/加速；若唯一生成结果过长，只报失败并保留partial，不自动重做。原15秒表达期限用于澄清准入，不新建/延长正常响应deadline；本地固定播放独立有界且可随输入/stop/生命周期取消，绝不计P12或正常ACK。尚待Android已有作者确认同一上限，由root统筹，不声称素材已满足时长。
+
 成本：本次prepare真实调用0；未来唯一请求的实际characters需取响应。实时额度、账单、价格均未知，不宣称免费或已扣费；尊重已有免费优先/用完即停，额度/auth/model失败直接停，不换服务。没有新增“必须实时证明免费才能执行”门槛。
 
 离线验证只用明确synthetic mock：固定载荷/正确顺序/累计usage非相加、错误task_id、缺失终态、quota失败、默认disabled、固定参数拒绝、第二次I/O拒绝、模型不符、私有权限、完整原始字节/SHA及清理负控。另复用现V2Speech本地释放测试。最初缺sparse原QA文件导致加载错误，补齐原仓库文件后通过，原日志保留，不改skip。
