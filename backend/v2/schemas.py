@@ -28,6 +28,16 @@ PLAN = obj(dict(
                  description='Zero-based indexes into actual sentences; every value must also be less than len(sentences). Never secret values or references.'),
     tools=dict(type='array',items=IMAGE_TOOL,maxItems=1)),
     required=['action','mode','rules','roles','secrets','sentences','anchors'])
+# Only the existing format-repair request uses index-free sentence labels.
+# Compile this complete DTO after validation; never coerce a rejected index.
+from copy import deepcopy
+PLAN_FORMAT_REPAIR=deepcopy(PLAN)
+PLAN_FORMAT_REPAIR['properties'].pop('anchors')
+PLAN_FORMAT_REPAIR['required'].remove('anchors')
+PLAN_FORMAT_REPAIR['properties']['sentences']=dict(type='array',minItems=1,maxItems=4,items=obj(dict(
+    text=dict(type='string',minLength=1,maxLength=120),
+    anchors=dict(type='array',maxItems=16,uniqueItems=True,items=dict(type='string',minLength=1,maxLength=40)))))
+
 FACT_ITEM = obj(dict(
     key=enum('nickname','preference','role','rule','clue','plot','promise'),
     value=dict(type='string',minLength=1,maxLength=256),

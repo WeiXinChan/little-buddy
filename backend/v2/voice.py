@@ -313,6 +313,10 @@ class VoicePeer:
                 raise
             remaining = budget.remaining()
             budget.read_retry_revision = revision  # reserve before the next await
+            format_receipt=None
+            if format_repair and repair:
+                format_receipt=dict(initial_detail=contract_detail(failure),encoding='sentence_labels',validated=False)
+                self.last_plan_format_repair=format_receipt
             async with asyncio.timeout(remaining):
                 retry_function=(self.providers.repair_plan_format if format_repair else self.providers.repair_plan) if repair else function
                 retry_args=deepcopy(snapshot) if kind=='plan' else args
@@ -324,6 +328,7 @@ class VoicePeer:
             # An adapter swallowing cancellation or a changed clock cannot
             # publish a result outside the original first-response budget.
             budget.remaining()
+            if format_receipt is not None:format_receipt['validated']=True
             return result
 
     @asynccontextmanager
@@ -1272,6 +1277,7 @@ class VoicePeer:
                 self.response_scope=(self.session,self.session.connection,self.session.turn,epoch,response_revision)
             if response_revision != self.revision:raise StaleOperation()
             self.last_guess_quality_repair=None
+            self.last_plan_format_repair=None
             while self.session.player is None:
                 self.changed.clear()
                 if not self.session._output_live():
