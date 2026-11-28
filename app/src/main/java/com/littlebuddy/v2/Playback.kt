@@ -82,7 +82,6 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
     var suspended = false; private set
     private var track: TrackPort? = null
     private val queue = ArrayDeque<AudioPacket>()
-    private var offset = 0
     private var written = 0L
     private var head = 0L
     private var progress = 0L
@@ -125,22 +124,37 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
             check(position >= head && position <= written)
             if(position>head && !suspended && queue.isNotEmpty())reportOutput(true)
             if (position > head) { head = position; progress = now() }
-            val packet = queue.firstOrNull()
-            if (packet != null && position != reported) {
-                ack(PlaybackAck(packet.binding, packet.segment, position, position >= packet.end))
-                reported = position
-            }
-            if (packet != null && offset == packet.pcm.size && position >= packet.end) {
-                queue.removeFirst().pcm.fill(0); offset = 0; reported = -1
-                if(queue.isEmpty())reportOutput(false)
+            // Confirmation and submission are independent cursors. A queued packet
+            // remains owned until its REAL native head completes it, even when later
+            // packets have already been submitted to the same native FIFO.
+            while (true) {
+                val packet = queue.firstOrNull() ?: break
+                val confirmed = minOf(position, packet.end)
+                if (confirmed != reported) {
+                    ack(PlaybackAck(packet.binding, packet.segment, confirmed, position >= packet.end))
+                    if (track !== native || binding != packet.binding) return
+                    reported = confirmed
+                }
+                if (position < packet.end) break
+                queue.removeFirst().pcm.fill(0)
+                reported = -1
+                if (queue.isEmpty()) reportOutput(false)
+                if (track !== native) return
             }
             if (!suspended) {
-                val next = queue.firstOrNull()
-                if (next != null && offset < next.pcm.size) {
+                // At most the bounded queue (10 packets) is visited per tick.
+                // Stop on zero/partial writes; never spin waiting for native room.
+                for (next in queue) {
+                    if (written >= next.end) continue
+                    val offset = (written - next.start).toInt()
+                    check(offset in 0 until next.pcm.size)
                     val count = native.write(next.pcm, offset)
                     check(count in 0..(next.pcm.size - offset))
-                    offset += count; written += count
+                    if (track !== native || binding != next.binding) return
+                    written += count
                     if (count > 0 && !started) { native.play(); started = true }
+                    if (track !== native || binding != next.binding) return
+                    if (count < next.pcm.size - offset) break
                 }
             }
             // Writes, duplicate ACKs, network pings and pauses never renew this clock.
@@ -171,7 +185,7 @@ internal class Playback(private val factory: () -> TrackPort, private val now: (
         binding=null
         val native=track
         track=null
-        queue.forEach{it.pcm.fill(0)};queue.clear();offset=0;suspended=false
+        queue.forEach{it.pcm.fill(0)};queue.clear();suspended=false
         try {
             var stopped=!quarantined
             var released=!quarantined
