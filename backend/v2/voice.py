@@ -964,9 +964,11 @@ class VoicePeer:
         ensure_current()
         key=self.input_resolution_key()
         if self.input_resolution==key:return
+        if isinstance(failure,TimeoutError):failure_observer.timeout(self,'input_analysis')
         # An already-expired expression remains a timeout with its original
         # boundary. Do not consume it through the finite unknown resolution.
         if failure is not None and operation.budget.deadline is not None and operation.session.clock()>=operation.budget.deadline:
+            if not isinstance(failure,TimeoutError):failure_observer.timeout(self,'input_analysis')
             await self.owned(operation,self.send,'failure',code='timeout',revision=operation.revision)
             return
         if failure is None:
@@ -1469,6 +1471,8 @@ class VoicePeer:
                 await self.send('failure', code='safety', session=operation.session_id,
                                 turn=operation.turn, revision=response_revision, local_help=local_help(reason))
             else:
+                if isinstance(failure,TimeoutError) or isinstance(failure,VoiceFault) and failure.code=='timeout':
+                    failure_observer.timeout(self,'output_generation')
                 await self.send('failure', code=failure.code if isinstance(failure, VoiceFault) else 'timeout' if isinstance(failure, TimeoutError) else 'voice')
             if self.quarantined:
                 await self.close_quarantined()
@@ -1572,6 +1576,7 @@ class VoicePeer:
                 try:
                     self.input_budget.remaining()
                 except (TimeoutError, ValueError):
+                    failure_observer.timeout(self,'input_monitor')
                     self.session.interrupt()
                     await self.commands()
                     await self.cancel_generation()
@@ -1600,6 +1605,7 @@ class VoicePeer:
             await self.commands()
             await self.poll_visual()
             if not self.session.active or self.session.response_expired:
+                failure_observer.timeout(self,'session_monitor')
                 await self.cancel_generation()
                 await self.send('failure', code='timeout')
                 return
