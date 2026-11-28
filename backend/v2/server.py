@@ -8,7 +8,7 @@ from websockets.asyncio.server import serve
 from backend.v2.voice import VoicePeer
 
 
-def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, clock=time.time, feedback=None):
+def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, clock=time.time, feedback=None, failure_observation=None):
     if tls is None or not isinstance(token, str) or not 32 <= len(token) <= 256 or not token.isascii() or not token.isalnum():
         raise ValueError('TLS and random device credential required')
     active = False
@@ -38,6 +38,9 @@ def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, 
             return
         active = True
         peer = VoicePeer(socket, providers, policy)
+        if failure_observation is not None:
+            try:failure_observation.attach(peer)
+            except BaseException:pass
         try:
             if expires_at is None:await peer.run()
             else:
