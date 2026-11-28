@@ -1184,6 +1184,7 @@ class VoicePeer:
         try:
             function=getattr(self.providers,'review',None) or self.providers.safe
             context=operation.session.context(query=query)
+            context['_review_turn']={'input':query,'phase':phase}
             if pending_guess is not None:context['_pending_guess']=deepcopy(pending_guess)
             verdict = await self.owned(operation, function, text, context)
         except SafetyFault:
