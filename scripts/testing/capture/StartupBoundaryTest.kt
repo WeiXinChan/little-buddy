@@ -10,7 +10,7 @@ import com.littlebuddy.SherpaWake
 /** Production Capture+ledger, controlled native source; no Android hardware claim. */
 class StartupBoundaryTest {
  private fun run(mode:String,expectReady:Boolean) {
-  AudioRecord.reset(24);SherpaWake.detectAfter=21
+  AudioRecord.reset(24);AudioRecord.actualFramesOverride=3200;SherpaWake.detectAfter=21
   val lock=Capture::class.java.getDeclaredField("nativeLock").apply{isAccessible=true}
   var injected=false;var errors=0;var modelDone=false
   AbsoluteWake.initializeHook={SystemClock.manualNow+=1385;modelDone=true}

@@ -10,7 +10,7 @@ import com.littlebuddy.SherpaWake
 class ExpiryStartupTest {
  private data class Result(val capture:Capture,val handler:Handler,val client:VoiceClient)
  private fun record(fault:Boolean):Result {
-  AudioRecord.reset(24);SherpaWake.detectAfter=21;AbsoluteWake.initializeHook={};AbsoluteWake.rearmHook={}
+  AudioRecord.reset(24);AudioRecord.actualFramesOverride=3200;SherpaWake.detectAfter=21;AbsoluteWake.initializeHook={};AbsoluteWake.rearmHook={}
   if(fault){AudioRecord.stampAvailableAfterMs=2000;AudioRecord.onRead={if(it==1)SystemClock.manualNow+=181}}
   val handler=Handler();val client=VoiceClient()
   val capture=Capture(AssetManager(),handler,client,{true}){}

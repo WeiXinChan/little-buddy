@@ -14,14 +14,15 @@ internal class NativeReadLedger(private val capacity:Int,private val mono:()->Lo
         const val STARTUP_LIMIT_MS=500L
         const val STARTUP_SAMPLES=8000
         const val MIN_RATE=15984L
-        private const val MAX_RATE=16016L
+        const val MAX_RATE=16016L
+        const val RESERVE_FRAMES=320
         fun durationMs(samples:Long)=(samples*1000+MIN_RATE-1)/MIN_RATE
     }
     private val bridge=CaptureClockBridge(mono,boot)
     private val monoOrigin=bridge.origin.after
     // Earliest BOOTTIME mapping, including the unchanged 5ms admissible bridge displacement.
     private val bootOrigin=bridge.earliestBoot(monoOrigin)
-    private val reserve=320L
+    private val reserve=RESERVE_FRAMES.toLong()
     private val startupMs=(capacity-reserve)/16
     private val maxAgeNs=minOf(100L,startupMs)*1_000_000
     private var checkedAt=monoOrigin
