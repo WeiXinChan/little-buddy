@@ -1171,14 +1171,16 @@ class VoicePeer:
             # Replays remain rejected by exact pending-front ID and task sequence.
             self.session.revealed.intersection_update(s.name for s in self.session.pending)
 
-    async def review(self, operation, text, *, query='', phase='whole'):
+    async def review(self, operation, text, *, query='', phase='whole',pending_guess=None):
         # Re-project current authoritative scope with this response's input,
-        # never a frozen PLAN snapshot or the unapproved candidate sentence.
+        # never replace played history with an unapproved proposal.
         operation.ensure()
         stage_timing.mark(phase+'_start',self,operation)
         try:
             function=getattr(self.providers,'review',None) or self.providers.safe
-            verdict = await self.owned(operation, function, text, operation.session.context(query=query))
+            context=operation.session.context(query=query)
+            if pending_guess is not None:context['_pending_guess']=deepcopy(pending_guess)
+            verdict = await self.owned(operation, function, text, context)
         except SafetyFault:
             stage_timing.mark(phase+'_end',self,operation,outcome='safety_denied')
             raise
@@ -1200,6 +1202,15 @@ class VoicePeer:
                 plan.get('action') in ('change','continue') and
                 plan.get('guess_role') in (None,'setter') and
                 isinstance(plan.get('secrets'),dict) and bool(plan['secrets']) and not plan.get('tools'))
+
+    def pending_initial_guess(self,plan):
+        s=self.session
+        if (not self.initial_guess_candidate(plan) or s.private_mode or s.secrets or
+            s.game.get('mode')=='guess'):return None
+        answer=plan['secrets'].get('answer')
+        if answer is None and len(plan['secrets'])==1:answer=next(iter(plan['secrets'].values()))
+        if not isinstance(answer,str) or not 0<len(answer.strip())<=999:return None
+        return dict(mode='guess',guess_role='setter',answer=answer,rules=plan['rules'])
 
     async def repair_initial_guess(self,operation,text,plan,revision,accepted,attempt):
         """One unplayed fresh-riddle correction, never a safety retry or new budget."""
@@ -1367,8 +1378,9 @@ class VoicePeer:
                     else:plan.pop('guess_role',None)
                 if ending:plan.update(tools=[],anchors={})
                 stage = 'safety'
+                pending_guess=self.pending_initial_guess(plan)
                 try:
-                    await self.review(operation, ''.join(plan['sentences']), query=text or '')
+                    await self.review(operation, ''.join(plan['sentences']), query=text or '',pending_guess=pending_guess)
                 except QualityFault:
                     attempt=dict(initial_whole_quality_rejected=True,attempted=False,replacement_whole_approved=False)
                     self.last_guess_quality_repair=attempt
@@ -1380,7 +1392,8 @@ class VoicePeer:
                     plan=replacement
                     self.last_guess_normalization=plan.get('_guess_normalization')
                     stage='safety'
-                    await self.review(operation, ''.join(plan['sentences']), query=text or '')
+                    pending_guess=self.pending_initial_guess(plan)
+                    await self.review(operation, ''.join(plan['sentences']), query=text or '',pending_guess=pending_guess)
                     attempt['replacement_whole_approved']=True
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
                 if plan['mode']=='guess' and 'guess_role' in plan:state['guess_role']=plan['guess_role']
@@ -1435,7 +1448,7 @@ class VoicePeer:
                         for sentence in plan['sentences']:
                             if len(plan['sentences']) > 1:
                                 stage='safety'
-                                await self.review(operation, sentence, query=text or '', phase='segment')
+                                await self.review(operation, sentence, query=text or '', phase='segment',pending_guess=pending_guess)
                             yield sentence
                     yield items()
                 manager = planned()
