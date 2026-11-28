@@ -1,6 +1,9 @@
 package com.littlebuddy.v2.parent
 
 import java.util.concurrent.atomic.AtomicInteger
+import com.littlebuddy.v2.CapturePredicate
+import com.littlebuddy.v2.CaptureClockReason
+import com.littlebuddy.v2.CaptureReadStep
 
 /** Closed vocabulary only. No authentication data or exception text can enter this port.
  * Disabled by default. The diagnostic adapter must be nonblocking; all failures are isolated. */
@@ -26,7 +29,10 @@ internal object PinDiagnostic {
         val operation:CaptureOperation=CaptureOperation.NONE,val currentTransport:Long=-1,val currentCapture:Long=-1,val restored:Boolean=false,val launcher:Boolean=false,val pump:PumpStep=PumpStep.NONE,
         val episode:Long=-1,val generation:Long=-1,val wakeBootMs:Long=-1,
         val operationNs:Long=-1,val wakeFrame:Long=-1,val readFrame:Long=-1,val wakeRelativeMs:Long=-1,val wakeLagMs:Long=-1,
-        val requestedNativeFrames:Int=0,val actualNativeFrames:Int=0,val creditedNativeFrames:Int=0)
+        val requestedNativeFrames:Int=0,val actualNativeFrames:Int=0,val creditedNativeFrames:Int=0,
+        val captureStage:Stage=Stage.CAPTURE_NATIVE,val capturePredicate:CapturePredicate=CapturePredicate.NONE,val clockReason:CaptureClockReason?=null,
+        val uploadSamples:Int=0,val nativeReturnedSamples:Long=0,val nativeReadCalls:Long=0,
+        val inputSerial:Long=0,val sealedSerial:Long=0,val readStep:CaptureReadStep=CaptureReadStep.NONE)
     private val activitySequence=java.util.concurrent.atomic.AtomicLong()
     fun nextActivity()=activitySequence.incrementAndGet()
     @Volatile private var runtimeSink:((RuntimeEvent)->Unit)?=null
@@ -156,9 +162,11 @@ internal class ConfigurationFailure(val stage:ConfigurationDiagnostic.Stage,val 
 
 /** Independent phase/terminal/operation reservations INSIDE the original256-row cap. */
 internal class ConfigurationEventBudget(configurationOnly:Boolean) {
-    private val general=AtomicInteger(if(configurationOnly)64 else 160)
+    private val general=AtomicInteger(if(configurationOnly)62 else 158)
     private val configuration=if(configurationOnly)AtomicInteger(96) else null
     private fun admit(counter:AtomicInteger)=counter.getAndUpdate { if(it>0)it-1 else 0 }>0
+    private val failure=AtomicInteger(2)
+    fun failure()=admit(failure)
     private val critical=AtomicInteger(16)
     private val operation=AtomicInteger(32)
     private val phase=AtomicInteger(48)

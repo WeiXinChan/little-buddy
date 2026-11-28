@@ -94,14 +94,15 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var startup:CaptureBootstrap?=null
         var uploadSamples = 0
         var step=CaptureReadStep.NONE
+        fun readBuffered():List<ShortArray> {step=CaptureReadStep.BUFFER_READ;return buffered.read()}
         fun upload(batch: List<ShortArray>, speech: Boolean) {
             try {
                 step=CaptureReadStep.UPLOAD_ADMIT
                 checkNotNull(ledger).check()
                 val count=batch.sumOf{it.size}
-                if(uploadSamples+count>320000)error("input bound")
+                captureCheck(uploadSamples+count<=320000,CapturePredicate.INPUT_BATCH_BOUND)
                 uploadSamples+=count
-                if(!client.stage(batch,speech,lastCapturedAt))check(uploads.offer(batch,speech,lastCapturedAt))
+                if(!client.stage(batch,speech,lastCapturedAt))captureCheck(uploads.offer(batch,speech,lastCapturedAt),CapturePredicate.UPLOAD_QUEUE)
             }catch(failure:Exception){batch.forEach{it.fill(0)};throw failure}
         }
         var requestedNativeFrames=0;var actualNativeFrames=0
@@ -202,13 +203,14 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     nativeRead(native,frame)
                 }
                 if(cancelled.get() || !allowed())break
-                check(count in 0..frame.size)
+                captureCheck(count in 0..frame.size,CapturePredicate.NATIVE_READ_COUNT)
                 diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                 step=CaptureReadStep.POST_READ
                 lastCapturedAt=if(replay)continuity.sampleTime(prefix.replayPosition) else continuity.read(count)
                 if (count == 0) { Thread.sleep(5); continue }
                 clockCheck(native.recordingState == AudioRecord.RECORDSTATE_RECORDING,CaptureClockReason.RECORDER_NOT_RECORDING)
                 nativeProof = nativeProof.copy(recording=true, frames=nativeProof.frames+count)
+                step=CaptureReadStep.BUFFER_PUSH
                 buffered.push(frame, count)
                 position = buffered.position
                 if (awake && idle != client.idleSerial) {
@@ -241,7 +243,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     continuity.check()
                     diagnosticStage=PinDiagnostic.Stage.CAPTURE_KWS
                     val absoluteTail=Math.addExact(wakeBase,tail)
-                    check(tail>=0 && absoluteTail in wakeBase..position) {"keyword capture coordinate"}
+                    captureCheck(tail>=0 && absoluteTail in wakeBase..position,CapturePredicate.WAKE_COORDINATE)
                     diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                     val wakeBoundary=continuity.sampleTime(absoluteTail)
                     check(wakeBoundary>=0)
@@ -252,12 +254,14 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     owner.post { if (!cancelled.get() && allowed()) client.wake(boundary) }
                     // Absolute ring and KWS-local coordinates share a recorded origin.
                     lastSpeech = android.os.SystemClock.elapsedRealtime()
+                    step=CaptureReadStep.BUFFER_BEGIN
                     buffered.begin(absoluteTail)
                     firstAfterWake = true
                     var continuation = false
                     // KWS can report after the first intent samples have arrived.
                     // Feed the cached tail to the real VAD, without consuming the
                     // upload cursor or waiting for a future recorder frame.
+                    step=CaptureReadStep.BUFFER_INSPECT
                     buffered.inspectAfter(absoluteTail) { cached ->
                         try {
                             if(!cancelled.get() && allowed()) {
@@ -268,7 +272,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     }
                     if (continuation) {
                         voiced = true; firstAfterWake = false
-                        upload(buffered.read(), true)
+                        upload(readBuffered(), true)
                     }
                     continue
                 }
@@ -282,25 +286,31 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                         voiced = true
                         buffered.onset()
                         firstAfterWake = false
-                        upload(buffered.read(), true)
-                    } else upload(buffered.read(), true)
+                        upload(readBuffered(), true)
+                    } else upload(readBuffered(), true)
                 } else if (voiced && now - lastSpeech <= 300) {
-                    upload(buffered.read(), false)
+                    upload(readBuffered(), false)
                 } else {
                     owner.post { if (!cancelled.get()) client.quiet() }
                     if (voiced) { voiced = false; detector = SpeechDetector(320, initialFloor = 36.0) }
-                    if (!firstAfterWake) buffered.follow()
+                    if (!firstAfterWake) {step=CaptureReadStep.BUFFER_FOLLOW;buffered.follow()}
                 }
                 // Per-expression audio is bounded. Endpoint completion resets it via
                 // the owner callback; the backend separately retains the 600s session.
-                if (uploadSamples >= 300000) error("input capacity")
+                captureCheck(uploadSamples < 300000,CapturePredicate.INPUT_CAPACITY)
             }
         } catch (error: Exception) {
             if(error is CaptureClockFailure){
                 val failure=CaptureClockFailure(error.reason,error.evidence,error.longWitness,context())
                 lastClockFailure=failure;CaptureClockDiagnostic.emit(failure)
             }
-            diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_FAILURE)
+            PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CAPTURE_FAILURE,diagnosticScope,
+                cancelled=cancelled.get(),allowed=runCatching{allowed()}.getOrDefault(false),stopRequested=stopRequested.get(),
+                nativeReleased=nativeProof.released,operation=operation,captureStage=diagnosticStage,
+                capturePredicate=(error as? CapturePredicateFailure)?.predicate ?: CapturePredicate.NONE,
+                clockReason=(error as? CaptureClockFailure)?.reason,
+                uploadSamples=uploadSamples,nativeReturnedSamples=nativeReturnedSamples,nativeReadCalls=nativeReadCalls,
+                inputSerial=client.inputSerial,sealedSerial=sealed,readStep=step))
             if (!cancelled.get()) PinDiagnostic.runtimeError(diagnosticStage,error)
             if (!cancelled.get()) owner.post { if(!cancelled.get() && allowed())failed() }
         } finally {

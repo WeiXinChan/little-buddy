@@ -148,7 +148,8 @@ class AndroidRuntimeConfigurationTest {
     }
     @Test fun normalDiagnosticBudgetStillSharesOriginal256Rows() {
         val b=ConfigurationEventBudget(false)
-        repeat(80){assertTrue(b.general());assertTrue(b.configuration())}
+        repeat(79){assertTrue(b.general());assertTrue(b.configuration())}
+        repeat(2){assertTrue(b.failure())};assertFalse(b.failure())
         assertFalse(b.general());assertFalse(b.configuration())
         repeat(16){assertTrue(b.critical())};assertFalse(b.critical())
         repeat(32){assertTrue(b.operation())};assertFalse(b.operation())
