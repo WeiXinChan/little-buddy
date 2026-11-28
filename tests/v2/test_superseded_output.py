@@ -171,6 +171,25 @@ class SupersededOutput(unittest.IsolatedAsyncioTestCase):
         self.model.release.set();await self.until('endpoint')
         await self.send('seal',revision=2);await self.finish_reply();self.assertEqual(self.peer.session.turn,3)
 
+    async def test_expiry_during_prefetch_close_cannot_grant_voice_recovery(self):
+        entered=asyncio.Event();closing=asyncio.Event();release=asyncio.Event()
+        async def facts(text):
+            entered.set()
+            try:await asyncio.Event().wait()
+            except asyncio.CancelledError:closing.set();await release.wait()
+            return []
+        async def plan(*args,**kwargs):
+            await entered.wait();raise RuntimeError('SYNTHETIC_PLAN_FAILURE')
+        self.peer.providers.facts=facts;self.peer.providers.plan=plan;self.peer.session.ttl=5
+        await self.probe(1,110);await self.until('endpoint')
+        await self.send('seal',revision=1);decision=await self.until('decision')
+        self.epoch+=1;self.seq=0;await self.send('stop',intent=decision['intent'])
+        await self.until('open');await self.send('bind',player='expiry-during-close');await self.until('bound')
+        await asyncio.wait_for(closing.wait(),1)
+        self.clock.now=115;release.set()
+        ended=await self.until('session_end');self.assertEqual(ended['reason'],'session_expired')
+        self.assertFalse([e for e in self.wire.events if e['type']=='failure'])
+
     async def test_current_quality_rejection_has_exact_scope_and_zero_audio(self):
         from backend.v2.review import ReviewDecision
         async def rejected(*args,**kwargs):return ReviewDecision(True,False)

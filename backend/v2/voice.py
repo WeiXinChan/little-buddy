@@ -1493,6 +1493,7 @@ class VoicePeer:
                 await retire_prefetch()
                 if (self.session is not operation.session or epoch != self.epoch or
                         self.session.turn != operation.turn or self.revision != response_revision or self.closed):return
+                if not self.session._live() or self.session.management_paused or self.session.response_expired:return
                 # Current, confirmed response failure can use the client's
                 # existing bounded SERVER_VOICE recovery. Quarantine grants none.
                 scope={} if self.quarantined else dict(session=operation.session_id,
