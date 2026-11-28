@@ -38,7 +38,7 @@ class FeedbackKeystorePolicyTest {
         override fun engineDoFinal(input:ByteArray,offset:Int,len:Int,output:ByteArray,out:Int)=delegate.doFinal(input,offset,len,output,out)
         override fun engineUpdateAAD(input:ByteArray,offset:Int,len:Int){delegate.updateAAD(input,offset,len)}
     }
-    private class Policy:Provider("FeedbackTestPolicy","1.0","Synthetic randomized-encryption policy") {
+    private class Policy:Provider("FeedbackTestPolicy",1.0,"Synthetic randomized-encryption policy") {
         init {put("Cipher.AES/GCM/NoPadding",PolicyCipher::class.java.name)}
     }
     private fun underPolicy(action:()->Unit) {
