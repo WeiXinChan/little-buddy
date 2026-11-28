@@ -77,7 +77,10 @@ class NaturalManagement(unittest.IsolatedAsyncioTestCase):
         await p.handle(json.dumps(dict(v=2,type='probe',epoch=0,seq=2,revision=1)))
         await model.started.wait()
         await p.handle(json.dumps(dict(v=2,type='advance',epoch=0,seq=3,revision=2)))
-        model.release.set();await p.recognition
+        model.release.set()
+        result,=await asyncio.gather(p.recognition,return_exceptions=True)
+        self.assertTrue(result is None or isinstance(result,asyncio.CancelledError))
+        if p.recognition_handoff is not None:await p.recognition_handoff
         self.assertFalse(any(e['type']=='management' for e in s.events));self.assertIsNone(p.analysis)
     async def test_scope_send_reentry_cannot_borrow_new_revision_or_session(self):
         for change in ('revision','session'):
