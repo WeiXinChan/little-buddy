@@ -16,10 +16,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  * No idle upload. Finite pre-roll preserves the KWS tail and short input onset.
  */
 internal class Capture(private val assets: AssetManager, private val owner: Handler,
-                       private val client: VoiceClient, private val allowed: () -> Boolean = { true },
+                       private val client: CaptureSessionPort, private val allowed: () -> Boolean = { true },
                        private val recording: (Boolean)->Unit = {},
                        private val diagnosticScope:PinDiagnostic.Scope=PinDiagnostic.Scope(),
                        private val modelDirectory:java.io.File?=null, private val failed: () -> Unit) {
+    constructor(assets:AssetManager,owner:Handler,client:VoiceClient,allowed:()->Boolean={true},
+        recording:(Boolean)->Unit={},diagnosticScope:PinDiagnostic.Scope=PinDiagnostic.Scope(),
+        modelDirectory:java.io.File?=null,failed:()->Unit):this(assets,owner,ClientCapturePort(client),allowed,recording,diagnosticScope,modelDirectory,failed)
     private val started=AtomicBoolean(false)
     private val cancelled = AtomicBoolean(false)
     @Volatile private var lease:RecorderLease?=null
@@ -36,6 +39,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     private var operationAfterNs=0L
     @Volatile private var workerJoined=false
     @Volatile private var thread: Thread? = null
+    @Volatile private var stopThread:Thread?=null
     @Volatile var nativeProof = RecorderProof(); private set
     @Volatile var quarantined = false; private set
     private fun diagnostic(stage:PinDiagnostic.RuntimeStage,joined:Boolean=workerJoined) {
@@ -96,7 +100,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 val count=batch.sumOf{it.size}
                 if(uploadSamples+count>320000)error("input bound")
                 uploadSamples+=count
-                check(uploads.offer(batch,speech,lastCapturedAt))
+                if(!client.stage(batch,speech,lastCapturedAt))check(uploads.offer(batch,speech,lastCapturedAt))
             }catch(failure:Exception){batch.forEach{it.fill(0)};throw failure}
         }
         var timestampResult=CaptureTimestampResult.NOT_CALLED
@@ -160,6 +164,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             diagnosticStage=PinDiagnostic.Stage.CAPTURE_READ
             PinDiagnostic.event(diagnosticStage,PinDiagnostic.Reason.READY)
             while (!cancelled.get() && allowed()) {
+                client.check()
                 diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                 step=CaptureReadStep.PRE_ROOM
                 val room=continuity.remainingMs()
@@ -196,6 +201,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     continuity.check()
                 }
                 if (!awake) {
+                    detector.accept(frame,count)
+                    if(detector.detectedSpeechInRead)client.speechBeforeWake()
                     if(cancelled.get() || !allowed())break
                     diagnosticStage=PinDiagnostic.Stage.CAPTURE_KWS
                     step=CaptureReadStep.KWS
@@ -219,7 +226,9 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     check(wakeBoundary>=0)
                     val observedPosition=position
                     val relativeWakeMs=wakeBoundary-continuity.sampleTime(0)
-                    owner.post { if (!cancelled.get() && allowed()) client.wake(wakeBoundary,absoluteTail,observedPosition,relativeWakeMs) }
+                    val boundary=WakeBoundary(wakeBoundary,absoluteTail,observedPosition,relativeWakeMs)
+                    client.stageWake(boundary)
+                    owner.post { if (!cancelled.get() && allowed()) client.wake(boundary) }
                     // Absolute ring and KWS-local coordinates share a recorded origin.
                     lastSpeech = android.os.SystemClock.elapsedRealtime()
                     buffered.begin(absoluteTail)
@@ -304,20 +313,27 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     /** Caller-thread cancellation never waits for the audio owner. Native stop is independent;
      * the shared lease includes its completion and the original model worker's completion. */
     fun requestCancel() {
-        cancelled.set(true);startupHandle?.clear();uploads.cancel()
+        cancelled.set(true);client.cancel();startupHandle?.clear();uploads.cancel()
         diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_CANCEL)
         if(!stopRequested.compareAndSet(false,true))return
         val hold=lease ?: return
         if(!hold.beginStop())return
-        Thread({diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_STOP_BEGIN);try { synchronized(nativeLock) {
+        val stopper=Thread({diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_STOP_BEGIN);try { synchronized(nativeLock) {
             nativeHandle?.let {if(it.recordingState==AudioRecord.RECORDSTATE_RECORDING)it.stop()}
-        }}catch(_:Exception){quarantined=true}finally{hold.endStop();diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_STOP_END)}},"v2-capture-stop").start()
+        }}catch(_:Exception){quarantined=true}finally{hold.endStop();diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_STOP_END)}},"v2-capture-stop")
+        stopThread=stopper;stopper.start()
     }
     fun close() {
         requestCancel()
+        val until=System.nanoTime()+500_000_000L
         val old = thread ?: return
-        old.join(500)
-        if (old.isAlive) quarantined = true
+        fun waitFor(worker:Thread?) {
+            if(worker==null)return
+            val left=(until-System.nanoTime())/1_000_000
+            if(left>0)worker.join(left)
+            if(worker.isAlive)quarantined=true
+        }
+        waitFor(old);waitFor(stopThread)
         // Never permit another recorder when the original has no release confirmation.
         if (!old.isAlive) {lease?.workerFinished();workerJoined=true;thread = null}
     }

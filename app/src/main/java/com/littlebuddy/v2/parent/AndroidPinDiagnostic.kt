@@ -57,6 +57,7 @@ internal object AndroidPinDiagnostic {
                         PinDiagnostic.RuntimeStage.CLIENT_FAIL -> "pump=${event.pump.name}"
                         PinDiagnostic.RuntimeStage.CAPTURE_OPERATION -> "operation=${event.operation.name} duration_ns=${event.operationNs} cancelled=${event.cancelled} allowed=${event.allowed} stop_requested=${event.stopRequested} native_released=${event.nativeReleased}"
                         PinDiagnostic.RuntimeStage.WAKE_ACCEPTED -> "wake_frame=${event.wakeFrame} read_frame=${event.readFrame} wake_relative_ms=${event.wakeRelativeMs} lag_ms=${event.wakeLagMs}"
+                        PinDiagnostic.RuntimeStage.RECOVERY_BIND -> "current_transport=${event.currentTransport} current_capture=${event.currentCapture} episode=${event.episode} generation=${event.generation} wake_boot_ms=${event.wakeBootMs} wake_frame=${event.wakeFrame} read_frame=${event.readFrame}"
                         PinDiagnostic.RuntimeStage.ACTIVITY_CREATE -> "restored=${event.restored} launcher=${event.launcher}"
                         PinDiagnostic.RuntimeStage.ACTIVITY_NEW_INTENT -> "launcher=${event.launcher}"
                         else -> ""

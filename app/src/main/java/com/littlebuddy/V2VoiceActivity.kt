@@ -73,6 +73,119 @@ class V2VoiceActivity : Activity() {
     @Volatile private var managementVisible = false
     private var helpVisible = false
     private val retryGate = RuntimeRetryGate()
+    private val recovery=RecoveryEpisode()
+    private val outputSlot=OutputSlot()
+    @Volatile private var recoveryTicket:RecoveryEpisode.Ticket?=null
+    @Volatile private var handoff:RecoveryHandoff?=null
+    private var recoveryCue:Playback?=null
+    private var pendingWake:WakeBoundary?=null
+    private var recoveryPhysicalScope:PinDiagnostic.Scope?=null
+    private fun recoveryAllowed()=foreground && focused && !managementRequested && !managementVisible && !helpVisible &&
+        checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED &&
+        !getSystemService(KeyguardManager::class.java).isKeyguardLocked && !outputSlot.quarantined &&
+        getSystemService(android.media.AudioManager::class.java).getDevices(android.media.AudioManager.GET_DEVICES_INPUTS).isNotEmpty() &&
+        getSystemService(android.media.AudioManager::class.java).getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).isNotEmpty()
+    private fun recoveryCurrent(ticket:RecoveryEpisode.Ticket)=recovery.current(ticket) && recoveryTicket==ticket && recoveryAllowed()
+    private fun recoveryEvent(stage:PinDiagnostic.RuntimeStage){PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(stage,diagnosticScope()))}
+    private fun playRecoveryCue(ticket:RecoveryEpisode.Ticket){
+        if(!recovery.cue(ticket))return
+        configurationWorker.execute {
+            val pcm=runCatching{ServiceFailureAsset.load(assets)}.getOrNull()
+            owner.post {
+                if(!recoveryCurrent(ticket) || (handoff?.state!=RecoveryHandoff.State.LOCAL || handoff?.cuePermitted!=true)){pcm?.fill(0);return@post}
+                if(pcm==null){recoveryFailed();return@post}
+                try {
+                    val player=Playback({outputSlot.acquire(OutputSlot.Purpose.SERVICE_CUE,
+                        {route->AndroidTrack(owner,execution,routeLost=route)},
+                        {if(recoveryCurrent(ticket))recoveryFailed()})},android.os.SystemClock::elapsedRealtime){error("local cue cannot ACK")}
+                    recoveryCue=player
+                    player.clarify(ticket.generation,pcm,
+                        onHead={if(recoveryCurrent(ticket))recoveryEvent(PinDiagnostic.RuntimeStage.SERVICE_CUE_HEAD)},
+                        onFinished={if(recoveryCurrent(ticket)){recoveryCue=null;recoveryEvent(PinDiagnostic.RuntimeStage.SERVICE_CUE_END)}},
+                        onCancelled={if(recoveryCurrent(ticket))recoveryEvent(PinDiagnostic.RuntimeStage.SERVICE_CUE_CANCEL)},
+                        allowed={recoveryCurrent(ticket) && handoff?.state==RecoveryHandoff.State.LOCAL && handoff?.cuePermitted==true})
+                    recoveryEvent(PinDiagnostic.RuntimeStage.SERVICE_CUE_BEGIN)
+                    val pump=object:Runnable {override fun run(){
+                        if(recoveryCue!==player)return
+                        try{player.tick();if(recoveryCue===player)owner.postDelayed(this,10)}catch(_:Exception){recoveryFailed()}
+                    }}
+                    owner.post(pump)
+                }catch(_:Exception){pcm.fill(0);recoveryFailed()}
+            }
+        }
+    }
+    private fun stopRecoveryCue():Boolean {
+        val old=recoveryCue ?: return !outputSlot.quarantined
+        recoveryCue=null
+        val proof=old.stop()
+        return proof.stopped && proof.released && !outputSlot.quarantined
+    }
+    private fun recoveryFailed(){
+        recoveryEvent(PinDiagnostic.RuntimeStage.RECOVERY_HOLD)
+        recovery.block();handoff?.cancel();pendingWake=null
+        runOnUiThread{showTechnicalFailure(PinDiagnostic.Reason.OTHER_ERROR)}
+    }
+    /** New local generation only after the entire old recorder lease is complete. No socket here. */
+    private fun resumeLocalRecovery(){
+        if(!recovery.hasEpisode() || !recoveryAllowed())return
+        val transport=transportRevision
+        owner.post {
+            if(transport!=transportRevision || !recoveryAllowed() || capture!=null || voice!=null ||
+                exitCapture!=null || releaseState=="quarantined" || !ProcessRecorders.released() || !outputSlot.idle)return@post
+            val grant=recovery.grant(true,true) ?: return@post
+            recoveryTicket=grant
+            val recordTicket=captureRevision.incrementAndGet()
+            val port=RecoveryHandoff(android.os.SystemClock::elapsedRealtime,{owner.post(it)},
+                {recoveryCurrent(grant) && recordTicket==captureRevision.get()},
+                connect={boundary->
+                    if(recovery.consumeWake(grant)){
+                        recoveryEvent(PinDiagnostic.RuntimeStage.RECOVERY_CONNECT)
+                        pendingWake=boundary
+                        runOnUiThread {if(recoveryCurrent(grant))startRecoveryConnection(grant)}
+                    }
+                },cancelCue={if(!stopRecoveryCue())recoveryFailed()},failed={
+                    if(recovery.current(grant) && recoveryTicket==grant && recordTicket==captureRevision.get() && foreground && focused && !managementRequested && !managementVisible)recoveryFailed()
+                },
+                imported={
+                    val promoted=recovery.succeeded(grant)
+                    if(promoted==null){recoveryFailed()}else{retryGate.recoverySucceeded(promoted)
+                    recoveryEvent(PinDiagnostic.RuntimeStage.RECOVERY_IMPORTED)
+                    handoff=null;pendingWake=null}
+                })
+            handoff=port
+            recoveryPhysicalScope=diagnosticScope(transport,recordTicket)
+            publishEyes(transport){state,key->state.beginRecorder(key,recordTicket)}
+            capture=Capture(assets,owner,port,
+                allowed={recoveryCurrent(grant) && recordTicket==captureRevision.get()},
+                recording={active->if(recoveryCurrent(grant))publishEyes(transportRevision){state,key->state.recording(key,recordTicket,active)}},
+                diagnosticScope=diagnosticScope(transport,recordTicket),modelDirectory=codeCacheDir,
+                failed={if(recovery.current(grant) && recoveryTicket==grant && recordTicket==captureRevision.get() && foreground && focused)recoveryFailed()}).also{it.start()}
+            releaseState="local_wake"
+            publishEyes(transport){state,key->state.status(key,"wake")}
+            recoveryEvent(PinDiagnostic.RuntimeStage.RECOVERY_LOCAL)
+            playRecoveryCue(grant)
+        }
+    }
+    private fun startRecoveryConnection(ticket:RecoveryEpisode.Ticket){
+        val revision=managementRevision
+        configurationWorker.execute {
+            val configuration=AndroidParentRuntime.configuration(this).configuration
+            runOnUiThread {
+                if(!recoveryCurrent(ticket) || revision!=managementRevision)return@runOnUiThread
+                if(configuration==null || pendingWake==null){recoveryFailed();return@runOnUiThread}
+                execution=configuration.playback
+                val connection=configuration.connection
+                if(connection==null){recoveryFailed();return@runOnUiThread}
+                transportRevision++ // New socket authority; the physical Capture keeps its original diagnostic scope.
+                resetEyes()
+                val record=recoveryPhysicalScope?.capture
+                if(record!=null)publishEyes(transportRevision){state,key->
+                    state.beginRecorder(key,record);state.recording(key,record,capture?.nativeProof?.recording==true)
+                }
+                startVoice(connection.address,connection.credential,connection.sshUser,ticket)
+            }
+        }
+    }
     private var managementReturning=false
     @Volatile private var foreground = false
     @Volatile private var focused = false
@@ -106,6 +219,7 @@ class V2VoiceActivity : Activity() {
     } }
     private fun leaveManagement() {
         publicKeyFile.cancel()
+        recovery.block();handoff?.cancel();handoff=null;recoveryTicket=null
         retryGate.explicitParentRetry()
         PinDiagnostic.event(PinDiagnostic.Stage.TECHNICAL, PinDiagnostic.Reason.PARENT_RETRY)
         val ticket=++managementRevision
@@ -192,6 +306,7 @@ class V2VoiceActivity : Activity() {
     internal fun requestParentManagement(entry: ManagementEntry?=null) {
         if (!foreground || !hasWindowFocus() || managementRequested || managementVisible) return
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return
+        recovery.pause();recoveryTicket=null;handoff?.cancel()
         managementReturning=false
         val ticket=++managementRevision
         val reservation=if (entry!=null) pageRequests.reserve(ticket) else null
@@ -203,7 +318,8 @@ class V2VoiceActivity : Activity() {
                 reservation!=null && pageRequests.claim(reservation)
             })) return@post
             if(entry!=null)runOnUiThread {if(ticket==managementRevision && managementRequested)silenceEyes()}
-            val playerQuiet=client?.stopForManagement() ?: true
+            val cueQuiet=stopRecoveryCue()
+            val playerQuiet=(client?.stopForManagement() ?: true) && cueQuiet
             captureRevision.incrementAndGet();capture?.requestCancel()
             capture?.close(); capture?.let { releasedRecorder=it.nativeProof }
             val recorderQuiet=capture?.quarantined!=true
@@ -235,6 +351,7 @@ class V2VoiceActivity : Activity() {
             android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { back() }
     }
     private fun resumeConfigured() {
+        if(recovery.hasEpisode()){resumeLocalRecovery();return}
         if (!retryGate.automaticAllowed || !foreground || !hasWindowFocus() || managementVisible || managementRequested || helpVisible) return
         val ticket = managementRevision
         configurationWorker.execute {
@@ -274,13 +391,13 @@ class V2VoiceActivity : Activity() {
         }
     }
     /** Internal native regression seam; production calls this only after encrypted provisioning. */
-    internal fun startVoice(address: String, credential: String, sshUser: String? = null) {
+    internal fun startVoice(address: String, credential: String, sshUser: String? = null, recoveryGrant:RecoveryEpisode.Ticket?=null) {
         check(!managementRequested && !managementVisible && !helpVisible)
         check(hasWindowFocus() && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
         check(!getSystemService(KeyguardManager::class.java).isKeyguardLocked)
         val ticket = transportRevision; val settings = execution; val images = imageRoute
         owner.post {
-            if (!retryGate.automaticAllowed || ticket != transportRevision || !foreground || !focused || voice != null || capture != null || releaseState == "quarantined") return@post
+            if ((if(recoveryGrant==null)!retryGate.automaticAllowed else !recoveryCurrent(recoveryGrant)) || ticket != transportRevision || !foreground || !focused || voice != null || (capture != null && recoveryGrant==null) || releaseState == "quarantined") return@post
             PinDiagnostic.beginRuntime()
             releaseState = "active"; budget = PlaybackBudget(android.os.SystemClock::elapsedRealtime, settings.durationSeconds)
             val ssh=try { sshUser?.let { com.littlebuddy.v2.transport.V2Ssh(
@@ -292,6 +409,7 @@ class V2VoiceActivity : Activity() {
                 catch (error: Exception) { PinDiagnostic.runtimeError(PinDiagnostic.Stage.WSS,error); ssh?.close(); runOnUiThread { if(ticket==transportRevision) showTechnicalFailure(PinDiagnostic.Reason.OTHER_ERROR) }; return@post }
             var lastLog: com.littlebuddy.v2.feedback.LogStage?=null
             var lastFailure=PinDiagnostic.Reason.OTHER_ERROR
+            var serverFailure:ServerFailure?=null
             val client = VoiceClient(owner, statusCallback@ { status ->
                 if(ticket!=transportRevision || !foreground || !focused)return@statusCallback
                 lastFailure=when(status) {
@@ -313,11 +431,12 @@ class V2VoiceActivity : Activity() {
                     else -> "连接暂不可用。"
                 }
                 if (status == "listening" && voice?.isAwake == true) budget?.begin()
-            }, { images?.inputChanged() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showTechnicalFailure(lastFailure) } },
+            }, { images?.inputChanged() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showTechnicalFailure(lastFailure,(recoveryGrant==null || !recovery.hasEpisode()) && serverFailure==ServerFailure.VOICE) } },
                 playbackSettings = settings,
                 localHelp = { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 management = { entry -> runOnUiThread { if (ticket == transportRevision) requestParentManagement(entry) } },
-                permitted = { foreground && focused && ticket == transportRevision }, images = images,
+                permitted = { foreground && focused && ticket == transportRevision &&
+                    (recoveryGrant==null || (recoveryCurrent(recoveryGrant) && handoff?.admitted()!=false)) }, images = images,
                 managed = { phase -> runOnUiThread { if (ticket==transportRevision) managementChanged(phase) } },
                 sessionEnded = { runOnUiThread { if (ticket==transportRevision && foreground && focused && !managementRequested && !managementVisible && !helpVisible) {
                     val page=++managementRevision
@@ -325,13 +444,20 @@ class V2VoiceActivity : Activity() {
                         !managementRequested && !managementVisible && !helpVisible) { eyes(); resumeConfigured() } }
                 } } }, requiredContract=ReleaseCompatibility.CONTRACT,
                 clarification={com.littlebuddy.v2.ClarificationAsset.load(assets)},
+                outputSlot=outputSlot,captureImport=recoveryGrant!=null,failureClassified={serverFailure=it},
                 http=http, closeTransport={ ssh?.close() }, diagnosticScope=diagnosticScope(ticket,0), actualOutput={playing->
                     if(playing && foreground && focused && ticket==transportRevision && lastLog!=com.littlebuddy.v2.feedback.LogStage.PLAY) {
                         lastLog=com.littlebuddy.v2.feedback.LogStage.PLAY
                         com.littlebuddy.v2.feedback.AndroidFeedbackRuntime.record(this@V2VoiceActivity,com.littlebuddy.v2.feedback.LogStage.PLAY)
                     }
                     publishEyes(ticket){state,key->state.output(key,playing)}
-                }, ready={ if (ticket==transportRevision && foreground && !managementRequested && !managementVisible) startChildCapture(checkNotNull(voice),ticket) })
+                }, ready={ if (ticket==transportRevision && foreground && !managementRequested && !managementVisible) {
+                    if(recoveryGrant==null)startChildCapture(checkNotNull(voice),ticket)
+                    else if(recoveryCurrent(recoveryGrant) && handoff?.ready(checkNotNull(voice))==true) {
+                        val physical=recoveryPhysicalScope;val boundary=pendingWake
+                        if(physical!=null && boundary!=null)recovery.binding(recoveryGrant,physical,ticket,boundary)?.let(PinDiagnostic::runtime)
+                    }
+                } })
             voice = client
             try { client.connect(address, credential)
                 // Capture starts only from the authenticated, compatible scope callback.
@@ -378,6 +504,7 @@ class V2VoiceActivity : Activity() {
     }
     private fun releaseAudio(done: (Boolean) -> Unit = {}) {
         PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.TRANSPORT_RETIRE,diagnosticScope()))
+        recovery.pause();recoveryTicket=null;handoff?.cancel();handoff=null;pendingWake=null
         transportRevision++;cancelRecorders();resetEyes();imageRoute?.clear()
         owner.post {
         owner.removeCallbacks(durationLimit)
@@ -386,20 +513,24 @@ class V2VoiceActivity : Activity() {
         capture?.close(); capture?.let { releasedRecorder = it.nativeProof }
         if (capture?.quarantined != true) capture = null
         budget = null
+        val cueQuiet=stopRecoveryCue()
         val exitQuiet=closeExitCapture()
-        val quiet = voice == null && capture == null && exitQuiet
+        val quiet = voice == null && capture == null && exitQuiet && cueQuiet && ProcessRecorders.released() && !outputSlot.quarantined
         releaseState = if (quiet) "released" else "quarantined"
         runOnUiThread { done(quiet) }
     } }
     private fun stopVoice() = releaseAudio()
-    private fun showTechnicalFailure(reason: PinDiagnostic.Reason) {
-        if (!retryGate.technicalFailure()) return
+    private fun showTechnicalFailure(reason: PinDiagnostic.Reason,recoverable:Boolean=false) {
+        val first=retryGate.technicalFailure()
+        if(recoverable)recovery.begin() else recovery.block()
+        if(!first && releaseState=="quarantined")return
         PinDiagnostic.event(PinDiagnostic.Stage.TECHNICAL, reason)
         PinDiagnostic.event(PinDiagnostic.Stage.TECHNICAL, PinDiagnostic.Reason.HOLD)
         connectionNotice="连接或收音暂不可用，已暂停。退出管理可重试一次。"
         helpVisible=false; help?.stop()
         val ticket=++managementRevision
-        releaseAudio { _ ->
+        releaseAudio { quiet ->
+            if(quiet && recoverable && recovery.hasEpisode() && recoveryAllowed()){resumeLocalRecovery();return@releaseAudio}
             if (ticket==managementRevision && foreground && hasWindowFocus() && !managementVisible && !managementRequested) {
                 eyes(); eyeState.status(EyeToken(transportRevision,eyeRevision),"technical_failure");eyeView?.show(eyeState.mood)
                 Toast.makeText(this, "技术准备未完成，已暂停自动重试。可从隐藏入口进入家长管理。", Toast.LENGTH_LONG).show()

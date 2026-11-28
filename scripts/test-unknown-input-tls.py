@@ -24,7 +24,7 @@ async def run():
   owner_port.write_text(text)
   media=out/'MediaPorts.kt';media.write_text((ports/'MediaPorts.kt').read_text().replace('val instances=','@JvmField var releaseFails=false;val instances=').replace('fun release(){state=0}','fun release(){if(releaseFails)error("fixture release");state=0}').replace('fun addOnRoutingChangedListener(l:AudioRouting.OnRoutingChangedListener,h:android.os.Handler){}','var savedRoute:AudioRouting.OnRoutingChangedListener?=null;fun addOnRoutingChangedListener(l:AudioRouting.OnRoutingChangedListener,h:android.os.Handler){savedRoute=l}').replace('override val routedDevice=AudioDeviceInfo()','override var routedDevice=AudioDeviceInfo()').replace('val instances=','@JvmField var advanceOnBuild=false;val instances=').replace('fun build()=AudioTrack()','fun build():AudioTrack{if(advanceOnBuild){advanceOnBuild=false;android.os.SystemClock.advance(15001)};return AudioTrack()}'))
   sources=[owner_port]+[media]+[ports/(n+'.kt') for n in ['Base64Port','JsonPort']]+[ROOT/'scripts/testing/unknown-input/RealUnknownClient.kt']
-  sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['VoiceClient','InputGate','AndroidTrack','ClientPhases','Playback']]
+  sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['VoiceClient','InputGate','AndroidTrack','ClientPhases','Playback','OutputSlot']]
   sources += [ROOT/'app/src/main/java/com/littlebuddy/v2/parent/PinDiagnostic.kt']
   baseline='--baseline' in os.sys.argv or '--negative' in os.sys.argv
   if baseline:

@@ -11,6 +11,7 @@ internal object ProcessRecorders {
     @Synchronized internal fun complete(lease:RecorderLease) {
         if(current===lease && lease.complete())current=null
     }
+    @Synchronized fun released()=current==null
     @Synchronized fun diagnostic()=current?.diagnostic() ?: "released"
 }
 internal class RecorderLease internal constructor(private val kind:String) {

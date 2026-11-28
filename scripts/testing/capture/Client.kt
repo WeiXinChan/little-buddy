@@ -7,6 +7,8 @@ class VoiceClient {
  val order=mutableListOf<String>()
  val capturedTimes=mutableListOf<Long>()
  fun frame(a:ShortArray,b:Boolean,c:Long){order+="frame";capturedTimes+=c;received+=a.copyOf()}
+ fun beginCaptureImport(t:Long){}
+ fun endCaptureImport(){}
  fun quiet(){}
  fun wake(t:Long,wakeTailFrame:Long=-1,captureFrame:Long=-1,wakeRelativeMs:Long=-1){order+="wake";wakes+=t}
 }

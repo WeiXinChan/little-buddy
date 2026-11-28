@@ -90,3 +90,13 @@ def clarification_files(root):
  require(480<=len(pcm)<=288000 and len(pcm)%2==0,'clarification_pcm_bounds')
  require(receipt==hashlib.sha256(pcm).hexdigest().encode()+b'\n','clarification_hash')
  return {'assets/v2-local-clarify.pcm':pcm,'assets/v2-local-clarify.sha256':receipt}
+
+
+def service_failure_files(root):
+ directory=Path(root)/'app/src/v2Debug/assets'
+ pcm=(directory/'v2-service-failure.pcm').read_bytes()
+ receipt=(directory/'v2-service-failure.sha256').read_bytes()
+ expected='9da6b3f7011d6a2c70fbe21ebb301d5487b0c7633cf7bf210938335cc9cc17eb'
+ require(len(pcm)==164160 and hashlib.sha256(pcm).hexdigest()==expected,'service_failure_reviewed_pcm')
+ require(receipt==expected.encode()+b'\n','service_failure_hash')
+ return {'assets/v2-service-failure.pcm':pcm,'assets/v2-service-failure.sha256':receipt}
