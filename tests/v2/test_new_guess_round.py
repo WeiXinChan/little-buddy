@@ -10,7 +10,7 @@ from tests.v2.test_initial_guess_quality import candidate
 
 NEW='再给我出一个新的动物谜语吧。'
 class NewGuessRound(unittest.IsolatedAsyncioTestCase):
-    async def scenario(self,*,query=NEW,action='change',clue='它会喵喵叫。',ack=True,omit_role=False,deny_first=False):
+    async def scenario(self,*,query=NEW,action='change',clue='它会喵喵叫。',ack=True,omit_role=False,deny_first=False,with_budget=False):
         answer='大象' if omit_role else '猫'
         reviews=[];plans=[];tts=[];calls=[]
         class CountSpeech(Speech):
@@ -50,7 +50,7 @@ class NewGuessRound(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(await turn('是兔子！'),2)
         before=(deepcopy(peer.session.game),deepcopy(peer.session.secrets),list(peer.session.public))
         reviews.clear();tts.clear();calls.clear();wire.acknowledge=ack
-        if deny_first:peer.input_budget.speech(0)
+        if deny_first or with_budget:peer.input_budget.speech(0)
         task=await turn(query)
         if not ack:
             async with asyncio.timeout(1):
@@ -81,6 +81,13 @@ class NewGuessRound(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(d['pending_guess']['answer'],'大象');self.assertEqual((game,secrets,heard),before)
         self.assertEqual(tts,['它有长长的象鼻。']);self.assertEqual(p.session.secrets,{'answer':'大象'})
         self.assertEqual(plans[-1]['server_constraints']['correction'],'new_guess_quality')
+
+    async def test_new_round_budget_never_retries_safety_or_unrequested_change(self):
+        for query,line,count in [(NEW,'答案是猫。',1),('不要换题','它会喵喵叫。',1),
+                                 (NEW,'它有长长的象鼻。',2)]:
+            p,_,reviews,plans,tts,_,before=await self.scenario(query=query,clue=line,with_budget=True)
+            self.assertEqual(len(reviews),count);self.assertEqual(len(plans),2+count)
+            self.assertFalse(tts);self.assertEqual((p.session.game,p.session.secrets,p.session.public),before)
 
     async def test_continue_changed_answer_stays_rejected_before_review_audio_or_commit(self):
         p,w,reviews,plans,tts,calls,before=await self.scenario(action='continue')
