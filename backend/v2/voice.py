@@ -809,7 +809,9 @@ class VoicePeer:
                     session.begin_turn();session.deadline=deadline
                     self.awaiting_input=False
                     await self.commands();await self.send('open',revision=self.revision)
-                    self.generation=asyncio.create_task(self.respond(text,self.epoch,solo_greeting=origin==['wake_solo']))
+                    response=(self.respond(text,self.epoch,solo_greeting=True) if origin==['wake_solo']
+                              else self.respond(text,self.epoch))
+                    self.generation=asyncio.create_task(response)
                 else:
                     # Confirmed stopped old reply, not a session/lease renewal.
                     session.deadline=session.progress_deadline=0
@@ -1268,9 +1270,11 @@ class VoicePeer:
     def respond(self, text, epoch, *, solo_greeting=False):
         operation=Operation(self,epoch,self.revision if solo_greeting else None)
         operation.response_revision=self.revision
-        return self._respond(text, epoch, operation, solo_greeting=solo_greeting)
+        operation.solo_greeting=solo_greeting
+        return self._respond(text, epoch, operation)
 
-    async def _respond(self, text, epoch, operation, *, solo_greeting=False):
+    async def _respond(self, text, epoch, operation):
+        solo_greeting=getattr(operation,'solo_greeting',False)
         owner = asyncio.current_task()
         self.generation_scopes[owner] = operation
         stage = 'bind'
