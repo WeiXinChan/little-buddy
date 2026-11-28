@@ -44,5 +44,16 @@ class HandoffTest {
         assertEquals(listOf(1,2),client.received.map{it[0].toInt()});assertEquals(0,r.q.retainedSamples())
         assertTrue(prefix.all{it==0.toShort()} && live.all{it==0.toShort()});r.q.cancel();assertFalse(r.q.admitted())
     }
+    @Test fun clientAdmissionFirstAndWorkerFirstRecordSameDeadlineAndCannotWashItWithCancel(){
+        for(clientFirst in listOf(true,false)){
+            val r=Rig();r.wake();val pcm=ShortArray(320){4};r.q.stage(listOf(pcm),true,r.now)
+            r.now+=2500
+            if(clientFirst)assertFalse(r.q.admitted()) else assertThrows(IllegalStateException::class.java){r.q.check()}
+            r.q.cancel();assertFalse(r.q.admitted());r.drain()
+            assertEquals(RecoveryHandoff.Rejection.CONNECT_DEADLINE,r.q.rejection)
+            assertEquals(r.now,r.q.rejectedAtBoot);assertEquals(1,r.errors)
+            assertTrue(pcm.all{it==0.toShort()});assertEquals(0,r.q.retainedSamples())
+        }
+    }
     @Test fun permissionLossClearsAndFailsOnce(){val r=Rig();r.wake();r.allowed=false;assertThrows(IllegalStateException::class.java){r.q.check()};r.drain();assertEquals(1,r.errors)}
 }

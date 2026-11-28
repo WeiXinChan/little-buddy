@@ -7,6 +7,9 @@ internal class RecoveryHandoff(private val now:()->Long,private val post:(Runnab
     private val cancelCue:()->Unit,private val failed:()->Unit,private val imported:()->Unit):CaptureSessionPort {
     private data class Item(val pcm:ShortArray?,val speech:Boolean,val at:Long)
     enum class State { LOCAL, CONNECTING, IMPORTING, LIVE, CANCELLED }
+    enum class Rejection { PERMISSION, CLOCK_ORDER, CONNECT_DEADLINE, PCM_AGE, CONSUMER }
+    @Volatile var rejection:Rejection?=null;private set
+    @Volatile var rejectedAtBoot=-1L;private set
     @Volatile var state=State.LOCAL;private set
     private var boundary:WakeBoundary?=null
     private var client:VoiceClient?=null
@@ -20,19 +23,32 @@ internal class RecoveryHandoff(private val now:()->Long,private val post:(Runnab
     val cuePermitted get()=!cueRevoked.get()
     override val idleSerial get()=if(state==State.LIVE)client?.idleSerial ?: 0 else 0
     override val inputSerial get()=if(state==State.LIVE)client?.inputSerial ?: 0 else 0
-    private fun validLocked():Boolean {
-        if(state==State.CANCELLED || !allowed())return false
+    private fun violationLocked():Rejection? {
+        if(!allowed())return Rejection.PERMISSION
         val t=now();val b=boundary
-        if(b!=null && (t<b.boot || (state==State.CONNECTING && t>=b.boot+2500)))return false
-        return queue.all{it.pcm==null || t-it.at in 0 until 3000} &&
-            (inFlight?.let{t-it.at in 0 until 3000} ?: true)
+        if(b!=null && t<b.boot)return Rejection.CLOCK_ORDER
+        if(b!=null && state==State.CONNECTING && t>=b.boot+2500)return Rejection.CONNECT_DEADLINE
+        if(queue.any{it.pcm!=null && t-it.at !in 0 until 3000} ||
+            inFlight?.let{t-it.at !in 0 until 3000}==true)return Rejection.PCM_AGE
+        return null
     }
+    private fun validLocked()=state!=State.CANCELLED && violationLocked()==null
     private fun clearLocked(){queue.forEach{it.pcm?.fill(0)};queue.clear();inFlight?.pcm?.fill(0);samples=inFlight?.pcm?.size ?: 0;state=State.CANCELLED;client=null}
     private fun reject(){
-        val report=synchronized(this){clearLocked();if(failurePosted)false else{failurePosted=true;true}}
+        val report=synchronized(this){
+            if(state==State.CANCELLED)false else {
+                rejection=violationLocked() ?: Rejection.CONSUMER;rejectedAtBoot=now()
+                clearLocked();if(failurePosted)false else{failurePosted=true;true}
+            }
+        }
         if(report)post(Runnable{failed()})
     }
-    internal fun admitted()=synchronized(this){validLocked()}
+    /** Both the client pump and capture worker can observe expiry first. Record/zero once,
+     * before returning false; a later lifecycle close cannot erase the budget evidence. */
+    internal fun admitted():Boolean {
+        if(synchronized(this){validLocked()})return true
+        reject();return false
+    }
     override fun cancel(){synchronized(this){clearLocked()}}
     override fun check(){if(!synchronized(this){validLocked()}){reject();error("recovery handoff rejected")}}
     override fun speechBeforeWake(){if(cueRevoked.compareAndSet(false,true))post(Runnable{if(allowed() && state!=State.CANCELLED)cancelCue()})}

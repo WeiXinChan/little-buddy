@@ -16,6 +16,7 @@ async def run():
  runtime=[str(main),compiler[1],jar('com.squareup.okhttp3','okhttp','4.12.0'),jar('com.squareup.okio','okio-jvm','3.6.0'),jar('com.google.code.gson','gson','2.11.0'),os.environ['ANDROID_JAR']]
  # Compile the actual current VoiceClient source against the same Kotlin JSON ports.
  # Other production dependencies come from the matching normal Android compile.
+ print('WORKTREE_RECOVERY_DRIVER_SHA256',hashlib.sha256((ROOT/'scripts/testing/recovery/RealRecoveryClient.kt').read_bytes()).hexdigest(),flush=True)
  print('WORKTREE_VOICECLIENT_SOURCE_SHA256',hashlib.sha256((ROOT/'app/src/main/java/com/littlebuddy/v2/VoiceClient.kt').read_bytes()).hexdigest(),flush=True)
  with tempfile.TemporaryDirectory(dir=ROOT,prefix='expiry-tls-') as folder:
   out=Path(folder);ports=ROOT/'scripts/testing/media'
