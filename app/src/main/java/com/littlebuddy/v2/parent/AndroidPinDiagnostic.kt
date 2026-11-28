@@ -40,7 +40,8 @@ internal object AndroidPinDiagnostic {
             }
             PinDiagnostic.installRuntime { event ->
                 val admitted=when(event.stage) {
-                    PinDiagnostic.RuntimeStage.WAKE_ACCEPTED,PinDiagnostic.RuntimeStage.CAPTURE_FAILURE,
+                    PinDiagnostic.RuntimeStage.CAPTURE_FAILURE -> budget.failure()
+                    PinDiagnostic.RuntimeStage.WAKE_ACCEPTED,
                     PinDiagnostic.RuntimeStage.WORKER_JOINED,PinDiagnostic.RuntimeStage.CAPTURE_RELEASE,
                     PinDiagnostic.RuntimeStage.CAPTURE_STOP_END -> budget.critical()
                     PinDiagnostic.RuntimeStage.CAPTURE_OPERATION -> budget.operation()
@@ -49,9 +50,10 @@ internal object AndroidPinDiagnostic {
                 if(admitted) {
                     val c=event.scope
                     val detail=when(event.stage) {
+                        PinDiagnostic.RuntimeStage.CAPTURE_FAILURE -> "operation=${event.operation.name} cancelled=${event.cancelled} allowed=${event.allowed} stop_requested=${event.stopRequested} native_released=${event.nativeReleased} capture_stage=${event.captureStage.name} predicate=${event.capturePredicate.name} clock_reason=${event.clockReason?.name ?: "NONE"} upload_samples=${event.uploadSamples} native_returned_samples=${event.nativeReturnedSamples} native_read_calls=${event.nativeReadCalls} input_serial=${event.inputSerial} sealed_serial=${event.sealedSerial} read_step=${event.readStep.name}"
                         PinDiagnostic.RuntimeStage.CAPTURE_START,PinDiagnostic.RuntimeStage.CAPTURE_CANCEL,
                         PinDiagnostic.RuntimeStage.CAPTURE_STOP_BEGIN,PinDiagnostic.RuntimeStage.CAPTURE_STOP_END,
-                        PinDiagnostic.RuntimeStage.CAPTURE_FAILURE,PinDiagnostic.RuntimeStage.CAPTURE_RELEASE,
+                        PinDiagnostic.RuntimeStage.CAPTURE_RELEASE,
                         PinDiagnostic.RuntimeStage.WORKER_JOINED -> "operation=${event.operation.name} cancelled=${event.cancelled} allowed=${event.allowed} stop_requested=${event.stopRequested} native_released=${event.nativeReleased} worker_joined=${event.workerJoined}"
                         PinDiagnostic.RuntimeStage.FAILURE_UI_APPLY,PinDiagnostic.RuntimeStage.FAILURE_UI_RETIRED -> "current_transport=${event.currentTransport} current_capture=${event.currentCapture}"
                         PinDiagnostic.RuntimeStage.CLIENT_FAIL -> "pump=${event.pump.name}"
