@@ -1228,9 +1228,14 @@ class VoicePeer:
     async def repair_initial_guess(self,operation,text,plan,revision,accepted,attempt):
         """One unplayed fresh-riddle correction, never a safety retry or new budget."""
         s=self.session;budget=operation.budget
-        repair=getattr(self.providers,'repair_initial_guess',None)
+        active=s.game.get('mode')=='guess'
+        continuation=(active and s.game.get('guess_role')=='setter' and bool(s.secrets)
+                      and isinstance(text,str) and 0<len(text.strip())<=32
+                      and plan.get('action')=='continue' and plan.get('secrets')==s.secrets)
+        if active and not continuation or not active and s.secrets:return None
+        repair=getattr(self.providers,'repair_guess_feedback' if continuation else 'repair_initial_guess',None)
         if (not self.initial_guess_candidate(plan) or not callable(repair) or accepted is not True or
-            text is None or budget.anchor is None or s.private_mode or operation.private_mode or s.game.get('mode')=='guess' or s.secrets or
+            text is None or budget.anchor is None or s.private_mode or operation.private_mode or
             s.pending or s.head or s.response_confirmed or self.waiting_wake or
             budget.read_retry_revision==revision):return None
         operation.ensure()
@@ -1248,6 +1253,10 @@ class VoicePeer:
             operation.private_mode!=s.private_mode):raise StaleOperation()
         stage_timing.mark('plan_end',self,operation)
         if not self.initial_guess_candidate(replacement):raise WireError('initial guess correction contract')
+        if continuation:
+            if (replacement['action']!='continue' or replacement.get('guess_role')!='setter' or
+                replacement['secrets']!=s.secrets or replacement['rules']!=s.game.get('rules') or
+                replacement['roles']!=s.game.get('roles')):raise WireError('continued guess correction contract')
         return replacement
 
     def respond(self, text, epoch):

@@ -16,7 +16,7 @@ def candidate(answer='兔子',clue='它有长长的耳朵。'):
 
 class InitialGuess(unittest.IsolatedAsyncioTestCase):
     async def scenario(self,*,reviews=None,active=False,private=False,spent=False,replacement=None,
-                       first=None,clock_expired=False,pause=False,quota_on_replacement=False,semantic=False):
+                       first=None,clock_expired=False,pause=False,quota_on_replacement=False,semantic=False,query=TEXT):
         calls=[];tts=[];review_count=0;plan_count=0;facts_count=0
         ready=asyncio.Event();release=asyncio.Event();clock=Clock()
         original=deepcopy(first or candidate());replacement=deepcopy(replacement or candidate('猫','它会喵喵叫。'))
@@ -53,12 +53,12 @@ class InitialGuess(unittest.IsolatedAsyncioTestCase):
                 async with super().synthesize(text,rate) as chunks:yield chunks
         wire=Socket();peer=VoicePeer(wire,UnifiedProviders(CountSpeech(),model),CompanionPolicy(),clock=clock);wire.peer=peer
         peer.review_inputs=[];peer.review_states=[]
-        if active:peer.session.game={'mode':'guess','guess_role':'setter'};peer.session.secrets={'answer':'兔子'}
+        if active:peer.session.game={'mode':'guess','guess_role':'setter','roles':original['roles'],'rules':original['rules']};peer.session.secrets={'answer':'兔子'}
         peer.session.private_mode=private
         peer.input_budget.speech(0);peer.session.begin_turn();peer.session.drain_commands()
         if spent:peer.input_budget.read_retry_revision=peer.revision
         peer.session.heartbeat_deadline=1000
-        peer.generation=asyncio.create_task(peer.respond(TEXT,0))
+        peer.generation=asyncio.create_task(peer.respond(query,0))
         await peer.handle(json.dumps(dict(v=2,type='bind',epoch=0,seq=0,player='synthetic')))
         if pause:
             await asyncio.wait_for(ready.wait(),1)
@@ -209,3 +209,23 @@ class PendingContract(unittest.IsolatedAsyncioTestCase):
                             {'_pending_guess':dict(valid,answer=[])}):
                 with self.assertRaises(SafetyFault):await provider.review('它有长耳朵。',context)
         self.assertFalse(calls)
+
+class ContinuedFeedback(unittest.IsolatedAsyncioTestCase):
+    scenario=InitialGuess.scenario
+
+    async def test_approved_replacement_only_is_heard(self):
+        for query,answer,reply in [('兔子','兔子','猜对啦！'),('小猫','兔子','还没猜对，它的耳朵长长的。'),
+                                   ('猫还是兔子','兔子','你想选哪一个呢？')]:
+            with self.subTest(query=query):
+                bad=candidate(answer,'再猜。');bad['action']='continue'
+                good=dict(bad,sentences=[reply])
+                peer,calls,tts,counts=await self.scenario(active=True,query=query,first=bad,replacement=good)
+                self.assertEqual(counts,(2,1,2));self.assertEqual(tts,[reply])
+                self.assertEqual(peer.session.secrets,{'answer':answer})
+                self.assertEqual(peer.review_inputs[-1]['current_input'],query)
+
+    async def test_second_rejection_stops(self):
+        plan=candidate();plan['action']='continue'
+        peer,calls,tts,counts=await self.scenario(active=True,first=plan,replacement=plan,
+            reviews=[{'allow':True,'quality':False},{'allow':False,'quality':True}])
+        self.assertEqual(counts,(2,1,2));self.assertFalse(tts)
