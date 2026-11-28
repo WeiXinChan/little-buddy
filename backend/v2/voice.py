@@ -1176,7 +1176,7 @@ class VoicePeer:
             # Replays remain rejected by exact pending-front ID and task sequence.
             self.session.revealed.intersection_update(s.name for s in self.session.pending)
 
-    async def review(self, operation, text, *, query='', phase='whole',pending_guess=None):
+    async def review(self, operation, text, *, query='', phase='whole',pending_guess=None,opening_segment=None):
         # Re-project current authoritative scope with this response's input,
         # never replace played history with an unapproved proposal.
         operation.ensure()
@@ -1187,6 +1187,7 @@ class VoicePeer:
             if context.get('game',{}).get('mode')=='guess' or pending_guess is not None:
                 context['_review_turn']={'input':query,'phase':phase}
             if pending_guess is not None:context['_pending_guess']=deepcopy(pending_guess)
+            if opening_segment is not None:context['_opening_segment']=opening_segment
             verdict = await self.owned(operation, function, text, context)
         except SafetyFault:
             stage_timing.mark(phase+'_end',self,operation,outcome='safety_denied')
@@ -1418,6 +1419,16 @@ class VoicePeer:
                     pending_guess=self.pending_guess_candidate(plan)
                     await self.review(operation, ''.join(plan['sentences']), query=text or '',pending_guess=pending_guess)
                     attempt['replacement_whole_approved']=True
+                # Review the fresh riddle as a unit before exposing its first PCM.
+                # Subsequent turns still project their actually played history.
+                opening_preflight=(pending_guess is not None and self.session.game.get('mode')!='guess'
+                                   and len(plan['sentences'])>1)
+                if opening_preflight:
+                    for index,sentence in enumerate(plan['sentences']):
+                        if not self.policy.segment(sentence):raise SafetyFault('content_blocked')
+                        await self.review(operation,sentence,query=text or '',phase='segment',pending_guess=pending_guess,
+                                          opening_segment=dict(sentences=list(plan['sentences']),index=index))
+                    operation.ensure()
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
                 if plan['mode']=='guess' and 'guess_role' in plan:state['guess_role']=plan['guess_role']
                 if state['mode']=='story':
@@ -1469,7 +1480,7 @@ class VoicePeer:
                     async def items():
                         nonlocal stage
                         for sentence in plan['sentences']:
-                            if len(plan['sentences']) > 1:
+                            if len(plan['sentences']) > 1 and not opening_preflight:
                                 stage='safety'
                                 await self.review(operation, sentence, query=text or '', phase='segment',pending_guess=pending_guess)
                             yield sentence
