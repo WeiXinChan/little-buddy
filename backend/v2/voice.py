@@ -102,9 +102,9 @@ def decode(raw):
 
 
 class VoicePeer:
-    def __init__(self, socket, providers, policy, *, clock=time.monotonic, stream_asr=False, animal_cards_enabled=False):
+    def __init__(self, socket, providers, policy, *, clock=time.monotonic, stream_asr=False, animal_cards_enabled=False, wide_audio_window=False):
         self.socket, self.providers, self.policy = socket, providers, policy
-        self.session = Session(clock)
+        self.session = Session(clock, audio_capacity=4 if wide_audio_window is True else 2)
         self.epoch, self.sequence = 0, -1
         self.capture = bytearray()
         self.animal_cards_enabled=animal_cards_enabled is True
@@ -1365,7 +1365,7 @@ class VoicePeer:
                     self.analysis = self.next_probe = self.prepared = None
                     self.ack_identity = None
                     self.session = Session(old.clock, ttl=old.ttl, lease=old.lease, budget=old.budget,
-                                           capacity=old.capacity, progress_timeout=old.progress_timeout)
+                                           capacity=old.capacity, audio_capacity=old.audio_capacity, progress_timeout=old.progress_timeout)
                     # A normal client stop/epoch transition then binds a fresh track.
                     # The existing request keeps its original first-response deadline.
                     if self.quarantined:
@@ -1622,7 +1622,7 @@ class VoicePeer:
     async def audio(self, pcm, public, epoch, state=None, anchors=(), operation=None, effect=None):
         operation = operation or Operation(self, epoch)
         operation.ensure()
-        while len(self.session.pending) >= 2 or self.suspended:
+        while len(self.session.pending) >= self.session.audio_capacity or self.suspended:
             self.changed.clear()
             if epoch != self.epoch or not self.session._output_live():
                 raise WireError('revoked')

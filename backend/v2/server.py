@@ -8,7 +8,7 @@ from websockets.asyncio.server import serve
 from backend.v2.voice import VoicePeer
 
 
-def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, clock=time.time, feedback=None, failure_observation=None, stream_asr=False, animal_cards_enabled=False):
+def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, clock=time.time, feedback=None, failure_observation=None, stream_asr=False, animal_cards_enabled=False, wide_audio_window=False):
     if tls is None or not isinstance(token, str) or not 32 <= len(token) <= 256 or not token.isascii() or not token.isalnum():
         raise ValueError('TLS and random device credential required')
     active = False
@@ -37,12 +37,11 @@ def voice_server(host, port, tls, token, providers, policy, *, expires_at=None, 
             await socket.close(1013, 'busy')
             return
         active = True
-        if animal_cards_enabled:
-            peer = VoicePeer(socket, providers, policy, stream_asr=stream_asr, animal_cards_enabled=True)
-        elif stream_asr:
-            peer = VoicePeer(socket, providers, policy, stream_asr=True)
-        else:
-            peer = VoicePeer(socket, providers, policy)
+        options={}
+        if wide_audio_window:options['wide_audio_window']=True
+        if animal_cards_enabled:options['animal_cards_enabled']=True
+        if stream_asr:options['stream_asr']=True
+        peer = VoicePeer(socket, providers, policy, **options)
         if failure_observation is not None:
             try:failure_observation.attach(peer)
             except BaseException:pass
