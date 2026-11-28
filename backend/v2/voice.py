@@ -1233,8 +1233,13 @@ class VoicePeer:
         continuation=(active and s.game.get('guess_role')=='setter' and bool(s.secrets)
                       and isinstance(text,str) and 0<len(text.strip())<=32
                       and plan.get('action')=='continue' and plan.get('secrets')==s.secrets)
-        if active and not continuation or not active and s.secrets:return None
-        repair=getattr(self.providers,'repair_guess_feedback' if continuation else 'repair_initial_guess',None)
+        # A narrow retry admission, never authority to change games. The full
+        # review must independently authorize the request on both candidates.
+        new_round=(active and plan.get('action')=='change' and self.pending_guess_candidate(plan) is not None
+                   and isinstance(text,str) and text.strip().rstrip('。！？!?') in
+                   ('再给我出一个新的动物谜语吧','再出一个新的谜语','再来一题','换一道题'))
+        if active and not (continuation or new_round) or not active and s.secrets:return None
+        repair=getattr(self.providers,'repair_guess_feedback' if continuation else 'repair_new_guess' if new_round else 'repair_initial_guess',None)
         if (not self.initial_guess_candidate(plan) or not callable(repair) or accepted is not True or
             text is None or budget.anchor is None or s.private_mode or operation.private_mode or
             s.pending or s.head or s.response_confirmed or self.waiting_wake or
@@ -1254,6 +1259,8 @@ class VoicePeer:
             operation.private_mode!=s.private_mode):raise StaleOperation()
         stage_timing.mark('plan_end',self,operation)
         if not self.initial_guess_candidate(replacement):raise WireError('initial guess correction contract')
+        if new_round and (replacement['action']!='change' or replacement['secrets']==s.secrets or
+                          self.pending_guess_candidate(replacement) is None):raise WireError('new guess correction contract')
         if continuation:
             if (replacement['action']!='continue' or replacement.get('guess_role')!='setter' or
                 replacement['secrets']!=s.secrets or replacement['rules']!=s.game.get('rules') or
@@ -1425,10 +1432,12 @@ class VoicePeer:
                                    and len(plan['sentences'])>1)
                 if opening_preflight:
                     for index,sentence in enumerate(plan['sentences']):
+                        if self.revision!=response_revision:raise StaleOperation()
                         if not self.policy.segment(sentence):raise SafetyFault('content_blocked')
                         await self.review(operation,sentence,query=text or '',phase='segment',pending_guess=pending_guess,
                                           opening_segment=dict(sentences=list(plan['sentences']),index=index))
                     operation.ensure()
+                    if self.revision!=response_revision:raise StaleOperation()
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
                 if plan['mode']=='guess' and 'guess_role' in plan:state['guess_role']=plan['guess_role']
                 if state['mode']=='story':

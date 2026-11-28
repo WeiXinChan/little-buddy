@@ -10,7 +10,8 @@ from tests.v2.test_initial_guess_quality import candidate
 
 NEW='再给我出一个新的动物谜语吧。'
 class NewGuessRound(unittest.IsolatedAsyncioTestCase):
-    async def scenario(self,*,query=NEW,action='change',clue='它会喵喵叫。',ack=True):
+    async def scenario(self,*,query=NEW,action='change',clue='它会喵喵叫。',ack=True,omit_role=False,deny_first=False):
+        answer='大象' if omit_role else '猫'
         reviews=[];plans=[];tts=[];calls=[]
         class CountSpeech(Speech):
             def synthesize(self,text,rate):tts.append(text);return super().synthesize(text,rate)
@@ -24,15 +25,17 @@ class NewGuessRound(unittest.IsolatedAsyncioTestCase):
                 if len(plans)==1:value={'allow':True,'quality':True}
                 elif len(plans)==2:value={'allow':True,'quality':True}
                 else:
-                    value={'allow':'猫' not in d['segment'],
+                    value={'allow':answer not in d['segment'],
                            'quality':d.get('pending_guess_kind')=='replacement' and d.get('current_input')==NEW and
-                           pending.get('answer')=='猫' and d['segment'] in ('它会喵喵叫。','它有软软的爪子。','它会喵喵叫。它有软软的爪子。')}
+                           pending.get('answer')==answer and d['segment'] in ((clue,) if omit_role else ('它会喵喵叫。','它有软软的爪子。','它会喵喵叫。它有软软的爪子。'))}
+                if deny_first and len(plans)==3:value={'allow':True,'quality':False}
             else:
                 plans.append(deepcopy(d))
                 value=candidate()
                 if len(plans)==2:value.update(action='continue',sentences=['对啦！就是兔子。'],anchors={})
                 if len(plans)>=3:
-                    value=candidate('猫',clue);value['action']=action
+                    value=candidate(answer,clue);value['action']=action
+                    if omit_role:value.pop('guess_role')
                     if isinstance(clue,list):value['sentences']=clue
             return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(value,ensure_ascii=False)}}]})
         http=httpx.AsyncClient(transport=httpx.MockTransport(response));self.addAsyncCleanup(http.aclose)
@@ -47,6 +50,7 @@ class NewGuessRound(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(await turn('是兔子！'),2)
         before=(deepcopy(peer.session.game),deepcopy(peer.session.secrets),list(peer.session.public))
         reviews.clear();tts.clear();calls.clear();wire.acknowledge=ack
+        if deny_first:peer.input_budget.speech(0)
         task=await turn(query)
         if not ack:
             async with asyncio.timeout(1):
@@ -68,6 +72,15 @@ class NewGuessRound(unittest.IsolatedAsyncioTestCase):
         instruction=next(i for i,d in calls if '严格字段' in i)
         self.assertIn('此时必须action=change',instruction)
         self.assertIn('不能用action=continue同时改变secrets',instruction)
+
+    async def test_omitted_role_new_round_first_and_repaired_review_use_new_answer(self):
+        p,_,reviews,plans,tts,calls,before=await self.scenario(omit_role=True,deny_first=True,clue='它有长长的象鼻。')
+        self.assertEqual(len(plans),4);self.assertEqual(len(reviews),2)
+        for d,game,secrets,heard in reviews:
+            self.assertEqual(d['pending_guess_kind'],'replacement');self.assertEqual(d['pending_guess']['guess_role'],'setter')
+            self.assertEqual(d['pending_guess']['answer'],'大象');self.assertEqual((game,secrets,heard),before)
+        self.assertEqual(tts,['它有长长的象鼻。']);self.assertEqual(p.session.secrets,{'answer':'大象'})
+        self.assertEqual(plans[-1]['server_constraints']['correction'],'new_guess_quality')
 
     async def test_continue_changed_answer_stays_rejected_before_review_audio_or_commit(self):
         p,w,reviews,plans,tts,calls,before=await self.scenario(action='continue')
