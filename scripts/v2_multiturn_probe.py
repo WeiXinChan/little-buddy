@@ -85,6 +85,12 @@ FAILURE_CODES=frozenset({'voice','timeout','network','quota','safety'})
 FAILURE_STAGES=frozenset({'bind','input_policy','plan','facts','fact_commit','safety','synthesis'})
 FAILURE_KINDS=frozenset({'WireError','VoiceFault','TimeoutError','ModelError','SafetyFault','QualityFault','ProbeLimit','CancelledError'})
 
+def guess_quality_repair(peer):
+    value=getattr(peer,'last_guess_quality_repair',None)
+    keys={'initial_whole_quality_rejected','attempted','replacement_whole_approved'}
+    if type(value) is not dict or set(value)!=keys or any(type(v) is not bool for v in value.values()):return None
+    return dict(value)
+
 def peer_failure(peer):
     failure=getattr(peer,'last_failure',None)
     if not isinstance(failure,dict):return None
@@ -235,7 +241,7 @@ async def run_case(case,providers,*,ack=True,observer=None):
                             rejected=asyncio.ensure_future(result);state.track(rejected);rejected.cancel()
                         raise ProbeLimit('observer_must_be_sync')
                 rows.append(dict(label=turn['label'],checks=checks,quality_assessable=ok,
-                    peer_failure=peer_failure(peer),resource_diagnostics=deepcopy(peer.probe_resources),control_failures=[e['code'] for e in sink.events if e['type']=='failure'],
+                    peer_failure=peer_failure(peer),guess_quality_repair=guess_quality_repair(peer),resource_diagnostics=deepcopy(peer.probe_resources),control_failures=[e['code'] for e in sink.events if e['type']=='failure'],
                     delivery_metadata=dict(audio_chunks=sink.frames,audio_bytes=sink.audio_bytes,max_audio_bytes=sink.max_audio_bytes,acks_accepted=sink.acks,game_committed=sink.game_commits>0,resource_quarantined=peer.quarantined),
                     first_audio_after_text_ms=None if sink.first is None else round((sink.first-start)*1000,2),
                     completed_ms=round((time.monotonic()-start)*1000,2),stages=deepcopy(meter.calls[offset:])))
