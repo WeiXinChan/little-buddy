@@ -36,7 +36,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                                .connectTimeout(4, TimeUnit.SECONDS).build(),
                            private val closeTransport: () -> Unit = {},
                            private val diagnosticScope:PinDiagnostic.Scope=PinDiagnostic.Scope(),
-                           private val actualOutput: (Boolean)->Unit = {}) {
+                           private val actualOutput: (Boolean)->Unit = {},
+                           private val clarification: ()->ShortArray = { error("clarification asset unavailable") }) {
     fun nativeProof() = player.nativeProof()
     private var controlQuarantined=false
     private var deliveringSafety=false // handler-owned: an accepted safety event must still show text if stop fails
@@ -58,6 +59,39 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     @Volatile var inputSerial = 0L; private set
     private var outputBusy = false
     private var responseRevision = -1L
+    private var localSequence=0L
+    private var localTicket:Long?=null
+    private fun cancelClarification():Boolean {
+        if(localTicket==null)return true
+        localTicket=null
+        val proof=player.stop()
+        outputBusy=false
+        if(!proof.stopped || !proof.released){fail("release");return false}
+        return true
+    }
+    private fun clarifyLocally(deadline:Long,expectedEpoch:Long,version:Long) {
+        val ticket=++localSequence
+        fun current()=active && compatible && !childBlocked && permitted() && !quarantined &&
+            managementState.mediaAllowed && epoch==expectedEpoch && gate.revision==version && localTicket==ticket
+        val pcm=clarification()
+        try {
+            check(SystemClock.elapsedRealtime()<deadline) // original admission; loading cannot renew it
+            if(!active || childBlocked || !permitted() || quarantined || !managementState.mediaAllowed ||
+                epoch!=expectedEpoch || gate.revision!=version)return
+            localTicket=ticket;outputBusy=true
+            player.clarify(ticket,pcm,
+                onHead={if(current())phase(ClientPhase.LOCAL_CLARIFY_HEAD)},
+                onFinished={if(current()){
+                    phase(ClientPhase.LOCAL_CLARIFY_END);localTicket=null;outputBusy=false;status("listening")
+                }},
+                onCancelled={
+                    if(active && permitted() && !childBlocked && epoch==expectedEpoch)
+                        phases?.event(ClientPhase.LOCAL_CLARIFY_CANCEL,expectedEpoch,version,gate.capturedLastSpeechBootMs)
+                    localTicket=null
+                })
+            phase(ClientPhase.LOCAL_CLARIFY_BEGIN)
+        } finally {if(localTicket!=ticket)pcm.fill(0)}
+    }
     private val phases=if(ClientPhasePort.enabled())ClientPhases(diagnosticScope,SystemClock::elapsedRealtime) else null
     private val gate: InputGate = InputGate(waits, SystemClock::elapsedRealtime,
         { version -> phases?.clear();entryGate.clear(); childVolume.clear(); images?.inputChanged(); send("advance", "revision" to version); candidate();status("listening") },
@@ -100,7 +134,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
     private fun outputObserved(playing:Boolean) {
         val actual=playing && permitted() && !childBlocked
-        try{if(actual && active && responseRevision==gate.revision)player.binding?.let {
+        try{if(actual && localTicket==null && active && responseRevision==gate.revision)player.binding?.let {
             phases?.firstHead(it.epoch,gate.revision,it.stream,gate.capturedLastSpeechBootMs)
         }}catch(_:Throwable){}
         actualOutput(actual)
@@ -243,6 +277,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 if (event.has("session") && event.has("turn")) {
                     bindNormalScope(managementScope(event))
                 }
+                if(!cancelClarification())return
                 outputBusy = true
                 responseRevision = gate.revision
                 check(player.binding == null)
@@ -294,6 +329,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                     if(player.binding!=null && !player.suspended && responseRevision==gate.revision)return
                     val resolvedEpoch=epoch
                     val resolvedRevision=event.getLong("revision")
+                    val originalDeadline=gate.responseDeadline
                     if(gate.unrecognized(resolvedRevision)) {
                         interrupt() // Original mute/stop/release, epoch/sequence migration and server stop.
                         if(active && !childBlocked && permitted() && !quarantined && epoch==resolvedEpoch+1 && gate.revision==resolvedRevision) {
@@ -301,6 +337,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                             try{phases?.event(ClientPhase.INPUT_UNRECOGNIZED,resolvedEpoch,resolvedRevision,
                                 gate.capturedLastSpeechBootMs,wireRevision=resolvedRevision)}catch(_:Throwable){}
                             status("clarify")
+                            clarifyLocally(originalDeadline,resolvedEpoch+1,resolvedRevision)
                         }
                     }
                 }
@@ -474,13 +511,14 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
     fun frame(samples: ShortArray, speech: Boolean, capturedAt: Long = SystemClock.elapsedRealtime()) {
         if (childBlocked || !managementState.mediaAllowed) { samples.fill(0); return }
+        if (speech && !cancelClarification()) {samples.fill(0);return}
         if (speech) gate.speech(capturedAt) else gate.quiet()
         input(samples, samples.size, speech, capturedAt)
         samples.fill(0)
     }
     fun quiet() { if (!childBlocked) gate.quiet() }
     fun candidate() {
-        if (childBlocked) return
+        if (childBlocked || !cancelClarification()) return
         if (player.binding != null && !player.suspended) {
             images?.inputChanged(); player.suspendOutput(); send("suspend")
         }

@@ -24,13 +24,15 @@ async def run():
   owner_port.write_text(text)
   media=out/'MediaPorts.kt';media.write_text((ports/'MediaPorts.kt').read_text().replace('val instances=','@JvmField var releaseFails=false;val instances=').replace('fun release(){state=0}','fun release(){if(releaseFails)error("fixture release");state=0}'))
   sources=[owner_port]+[media]+[ports/(n+'.kt') for n in ['Base64Port','JsonPort']]+[ROOT/'scripts/testing/unknown-input/RealUnknownClient.kt']
-  sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['VoiceClient','InputGate','AndroidTrack','ClientPhases']]
+  sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['VoiceClient','InputGate','AndroidTrack','ClientPhases','Playback']]
   sources += [ROOT/'app/src/main/java/com/littlebuddy/v2/parent/PinDiagnostic.kt']
   baseline='--baseline' in os.sys.argv or '--negative' in os.sys.argv
   if baseline:
    for n in ['VoiceClient','InputGate','ClientPhases']:
     frozen=out/(n+'.kt');frozen.write_bytes(subprocess.check_output(['git','show','650cbc859d2bd546cc710d7119fbdf895e32abee:app/src/main/java/com/littlebuddy/v2/'+n+'.kt'],cwd=ROOT))
     sources=[frozen if p.name==n+'.kt' else p for p in sources]
+   driver=out/'RealUnknownClient.kt';driver.write_bytes(subprocess.check_output(['git','show','19215a5de3f8ac2e1ca43639e510e32735530085:scripts/testing/unknown-input/RealUnknownClient.kt'],cwd=ROOT))
+   sources=[driver if p.name=='RealUnknownClient.kt' else p for p in sources]
    print('BASELINE_SOURCE 650cbc859d2bd546cc710d7119fbdf895e32abee',flush=True)
   chosen=next(p for p in sources if p.name=='VoiceClient.kt');print('SELECTED_VOICECLIENT_SOURCE_SHA256',hashlib.sha256(chosen.read_bytes()).hexdigest(),flush=True)
   subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-Xfriend-paths='+str(main),'-classpath',os.pathsep.join(runtime),'-d',str(out/'classes'),*map(str,sources)],check=True)
@@ -38,7 +40,7 @@ async def run():
   subprocess.run(['keytool','-importcert','-noprompt','-alias','fixture','-file',str(out/'cert'),'-keystore',str(out/'trust.p12'),'-storetype','PKCS12','-storepass','fixture-only'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
   tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(out/'cert',out/'key')
   contract='v2-voice2-safety1-images2-volume1-management1-end1'
-  modes=['unknown'] if baseline else ['unknown','unknown_complete','empty','incomplete','thinking','stop','noise','stale_epoch','stale_revision','stale_new_input','expired','management','cancel','provider','release_failure','late_bound']
+  modes=['unknown'] if baseline else ['unknown','unknown_complete','empty','incomplete','thinking','stop','noise','stale_epoch','stale_revision','stale_new_input','expired','management','cancel','provider','release_failure','late_bound','local_input','local_candidate','local_management','local_close','local_background','local_release_failure','asset_late','local_duplicate']
   if os.environ.get('UNKNOWN_CASE'):
    assert os.environ['UNKNOWN_CASE'] in modes;modes=[os.environ['UNKNOWN_CASE']]
   for mode in modes:
@@ -63,7 +65,7 @@ async def run():
        await send('audio',player=player,stream=stream,segment='fixed',start=240,end=480,pcm=pcm)
       elif kind=='ack':
        if resolved and event['stream']==1:old_acks+=1
-       if event['head']==480 and not solo_ended:
+       if event['head']==480:
         solo_ended=True;await send('reply_end',head=480,public_facts=0)
       elif kind=='probe':
        if revision>=2 and mode not in {'stale_new_input'}:await send('endpoint',completion='complete');continue
@@ -83,7 +85,10 @@ async def run():
       elif kind=='stop':
        epoch=event['epoch']
        if prepared:prepared=False;await send('open')
-       else:await send('thinking_wait')
+       else:
+        if mode=='local_duplicate' and resolved:
+         await send('decision',meaning='unknown',intent='');await send('decision',meaning='unknown',intent='')
+        await send('thinking_wait')
       elif kind=='resume_noise':await send('thinking_wait')
     except Exception as e:
      from websockets.exceptions import ConnectionClosed
