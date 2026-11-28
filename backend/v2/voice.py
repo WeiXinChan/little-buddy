@@ -51,6 +51,7 @@ class Operation:
         self.epoch, self.revision = epoch, revision
         self.budget = peer.input_budget
         self.output = None
+        self.private_mode = self.session.private_mode
         self.cancelled = False
 
     def valid(self):
@@ -106,6 +107,7 @@ class VoicePeer:
         self.awaiting_input = False
         self.generation = None
         self.recognition = None
+        self.recognition_handoff = None
         self.next_probe = None
         self.prepared = None
         self.revision = 0
@@ -261,23 +263,62 @@ class VoicePeer:
                 done.exception()
         task.add_done_callback(finished)
 
+    def retire_recognition_for_advance(self):
+        old=self.recognition
+        if old is None or old.done() or self.recognition_handoff is not None:return
+        scope=self.recognition_scopes.get(old)
+        if scope is not None:scope.cancelled=True
+        authority=(self.session,self.session.session,self.session.connection,self.epoch,self.session.private_mode)
+        deadline=asyncio.get_running_loop().time()+.5
+        old.cancel()
+        self.recognition_handoff=asyncio.create_task(self.finish_recognition_handoff(old,authority,deadline))
+        self.track_retired(self.recognition_handoff)
+
+    async def finish_recognition_handoff(self,old,authority,deadline):
+        owner=asyncio.current_task()
+        try:
+            done,_=await asyncio.wait({old},timeout=max(0,deadline-asyncio.get_running_loop().time()))
+            if not done or not old.cancelled() and old.exception() is not None:
+                self.quarantined=True;self.track_retired(old)
+                if self.next_probe is not None and self.next_probe[2] is old:self.next_probe=None
+                return
+            if self.quarantined or self.recognition_handoff is not owner or self.recognition is not old:return
+            pending=self.next_probe;self.next_probe=None;self.recognition=None
+            current=(self.session,self.session.session,self.session.connection,self.epoch,self.session.private_mode)
+            if current!=authority or pending is None or pending[2] is not old:return
+            data,following,_=pending
+            if following.valid() and following.private_mode==self.session.private_mode:
+                self.recognition=asyncio.create_task(self._analyze(data,following))
+        except asyncio.CancelledError:
+            if not old.done():
+                self.track_retired(old)
+                if self.recognition_handoff is owner:
+                    self.quarantined=True
+                    if self.next_probe is not None and self.next_probe[2] is old:self.next_probe=None
+            raise
+        finally:
+            if self.recognition_handoff is owner:self.recognition_handoff=None
+
     async def cancel_recognition(self):
-        task = self.recognition
-        self.next_probe = None
-        if task is None or task.done():
-            return
-        scope = self.recognition_scopes.get(task)
-        if scope is not None:
-            scope.cancelled = True
-        task.cancel()
-        done, _ = await asyncio.wait({task}, timeout=.5)
-        if not done:
-            # No replacement supplier is allowed on this connection after an
-            # unconfirmed release. Late work still retains its revoked scope.
-            self.quarantined = True
-            self.track_retired(task)
-        elif not task.cancelled():
-            task.exception()
+        task=self.recognition
+        handoff,self.recognition_handoff=self.recognition_handoff,None
+        self.next_probe=None
+        tasks={t for t in (task,handoff) if t is not None and not t.done()}
+        if not tasks:return
+        scope=self.recognition_scopes.get(task)
+        if scope is not None:scope.cancelled=True
+        for t in tasks:t.cancel()
+        try:done,pending=await asyncio.wait(tasks,timeout=.5)
+        except asyncio.CancelledError:
+            self.quarantined=True
+            for t in tasks:
+                if not t.done():self.track_retired(t)
+            raise
+        if pending:
+            self.quarantined=True
+            for t in pending:self.track_retired(t)
+        for t in done:
+            if not t.cancelled() and t.exception() is not None:self.quarantined=True
 
     async def close_quarantined(self):
         task = asyncio.create_task(self.socket.close(1011, 'resource unavailable'))
@@ -713,6 +754,8 @@ class VoicePeer:
             if type(version) is not int or version != self.revision + 1:
                 raise WireError('revision')
             self.revision = version
+            self.next_probe=None
+            self.retire_recognition_for_advance()
             self.suspended = True
             await self.hide_visual('input_changed')
             self.analysis = self.prepared = None
@@ -723,7 +766,7 @@ class VoicePeer:
                 return
             self.input_budget.resume()
             self.input_budget.remaining()
-            if self.recognition is not None and not self.recognition.done():
+            if self.recognition_handoff is not None or self.recognition is not None and not self.recognition.done():
                 self.next_probe = (bytes(self.capture), Operation(self, self.epoch, self.revision), self.recognition)
                 return
             self.recognition = asyncio.create_task(self.analyze(bytes(self.capture), self.epoch, self.revision))
@@ -790,6 +833,7 @@ class VoicePeer:
         self.recognition_scopes[owner] = operation
         try:
             operation.ensure()
+            if operation.private_mode!=operation.session.private_mode:raise StaleOperation()
             async with asyncio.timeout(operation.budget.remaining()):
                 stage_timing.mark('asr_open',self,operation)
                 async with self.owned_resource(operation, self.providers.recognize, 16000) as recognizer:
@@ -802,6 +846,7 @@ class VoicePeer:
                 operation.ensure()
                 text = self.policy.input(text)
                 operation.ensure()
+                if operation.private_mode!=operation.session.private_mode:raise StaleOperation()
                 # Only this operation's authorised session may supply context.
                 context = operation.session.context()
                 result = await self.read_request(operation, 'endpoint', text, context)
@@ -813,6 +858,7 @@ class VoicePeer:
                 operation.budget.remaining()
                 if result['completion'] == 'thinking':
                     operation.budget.pause_thinking()
+                if operation.private_mode!=operation.session.private_mode:raise StaleOperation()
                 self.analysis = (operation.revision, text, result['completion'], result['meaning'])
                 await self.owned(operation, self.send, 'endpoint',
                                  revision=operation.revision, completion=result['completion'])
@@ -830,7 +876,7 @@ class VoicePeer:
             self.recognition_scopes.pop(owner, None)
             # An old finally must not consume a newer owner's pending probe.
             pending = self.next_probe
-            if self.recognition is owner and pending is not None and pending[2] is owner:
+            if self.recognition_handoff is None and self.recognition is owner and pending is not None and pending[2] is owner:
                 self.next_probe = None
                 data, following, _ = pending
                 if following.valid() and not operation.cancelled and not owner.cancelling():

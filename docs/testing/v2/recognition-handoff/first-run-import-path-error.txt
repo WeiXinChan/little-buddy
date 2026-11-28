@@ -1,0 +1,18 @@
+......E.....................................................
+======================================================================
+ERROR: test_r99 (unittest.loader._FailedTest.test_r99)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_r99
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/multica_workspaces/titan-q0u7-aa9ba699e3d3/tita-87-829bcaedfd74/workdir/recognition-handoff/tests/v2/test_r99.py", line 16, in <module>
+    from test_m05 import Model, Speech, Socket, plan
+ModuleNotFoundError: No module named 'test_m05'
+
+
+----------------------------------------------------------------------
+Ran 60 tests in 8.948s
+
+FAILED (errors=1)
