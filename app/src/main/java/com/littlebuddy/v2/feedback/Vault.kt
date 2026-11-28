@@ -3,7 +3,6 @@ package com.littlebuddy.v2.feedback
 import java.io.*
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
@@ -46,12 +45,18 @@ class PrivateVaultFiles(private val directory: File) : VaultFiles {
  */
 class FeedbackVault(private val files: VaultFiles, private val key: SecretKey) {
     private var quarantined = false
-    private val random = SecureRandom()
     private fun crypt(input: ByteArray, encrypt: Boolean): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        val nonce = if (encrypt) ByteArray(12).also(random::nextBytes) else input.take(12).toByteArray()
         require(encrypt || input.size >= 28)
-        cipher.init(if (encrypt) Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, nonce))
+        if (encrypt) {
+            // AndroidKeyStore's randomized-encryption policy forbids caller-supplied IVs.
+            cipher.init(Cipher.ENCRYPT_MODE, key)
+        } else {
+            // Keep the v1 on-disk layout: 12-byte IV followed by ciphertext + 128-bit tag.
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, input.copyOfRange(0, 12)))
+        }
+        val nonce = cipher.iv
+        require(nonce.size == 12)
         cipher.updateAAD("little-buddy-m09-v1".toByteArray())
         return if (encrypt) nonce + cipher.doFinal(input) else cipher.doFinal(input, 12, input.size - 12)
     }
