@@ -94,6 +94,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                         phases?.event(ClientPhase.LOCAL_CLARIFY_CANCEL,expectedEpoch,version,capturedSpeech)
                     if(localTicket==ticket)localTicket=null
                 })
+            check(SystemClock.elapsedRealtime()<deadline) // native construction must also fit original admission
+            if(!current()){cancelClarification();return}
             phase(ClientPhase.LOCAL_CLARIFY_BEGIN)
         } finally {if(localTicket!=ticket)pcm.fill(0)}
     }

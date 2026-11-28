@@ -14,7 +14,7 @@ fun main(args:Array<String>) {
     val failures=java.util.concurrent.CopyOnWriteArrayList<PinDiagnostic.RuntimeEvent>()
     var localVolume=-1f;var localBegin=0;var localHead=0;var localEnd=0;var localCancel=0;var allowed=true;var localTrack:AudioTrack?=null;var failed=0;var clarified=0;var serialAtTerminal=-1L;var phaseUnknown=0;var ordinaryComplete=false;var firstRequest=false;var waiting=false;var tested=false;var secondHead=false
     lateinit var client:VoiceClient
-    val expectedFault=mode in setOf("stale_epoch","stale_revision","stale_new_input","expired","provider","release_failure","local_release_failure","asset_late")
+    val expectedFault=mode in setOf("stale_epoch","stale_revision","stale_new_input","expired","provider","release_failure","local_release_failure","asset_late","track_late")
     fun newSpeech(){client.frame(ShortArray(320),true,SystemClock.elapsedRealtime());client.quiet();SystemClock.advance(301)}
     fun afterWireBarrier(){
         if(tested)return;tested=true;waiting=false
@@ -53,7 +53,7 @@ fun main(args:Array<String>) {
         if(mode=="bare_interrupted" && e.phase==ClientPhase.BOUND_RECEIVED && e.revision==0L && !firstRequest){
             firstRequest=true;owner.postDelayed({newSpeech()},20)
         }
-        if(e.phase.name=="INPUT_UNRECOGNIZED"){phaseUnknown++;serialAtTerminal=client.inputSerial}
+        if(e.phase.name=="INPUT_UNRECOGNIZED"){phaseUnknown++;serialAtTerminal=client.inputSerial;if(mode=="track_late")AudioTrack.advanceOnBuild=true}
         if(e.phase==ClientPhase.PROBE_SENT && e.revision==1L){
             waiting=true
             when(mode){
@@ -70,12 +70,12 @@ fun main(args:Array<String>) {
     }
     client=VoiceClient(owner,{s->
         if(s=="clarify")clarified++
-        if(waiting && mode !in setOf("unknown","empty","unknown_complete","local_duplicate","local_route_late","bare_interrupted","local_input","local_candidate","local_management","local_close","local_background","local_release_failure","asset_late","local_route_active") && s in setOf("listening","waiting_incomplete","waiting_thinking","waiting_complete") && mode !in setOf("unknown_complete","late_bound"))afterWireBarrier()
+        if(waiting && mode !in setOf("unknown","empty","unknown_complete","local_duplicate","local_route_late","bare_interrupted","local_input","local_candidate","local_management","local_close","local_background","local_release_failure","asset_late","track_late","local_route_active") && s in setOf("listening","waiting_incomplete","waiting_thinking","waiting_complete") && mode !in setOf("unknown_complete","late_bound"))afterWireBarrier()
 
     },{},{_,_->},failed={failed++;done.countDown()},requiredContract=ReleaseCompatibility.CONTRACT,
         diagnosticScope=PinDiagnostic.Scope(10,20,0),permitted={allowed},
         playbackSettings=com.littlebuddy.v2.parent.ParentPlaybackSettings(35,100,180),
-        clarification={if(mode=="asset_late")SystemClock.advance(15001);ShortArray(48000){(it%31).toShort()}},
+        clarification={if(mode=="asset_late","track_late")SystemClock.advance(15001);ShortArray(48000){(it%31).toShort()}},
         ready={client.wake();SystemClock.advance(600)},
         completed={_,_->if(!firstRequest){firstRequest=true;newSpeech()}else{ordinaryComplete=true}})
     owner.post{client.connect(args[0],"A".repeat(32))}
@@ -90,7 +90,7 @@ fun main(args:Array<String>) {
             mode=="local_background"->{check(failed==1 && localHead==1 && localEnd==0);check(AudioTrack.instances.all{it.state==0})}
             mode in setOf("local_candidate","local_management","local_close")->{check(failed==0 && localHead==1 && localEnd==0 && localCancel==if(mode=="local_candidate")1 else 0);check(localTrack?.state==0)}
             mode=="local_release_failure"->{check(failed==1 && localEnd==0 && client.quarantined)}
-            mode=="asset_late"->{check(failed==1 && localBegin==0 && localHead==0)}
+            mode in setOf("asset_late","track_late")->{check(failed==1 && localBegin==0 && localHead==0);check(AudioTrack.instances.all{it.state==0})}
             expectedFault->{
                 check(failed==1 && phaseUnknown==0)
                 val expected=when(mode){"provider"->PinDiagnostic.FailSource.SERVER_VOICE;"release_failure"->PinDiagnostic.FailSource.RELEASE;else->null}
