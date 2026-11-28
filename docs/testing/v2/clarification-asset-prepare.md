@@ -29,3 +29,5 @@ sudo -n scripts/with-build-lock python3 -I -B scripts/v2_clarification_asset.py 
 不能复用prepare目录作为execute目录，不自动将素材提交Git/复制APK，不改后端wire/服务或Android工作树。
 
 root零云发现旧FD9 admission在真实systemd-run内不可用，旧prepare/17绿与阻断保留；已修真实cgroup+外部忙锁admission。新增--admission-smoke仅检父子监督与源码/资源，不读配置/凭据、不调用generate或network。必须在原with-build-lock下跑真实smoke后交审，不能拿mock替代。
+
+真实wrapper零云smoke还发现systemd清空Git安全目录环境后root source_guard被dubious ownership拒绝；隔离HOME/PATH环境已验证该拒绝及精确当前ROOT的单命令safe.directory修正，不改全局Git信任。两条admission失败均保留，未发生provider调用。

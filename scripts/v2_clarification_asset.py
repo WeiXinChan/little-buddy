@@ -17,7 +17,7 @@ class GuardError(RuntimeError):pass
 def digest(value):return hashlib.sha256(value).hexdigest()
 def source_guard(tool_source):
     for ref,name in [(SOURCE,n) for n in PRODUCTION]+[(tool_source,'scripts/v2_clarification_asset.py')]:
-        result=subprocess.run(['git','show',ref+':'+name],cwd=ROOT,capture_output=True,timeout=3)
+        result=subprocess.run(['git','-c','safe.directory='+str(ROOT),'show',ref+':'+name],cwd=ROOT,capture_output=True,timeout=3)
         if result.returncode or result.stdout!=(ROOT/name).read_bytes():raise GuardError('source_mismatch')
 
 def load_config():
@@ -211,4 +211,8 @@ def main(argv=None):
 
 if __name__=='__main__':
     try:sys.exit(main())
+    except GuardError as error:
+        allowed={'admission','source_mismatch','production_model_mismatch','output_exists','private_directory','build_supervisor_required','resource_limit_required','lock_directory','lock_identity','external_lock_not_held','parent_binding','one_worker_only'}
+        value=error.args[0] if error.args and type(error.args[0]) is str and error.args[0] in allowed else 'unknown'
+        print(json.dumps(dict(error='asset_admission_failed',detail=value)),file=sys.stderr);sys.exit(2)
     except Exception:print('asset_admission_failed',file=sys.stderr);sys.exit(2)
