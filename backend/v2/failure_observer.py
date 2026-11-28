@@ -5,6 +5,7 @@ import asyncio
 import sys
 import time
 import weakref
+import math
 from backend.v2.diagnostics import CONTRACT_FAILURES,CONTRACT_DETAILS
 
 STAGES=frozenset({'bind','input_policy','plan','facts','fact_commit','safety','synthesis'})
@@ -88,6 +89,47 @@ class PeerFailures:
                 raise ValueError('observer_sync_required')
         except BaseException:
             window.disabled=True;window.sink=None
+
+    def timeout(self,peer,source):
+        """Terminal observation may follow expiry; never grants operation authority."""
+        window=self.window
+        try:
+            now=window.clock();s=peer.session
+            if (window.disabled or now-window.started>=900 or window.records>=16 or self.records>=4 or
+                self.peer() is not peer or self.session() is not s or self.connection!=s.connection or peer.closed):return
+            allowed={'input_monitor','session_monitor','input_analysis','output_generation'}
+            if source not in allowed:return
+            sampled=s.clock()
+            def remaining(deadline):
+                if deadline is None:return None
+                value=(deadline-sampled)*1000
+                return max(-2147483647,min(2147483647,round(value))) if math.isfinite(value) else None
+            reason=s.expiry_reason if s.expiry_reason in {'heartbeat_timeout','response_timeout','management_expired','session_expired'} else 'none'
+            row=dict(stage='timeout',kind='TimeoutError',source=source,expiry=reason,
+                     peer=self.ordinal,record=self.records+1,
+                     elapsed_ms=min(900000,max(0,round((now-window.started)*1000))),
+                     input_remaining_ms=remaining(peer.input_budget.deadline),
+                     output_remaining_ms=remaining(s.deadline or None),progress_remaining_ms=remaining(s.progress_deadline or None),
+                     heartbeat_remaining_ms=remaining(s.heartbeat_deadline),ttl_remaining_ms=remaining(s.expires),
+                     awaiting_input=peer.awaiting_input,thinking=peer.input_budget.thinking_at is not None,
+                     response_confirmed=s.response_confirmed,response_expired=s.response_expired,
+                     active=s.active)
+            self.records+=1;window.records+=1
+            result=window.sink(row)
+            if inspect.isawaitable(result):
+                if inspect.iscoroutine(result):result.close()
+                elif isinstance(result,asyncio.Future):
+                    result.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+                raise ValueError('observer_sync_required')
+        except BaseException:
+            window.disabled=True;window.sink=None
+
+
+def timeout(peer,source):
+    observer=getattr(peer,'failure_observer',None)
+    if observer is None:return
+    try:observer.timeout(peer,source)
+    except BaseException:pass
 
 KINDS=frozenset({'VoiceFault','WireError','ModelError','SafetyFault','QualityFault','SpeechTaskError',
                  'TimeoutError','OSError','RuntimeError','ValueError','TypeError','BufferError'})
