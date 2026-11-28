@@ -22,7 +22,7 @@ async def run():
   owner_port=out/'OwnerPorts.kt';owner_port.write_text((ports/'OwnerPorts.kt').read_text().replace('executor.execute(r);return true','if(executor.isShutdown)return false;return try{executor.execute{try{r.run()}catch(t:Throwable){t.printStackTrace();throw t}};true}catch(_:RejectedExecutionException){false}'))
   text=owner_port.read_text().replace('object SystemClock {@JvmStatic fun elapsedRealtime()=System.nanoTime()/1_000_000}', 'object SystemClock {@JvmField var now=100000L;@JvmStatic fun elapsedRealtime()=now;@JvmStatic fun advance(ms:Long){now+=ms}}')
   owner_port.write_text(text)
-  media=out/'MediaPorts.kt';media.write_text((ports/'MediaPorts.kt').read_text().replace('val instances=','@JvmField var releaseFails=false;val instances=').replace('fun release(){state=0}','fun release(){if(releaseFails)error("fixture release");state=0}'))
+  media=out/'MediaPorts.kt';media.write_text((ports/'MediaPorts.kt').read_text().replace('val instances=','@JvmField var releaseFails=false;val instances=').replace('fun release(){state=0}','fun release(){if(releaseFails)error("fixture release");state=0}').replace('fun addOnRoutingChangedListener(l:AudioRouting.OnRoutingChangedListener,h:android.os.Handler){}','var savedRoute:AudioRouting.OnRoutingChangedListener?=null;fun addOnRoutingChangedListener(l:AudioRouting.OnRoutingChangedListener,h:android.os.Handler){savedRoute=l}').replace('override val routedDevice=AudioDeviceInfo()','override var routedDevice=AudioDeviceInfo()'))
   sources=[owner_port]+[media]+[ports/(n+'.kt') for n in ['Base64Port','JsonPort']]+[ROOT/'scripts/testing/unknown-input/RealUnknownClient.kt']
   sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['VoiceClient','InputGate','AndroidTrack','ClientPhases','Playback']]
   sources += [ROOT/'app/src/main/java/com/littlebuddy/v2/parent/PinDiagnostic.kt']
@@ -40,7 +40,7 @@ async def run():
   subprocess.run(['keytool','-importcert','-noprompt','-alias','fixture','-file',str(out/'cert'),'-keystore',str(out/'trust.p12'),'-storetype','PKCS12','-storepass','fixture-only'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
   tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(out/'cert',out/'key')
   contract='v2-voice2-safety1-images2-volume1-management1-end1'
-  modes=['unknown'] if baseline else ['unknown','unknown_complete','empty','incomplete','thinking','stop','noise','stale_epoch','stale_revision','stale_new_input','expired','management','cancel','provider','release_failure','late_bound','local_input','local_candidate','local_management','local_close','local_background','local_release_failure','asset_late','local_duplicate']
+  modes=['unknown'] if baseline else ['unknown','unknown_complete','empty','incomplete','thinking','stop','noise','stale_epoch','stale_revision','stale_new_input','expired','management','cancel','provider','release_failure','late_bound','local_input','local_candidate','local_management','local_close','local_background','local_release_failure','asset_late','local_duplicate','local_route_late','local_route_active','bare_interrupted']
   if os.environ.get('UNKNOWN_CASE'):
    assert os.environ['UNKNOWN_CASE'] in modes;modes=[os.environ['UNKNOWN_CASE']]
   for mode in modes:
@@ -59,6 +59,7 @@ async def run():
        stream+=1;player=event['player']
        await send('bound',player=player,stream=stream,identity=dict(session='a'*32,turn=0))
        if stream==2 and mode=='late_bound':await send('decision',meaning='unknown',intent='')
+       if mode=='bare_interrupted' and stream==1:continue
        import base64
        pcm=base64.b64encode(bytes(480)).decode()
        await send('audio',player=player,stream=stream,segment='fixed',start=0,end=240,pcm=pcm)

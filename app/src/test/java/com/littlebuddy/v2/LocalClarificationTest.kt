@@ -23,16 +23,16 @@ class LocalClarificationTest {
   assertTrue(pcm.all{it==0.toShort()});assertFalse(p.localActive)
  }
  @Test fun throwingCancelAndOutputObserverCannotPreventCleanupOrRebindOldNative(){
-  val n=Native();val p=Playback({n},{100L}){}
+  val n=Native();val p=Playback({n},{100L}){};var proofBeforeNotify=false;var refused=false
   p.observeOutput{if(!it)throw AssertionError("observer")}
   p.clarify(1,ShortArray(480),{}, {}, {
-   assertEquals(listOf("mute","pause","flush","stop","release"),n.cleanup)
-   try{p.bind(Binding(2,"reentrant",2));fail()}catch(_:IllegalStateException){}
+   proofBeforeNotify=n.cleanup==listOf("mute","pause","flush","stop","release")
+   try{p.bind(Binding(2,"reentrant",2))}catch(_:IllegalStateException){refused=true}
    throw AssertionError("cancel observer")
   })
   p.tick();n.head=240;p.tick()
   assertEquals(StopResult(true,true),p.stop());assertEquals(StopResult(true,true),p.stop())
-  assertNull(p.binding);assertEquals(5,n.cleanup.size)
+  assertTrue(proofBeforeNotify);assertTrue(refused);assertNull(p.binding);assertEquals(5,n.cleanup.size)
  }
  @Test fun throwingHeadStillReleasesAndClearsPrefix(){
   val n=Native();val p=Playback({n},{100L}){};val pcm=ShortArray(480){9}

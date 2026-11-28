@@ -29,6 +29,7 @@ def generate(output, pin_init_diagnostics=False, private_device_preset=False, co
     resource_raw,pngs=_snapshot.resource_files(ROOT)
     manifest=hashlib.sha256(resource_raw).hexdigest()
     assert manifest==RC9_RESOURCES_MANIFEST, 'RC9 reviewed resource manifest required'
+    _snapshot.clarification_files(ROOT) # missing/unreviewed placeholder cannot become a candidate
     inventory=source_inventory(ROOT)
     _native.validate_source(ROOT)
     _snapshot.bind_resources(inventory,resource_raw,pngs)

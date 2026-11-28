@@ -80,6 +80,9 @@ def inspect(apk, pin_init_diagnostics=False, private_device_preset=False, config
         if actual!=expected:raise ValueError('apk_resource_set_mismatch')
         for name,data in pngs.items():
             if z.read(name)!=data:raise ValueError('apk_resource_payload_mismatch')
+        clip=_snapshot.clarification_files(root)
+        if {name for name in names if name.startswith('assets/v2-local-clarify')}!=set(clip):raise ValueError('clarification_asset_set')
+        if any(z.read(name)!=data for name,data in clip.items()):raise ValueError('clarification_asset_bytes')
         _native.validate_apk(root,z)
         return meta
 

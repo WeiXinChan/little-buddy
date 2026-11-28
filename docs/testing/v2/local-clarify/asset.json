@@ -1,0 +1,23 @@
+{
+  "pcm_sha256": "b11fca1d95974735e3f48faf6e8d21d8b8a541c0bf7d4c521c5d10c3f8b260e7",
+  "bytes": 158400,
+  "samples": 79200,
+  "sample_rate": 24000,
+  "channels": 1,
+  "format": "S16LE",
+  "duration_ms": 3300,
+  "text_sha256": "da4dc6b73c651b623c30fc1bae31e8e1f6c9731651131c2b32ca03ea24e868b2",
+  "origin": "root-authorized one fixed system prompt generation",
+  "tool_source": "524e462e",
+  "model": "cosyvoice-v3-flash",
+  "voice": "longanyang",
+  "calls": {
+    "tts": 1,
+    "asr": 0,
+    "other": 0
+  },
+  "usage_characters": 24,
+  "billing": "UNKNOWN",
+  "device_playback": "NOT_TESTED",
+  "bytes_unchanged": true
+}

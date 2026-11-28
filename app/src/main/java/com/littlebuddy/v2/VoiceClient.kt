@@ -59,6 +59,7 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     @Volatile var inputSerial = 0L; private set
     private var outputBusy = false
     private var responseRevision = -1L
+    private var nativeTrackSequence=0L
     private var localSequence=0L
     private var localTicket:Long?=null
     private fun cancelClarification():Boolean {
@@ -71,12 +72,16 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
     }
     private fun clarifyLocally(deadline:Long,expectedEpoch:Long,version:Long) {
         val ticket=++localSequence
-        fun current()=active && compatible && !childBlocked && permitted() && !quarantined &&
+        val capturedSpeech=gate.capturedLastSpeechBootMs
+        fun current()=isAwake && active && compatible && !childBlocked && permitted() && !quarantined &&
             managementState.mediaAllowed && epoch==expectedEpoch && gate.revision==version && localTicket==ticket
+        if(!isAwake || !active || childBlocked || !permitted() || quarantined || !managementState.mediaAllowed ||
+            epoch!=expectedEpoch || gate.revision!=version)return
+        check(SystemClock.elapsedRealtime()<deadline)
         val pcm=clarification()
         try {
             check(SystemClock.elapsedRealtime()<deadline) // original admission; loading cannot renew it
-            if(!active || childBlocked || !permitted() || quarantined || !managementState.mediaAllowed ||
+            if(!isAwake || !active || childBlocked || !permitted() || quarantined || !managementState.mediaAllowed ||
                 epoch!=expectedEpoch || gate.revision!=version)return
             localTicket=ticket;outputBusy=true
             player.clarify(ticket,pcm,
@@ -86,8 +91,8 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                 }},
                 onCancelled={
                     if(active && permitted() && !childBlocked && epoch==expectedEpoch)
-                        phases?.event(ClientPhase.LOCAL_CLARIFY_CANCEL,expectedEpoch,version,gate.capturedLastSpeechBootMs)
-                    localTicket=null
+                        phases?.event(ClientPhase.LOCAL_CLARIFY_CANCEL,expectedEpoch,version,capturedSpeech)
+                    if(localTicket==ticket)localTicket=null
                 })
             phase(ClientPhase.LOCAL_CLARIFY_BEGIN)
         } finally {if(localTicket!=ticket)pcm.fill(0)}
@@ -125,12 +130,16 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
         }catch(_:Throwable){}
     }
     private fun createTrack():AndroidTrack {
+        val nativeTicket=++nativeTrackSequence
         val key=phases?.bindingKey
         return AndroidTrack(handler,com.littlebuddy.v2.parent.ParentPlaybackSettings(childVolume.value,playbackSettings.rate,playbackSettings.durationSeconds),
             phase=if(key==null)null else {metric->
                 if(active && !childBlocked && permitted() && epoch==key.epoch && gate.revision==key.revision)
                     phases?.track(key,metric,gate.capturedLastSpeechBootMs)
-            }) { fail("route") }
+            }) {
+            // Android may already have queued the listener when release removes it.
+            if(active && nativeTicket==nativeTrackSequence && (player.binding!=null || player.localActive))fail("route")
+        }
     }
     private fun outputObserved(playing:Boolean) {
         val actual=playing && permitted() && !childBlocked

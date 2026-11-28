@@ -9,11 +9,10 @@ internal object ClarificationAsset {
         val expected=assets.open("v2-local-clarify.sha256").bufferedReader().use{it.readText().trim()}
         require(expected.matches(Regex("[0-9a-f]{64}")))
         val bytes=assets.open("v2-local-clarify.pcm").use{input->
-            val value=input.readBytesLimited(288000)
-            require(value.size in 480..288000 && value.size%2==0)
-            value
+            input.readBytesLimited(288000)
         }
         try {
+            require(bytes.size in 480..288000 && bytes.size%2==0)
             val digest=MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
             check(digest==expected)
             return ShortArray(bytes.size/2){i->((bytes[2*i].toInt() and 255) or (bytes[2*i+1].toInt() shl 8)).toShort()}

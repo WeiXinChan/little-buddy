@@ -10,4 +10,6 @@ LOCAL_CLARIFY_BEGIN/HEAD/END/CANCEL are CLIENT_PHASE enum markers using the exis
 
 Run `scripts/with-build-lock python3 scripts/test-local-clarification.py` for actual Playback ownership/callback/deadline paths. Run `scripts/with-build-lock env ANDROID_JAR=<cached android.jar> python3 scripts/test-unknown-input-tls.py` for actual current VoiceClient/Playback/AndroidTrack over loopback TLS with controlled platform ports, not a replicated client. No phone/provider. Original650 negative remains available with `--baseline`; original code33 logs are retained outside this directory. Local audio tests do not establish audible/child/device success.
 
-No installation/deployment is performed by the author. Root reviews one canonical private same-signer code34 APK before any device action.
+No installation/deployment is performed by the author. Real fixed asset is158400bytes/79200samples/3.3s; SHA256/provenance in asset.json. It was generated once by root, unmodified; not a fixture or proof of device playback.
+
+Root reviews one canonical private same-signer code34 APK before any device action.
