@@ -52,7 +52,8 @@ async def serve_checked(args,prepared,*,stop=None,ready=None):
                 async with voice_server('127.0.0.1',args.port,prepared.tls,prepared.token,bundle,
                                         CompanionPolicy(),expires_at=prepared.expires_at,feedback=feedback,failure_observation=observation,
                                         stream_asr=getattr(args,'stream_asr',False),animal_cards_enabled=getattr(args,'animal_cards',False),
-                                        wide_audio_window=getattr(args,'wide_audio_window',False)) as server:
+                                        wide_audio_window=getattr(args,'wide_audio_window',False),
+                                        fixed_solo_greeting=getattr(args,'fixed_solo_greeting',False)) as server:
                     notify_ready()
                     event('ready_loopback')
                     if ready is not None:ready.set_result(server.sockets[0].getsockname()[1])
@@ -67,6 +68,7 @@ def parser():
     for name in ('cert','key','token-file','device-scope','ca-file','tls-name','service-env',
                  'credential-directory','apk-contract'):
         result.add_argument('--'+name,required=True)
+    result.add_argument('--fixed-solo-greeting',action='store_true',help='Use the reviewed fixed invitation for explicit public wake_solo only')
     result.add_argument('--wide-audio-window',action='store_true',help='Allow up to four unacknowledged PCM packets (default two)')
     result.add_argument('--animal-cards',action='store_true',help='Use the fixed reviewed animal card catalogue for exact game turns')
     result.add_argument('--stream-asr',action='store_true',help='Opt-in first-expression ASR prestream; default off, no client/wire change')

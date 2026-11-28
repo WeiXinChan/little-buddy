@@ -102,12 +102,13 @@ def decode(raw):
 
 
 class VoicePeer:
-    def __init__(self, socket, providers, policy, *, clock=time.monotonic, stream_asr=False, animal_cards_enabled=False, wide_audio_window=False):
+    def __init__(self, socket, providers, policy, *, clock=time.monotonic, stream_asr=False, animal_cards_enabled=False, wide_audio_window=False, fixed_solo_greeting=False):
         self.socket, self.providers, self.policy = socket, providers, policy
         self.session = Session(clock, audio_capacity=4 if wide_audio_window is True else 2)
         self.epoch, self.sequence = 0, -1
         self.capture = bytearray()
         self.animal_cards_enabled=animal_cards_enabled is True
+        self.fixed_solo_greeting=fixed_solo_greeting is True
         self.card_owner=None
         self.stream_asr = stream_asr is True  # opt-in server capability; no wire field
         self.stream_wake = None
@@ -802,13 +803,15 @@ class VoicePeer:
                     return
                 self.prepared=None
                 if prepared is not None and event['intent']==prepared[2]:
-                    text,deadline,_,revision=prepared
+                    text,deadline,_,revision,*origin=prepared
                     if revision!=self.revision:return
                     if session.clock()>=deadline:raise WireError('response budget exhausted')
                     session.begin_turn();session.deadline=deadline
                     self.awaiting_input=False
                     await self.commands();await self.send('open',revision=self.revision)
-                    self.generation=asyncio.create_task(self.respond(text,self.epoch))
+                    response=(self.respond(text,self.epoch,solo_greeting=True) if origin==['wake_solo']
+                              else self.respond(text,self.epoch))
+                    self.generation=asyncio.create_task(response)
                 else:
                     # Confirmed stopped old reply, not a session/lease renewal.
                     session.deadline=session.progress_deadline=0
@@ -877,7 +880,8 @@ class VoicePeer:
                 self.input_budget.speech(event.get('age_ms', 0))
                 self.input_budget.remaining()
                 self.awaiting_input = True
-                await self.decision(None, 'new_turn', self.revision, self.input_budget.deadline)
+                await self.decision(None, 'new_turn', self.revision, self.input_budget.deadline,
+                                    solo_greeting=self.fixed_solo_greeting and not self.session.private_mode)
         elif kind == 'advance':
             version = event['revision']
             if type(version) is not int or version != self.revision + 1:
@@ -1113,7 +1117,7 @@ class VoicePeer:
                 if following.valid() and not operation.cancelled and not owner.cancelling():
                     self.recognition = asyncio.create_task(self._analyze(data, following))
 
-    async def decision(self, text, meaning, revision, deadline):
+    async def decision(self, text, meaning, revision, deadline, *, solo_greeting=False):
         if meaning=='unknown':
             await self.finish_input_analysis(Operation(self,self.epoch,revision),outcome='semantic_unknown')
             return
@@ -1154,7 +1158,7 @@ class VoicePeer:
             return
         if meaning == 'new_turn':
             intent = uuid4().hex
-            self.prepared = (text, deadline, intent, revision)
+            self.prepared = (text, deadline, intent, revision) + (('wake_solo',) if solo_greeting else ())
         else:
             intent = ''
             self.awaiting_input = False
@@ -1263,12 +1267,14 @@ class VoicePeer:
                 replacement['roles']!=s.game.get('roles')):raise WireError('continued guess correction contract')
         return replacement
 
-    def respond(self, text, epoch):
-        operation=Operation(self,epoch)
+    def respond(self, text, epoch, *, solo_greeting=False):
+        operation=Operation(self,epoch,self.revision if solo_greeting else None)
         operation.response_revision=self.revision
+        operation.solo_greeting=solo_greeting
         return self._respond(text, epoch, operation)
 
     async def _respond(self, text, epoch, operation):
+        solo_greeting=getattr(operation,'solo_greeting',False)
         owner = asyncio.current_task()
         self.generation_scopes[owner] = operation
         stage = 'bind'
@@ -1308,7 +1314,7 @@ class VoicePeer:
             operation.ensure()
             # Unified model receives the authoritative played-only context. Supplier
             # adaptation belongs to M05; no unrestricted model-proposed facts enter it.
-            await self.compact_memory(epoch, operation)
+            if not solo_greeting:await self.compact_memory(epoch, operation)
             state = None
             card=None
             ending=False
@@ -1316,7 +1322,17 @@ class VoicePeer:
             stage = 'input_policy'
             if getattr(self.policy, 'needs_local_help', lambda _: False)(text) is True:
                 raise SafetyFault('content_blocked')
-            if hasattr(self.providers, 'plan'):
+            if solo_greeting:
+                if text is not None or self.session.private_mode or operation.private_mode:raise StaleOperation()
+                # This single fixed utterance has no proposed facts, game or tools.
+                # The shared output loop still gates each chunk and commits on played ACK.
+                @asynccontextmanager
+                async def greeting():
+                    async def items():
+                        yield '你好呀！想聊点什么？'
+                    yield items()
+                manager=greeting()
+            elif hasattr(self.providers, 'plan'):
                 context = self.session.context(query=text or '')
                 if self.images_enabled and hasattr(self.providers,'image_catalogue'):
                     context['image_catalog']=self.providers.image_catalogue()
