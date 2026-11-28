@@ -3,7 +3,7 @@ package com.littlebuddy.v2
 import com.littlebuddy.v2.parent.PinDiagnostic
 
 /** Diagnostic-only, owner-thread, one numeric binding. No identity strings/history or business timers. */
-internal enum class ClientPhase { PROBE_SENT, ENDPOINT_RECEIVED, SEAL_SENT, OPEN_RECEIVED, BIND_SENT, BOUND_RECEIVED,
+internal enum class ClientPhase { INPUT_UNRECOGNIZED, PROBE_SENT, ENDPOINT_RECEIVED, SEAL_SENT, OPEN_RECEIVED, BIND_SENT, BOUND_RECEIVED,
     FIRST_AUDIO_ACCEPTED, FIRST_NATIVE_HEAD_PROGRESS, TRACK_BUILT, TRACK_PLAY, TRACK_PARAMS }
 internal data class ClientPhaseEvent(val scope:PinDiagnostic.Scope,val phase:ClientPhase,val phaseBootMs:Long,
     val epoch:Long,val revision:Long,val wireRevision:Long=-1,val wireSequence:Long=-1,

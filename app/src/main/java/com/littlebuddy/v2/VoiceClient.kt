@@ -289,6 +289,21 @@ internal class VoiceClient(private val handler: Handler, private val status: (St
                     send("resume_noise"); outputBusy = player.hasPending
                 }
                 "thinking" -> status("waiting_thinking")
+                "unknown" -> {
+                    // A delayed classification cannot revoke a response that has already bound.
+                    if(player.binding!=null && !player.suspended && responseRevision==gate.revision)return
+                    val resolvedEpoch=epoch
+                    val resolvedRevision=event.getLong("revision")
+                    if(gate.unrecognized(resolvedRevision)) {
+                        interrupt() // Original mute/stop/release, epoch/sequence migration and server stop.
+                        if(active && !childBlocked && permitted() && !quarantined && epoch==resolvedEpoch+1 && gate.revision==resolvedRevision) {
+                            inputSerial++ // Completed input, not a new response grant; Capture resets its per-expression counter.
+                            try{phases?.event(ClientPhase.INPUT_UNRECOGNIZED,resolvedEpoch,resolvedRevision,
+                                gate.capturedLastSpeechBootMs,wireRevision=resolvedRevision)}catch(_:Throwable){}
+                            status("clarify")
+                        }
+                    }
+                }
                 "new_turn" -> interrupt(event.optString("intent", ""),preservePublicImage=true)
                 "stop" -> { gate.noResponseExpected(); interrupt() }
                 else -> status("clarify") // Unknown recognition never resumes audio.

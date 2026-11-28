@@ -21,17 +21,18 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
     var excludedThinkingMs = 0L; private set
     private var thinkingAt: Long? = null
     private var responsePending = false
+    private var inputPending = false // Distinguish a captured expression from a wake-solo response.
     fun checkResponseDeadline() {
         if (responsePending && thinkingAt == null) check(now() < responseDeadline) { "first response expired" }
     }
-    fun noResponseExpected() { responsePending = false }
-    fun effectivePlayed() { responsePending = false }
+    fun noResponseExpected() { responsePending = false; inputPending = false }
+    fun effectivePlayed() { responsePending = false; inputPending = false }
     var revision = 0L; private set
     var awake = false; private set
     fun managementWaiting(version: Long) {
         require(version >= revision)
         revision = version; awake = false; hasInput = false; speaking = false; probing = false
-        completion = null; responsePending = false; thinkingAt = null; prompted = false; soloSent = false
+        completion = null; responsePending = false; inputPending = false; thinkingAt = null; prompted = false; soloSent = false
     }
     private var lastSpeech = 0L
     val capturedLastSpeechBootMs:Long get()=lastSpeech // Read-only: original capture boundary, never a phase timestamp.
@@ -51,7 +52,7 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
         awake = true; wakeAt = observedAt; lastInteraction = now()
         hasInput = false; speaking = false; soloSent = false; prompted = false
         completion = null; probing = false
-        responsePending = false; thinkingAt = null; excludedThinkingMs = 0
+        responsePending = false; inputPending = false; thinkingAt = null; excludedThinkingMs = 0
     }
     fun speech(observedAt: Long = now()) {
         if (!awake) return
@@ -62,7 +63,7 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
         }
         soloSent = true
         hasInput = true; speaking = true; lastSpeech = maxOf(lastSpeech, observedAt); lastInteraction = now()
-        responsePending = true; responseDeadline = lastSpeech + 15000
+        responsePending = true; inputPending = true; responseDeadline = lastSpeech + 15000
         thinkingAt = null; excludedThinkingMs = 0
     }
     fun quiet() { speaking = false }
@@ -76,6 +77,15 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
             excludedThinkingMs += excluded; responseDeadline += excluded; thinkingAt = null
         }
         probing = false; completion = value; decisionAt = now()
+        return true
+    }
+    /** Terminal non-response for this captured expression, NOT noise or effective playback.
+     * Check the original deadline before clearing; no renewal of deadline/capture/idle/TTL. */
+    fun unrecognized(version: Long): Boolean {
+        if (!awake || version != revision || speaking || !inputPending || !responsePending) return false
+        checkResponseDeadline()
+        hasInput=false; probing=false; completion=null; responsePending=false; inputPending=false
+        thinkingAt=null; prompted=false; soloSent=true
         return true
     }
     fun interaction() { lastInteraction = now() }
