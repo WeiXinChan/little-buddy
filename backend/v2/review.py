@@ -10,4 +10,6 @@ class ReviewDecision:
             raise ValueError('invalid review decision')
 
 class QualityFault(Exception):
-    def __init__(self):super().__init__('quality_rejected')
+    def __init__(self,phase='unknown'):
+        super().__init__('quality_rejected')
+        if phase in ('whole','segment'):self.contract_detail='quality_'+phase

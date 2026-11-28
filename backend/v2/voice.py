@@ -1171,14 +1171,16 @@ class VoicePeer:
             # Replays remain rejected by exact pending-front ID and task sequence.
             self.session.revealed.intersection_update(s.name for s in self.session.pending)
 
-    async def review(self, operation, text, *, query='', phase='whole'):
+    async def review(self, operation, text, *, query='', phase='whole',pending_guess=None):
         # Re-project current authoritative scope with this response's input,
-        # never a frozen PLAN snapshot or the unapproved candidate sentence.
+        # never replace played history with an unapproved proposal.
         operation.ensure()
         stage_timing.mark(phase+'_start',self,operation)
         try:
             function=getattr(self.providers,'review',None) or self.providers.safe
-            verdict = await self.owned(operation, function, text, operation.session.context(query=query))
+            context=operation.session.context(query=query)
+            if pending_guess is not None:context['_pending_guess']=deepcopy(pending_guess)
+            verdict = await self.owned(operation, function, text, context)
         except SafetyFault:
             stage_timing.mark(phase+'_end',self,operation,outcome='safety_denied')
             raise
@@ -1189,10 +1191,51 @@ class VoicePeer:
         stage_timing.mark(phase+'_end',self,operation,outcome=outcome)
         if isinstance(verdict,ReviewDecision):
             if not verdict.safety_allowed:raise SafetyFault('content_blocked')
-            if not verdict.quality_allowed:raise QualityFault()
+            if not verdict.quality_allowed:raise QualityFault(phase)
         elif verdict is not True:
             # Legacy injected boolean safety providers remain fail-closed.
             raise SafetyFault('content_blocked' if verdict is False else 'review_unavailable')
+
+    @staticmethod
+    def initial_guess_candidate(plan):
+        return (isinstance(plan,dict) and plan.get('mode')=='guess' and
+                plan.get('action') in ('change','continue') and
+                plan.get('guess_role') in (None,'setter') and
+                isinstance(plan.get('secrets'),dict) and bool(plan['secrets']) and not plan.get('tools'))
+
+    def pending_initial_guess(self,plan):
+        s=self.session
+        if (not self.initial_guess_candidate(plan) or s.private_mode or s.secrets or
+            s.game.get('mode')=='guess'):return None
+        answer=plan['secrets'].get('answer')
+        if answer is None and len(plan['secrets'])==1:answer=next(iter(plan['secrets'].values()))
+        if not isinstance(answer,str) or not 0<len(answer.strip())<=999:return None
+        return dict(mode='guess',guess_role='setter',answer=answer,rules=plan['rules'])
+
+    async def repair_initial_guess(self,operation,text,plan,revision,accepted,attempt):
+        """One unplayed fresh-riddle correction, never a safety retry or new budget."""
+        s=self.session;budget=operation.budget
+        repair=getattr(self.providers,'repair_initial_guess',None)
+        if (not self.initial_guess_candidate(plan) or not callable(repair) or accepted is not True or
+            text is None or budget.anchor is None or s.private_mode or operation.private_mode or s.game.get('mode')=='guess' or s.secrets or
+            s.pending or s.head or s.response_confirmed or self.waiting_wake or
+            budget.read_retry_revision==revision):return None
+        operation.ensure()
+        if (self.revision!=revision or self.input_budget is not budget or budget.anchor!=operation.input_anchor or
+            operation.private_mode!=s.private_mode):raise StaleOperation()
+        remaining=budget.remaining()
+        budget.read_retry_revision=revision # shared with transient/format retry, reserve before await
+        attempt['attempted']=True
+        context=s.context(query=text)
+        stage_timing.mark('plan_start',self,operation)
+        async with asyncio.timeout(remaining):
+            replacement=await self.owned(operation,repair,text,deepcopy(context))
+        operation.ensure();budget.remaining()
+        if (self.revision!=revision or self.input_budget is not budget or budget.anchor!=operation.input_anchor or
+            operation.private_mode!=s.private_mode):raise StaleOperation()
+        stage_timing.mark('plan_end',self,operation)
+        if not self.initial_guess_candidate(replacement):raise WireError('initial guess correction contract')
+        return replacement
 
     def respond(self, text, epoch):
         operation=Operation(self,epoch)
@@ -1228,6 +1271,7 @@ class VoicePeer:
             if self.generation is owner:
                 self.response_scope=(self.session,self.session.connection,self.session.turn,epoch,response_revision)
             if response_revision != self.revision:raise StaleOperation()
+            self.last_guess_quality_repair=None
             while self.session.player is None:
                 self.changed.clear()
                 if not self.session._output_live():
@@ -1334,7 +1378,23 @@ class VoicePeer:
                     else:plan.pop('guess_role',None)
                 if ending:plan.update(tools=[],anchors={})
                 stage = 'safety'
-                await self.review(operation, ''.join(plan['sentences']), query=text or '')
+                pending_guess=self.pending_initial_guess(plan)
+                try:
+                    await self.review(operation, ''.join(plan['sentences']), query=text or '',pending_guess=pending_guess)
+                except QualityFault:
+                    attempt=dict(initial_whole_quality_rejected=True,attempted=False,replacement_whole_approved=False)
+                    self.last_guess_quality_repair=attempt
+                    stage='plan'
+                    replacement=await self.repair_initial_guess(operation,text,plan,response_revision,accepted,attempt)
+                    if replacement is None:
+                        stage='safety'
+                        raise
+                    plan=replacement
+                    self.last_guess_normalization=plan.get('_guess_normalization')
+                    stage='safety'
+                    pending_guess=self.pending_initial_guess(plan)
+                    await self.review(operation, ''.join(plan['sentences']), query=text or '',pending_guess=pending_guess)
+                    attempt['replacement_whole_approved']=True
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
                 if plan['mode']=='guess' and 'guess_role' in plan:state['guess_role']=plan['guess_role']
                 if state['mode']=='story':
@@ -1388,7 +1448,7 @@ class VoicePeer:
                         for sentence in plan['sentences']:
                             if len(plan['sentences']) > 1:
                                 stage='safety'
-                                await self.review(operation, sentence, query=text or '', phase='segment')
+                                await self.review(operation, sentence, query=text or '', phase='segment',pending_guess=pending_guess)
                             yield sentence
                     yield items()
                 manager = planned()
