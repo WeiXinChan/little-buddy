@@ -1210,10 +1210,16 @@ class VoicePeer:
                 plan.get('guess_role') in (None,'setter') and
                 isinstance(plan.get('secrets'),dict) and bool(plan['secrets']) and not plan.get('tools'))
 
-    def pending_initial_guess(self,plan):
+    def pending_guess_candidate(self,plan):
         s=self.session
-        if (not self.initial_guess_candidate(plan) or s.private_mode or s.secrets or
-            s.game.get('mode')=='guess'):return None
+        if not self.initial_guess_candidate(plan) or s.private_mode:return None
+        active=s.game.get('mode')=='guess'
+        if active:
+            # Only an explicit PLAN change can propose replacement. It is not
+            # authority: the reviewer must validate this turn's request first.
+            if (plan['action']!='change' or s.game.get('guess_role') not in (None,'setter') or
+                not s.secrets):return None
+        elif s.secrets:return None
         answer=plan['secrets'].get('answer')
         if answer is None and len(plan['secrets'])==1:answer=next(iter(plan['secrets'].values()))
         if not isinstance(answer,str) or not 0<len(answer.strip())<=999:return None
@@ -1386,7 +1392,7 @@ class VoicePeer:
                     else:plan.pop('guess_role',None)
                 if ending:plan.update(tools=[],anchors={})
                 stage = 'safety'
-                pending_guess=self.pending_initial_guess(plan)
+                pending_guess=self.pending_guess_candidate(plan)
                 try:
                     await self.review(operation, ''.join(plan['sentences']), query=text or '',pending_guess=pending_guess)
                 except QualityFault:
@@ -1400,7 +1406,7 @@ class VoicePeer:
                     plan=replacement
                     self.last_guess_normalization=plan.get('_guess_normalization')
                     stage='safety'
-                    pending_guess=self.pending_initial_guess(plan)
+                    pending_guess=self.pending_guess_candidate(plan)
                     await self.review(operation, ''.join(plan['sentences']), query=text or '',pending_guess=pending_guess)
                     attempt['replacement_whole_approved']=True
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
