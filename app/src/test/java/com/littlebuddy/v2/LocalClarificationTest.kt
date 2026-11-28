@@ -5,10 +5,13 @@ import org.junit.Test
 
 class LocalClarificationTest {
  private class Native:TrackPort {
-  override var head=0L;var written=0L;val cleanup=mutableListOf<String>();var volume=0
-  override fun write(pcm:ShortArray,offset:Int):Int {val n=minOf(240,pcm.size-offset);written+=n;return n}
+  var beforeHead:()->Unit={};var beforeWrite:()->Unit={};private var position=0L
+  override var head:Long get(){beforeHead();return position}
+   set(value){position=value}
+  var plays=0;var written=0L;val cleanup=mutableListOf<String>();var volume=0
+  override fun write(pcm:ShortArray,offset:Int):Int {val n=minOf(240,pcm.size-offset);written+=n;beforeWrite();return n}
   override fun setVolume(percent:Int):Boolean {volume=percent;return true}
-  override fun play(){}
+  override fun play(){plays++}
   override fun pause(){cleanup+="pause"};override fun mute(){cleanup+="mute"}
   override fun flush(){cleanup+="flush"};override fun stop(){cleanup+="stop"};override fun release(){cleanup+="release"}
  }
@@ -60,6 +63,16 @@ class LocalClarificationTest {
   try{p.clarify(1,pcm,{}, {}, {});fail()}catch(_:IllegalStateException){}
   assertEquals(binding,p.binding);assertTrue(n.cleanup.isEmpty());assertTrue(pcm.all{it==0.toShort()})
   p.stop()
+ }
+ @Test fun permissionLostInsideNativeHeadCannotEmitHeadOrWriteAgain(){
+  val n=Native();val p=Playback({n},{100L}){};var allowed=true;var heads=0;val pcm=ShortArray(480){9}
+  p.clarify(1,pcm,{heads++},{},{},allowed={allowed});p.tick();n.head=240;n.beforeHead={allowed=false};p.tick()
+  assertEquals(0,heads);assertEquals(240L,n.written);assertTrue(n.cleanup.contains("release"));assertTrue(pcm.all{it==0.toShort()})
+ }
+ @Test fun permissionLostDuringWriteCannotStartNativePlay(){
+  val n=Native();val p=Playback({n},{100L}){};var allowed=true;n.beforeWrite={allowed=false}
+  p.clarify(1,ShortArray(480),{},{},{},allowed={allowed});p.tick()
+  assertEquals(0,n.plays);assertTrue(n.cleanup.contains("release"))
  }
  @Test fun localResourceDeadlineFailsClosedWithoutWaitingForAudio(){
   val n=Native();var time=100L;val p=Playback({n},{time}){}
