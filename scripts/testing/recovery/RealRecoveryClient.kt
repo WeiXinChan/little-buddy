@@ -20,8 +20,8 @@ fun main(args:Array<String>){
     val trace=java.util.concurrent.CopyOnWriteArrayList<String>()
     val physical=PinDiagnostic.Scope(1,1,2);var binds=0;var captureStarts=0
     val mode=args[1]
-    val denied=mode in setOf("stale_scope","quota","auth","timeout","safety","unknown")
-    val expected=when(mode){"stale_scope"->null;"quota"->ServerFailure.QUOTA;"auth"->ServerFailure.AUTH;"timeout"->ServerFailure.TIMEOUT;"safety"->ServerFailure.SAFETY;"unknown"->ServerFailure.UNKNOWN;else->ServerFailure.VOICE}
+    val denied=mode in setOf("stale_scope","quota","auth","timeout","safety","unknown","unscoped")
+    val expected=when(mode){"stale_scope","unscoped"->null;"quota"->ServerFailure.QUOTA;"auth"->ServerFailure.AUTH;"timeout"->ServerFailure.TIMEOUT;"safety"->ServerFailure.SAFETY;"unknown"->ServerFailure.UNKNOWN;else->ServerFailure.VOICE}
     val failures=java.util.concurrent.CopyOnWriteArrayList<PinDiagnostic.FailSource>()
     PinDiagnostic.installRuntime{
         if(it.stage==PinDiagnostic.RuntimeStage.CLIENT_FAIL){failures+=it.source;trace+="FAIL_${it.source.name}_${it.scope.transport}"}
@@ -77,7 +77,7 @@ fun main(args:Array<String>){
         check(!callbackException && !unexpectedCapture)
         check(firstFailure==1)
         if(mode!="slow")check(failures.size==1)
-        check(failures.first()==PinDiagnostic.failSource((expected ?: ServerFailure.VOICE).localCode))
+        check(failures.first()==if(mode=="unscoped")PinDiagnostic.FailSource.RECEIVE_PROTOCOL else PinDiagnostic.failSource((expected ?: ServerFailure.VOICE).localCode))
         if(denied){check(connects==0 && heads==0 && binds==0)}
         else if(mode=="slow"){check(secondFailure>=1 && heads==0 && imported==0 && oldReleased && connects==1 && readyCount==0 && rejectedBoot>=wakeBoot+2500 && handoff!!.rejection==RecoveryHandoff.Rejection.CONNECT_DEADLINE);check(handoff!!.retainedSamples()==0 && handoff!!.state==RecoveryHandoff.State.CANCELLED)}
         else{check(connects==1 && secondFailure==0 && imported==1 && heads==1 && replies==1 && binds==1 && captureStarts==2)}
