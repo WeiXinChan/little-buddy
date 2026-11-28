@@ -138,6 +138,9 @@ reset_app() {
 report ''
 report '| Scenario | Test | Started | Pass | Fail | Skip | Raw events | Time | Result |'
 report '| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |'
+run_test com.littlebuddy.v2.feedback.FeedbackKeystoreProbeTest \
+    firstEmptyCoreAndExistingRecordUseRandomizedKeystoreIvWithoutScreenCredential \
+    feedback-keystore -e feedbackKeystoreProbe true || failures=1
 run_test "$smoke_class" "$smoke_case" smoke || failures=1
 
 transport_healthy=1
