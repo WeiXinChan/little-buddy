@@ -17,6 +17,7 @@ from uuid import uuid4
 
 from backend.v2.session import Identity, Session
 from backend.v2.budget import ResponseBudget
+from backend.v2.stream_asr import RawASRLease
 from backend.v2.safety import SafetyFault, local_help
 from backend.v2.review import ReviewDecision,QualityFault
 from backend.v2.images import revealable
@@ -100,11 +101,18 @@ def decode(raw):
 
 
 class VoicePeer:
-    def __init__(self, socket, providers, policy, *, clock=time.monotonic):
+    def __init__(self, socket, providers, policy, *, clock=time.monotonic, stream_asr=False):
         self.socket, self.providers, self.policy = socket, providers, policy
         self.session = Session(clock)
         self.epoch, self.sequence = 0, -1
         self.capture = bytearray()
+        self.stream_asr = stream_asr is True  # opt-in server capability; no wire field
+        self.stream_wake = None
+        self.stream_prewake_capture = None
+        self.expression_token = object()
+        self.stream_started = False
+        self.raw_asr = None
+        self.raw_closing = {}
         self.input_budget = ResponseBudget(clock)
         self.awaiting_input = False
         self.generation = None
@@ -139,6 +147,82 @@ class VoicePeer:
         self.last_volume_scope=None
         self.settling_stop=None
         self.expiry_notice_scope=None
+
+    def clear_capture(self):
+        self.retire_raw_asr()
+        self.expression_token = object()
+        self.stream_started = False
+        self.capture.clear()
+
+    def retire_raw_asr(self):
+        lease, self.raw_asr = self.raw_asr, None
+        if lease is None:
+            return
+        lease.revoke()
+        if lease.task.done():
+            return
+        deadline = asyncio.get_running_loop().time() + .5
+        self.raw_closing[lease.task] = deadline
+        lease.task.add_done_callback(lambda task: self.raw_closing.pop(task, None))
+        async def retired():
+            try:
+                done, _ = await asyncio.wait({lease.task}, timeout=max(0, deadline-asyncio.get_running_loop().time()))
+                if not done:
+                    self.quarantined = True
+            except asyncio.CancelledError:
+                if not lease.task.done():
+                    self.quarantined = True
+                raise
+            finally:
+                if lease.task.done():
+                    self.raw_closing.pop(lease.task, None)
+        self.track_retired(asyncio.create_task(retired()))
+
+    async def wait_raw_asr(self, operation):
+        # A normal future probe may use the legacy snapshot ONLY after revoked
+        # raw resources finish. Each old resource keeps its original deadline.
+        for task, deadline in tuple(self.raw_closing.items()):
+            if not task.done():
+                await asyncio.wait({task}, timeout=max(0, deadline-asyncio.get_running_loop().time()))
+            if not task.done():
+                self.quarantined = True
+            operation.ensure()
+
+    def check_raw_asr(self):
+        lease = self.raw_asr
+        if lease is not None:
+            try:
+                lease.check_scope()
+            except StaleOperation:
+                self.retire_raw_asr()
+
+    def start_raw_asr(self):
+        if (not self.stream_asr or self.stream_started or
+                self.stream_wake != (self.session, self.session.connection)):
+            return
+        if self.stream_prewake_capture is self.expression_token:
+            return  # never pre-upload PCM retained from before the wake barrier
+        self.stream_started = True  # one speculative request per expression
+        if any(not task.done() for task in self.raw_closing):
+            return  # later real probe waits for release, no speculative overlap
+        session = self.session
+        scope = (session.session, session.connection, session.turn, self.epoch, session.private_mode)
+        token, capture, budget = self.expression_token, self.capture, self.input_budget
+        def ensure_scope():
+            if (self.closed or self.quarantined or self.waiting_wake or session.management_paused or
+                    self.session is not session or self.expression_token is not token or self.capture is not capture or
+                    self.input_budget is not budget or
+                    (session.session, session.connection, session.turn, self.epoch, session.private_mode) != scope or
+                    not session._live()):
+                raise StaleOperation()
+        def ensure_io():
+            ensure_scope()
+            if budget.thinking_at is None:
+                budget.remaining()
+        # Separate scope revocation from an actual ASR/deadline failure: failures
+        # remain attached until a current probe reports them, never fallback.
+        lease = RawASRLease(self, ensure_io, check_scope=ensure_scope)
+        self.raw_asr = lease
 
     @asynccontextmanager
     async def resource(self, manager):
@@ -303,15 +387,18 @@ class VoicePeer:
             if self.recognition_handoff is owner:self.recognition_handoff=None
 
     async def cancel_recognition(self):
+        self.retire_raw_asr()
         task=self.recognition
         handoff,self.recognition_handoff=self.recognition_handoff,None
         self.next_probe=None
         tasks={t for t in (task,handoff) if t is not None and not t.done()}
+        tasks.update(t for t in self.raw_closing if not t.done())
+        deadline=min([asyncio.get_running_loop().time()+.5, *self.raw_closing.values()])
         if not tasks:return
         scope=self.recognition_scopes.get(task)
         if scope is not None:scope.cancelled=True
         for t in tasks:t.cancel()
-        try:done,pending=await asyncio.wait(tasks,timeout=.5)
+        try:done,pending=await asyncio.wait(tasks,timeout=max(0,deadline-asyncio.get_running_loop().time()))
         except asyncio.CancelledError:
             self.quarantined=True
             for t in tasks:
@@ -599,6 +686,7 @@ class VoicePeer:
         if self.closed:return
         if self.quarantined and event['type'] != 'end':
             raise WireError('quarantined')
+        self.check_raw_asr()
         kind, epoch, seq = event['type'], event['epoch'], event['seq']
         if epoch < self.epoch:
             return  # Revoked audio, ASR and playback callbacks have no effects.
@@ -639,13 +727,14 @@ class VoicePeer:
             state='expired' if not live else 'paused' if self.session.management_paused else 'waiting_wake' if self.waiting_wake else 'active'
             await self.send('scope',management_v=1,state=state)
         elif kind=='management_pause':
+            self.stream_wake=None
             self.revision=event['revision']
             self.session.pause_management()
             self.management_receipt=uuid4().hex;self.management_ready=False
             self.management_scope=(self.session,self.session.connection,self.session.session,self.session.turn,
                                    self.session.output,self.epoch,self.revision)
             self.waiting_wake=False;self.suspended=True
-            self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+            self.clear_capture();self.analysis=self.next_probe=self.prepared=None
             self.awaiting_input=False;self.prompted_revision=None
             self.input_budget=ResponseBudget(self.session.clock)
             self.ack_identity=None
@@ -665,7 +754,7 @@ class VoicePeer:
             self.revision=event['revision']
             if not self.session.resume_management():return
             self.waiting_wake=True;self.suspended=False
-            self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+            self.clear_capture();self.analysis=self.next_probe=self.prepared=None
             self.awaiting_input=False;self.ack_identity=None
             self.input_budget=ResponseBudget(self.session.clock)
             await self.send('management_state',management_v=1,state='waiting_wake',pause=None)
@@ -674,7 +763,7 @@ class VoicePeer:
         elif kind == 'stop':
             session=self.session;old_generation=self.generation;prepared=self.prepared
             self.session.interrupt()
-            self.capture.clear()
+            self.clear_capture()
             self.suspended=False
             scope=(session,self.epoch,self.revision,session.connection,session.turn,session.output)
             timing=(session.deadline,session.progress_deadline,session.response_confirmed,session.response_expired)
@@ -720,10 +809,11 @@ class VoicePeer:
             finally:
                 if self.settling_stop is token:self.settling_stop=None
         elif kind == 'end':
+            self.stream_wake=None
             self.management_receipt=None;self.management_ready=False;self.management_scope=None;self.waiting_wake=False
             self.prepared = None
             self.session.clear()
-            self.capture.clear()
+            self.clear_capture()
             await self.cancel_recognition()
             await self.commands()
             await self.cancel_generation()
@@ -747,12 +837,26 @@ class VoicePeer:
             if speech:
                 self.input_budget.speech(age)
                 self.awaiting_input = True
+            if self.stream_asr and speech:
+                if self.raw_asr is not None and self.raw_asr.operation is not None:
+                    self.retire_raw_asr()
+                # Quiet frames continue arriving after a probe on client34.
+                # Only actual renewed speech invalidates that frozen analysis.
+                self.retire_recognition_for_advance()
             self.capture.extend(data)
+            if speech:
+                self.start_raw_asr()
+            if self.raw_asr is not None:
+                self.raw_asr.appended()
         elif kind == 'wake':
             self.waiting_wake=False
+            self.stream_wake=(self.session,self.session.connection)
+            self.stream_prewake_capture=self.expression_token if self.capture else None
             self.session.valid_interaction()
         elif kind == 'wake_solo':
             self.waiting_wake=False
+            self.stream_wake=(self.session,self.session.connection)
+            self.stream_prewake_capture=self.expression_token if self.capture else None
             if (not self.awaiting_input and self.prepared is None and not self.capture
                     and (self.generation is None or self.generation.done())):
                 self.input_budget = ResponseBudget(self.session.clock)
@@ -766,6 +870,8 @@ class VoicePeer:
                 raise WireError('revision')
             self.revision = version
             self.next_probe=None
+            if self.raw_asr is not None and self.raw_asr.operation is not None:
+                self.retire_raw_asr()
             self.retire_recognition_for_advance()
             self.suspended = True
             await self.hide_visual('input_changed')
@@ -781,7 +887,13 @@ class VoicePeer:
             if self.recognition_handoff is not None or self.recognition is not None and not self.recognition.done():
                 self.next_probe = (bytes(self.capture), Operation(self, self.epoch, self.revision), self.recognition)
                 return
-            self.recognition = asyncio.create_task(self.analyze(bytes(self.capture), self.epoch, self.revision))
+            lease=self.raw_asr
+            if lease is not None and lease.operation is None:
+                operation=Operation(self,self.epoch,self.revision)
+                lease.freeze(operation)
+                self.recognition=asyncio.create_task(self._analyze(b'',operation,lease=lease))
+            else:
+                self.recognition = asyncio.create_task(self.analyze(bytes(self.capture), self.epoch, self.revision))
         elif kind == 'thinking_prompt':
             if event['revision'] == self.revision and self.prompted_revision != self.revision:
                 self.prompted_revision = self.revision
@@ -793,7 +905,7 @@ class VoicePeer:
                     or self.analysis[0] != self.revision or self.analysis[2] != 'complete'):
                 return
             revision, text, _, meaning = self.analysis
-            self.capture.clear()
+            self.clear_capture()
             self.analysis = None
             self.input_budget.resume()
             self.input_budget.remaining()
@@ -882,7 +994,7 @@ class VoicePeer:
         self.session.response_confirmed=self.session.response_expired=False
         self.input_resolution=key
         self.awaiting_input=False
-        self.capture.clear();self.analysis=self.prepared=self.next_probe=None
+        self.clear_capture();self.analysis=self.prepared=self.next_probe=None
         self.input_budget=ResponseBudget(self.session.clock) # inactive, NOT a new 15s grant
         inactive_budget=self.input_budget
         def ensure_resolved():
@@ -910,21 +1022,33 @@ class VoicePeer:
         # Bind on invocation, before create_task can be delayed until a handoff.
         return self._analyze(pcm, Operation(self, epoch, revision))
 
-    async def _analyze(self, pcm, operation):
+    async def _analyze(self, pcm, operation, *, lease=None):
         owner = asyncio.current_task()
         self.recognition_scopes[owner] = operation
         try:
             operation.ensure()
             if operation.private_mode!=operation.session.private_mode:raise StaleOperation()
             async with asyncio.timeout(operation.budget.remaining()):
-                stage_timing.mark('asr_open',self,operation)
-                async with self.owned_resource(operation, self.providers.recognize, 16000) as recognizer:
-                    stage_timing.mark('asr_ready',self,operation)
-                    for offset in range(0, len(pcm), 6400):
-                        await self.owned(operation, recognizer.write, pcm[offset:offset+6400])
-                    text = await self.owned(operation, recognizer.finish)
-                    stage_timing.mark('asr_final',self,operation)
-                stage_timing.mark('asr_released',self,operation)
+                await self.wait_raw_asr(operation)
+                if lease is not None:
+                    try:
+                        text=await self.owned(operation,lambda: lease.task)
+                    finally:
+                        # Done means its resource __aexit__ has also finished.
+                        # Normal empty/unknown resolution may clear capture;
+                        # that must not revoke its own publishing Operation.
+                        if self.raw_asr is lease and lease.task.done():
+                            self.raw_asr=None
+                    stage_timing.mark('asr_released',self,operation)
+                else:
+                    stage_timing.mark('asr_open',self,operation)
+                    async with self.owned_resource(operation, self.providers.recognize, 16000) as recognizer:
+                        stage_timing.mark('asr_ready',self,operation)
+                        for offset in range(0, len(pcm), 6400):
+                            await self.owned(operation, recognizer.write, pcm[offset:offset+6400])
+                        text = await self.owned(operation, recognizer.finish)
+                        stage_timing.mark('asr_final',self,operation)
+                    stage_timing.mark('asr_released',self,operation)
                 operation.ensure()
                 if isinstance(text,str) and not text.strip():
                     await self.finish_input_analysis(operation,outcome='asr_empty')
@@ -958,6 +1082,11 @@ class VoicePeer:
                 except StaleOperation:return
         finally:
             pcm = b''
+            if lease is not None and self.raw_asr is lease:
+                if lease.task.done():
+                    self.raw_asr = None
+                else:
+                    self.retire_raw_asr()
             self.recognition_scopes.pop(owner, None)
             # An old finally must not consume a newer owner's pending probe.
             pending = self.next_probe
@@ -981,7 +1110,7 @@ class VoicePeer:
                         session.connection==connection and session.clock()<deadline)
             if not current() or self.last_volume_scope==key:return
             self.last_volume_scope=key # consume before IO; failed writes never auto-repeat an increase
-            self.awaiting_input=False;self.capture.clear();self.analysis=self.prepared=self.next_probe=None
+            self.awaiting_input=False;self.clear_capture();self.analysis=self.prepared=self.next_probe=None
             self.input_budget=ResponseBudget(self.session.clock)
             fields=dict(session=session.session,turn=turn,revision=revision)
             await self.send('scope',management_v=1,state='active',**fields)
@@ -997,7 +1126,7 @@ class VoicePeer:
                         session._live() and session.clock()<deadline and
                         not session.management_paused and not self.waiting_wake)
             if not current():return
-            self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+            self.clear_capture();self.analysis=self.next_probe=self.prepared=None
             self.awaiting_input=False
             fields=dict(session=session.session,turn=turn,revision=revision)
             # A first-turn request has no open/bound. Establish its normal scope
@@ -1142,7 +1271,7 @@ class VoicePeer:
                             or self.revision != transition_revision or self.closed
                             or asyncio.current_task().cancelling()):
                         return
-                    self.capture.clear()
+                    self.clear_capture()
                     self.analysis = self.next_probe = self.prepared = None
                     self.ack_identity = None
                     self.session = Session(old.clock, ttl=old.ttl, lease=old.lease, budget=old.budget,
@@ -1156,8 +1285,10 @@ class VoicePeer:
                     await self.decision(text, 'new_turn', self.revision, deadline)
                     return
                 elif action == 'private':
+                    self.retire_raw_asr()
                     self.session.private_mode = True
                 elif shared_replanned:
+                    self.retire_raw_asr()
                     self.session.private_mode = False
                 if action == 'leave':
                     plan.update(mode='chat', rules='', roles=[], secrets={})
@@ -1294,7 +1425,7 @@ class VoicePeer:
             if ending:
                 ended=dict(session=self.session.session,turn=self.session.turn,revision=self.revision)
                 self.session.clear()
-                self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+                self.clear_capture();self.analysis=self.next_probe=self.prepared=None
                 self.awaiting_input=False
                 self.management_receipt=None;self.management_scope=None;self.management_ready=False
                 await self.commands()
@@ -1330,7 +1461,7 @@ class VoicePeer:
                     return
                 # The local help replaces this failed response, not a new cloud retry.
                 self.awaiting_input = False
-                self.capture.clear()
+                self.clear_capture()
                 self.analysis = self.prepared = self.next_probe = None
                 self.input_budget = ResponseBudget(self.session.clock)
                 self.session.deadline = 0
@@ -1384,7 +1515,7 @@ class VoicePeer:
         if self.expiry_notice_scope is not None and self.expiry_notice_scope[0] is session:return True
         # Claim before any await; no duplicate terminal event for this dead session.
         self.expiry_notice_scope=scope
-        self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+        self.clear_capture();self.analysis=self.next_probe=self.prepared=None
         self.awaiting_input=False;self.waiting_wake=False;self.settling_stop=None
         self.management_receipt=None;self.management_scope=None;self.management_ready=False
         self.ack_identity=None
@@ -1422,7 +1553,7 @@ class VoicePeer:
             await self.close_quarantined()
         else:
             # Ignore buffered intake that arrived during bounded old-task close.
-            self.capture.clear();self.analysis=self.next_probe=self.prepared=None
+            self.clear_capture();self.analysis=self.next_probe=self.prepared=None
             self.awaiting_input=False
             self.recognition=None
             self.generation_scopes.clear();self.recognition_scopes.clear()
@@ -1432,6 +1563,7 @@ class VoicePeer:
     async def monitor(self):
         while not self.closed:
             await asyncio.sleep(.1)
+            self.check_raw_asr()
             if self.quarantined:
                 await self.send('failure', code='voice')
                 await self.close_quarantined()
@@ -1490,6 +1622,8 @@ class VoicePeer:
                 await self.handle(receiver.result())
         finally:
             self.closed = True
+            self.clear_capture()
+            self.stream_wake=None
             self.management_receipt=None;self.management_scope=None;self.management_ready=False;self.waiting_wake=False
             self.invalidate_visual()
             for task in (monitor, receiver, self.recognition):
@@ -1503,7 +1637,7 @@ class VoicePeer:
             if pending:
                 self.quarantined = True
             self.session.clear()
-            self.capture.clear()
+            self.clear_capture()
             self.prepared = None
             self.analysis = self.next_probe = None
             await self.cancel_generation()
