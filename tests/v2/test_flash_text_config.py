@@ -72,7 +72,7 @@ class Flash(unittest.IsolatedAsyncioTestCase):
 
     async def test_allowlist_model_schema_and_probe_admission_are_exact(self):
         self.assertEqual(TEXT_MODEL,'deepseek-v4.1-flash-1017');self.assertEqual(IMAGE_REVIEW_MODEL,'qwen4-max')
-        for bad in ('qwen3.8-omni-flash','deepseek-typo','qwen3.8-flash',''):
+        for bad in ('qwen3-omni-flash','deepseek-typo','qwen3.8-flash',''):
             config=dict(CONFIG,DASHSCOPE_LLM_MODEL=bad)
             with self.assertRaises(ValueError):settings(environment=config)
             if bad:
@@ -81,12 +81,12 @@ class Flash(unittest.IsolatedAsyncioTestCase):
         for invalid in ('',[],{}):
             with self.assertRaises(ValueError):DashScopeModel(configured.speech,model=invalid)
         calls=[]
-        async def response(request):calls.append(json.loads(request.content));return httpx.Response(200,json={'choices':[{'message':{'content':'{}'}}]})
+        async def response(request):calls.append(json.loads(request.content));return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'{}'}}]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as http:
             for candidate in sorted(TEXT_MODELS):await self.model(http,candidate).complete('synthetic',{},schema={'type':'object'})
         for request in calls:
             self.assertEqual(request['response_format']['type'],'json_schema' if request['model']=='qwen4-max' else 'json_object')
-        invalid=fixtures.Probe().providers();invalid.model.model='qwen3.8-omni-flash'
+        invalid=fixtures.Probe().providers();invalid.model.model='qwen3-omni-flash'
         with self.assertRaises(ProbeLimit):await run_case(fixtures.CASE,invalid)
 
     async def test_visual_review_remains_qwen4_regardless_text_choice(self):
@@ -109,7 +109,7 @@ class Flash(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(prepared.report['models']['llm'],candidate)
                 self.assertEqual(prepared.report['model_policy']['image_review'],'qwen4-max')
                 self.assertFalse(prepared.report['model_policy']['automatic_fallback'])
-            fixture.write('service.env',original.replace('qwen4-max','qwen3.8-omni-flash'))
+            fixture.write('service.env',original.replace('qwen4-max','qwen3-omni-flash'))
             with self.assertRaisesRegex(ConfigurationError,'provider_model_contract_mismatch'):prepare(fixture.args)
 
     async def test_release_identity_binds_default_text_and_independent_review(self):

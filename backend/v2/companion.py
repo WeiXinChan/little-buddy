@@ -15,7 +15,7 @@ from backend.v2.review import ReviewDecision,QualityFault
 from backend.v2.images import DefaultImages
 from backend.v2.dynamic_images import ImageFailure
 from backend.v2.image_descriptions import MinimalDescription, compile_description, ImageAllowance, ExplicitImageRequest, explicit_request, VOCAB
-from backend.v2.models import TEXT_MODELS, SCHEMA_MODELS, UnsupportedTextModel
+from backend.v2.models import TEXT_MODELS, SCHEMA_MODELS, OMNI_TEXT_MODEL, UnsupportedTextModel
 from backend.v2.diagnostics import mark_contract,mark_contract_detail
 from backend.v2.story_rules import obeys_turn_limit,constraint_proposal,turn_limit,sentence_count
 from contextlib import asynccontextmanager
@@ -546,7 +546,9 @@ class DashScopeModel:
                 json=dict(model=self.model, messages=[
                     dict(role='system', content=instruction),
                     dict(role='user', content=json.dumps(data, ensure_ascii=False))],
-                    stream=False, enable_thinking=False, max_tokens=1400,
+                    stream=False, max_tokens=1400,
+                    **(dict(modalities=['text'],reasoning_effort='none')
+                       if self.model==OMNI_TEXT_MODEL else dict(enable_thinking=False)),
                     response_format=(dict(type='json_schema',json_schema=dict(name='v2_response',strict=True,schema=schema))
                                      if schema is not None and self.model in SCHEMA_MODELS
                                      else dict(type='json_object'))))
@@ -579,6 +581,11 @@ class DashScopeModel:
                 else:
                     self.usage_missing[name]+=1
             usage_recorded=True
+            if self.model==OMNI_TEXT_MODEL:
+                choice=result['choices'][0];message=choice['message']
+                if (choice.get('finish_reason')!='stop' or message.get('tool_calls') or message.get('refusal') or
+                    message.get('role','assistant')!='assistant' or not isinstance(message.get('content'),str) or not message['content']):
+                    raise ModelError('incomplete text response')
             return result['choices'][0]['message']['content']
         except asyncio.CancelledError:
             self.cancelled+=1
