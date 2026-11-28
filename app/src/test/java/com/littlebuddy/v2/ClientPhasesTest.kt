@@ -58,7 +58,8 @@ class ClientPhasesTest {
             val configRows=if(config)(1..1000).count{b.configuration()} else 0
             val critical=(1..1000).count{b.critical()};val op=(1..1000).count{b.operation()}
             assertEquals(48,phase);assertEquals(16,critical);assertEquals(32,op)
-            assertEquals(256,phase+general+configRows+critical+op)
+            val failure=(1..1000).count{b.failure()};assertEquals(2,failure)
+            assertEquals(256,phase+general+configRows+critical+op+failure)
         }
     }
     @Test fun throwingObserverCannotAlterBusinessCaller(){

@@ -39,12 +39,15 @@ internal data class CaptureClockEvidence(
     val bridgeOriginLowerMs:Long=0,val bridgeOriginUpperMs:Long=0,val bridgeLowerMs:Long=0,val bridgeUpperMs:Long=0,
     val bridgeAttempts:Int=0)
 internal data class CaptureLongWitness(val fromFrame:Long,val fromNs:Long,val toFrame:Long,val toNs:Long,val lowerBudget:Long,val upperBudget:Long)
-internal enum class CaptureReadStep { NONE, STARTUP, PRE_ROOM, AFTER_ROOM, NATIVE_READ, PREFIX_REPLAY, POST_READ, KWS_REARM, POST_REARM, KWS, POST_KWS, UPLOAD_ADMIT, CLEANUP }
+internal enum class CaptureReadStep { NONE, STARTUP, PRE_ROOM, AFTER_ROOM, NATIVE_READ, PREFIX_REPLAY, POST_READ, KWS_REARM, POST_REARM, KWS, POST_KWS, BUFFER_PUSH, BUFFER_READ, BUFFER_BEGIN, BUFFER_FOLLOW, BUFFER_INSPECT, UPLOAD_ADMIT, CLEANUP }
 internal enum class CaptureTimestampResult { NOT_CALLED, IN_FLIGHT, SUCCESS, UNAVAILABLE, OTHER }
 internal data class CaptureClockContext(val activity:Long=0,val transport:Long=0,val capture:Long=0,
     val step:CaptureReadStep=CaptureReadStep.NONE,val cancelled:Boolean=false,val allowed:Boolean=false,
     val stopRequested:Boolean=false,val nativeReleased:Boolean=false,val timestampResult:CaptureTimestampResult=CaptureTimestampResult.NOT_CALLED,
-    val lastOperation:Int=0,val operationBeforeNs:Long=0,val operationAfterNs:Long=0)
+    val lastOperation:Int=0,val operationBeforeNs:Long=0,val operationAfterNs:Long=0,
+    val nativeStartBeforeMs:Long=-1,val nativeStartAfterMs:Long=-1,
+    val nativeReadCalls:Long=0,val nativeReturnedSamples:Long=0,val lastNativeReadCount:Int=-1,
+    val prefixCachedSamplesTotal:Int=0,val requestedNativeFrames:Int=0,val actualNativeFrames:Int=0)
 internal class CaptureClockFailure(val reason:CaptureClockReason,
     val evidence:CaptureClockEvidence=CaptureClockEvidence(),val longWitness:CaptureLongWitness?=null,val context:CaptureClockContext?=null):IllegalStateException(reason.legacy)
 internal fun clockCheck(valid:Boolean, reason:CaptureClockReason) {
@@ -55,3 +58,7 @@ internal object CaptureClockDiagnostic {
     fun install(value:((CaptureClockFailure)->Unit)?) { sink=value }
     fun emit(error:CaptureClockFailure) { try { sink?.invoke(error) } catch(_:Throwable) { } }
 }
+
+internal enum class CapturePredicate { NONE, INPUT_BATCH_BOUND, INPUT_CAPACITY, UPLOAD_QUEUE, NATIVE_READ_COUNT, WAKE_COORDINATE }
+internal class CapturePredicateFailure(val predicate:CapturePredicate):IllegalStateException("capture predicate failed")
+internal fun captureCheck(valid:Boolean,predicate:CapturePredicate) { if(!valid)throw CapturePredicateFailure(predicate) }

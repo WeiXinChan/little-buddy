@@ -27,7 +27,7 @@ async def run():
   owner_port.write_text(text)
   media=out/'MediaPorts.kt';media.write_text((ports/'MediaPorts.kt').read_text().replace('val instances=','@JvmField var releaseFails=false;val instances=').replace('fun release(){state=0}','fun release(){if(releaseFails)error("fixture release");state=0}').replace('fun addOnRoutingChangedListener(l:AudioRouting.OnRoutingChangedListener,h:android.os.Handler){}','var savedRoute:AudioRouting.OnRoutingChangedListener?=null;fun addOnRoutingChangedListener(l:AudioRouting.OnRoutingChangedListener,h:android.os.Handler){savedRoute=l}').replace('override val routedDevice=AudioDeviceInfo()','override var routedDevice=AudioDeviceInfo()').replace('val instances=','@JvmField var advanceOnBuild=false;val instances=').replace('fun build()=AudioTrack()','fun build():AudioTrack{if(advanceOnBuild){advanceOnBuild=false;android.os.SystemClock.advance(15001)};return AudioTrack()}'))
   sources=[owner_port]+[media]+[ports/(n+'.kt') for n in ['Base64Port','JsonPort']]+[ROOT/'scripts/testing/unknown-input/RealUnknownClient.kt']
-  sources += [client_source if n=='VoiceClient' else ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['VoiceClient','InputGate','AndroidTrack','ClientPhases','Playback','OutputSlot']]
+  sources += [client_source if n=='VoiceClient' else ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['VoiceClient','InputGate','SessionTermination','AndroidTrack','ClientPhases','Playback','OutputSlot']]
   sources += [ROOT/'app/src/main/java/com/littlebuddy/v2/parent/PinDiagnostic.kt']
   capture=ROOT/'scripts/testing/capture'
   sources=[p for p in sources if p.name!='RealUnknownClient.kt']
@@ -38,12 +38,15 @@ async def run():
   sources += [audio]
   media.write_text(media.read_text().replace('const val CHANNEL_OUT_MONO=1;','const val CHANNEL_IN_MONO=1;const val CHANNEL_OUT_MONO=1;'))
   owner_port.write_text(owner_port.read_text().replace('object SystemClock {@JvmField var now=100000L;@JvmStatic fun elapsedRealtime()=now;@JvmStatic fun advance(ms:Long){now+=ms}}', 'object SystemClock {@JvmField var realtime=true;@JvmField var manualNow=100000L;@JvmStatic fun elapsedRealtime()=if(realtime)System.nanoTime()/1_000_000 else manualNow;@JvmStatic fun uptimeMillis()=elapsedRealtime();@JvmStatic fun advance(ms:Long){manualNow+=ms}}'))
-  sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['Capture','CaptureSessionPort','RecoveryHandoff','RecoveryEpisode','CaptureUploads','RecorderLease','WakeSamples','NativeReadLedger','CaptureBootstrap','CaptureClockEnvelope','CaptureClockFailure','CaptureMonotonic','WakeOrigin','NativeEvidence']]
+  sources += [ROOT/'app/src/main/java/com/littlebuddy/v2'/(n+'.kt') for n in ['Capture','CaptureSessionPort','RecoveryHandoff','RecoveryEpisode','CaptureUploads','RecorderLease','WakeSamples','NativeReadLedger','CaptureBootstrap','CaptureClockEnvelope','CaptureClockFailure','CaptureMonotonic','WakeOrigin','NativeEvidence','NativeCaptureBuffer']]
   subprocess.run(['java','-Xmx512m','-cp',os.pathsep.join(compiler),'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler','-no-stdlib','-no-reflect','-jvm-target','17','-Xfriend-paths='+str(main),'-classpath',os.pathsep.join(runtime),'-d',str(out/'classes'),*map(str,sources)],check=True)
   subprocess.run(['openssl','req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:P-256','-nodes','-days','1','-subj','/CN=localhost','-addext','subjectAltName=DNS:localhost,IP:127.0.0.1','-keyout',str(out/'key'),'-out',str(out/'cert')],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
   subprocess.run(['keytool','-importcert','-noprompt','-alias','fixture','-file',str(out/'cert'),'-keystore',str(out/'trust.p12'),'-storetype','PKCS12','-storepass','fixture-only'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
   tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(out/'cert',out/'key')
-  for mode in ['success','slow','stale_scope','quota','auth','timeout','safety','unknown','unscoped','production_quality','production_quality_stream']:
+  modes='success,slow,stale_scope,quota,auth,timeout,timeout_slow,timeout_idle,timeout_stale,safety,unknown,unscoped,production_quality,production_quality_stream'.split(',')
+  selected=os.environ.get('RECOVERY_CASES',','.join(modes)).split(',')
+  assert selected and set(selected)<=set(modes)
+  for mode in selected:
    connections=[];wire=[]
    async def peer(ws):
     index=len(connections);connections.append(index);epoch=0;revision=0;count=0;player=None;session=('a' if index==0 else 'b')*32
@@ -55,14 +58,16 @@ async def run():
      async for raw in ws:
       event=json.loads(raw);kind=event['type'];wire.append((index,kind))
       if kind=='scope':
-       if index==1 and mode=='slow':await asyncio.sleep(2.6)
+       if index==1 and mode in ('slow','timeout_slow'):await asyncio.sleep(2.6)
        await send('scope',protocol_contract='v2-voice2-safety1-images2-volume1-management1-end1',management_v=1,state='active')
+       if index==0 and mode=='timeout_idle':
+        await asyncio.sleep(.05);await send('failure',code='timeout')
       elif kind=='wake' and index==0:pass
       elif kind=='advance':
        revision=event['revision']
       elif kind=='input':count+=1
       elif kind=='probe':
-       if index==0:await send('failure',code=(mode if mode in ('quota','auth','timeout','safety') else 'synthetic_unknown' if mode=='unknown' else 'voice'),**({'revision':9} if mode=='stale_scope' else {}))
+       if index==0:await send('failure',code=('timeout' if mode.startswith('timeout') else mode if mode in ('quota','auth','safety') else 'synthetic_unknown' if mode=='unknown' else 'voice'),**({'revision':9} if mode in ('stale_scope','timeout_stale') else {}))
        else:await send('endpoint',completion='complete')
       elif kind=='seal':await send('decision',meaning='new_turn',intent='fixture')
       elif kind=='stop':epoch=event['epoch'];await send('open')
@@ -112,7 +117,7 @@ async def run():
      assert code==0,mode
     finally:
      if process.returncode is None:process.kill();await process.wait()
-   assert len(connections)==(2 if mode in ('success','slow','production_quality','production_quality_stream') else 1),connections
+   assert len(connections)==(2 if mode in ('success','slow','timeout','timeout_slow','production_quality','production_quality_stream') else 1),connections
    assert not any(i==0 and k=='ack' for i,k in wire),'failed generation ACK'
    print('RECOVERY_PEER',mode,'connections',len(connections),'PASS',flush=True)
 asyncio.run(run())

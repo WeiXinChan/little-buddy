@@ -23,6 +23,7 @@ import androidx.test.runner.AndroidJUnitRunner
 import com.littlebuddy.v2.CaptureMonotonic
 import com.littlebuddy.v2.CaptureStamp
 import com.littlebuddy.v2.NativeReadLedger
+import com.littlebuddy.v2.NativeCaptureBuffer
 import com.littlebuddy.v2.CaptureBootstrap
 import com.littlebuddy.v2.ProcessRecorders
 import com.littlebuddy.v2.RecorderLease
@@ -174,7 +175,7 @@ internal class ProbeControl(private val lease:RecorderLease,private val meta:Pro
     private var native:AudioRecord?=null
     @Volatile private var stopper:Thread?=null
     fun install(value:AudioRecord){synchronized(lock){native=value}}
-    fun start(){synchronized(lock){check(!cancelled.get());checkNotNull(native).startRecording()}}
+    fun start(beforeNative:()->Unit={}){synchronized(lock){check(!cancelled.get());beforeNative();checkNotNull(native).startRecording()}}
     fun cancel(){
         startup.cancel()
         if(!stopOnce.compareAndSet(false,true) || !lease.beginStop())return
@@ -276,7 +277,7 @@ class NativeTimestampTest {
                     meta.phase="native_create"
                     val minimum=AudioRecord.getMinBufferSize(16000,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT)
                     meta.minimumBytes=minimum;check(minimum in 1..32000)
-                    val bytes=maxOf(minimum,6400);meta.nativeBytes=bytes
+                    val bytes=NativeCaptureBuffer.requestedBytes(minimum);meta.nativeBytes=bytes
                     if(cancellation.cancelled.get() || !allowed(front))dependency("DEPENDENCY_FOREGROUND_LOST")
                     meta.nativeAttempted=true
                     val native=AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION,16000,AudioFormat.CHANNEL_IN_MONO,
@@ -284,11 +285,11 @@ class NativeTimestampTest {
                     cancellation.install(native)
                     if(native.state!=AudioRecord.STATE_INITIALIZED)dependency("DEPENDENCY_NATIVE_UNINITIALIZED")
                     meta.actualBufferFrames=native.bufferSizeInFrames
-                    check(meta.actualBufferFrames>=bytes/2){"native buffer smaller than requested"}
+                    val verifiedFrames=NativeCaptureBuffer.verifiedFrames(bytes,meta.actualBufferFrames)
                     check(native.sampleRate==16000 && native.channelCount==1 && native.audioFormat==AudioFormat.ENCODING_PCM_16BIT){"native format mismatch"}
                     var window:NativeProbeWindow?=null
                     val timestamp=AudioTimestamp()
-                    val ledger=NativeReadLedger(bytes/2,CaptureMonotonic::nowMs,SystemClock::elapsedRealtime){
+                    val ledger=NativeReadLedger(verifiedFrames,CaptureMonotonic::nowMs,SystemClock::elapsedRealtime){
                         window?.beforeApi(meta.continuousRawSamples)
                         val began=System.nanoTime()
                         val result=native.getTimestamp(timestamp,AudioTimestamp.TIMEBASE_MONOTONIC)
@@ -311,7 +312,7 @@ class NativeTimestampTest {
                     val prefix=CaptureBootstrap(ledger)
                     cancellation.installStartup(prefix)
                     meta.phase="native_start";meta.startCallMs=SystemClock.elapsedRealtime()
-                    cancellation.start();meta.startDurationMs=SystemClock.elapsedRealtime()-meta.startCallMs
+                    cancellation.start{ledger.armNativeStart()};meta.startDurationMs=SystemClock.elapsedRealtime()-meta.startCallMs
                     if(native.recordingState!=AudioRecord.RECORDSTATE_RECORDING)dependency("DEPENDENCY_NATIVE_START_RESTRICTED");meta.started=true
                     meta.phase="timestamp_startup"
                     try {

@@ -28,7 +28,7 @@ internal object AndroidPinDiagnostic {
             com.littlebuddy.v2.CaptureClockDiagnostic.install { error ->
                 val c=error.context
                 fun flag(value:Boolean?)=if(value==null)-1 else if(value)1 else 0
-                val scope="ctx_known=${c!=null} activity=${c?.activity ?: -1} transport=${c?.transport ?: -1} capture=${c?.capture ?: -1} read_step=${c?.step?.name ?: "NONE"} cancelled=${flag(c?.cancelled)} allowed=${flag(c?.allowed)} stop_requested=${flag(c?.stopRequested)} native_released=${flag(c?.nativeReleased)} timestamp_result=${c?.timestampResult?.name ?: "NOT_CALLED"} last_operation=${PinDiagnostic.CaptureOperation.entries.getOrNull(c?.lastOperation ?: 0)?.name ?: "NONE"} operation_before_ns=${c?.operationBeforeNs ?: 0} operation_after_ns=${c?.operationAfterNs ?: 0}"
+                val scope="ctx_known=${c!=null} activity=${c?.activity ?: -1} transport=${c?.transport ?: -1} capture=${c?.capture ?: -1} read_step=${c?.step?.name ?: "NONE"} cancelled=${flag(c?.cancelled)} allowed=${flag(c?.allowed)} stop_requested=${flag(c?.stopRequested)} native_released=${flag(c?.nativeReleased)} timestamp_result=${c?.timestampResult?.name ?: "NOT_CALLED"} last_operation=${PinDiagnostic.CaptureOperation.entries.getOrNull(c?.lastOperation ?: 0)?.name ?: "NONE"} operation_before_ns=${c?.operationBeforeNs ?: 0} operation_after_ns=${c?.operationAfterNs ?: 0} native_start_before_mono_ms=${c?.nativeStartBeforeMs ?: -1} native_start_after_mono_ms=${c?.nativeStartAfterMs ?: -1} native_read_calls=${c?.nativeReadCalls ?: 0} native_returned_samples=${c?.nativeReturnedSamples ?: 0} last_native_read_count=${c?.lastNativeReadCount ?: -1} prefix_cached_samples_total=${c?.prefixCachedSamplesTotal ?: 0} requested_native_frames=${c?.requestedNativeFrames ?: 0} actual_native_frames=${c?.actualNativeFrames ?: 0}"
                 val w=error.longWitness
                 if(w!=null && budget.general()) {
                     queue.offer("mono_ms=${System.nanoTime()/1_000_000} stage=CAPTURE_LONG_PAIR reason=${error.reason.name} from_frame=${w.fromFrame} from_ns=${w.fromNs} to_frame=${w.toFrame} to_ns=${w.toNs} df=${w.toFrame-w.fromFrame} dn_ns=${w.toNs-w.fromNs} lower_budget=${w.lowerBudget} upper_budget=${w.upperBudget} phase_ns=2000000 min_rate=15984 max_rate=16016 $scope")
@@ -40,7 +40,8 @@ internal object AndroidPinDiagnostic {
             }
             PinDiagnostic.installRuntime { event ->
                 val admitted=when(event.stage) {
-                    PinDiagnostic.RuntimeStage.WAKE_ACCEPTED,PinDiagnostic.RuntimeStage.CAPTURE_FAILURE,
+                    PinDiagnostic.RuntimeStage.CAPTURE_FAILURE -> budget.failure()
+                    PinDiagnostic.RuntimeStage.WAKE_ACCEPTED,
                     PinDiagnostic.RuntimeStage.WORKER_JOINED,PinDiagnostic.RuntimeStage.CAPTURE_RELEASE,
                     PinDiagnostic.RuntimeStage.CAPTURE_STOP_END -> budget.critical()
                     PinDiagnostic.RuntimeStage.CAPTURE_OPERATION -> budget.operation()
@@ -49,12 +50,14 @@ internal object AndroidPinDiagnostic {
                 if(admitted) {
                     val c=event.scope
                     val detail=when(event.stage) {
+                        PinDiagnostic.RuntimeStage.CAPTURE_FAILURE -> "operation=${event.operation.name} cancelled=${event.cancelled} allowed=${event.allowed} stop_requested=${event.stopRequested} native_released=${event.nativeReleased} capture_stage=${event.captureStage.name} predicate=${event.capturePredicate.name} clock_reason=${event.clockReason?.name ?: "NONE"} upload_samples=${event.uploadSamples} native_returned_samples=${event.nativeReturnedSamples} native_read_calls=${event.nativeReadCalls} input_serial=${event.inputSerial} sealed_serial=${event.sealedSerial} read_step=${event.readStep.name}"
                         PinDiagnostic.RuntimeStage.CAPTURE_START,PinDiagnostic.RuntimeStage.CAPTURE_CANCEL,
                         PinDiagnostic.RuntimeStage.CAPTURE_STOP_BEGIN,PinDiagnostic.RuntimeStage.CAPTURE_STOP_END,
-                        PinDiagnostic.RuntimeStage.CAPTURE_FAILURE,PinDiagnostic.RuntimeStage.CAPTURE_RELEASE,
+                        PinDiagnostic.RuntimeStage.CAPTURE_RELEASE,
                         PinDiagnostic.RuntimeStage.WORKER_JOINED -> "operation=${event.operation.name} cancelled=${event.cancelled} allowed=${event.allowed} stop_requested=${event.stopRequested} native_released=${event.nativeReleased} worker_joined=${event.workerJoined}"
                         PinDiagnostic.RuntimeStage.FAILURE_UI_APPLY,PinDiagnostic.RuntimeStage.FAILURE_UI_RETIRED -> "current_transport=${event.currentTransport} current_capture=${event.currentCapture}"
-                        PinDiagnostic.RuntimeStage.CLIENT_FAIL -> "pump=${event.pump.name}"
+                        PinDiagnostic.RuntimeStage.CLIENT_FAIL -> "pump=${event.pump.name} recovery_eligible=${event.recoveryEligible}"
+                        PinDiagnostic.RuntimeStage.CAPTURE_BUFFER -> "requested_native_frames=${event.requestedNativeFrames} actual_native_frames=${event.actualNativeFrames} credited_native_frames=${event.creditedNativeFrames}"
                         PinDiagnostic.RuntimeStage.CAPTURE_OPERATION -> "operation=${event.operation.name} duration_ns=${event.operationNs} cancelled=${event.cancelled} allowed=${event.allowed} stop_requested=${event.stopRequested} native_released=${event.nativeReleased}"
                         PinDiagnostic.RuntimeStage.WAKE_ACCEPTED -> "wake_frame=${event.wakeFrame} read_frame=${event.readFrame} wake_relative_ms=${event.wakeRelativeMs} lag_ms=${event.wakeLagMs}"
                         PinDiagnostic.RuntimeStage.RECOVERY_BIND -> "current_transport=${event.currentTransport} current_capture=${event.currentCapture} episode=${event.episode} generation=${event.generation} wake_boot_ms=${event.wakeBootMs} wake_frame=${event.wakeFrame} read_frame=${event.readFrame}"

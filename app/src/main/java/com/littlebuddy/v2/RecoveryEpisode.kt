@@ -1,6 +1,6 @@
 package com.littlebuddy.v2
 
-/** No generic unlock. A typed grant is created only by current SERVER_VOICE retirement. */
+/** No generic unlock. A typed grant is created only by current trusted SERVER_VOICE/single-response SERVER_TIMEOUT retirement. */
 internal class RecoveryEpisode {
     class Ticket internal constructor(val episode:Long,val generation:Long)
     private var serial=0L

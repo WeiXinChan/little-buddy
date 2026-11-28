@@ -11,6 +11,16 @@ class InputGateTest {
             { calls += "probe:$it" }, { calls += "seal:$it" }, { calls += "solo" },
             { calls += "ask" }, { calls += "idle" })
     }
+    @Test fun responseObservationDoesNotExtendDeadlineOrMakeIdleRecoverable() {
+        val lab=Lab();val g=lab.gate
+        assertFalse(g.awaitingResponse);g.wake();assertFalse(g.awaitingResponse)
+        g.speech();assertTrue(g.awaitingResponse);val deadline=g.responseDeadline
+        lab.time=deadline;repeat(10){assertTrue(g.awaitingResponse)}
+        assertEquals(deadline,g.responseDeadline)
+        assertThrows(IllegalStateException::class.java){g.checkResponseDeadline()}
+        g.effectivePlayed();assertFalse(g.awaitingResponse)
+        g.managementWaiting(g.revision);assertFalse(g.awaitingResponse)
+    }
     @Test fun wakeContinuationSealsWithoutExtraSoloProposal() {
         val lab = Lab(); val g = lab.gate
         g.wake(); lab.time = 100; g.speech(); g.quiet()

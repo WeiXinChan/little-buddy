@@ -21,6 +21,7 @@ internal class InputGate(private val waits: Waits, private val now: () -> Long,
     var excludedThinkingMs = 0L; private set
     private var thinkingAt: Long? = null
     private var responsePending = false
+    val awaitingResponse:Boolean get()=awake && responsePending
     private var inputPending = false // Distinguish a captured expression from a wake-solo response.
     fun checkResponseDeadline() {
         if (responsePending && thinkingAt == null) check(now() < responseDeadline) { "first response expired" }

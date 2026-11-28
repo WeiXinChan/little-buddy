@@ -73,6 +73,7 @@ class V2VoiceActivity : Activity() {
     @Volatile private var managementVisible = false
     private var helpVisible = false
     private val retryGate = RuntimeRetryGate()
+    private val expiryCaptureRestart=ExpiryCaptureRestart()
     private val recovery=RecoveryEpisode()
     private val outputSlot=OutputSlot()
     @Volatile private var recoveryTicket:RecoveryEpisode.Ticket?=null
@@ -306,6 +307,7 @@ class V2VoiceActivity : Activity() {
     internal fun requestParentManagement(entry: ManagementEntry?=null) {
         if (!foreground || !hasWindowFocus() || managementRequested || managementVisible) return
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) return
+        expiryCaptureRestart.cancel()
         recovery.pause();recoveryTicket=null;handoff?.cancel()
         managementReturning=false
         val ticket=++managementRevision
@@ -431,17 +433,19 @@ class V2VoiceActivity : Activity() {
                     else -> "连接暂不可用。"
                 }
                 if (status == "listening" && voice?.isAwake == true) budget?.begin()
-            }, { images?.inputChanged() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showTechnicalFailure(lastFailure,(recoveryGrant==null || !recovery.hasEpisode()) && serverFailure==ServerFailure.VOICE) } },
+            }, { images?.inputChanged() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showTechnicalFailure(lastFailure,(recoveryGrant==null || !recovery.hasEpisode()) && serverFailure?.wakeRecoveryCandidate==true) } },
                 playbackSettings = settings,
                 localHelp = { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 management = { entry -> runOnUiThread { if (ticket == transportRevision) requestParentManagement(entry) } },
                 permitted = { foreground && focused && ticket == transportRevision &&
                     (recoveryGrant==null || (recoveryCurrent(recoveryGrant) && handoff?.admitted()!=false)) }, images = images,
                 managed = { phase -> runOnUiThread { if (ticket==transportRevision) managementChanged(phase) } },
-                sessionEnded = { runOnUiThread { if (ticket==transportRevision && foreground && focused && !managementRequested && !managementVisible && !helpVisible) {
+                sessionEnded = { val expired=voice?.endedByExpiry==true;runOnUiThread { if (ticket==transportRevision && foreground && focused && !managementRequested && !managementVisible && !helpVisible) {
                     val page=++managementRevision
                     releaseAudio { quiet -> if (quiet && ticket+1==transportRevision && page==managementRevision && foreground && focused &&
-                        !managementRequested && !managementVisible && !helpVisible) { eyes(); resumeConfigured() } }
+                        !managementRequested && !managementVisible && !helpVisible) {
+                            if(expired)expiryCaptureRestart.arm(transportRevision)
+                            eyes(); resumeConfigured() } }
                 } } }, requiredContract=ReleaseCompatibility.CONTRACT,
                 clarification={com.littlebuddy.v2.ClarificationAsset.load(assets)},
                 outputSlot=outputSlot,captureImport=recoveryGrant!=null,failureClassified={serverFailure=it},
@@ -467,6 +471,7 @@ class V2VoiceActivity : Activity() {
     private fun startChildCapture(client: VoiceClient, ticket: Long) {
         if (!foreground || !focused || ticket!=transportRevision || managementRequested || managementVisible || capture!=null || exitCapture!=null || releaseState=="quarantined") return
         val recorderTicket=captureRevision.incrementAndGet()
+        expiryCaptureRestart.started(ticket,recorderTicket)
         publishEyes(ticket){state,key->state.beginRecorder(key,recorderTicket)}
         capture=Capture(assets,owner,client,
             allowed={ foreground && focused && ticket==transportRevision && recorderTicket==captureRevision.get() && !managementRequested && !managementVisible },
@@ -476,9 +481,33 @@ class V2VoiceActivity : Activity() {
                 val currentTransport=transportRevision;val currentCapture=captureRevision.get()
                 val apply=CaptureFailureGate.current(ticket,recorderTicket,currentTransport,currentCapture,
                     foreground && focused && !managementRequested && !managementVisible && !helpVisible && voice===client)
-                PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(if(apply)PinDiagnostic.RuntimeStage.FAILURE_UI_APPLY else PinDiagnostic.RuntimeStage.FAILURE_UI_RETIRED,
+                if(!apply)PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.FAILURE_UI_RETIRED,
                     diagnosticScope(ticket,recorderTicket),currentTransport=currentTransport,currentCapture=currentCapture))
-                if(apply)showTechnicalFailure(PinDiagnostic.Reason.CAPTURE_FAILED)
+                if(apply) {
+                    val failedCapture=capture
+                    owner.post {
+                        // Close/confirm before consuming the one retry; the lease includes both workers.
+                        failedCapture?.close()
+                        val current=CaptureFailureGate.current(ticket,recorderTicket,transportRevision,captureRevision.get(),
+                            recoveryAllowed() && voice===client && capture===failedCapture)
+                        val released=failedCapture!=null && !failedCapture.quarantined && failedCapture.nativeProof.released &&
+                            ProcessRecorders.released() && outputSlot.idle
+                        if(expiryCaptureRestart.consume(ticket,recorderTicket,failedCapture?.lastClockFailure?.reason,
+                                current,client.idleForCaptureRestart,released)) {
+                            capture=null
+                            PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.EXPIRY_CAPTURE_RETRY,
+                                diagnosticScope(ticket,recorderTicket)))
+                            startChildCapture(client,ticket)
+                        } else runOnUiThread {
+                            if(CaptureFailureGate.current(ticket,recorderTicket,transportRevision,captureRevision.get(),
+                                    foreground && focused && voice===client && !managementRequested && !managementVisible)) {
+                                PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.FAILURE_UI_APPLY,
+                                    diagnosticScope(ticket,recorderTicket),currentTransport=transportRevision,currentCapture=captureRevision.get()))
+                                showTechnicalFailure(PinDiagnostic.Reason.CAPTURE_FAILED)
+                            }
+                        }
+                    }
+                }
             }
         }.also { it.start() }
         owner.removeCallbacks(durationLimit); owner.postDelayed(durationLimit,250)
@@ -503,6 +532,7 @@ class V2VoiceActivity : Activity() {
         }
     }
     private fun releaseAudio(done: (Boolean) -> Unit = {}) {
+        expiryCaptureRestart.cancel()
         PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.TRANSPORT_RETIRE,diagnosticScope()))
         recovery.pause();recoveryTicket=null;handoff?.cancel();handoff=null;pendingWake=null
         transportRevision++;cancelRecorders();resetEyes();imageRoute?.clear()

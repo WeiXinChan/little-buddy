@@ -41,6 +41,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
     @Volatile private var thread: Thread? = null
     @Volatile private var stopThread:Thread?=null
     @Volatile var nativeProof = RecorderProof(); private set
+    @Volatile var lastClockFailure:CaptureClockFailure?=null;private set
     @Volatile var quarantined = false; private set
     private fun diagnostic(stage:PinDiagnostic.RuntimeStage,joined:Boolean=workerJoined) {
         PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(stage,diagnosticScope,cancelled=cancelled.get(),
@@ -93,19 +94,34 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
         var startup:CaptureBootstrap?=null
         var uploadSamples = 0
         var step=CaptureReadStep.NONE
+        fun readBuffered():List<ShortArray> {step=CaptureReadStep.BUFFER_READ;return buffered.read()}
         fun upload(batch: List<ShortArray>, speech: Boolean) {
             try {
                 step=CaptureReadStep.UPLOAD_ADMIT
                 checkNotNull(ledger).check()
                 val count=batch.sumOf{it.size}
-                if(uploadSamples+count>320000)error("input bound")
+                captureCheck(uploadSamples+count<=320000,CapturePredicate.INPUT_BATCH_BOUND)
                 uploadSamples+=count
-                if(!client.stage(batch,speech,lastCapturedAt))check(uploads.offer(batch,speech,lastCapturedAt))
+                if(!client.stage(batch,speech,lastCapturedAt))captureCheck(uploads.offer(batch,speech,lastCapturedAt),CapturePredicate.UPLOAD_QUEUE)
             }catch(failure:Exception){batch.forEach{it.fill(0)};throw failure}
+        }
+        var requestedNativeFrames=0;var actualNativeFrames=0
+        var nativeStartBeforeMs=-1L;var nativeStartAfterMs=-1L
+        var nativeReadCalls=0L;var nativeReturnedSamples=0L;var lastNativeReadCount=-1
+        fun nativeRead(native:AudioRecord,target:ShortArray):Int {
+            operation=PinDiagnostic.CaptureOperation.NATIVE_READ
+            nativeReadCalls++
+            try {
+                val count=measured(PinDiagnostic.CaptureOperation.NATIVE_READ){native.read(target,0,target.size,AudioRecord.READ_NON_BLOCKING)}
+                lastNativeReadCount=count
+                if(count>0)nativeReturnedSamples=Math.addExact(nativeReturnedSamples,count.toLong())
+                return count
+            }finally{operation=PinDiagnostic.CaptureOperation.NONE}
         }
         var timestampResult=CaptureTimestampResult.NOT_CALLED
         fun context()=CaptureClockContext(diagnosticScope.activity,diagnosticScope.transport,diagnosticScope.capture,
-            step,cancelled.get(),runCatching{allowed()}.getOrDefault(false),stopRequested.get(),nativeProof.released,timestampResult,lastOperation.ordinal,operationBeforeNs,operationAfterNs)
+            step,cancelled.get(),runCatching{allowed()}.getOrDefault(false),stopRequested.get(),nativeProof.released,timestampResult,lastOperation.ordinal,operationBeforeNs,operationAfterNs,
+            nativeStartBeforeMs,nativeStartAfterMs,nativeReadCalls,nativeReturnedSamples,lastNativeReadCount,startup?.cachedSamplesTotal ?: 0,requestedNativeFrames,actualNativeFrames)
         var diagnosticStage=PinDiagnostic.Stage.CAPTURE_NATIVE
         var attemptedNative=false
         var attemptedWake=false
@@ -113,7 +129,8 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             val minimum = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO,
                                                        AudioFormat.ENCODING_PCM_16BIT)
             check(minimum in 1..32000)
-            val nativeBytes=maxOf(minimum,6400)
+            val nativeBytes=NativeCaptureBuffer.requestedBytes(minimum)
+            requestedNativeFrames=nativeBytes/2
             uploads.nativeRoom(nativeBytes)
             if(cancelled.get() || !allowed())return
             attemptedNative=true
@@ -122,6 +139,10 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             recorder = native
             synchronized(nativeLock){nativeHandle=native}
             check(native.state == AudioRecord.STATE_INITIALIZED)
+            actualNativeFrames=native.bufferSizeInFrames
+            val verifiedFrames=NativeCaptureBuffer.verifiedFrames(nativeBytes,actualNativeFrames)
+            PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CAPTURE_BUFFER,diagnosticScope,
+                requestedNativeFrames=requestedNativeFrames,actualNativeFrames=actualNativeFrames,creditedNativeFrames=verifiedFrames))
             if (AcousticEchoCanceler.isAvailable()) {
                 aec = AcousticEchoCanceler.create(native.audioSessionId)
                 aec?.enabled = true // Availability/enabled are diagnostics, not acoustic PASS.
@@ -133,7 +154,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             measured(PinDiagnostic.CaptureOperation.MODEL_INIT) { wake.initialize() }
             if (cancelled.get() || !allowed()) return
             val timestamp=AudioTimestamp()
-            val continuity=NativeReadLedger(nativeBytes/2,CaptureMonotonic::nowMs,
+            val continuity=NativeReadLedger(verifiedFrames,CaptureMonotonic::nowMs,
                 android.os.SystemClock::elapsedRealtime) {
                 timestampResult=CaptureTimestampResult.IN_FLIGHT
                 val oldOperation=operation;operation=PinDiagnostic.CaptureOperation.TIMESTAMP
@@ -148,7 +169,10 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             val prefix=CaptureBootstrap(continuity);startup=prefix;startupHandle=prefix
             synchronized(nativeLock){
                 if(cancelled.get() || !allowed())return
-                native.startRecording()
+                measured(PinDiagnostic.CaptureOperation.NATIVE_START) {
+                    nativeStartBeforeMs=continuity.armNativeStart()
+                    try{native.startRecording()}finally{nativeStartAfterMs=CaptureMonotonic.nowMs()}
+                }
             }
             clockCheck(native.recordingState == AudioRecord.RECORDSTATE_RECORDING,CaptureClockReason.RECORDER_NOT_RECORDING)
             nativeProof = RecorderProof(native.audioSessionId, started=true, recording=true)
@@ -157,8 +181,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             PinDiagnostic.event(diagnosticStage,PinDiagnostic.Reason.BEGIN)
             step=CaptureReadStep.STARTUP
             prefix.prepare({target->
-                operation=PinDiagnostic.CaptureOperation.NATIVE_READ
-                try{native.read(target,0,target.size,AudioRecord.READ_NON_BLOCKING)}finally{operation=PinDiagnostic.CaptureOperation.NONE}
+                nativeRead(native,target)
             },
                 {!cancelled.get() && allowed()},{Thread.sleep(5)})
             diagnosticStage=PinDiagnostic.Stage.CAPTURE_READ
@@ -177,17 +200,17 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                 val replay=prefix.pending
                 step=if(replay)CaptureReadStep.PREFIX_REPLAY else CaptureReadStep.NATIVE_READ
                 val count=if(replay)prefix.take(frame) else {
-                    operation=PinDiagnostic.CaptureOperation.NATIVE_READ
-                    try{native.read(frame,0,frame.size,AudioRecord.READ_NON_BLOCKING)}finally{operation=PinDiagnostic.CaptureOperation.NONE}
+                    nativeRead(native,frame)
                 }
                 if(cancelled.get() || !allowed())break
-                check(count in 0..frame.size)
+                captureCheck(count in 0..frame.size,CapturePredicate.NATIVE_READ_COUNT)
                 diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                 step=CaptureReadStep.POST_READ
                 lastCapturedAt=if(replay)continuity.sampleTime(prefix.replayPosition) else continuity.read(count)
                 if (count == 0) { Thread.sleep(5); continue }
                 clockCheck(native.recordingState == AudioRecord.RECORDSTATE_RECORDING,CaptureClockReason.RECORDER_NOT_RECORDING)
                 nativeProof = nativeProof.copy(recording=true, frames=nativeProof.frames+count)
+                step=CaptureReadStep.BUFFER_PUSH
                 buffered.push(frame, count)
                 position = buffered.position
                 if (awake && idle != client.idleSerial) {
@@ -220,7 +243,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     continuity.check()
                     diagnosticStage=PinDiagnostic.Stage.CAPTURE_KWS
                     val absoluteTail=Math.addExact(wakeBase,tail)
-                    check(tail>=0 && absoluteTail in wakeBase..position) {"keyword capture coordinate"}
+                    captureCheck(tail>=0 && absoluteTail in wakeBase..position,CapturePredicate.WAKE_COORDINATE)
                     diagnosticStage=PinDiagnostic.Stage.CAPTURE_CLOCK
                     val wakeBoundary=continuity.sampleTime(absoluteTail)
                     check(wakeBoundary>=0)
@@ -231,12 +254,14 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     owner.post { if (!cancelled.get() && allowed()) client.wake(boundary) }
                     // Absolute ring and KWS-local coordinates share a recorded origin.
                     lastSpeech = android.os.SystemClock.elapsedRealtime()
+                    step=CaptureReadStep.BUFFER_BEGIN
                     buffered.begin(absoluteTail)
                     firstAfterWake = true
                     var continuation = false
                     // KWS can report after the first intent samples have arrived.
                     // Feed the cached tail to the real VAD, without consuming the
                     // upload cursor or waiting for a future recorder frame.
+                    step=CaptureReadStep.BUFFER_INSPECT
                     buffered.inspectAfter(absoluteTail) { cached ->
                         try {
                             if(!cancelled.get() && allowed()) {
@@ -247,7 +272,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                     }
                     if (continuation) {
                         voiced = true; firstAfterWake = false
-                        upload(buffered.read(), true)
+                        upload(readBuffered(), true)
                     }
                     continue
                 }
@@ -261,22 +286,31 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
                         voiced = true
                         buffered.onset()
                         firstAfterWake = false
-                        upload(buffered.read(), true)
-                    } else upload(buffered.read(), true)
+                        upload(readBuffered(), true)
+                    } else upload(readBuffered(), true)
                 } else if (voiced && now - lastSpeech <= 300) {
-                    upload(buffered.read(), false)
+                    upload(readBuffered(), false)
                 } else {
                     owner.post { if (!cancelled.get()) client.quiet() }
                     if (voiced) { voiced = false; detector = SpeechDetector(320, initialFloor = 36.0) }
-                    if (!firstAfterWake) buffered.follow()
+                    if (!firstAfterWake) {step=CaptureReadStep.BUFFER_FOLLOW;buffered.follow()}
                 }
                 // Per-expression audio is bounded. Endpoint completion resets it via
                 // the owner callback; the backend separately retains the 600s session.
-                if (uploadSamples >= 300000) error("input capacity")
+                captureCheck(uploadSamples < 300000,CapturePredicate.INPUT_CAPACITY)
             }
         } catch (error: Exception) {
-            if(error is CaptureClockFailure)CaptureClockDiagnostic.emit(CaptureClockFailure(error.reason,error.evidence,error.longWitness,context()))
-            diagnostic(PinDiagnostic.RuntimeStage.CAPTURE_FAILURE)
+            if(error is CaptureClockFailure){
+                val failure=CaptureClockFailure(error.reason,error.evidence,error.longWitness,context())
+                lastClockFailure=failure;CaptureClockDiagnostic.emit(failure)
+            }
+            PinDiagnostic.runtime(PinDiagnostic.RuntimeEvent(PinDiagnostic.RuntimeStage.CAPTURE_FAILURE,diagnosticScope,
+                cancelled=cancelled.get(),allowed=runCatching{allowed()}.getOrDefault(false),stopRequested=stopRequested.get(),
+                nativeReleased=nativeProof.released,operation=operation,captureStage=diagnosticStage,
+                capturePredicate=(error as? CapturePredicateFailure)?.predicate ?: CapturePredicate.NONE,
+                clockReason=(error as? CaptureClockFailure)?.reason,
+                uploadSamples=uploadSamples,nativeReturnedSamples=nativeReturnedSamples,nativeReadCalls=nativeReadCalls,
+                inputSerial=client.inputSerial,sealedSerial=sealed,readStep=step))
             if (!cancelled.get()) PinDiagnostic.runtimeError(diagnosticStage,error)
             if (!cancelled.get()) owner.post { if(!cancelled.get() && allowed())failed() }
         } finally {

@@ -14,17 +14,17 @@ fun main(args:Array<String>){
     Thread.setDefaultUncaughtExceptionHandler{_,t->t.printStackTrace();System.err.println("RECOVERY_UNCAUGHT "+t.javaClass.simpleName);kotlin.system.exitProcess(1)}
     val owner=Handler();val done=CountDownLatch(1);val slot=OutputSlot();val episode=RecoveryEpisode()
     var cap:Capture?=null;var firstFailure=0;var secondFailure=0;var connects=0;var heads=0;var replies=0;var imported=0
-    var trusted:ServerFailure?=null
+    var trusted:ServerFailure?=null;var eligibility=false
     var callbackStage="NONE";var callbackException=false;var oldReleased=false
     var wakeBoot=-1L;var rejectedBoot=-1L;var readyCount=0;var unexpectedCapture=false
     val trace=java.util.concurrent.CopyOnWriteArrayList<String>()
     val physical=PinDiagnostic.Scope(1,1,2);var binds=0;var captureStarts=0
     val mode=args[1]
-    val denied=mode in setOf("stale_scope","quota","auth","timeout","safety","unknown","unscoped")
-    val expected=when(mode){"stale_scope","unscoped"->null;"quota"->ServerFailure.QUOTA;"auth"->ServerFailure.AUTH;"timeout"->ServerFailure.TIMEOUT;"safety"->ServerFailure.SAFETY;"unknown"->ServerFailure.UNKNOWN;else->ServerFailure.VOICE}
+    val denied=mode in setOf("stale_scope","quota","auth","timeout_idle","timeout_stale","safety","unknown","unscoped")
+    val expected=when(mode){"stale_scope","timeout_idle","timeout_stale","unscoped"->null;"quota"->ServerFailure.QUOTA;"auth"->ServerFailure.AUTH;"timeout","timeout_slow"->ServerFailure.TIMEOUT;"safety"->ServerFailure.SAFETY;"unknown"->ServerFailure.UNKNOWN;else->ServerFailure.VOICE}
     val failures=java.util.concurrent.CopyOnWriteArrayList<PinDiagnostic.FailSource>()
     PinDiagnostic.installRuntime{
-        if(it.stage==PinDiagnostic.RuntimeStage.CLIENT_FAIL){failures+=it.source;trace+="FAIL_${it.source.name}_${it.scope.transport}"}
+        if(it.stage==PinDiagnostic.RuntimeStage.CLIENT_FAIL){eligibility=it.recoveryEligible;failures+=it.source;trace+="FAIL_${it.source.name}_${it.scope.transport}"}
         if(it.stage==PinDiagnostic.RuntimeStage.CAPTURE_START)captureStarts++
         if(it.stage==PinDiagnostic.RuntimeStage.RECOVERY_BIND){
             check(it.scope==physical && it.currentTransport==2L && it.currentCapture==2L);binds++
@@ -44,7 +44,8 @@ fun main(args:Array<String>){
         check(trusted==expected){"mode=$mode trusted=$trusted sources=$failures"}
         callbackStage="OLD_RELEASE"
         cap!!.close();check(cap!!.nativeProof.released && ProcessRecorders.released());check(slot.idle);oldReleased=true;trace+="OLD_RELEASED"
-        if(denied){done.countDown();return@VoiceClient}
+        if(denied){check(!eligibility);done.countDown();return@VoiceClient}
+        check(eligibility && trusted?.wakeRecoveryCandidate==true)
         callbackStage="EPISODE"
         check(episode.begin());val ticket=episode.grant(true,true)!!
         handoff=RecoveryHandoff(SystemClock::elapsedRealtime,{owner.post(it)},{episode.current(ticket)},
@@ -76,10 +77,10 @@ fun main(args:Array<String>){
         println("RECOVERY_TRACE mode=$mode first_callbacks=$firstFailure trusted=$trusted old_released=$oldReleased callback_stage=$callbackStage callback_exception=$callbackException capture_guard=$unexpectedCapture ready=$readyCount wake_boot=$wakeBoot reject_boot=$rejectedBoot reason=${handoff?.rejection} sources=$failures steps=$trace")
         check(!callbackException && !unexpectedCapture)
         check(firstFailure==1)
-        if(mode!="slow")check(failures.size==1)
-        check(failures.first()==if(mode=="unscoped")PinDiagnostic.FailSource.RECEIVE_PROTOCOL else PinDiagnostic.failSource((expected ?: ServerFailure.VOICE).localCode))
+    if(mode !in setOf("slow","timeout_slow"))check(failures.size==1)
+    check(failures.first()==if(mode=="unscoped")PinDiagnostic.FailSource.RECEIVE_PROTOCOL else PinDiagnostic.failSource((if(mode.startsWith("timeout"))ServerFailure.TIMEOUT else expected ?: ServerFailure.VOICE).localCode))
         if(denied){check(connects==0 && heads==0 && binds==0)}
-        else if(mode=="slow"){check(secondFailure>=1 && heads==0 && imported==0 && oldReleased && connects==1 && readyCount==0 && rejectedBoot>=wakeBoot+2500 && handoff!!.rejection==RecoveryHandoff.Rejection.CONNECT_DEADLINE);check(handoff!!.retainedSamples()==0 && handoff!!.state==RecoveryHandoff.State.CANCELLED)}
+        else if(mode in setOf("slow","timeout_slow")){check(secondFailure>=1 && heads==0 && imported==0 && oldReleased && connects==1 && readyCount==0 && rejectedBoot>=wakeBoot+2500 && handoff!!.rejection==RecoveryHandoff.Rejection.CONNECT_DEADLINE);check(handoff!!.retainedSamples()==0 && handoff!!.state==RecoveryHandoff.State.CANCELLED)}
         else{check(connects==1 && secondFailure==0 && imported==1 && heads==1 && replies==1 && binds==1 && captureStarts==2)}
         println("RECOVERY_TLS mode=$mode first_failure=$firstFailure connections=$connects import=$imported heads=$heads replies=$replies second_failure=$secondFailure")
     }finally{
