@@ -16,7 +16,7 @@ def candidate(answer='兔子',clue='它有长长的耳朵。'):
 
 class InitialGuess(unittest.IsolatedAsyncioTestCase):
     async def scenario(self,*,reviews=None,active=False,private=False,spent=False,replacement=None,
-                       first=None,clock_expired=False,pause=False,quota_on_replacement=False,semantic=False,query=TEXT):
+                       first=None,clock_expired=False,pause=False,pause_last_review=False,quota_on_replacement=False,semantic=False,query=TEXT):
         calls=[];tts=[];review_count=0;plan_count=0;facts_count=0
         ready=asyncio.Event();release=asyncio.Event();clock=Clock()
         original=deepcopy(first or candidate());replacement=deepcopy(replacement or candidate('猫','它会喵喵叫。'))
@@ -36,6 +36,7 @@ class InitialGuess(unittest.IsolatedAsyncioTestCase):
                            'quality':bool(clue and clue in data['segment'])}
                 else:value=reviews[min(review_count,len(reviews)-1)]
                 review_count+=1
+                if pause_last_review and review_count==3:ready.set();await release.wait()
                 if value=='error':return httpx.Response(503)
             else:
                 plan_count+=1;value=original if plan_count==1 else replacement
@@ -60,7 +61,7 @@ class InitialGuess(unittest.IsolatedAsyncioTestCase):
         peer.session.heartbeat_deadline=1000
         peer.generation=asyncio.create_task(peer.respond(query,0))
         await peer.handle(json.dumps(dict(v=2,type='bind',epoch=0,seq=0,player='synthetic')))
-        if pause:
+        if pause or pause_last_review:
             await asyncio.wait_for(ready.wait(),1)
             await peer.handle(json.dumps(dict(v=2,type='advance',epoch=0,seq=1,revision=1)))
             release.set()
@@ -160,12 +161,33 @@ class InitialGuess(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(counts,(1,1,2));self.assertFalse(tts)
         self.assertEqual(peer.last_failure['detail'],'quality_segment')
 
-    async def test_quality_after_first_played_segment_never_changes_riddle(self):
+    async def test_late_segment_denial_prevents_any_playback(self):
         first=candidate();first['sentences']=['第一条线索。','第二条线索。']
         peer,calls,tts,counts=await self.scenario(first=first,reviews=[{'allow':True,'quality':True},
             {'allow':True,'quality':True},{'allow':True,'quality':False}])
-        self.assertEqual(counts,(1,1,3));self.assertEqual(tts,['第一条线索。'])
+        self.assertEqual(counts,(1,1,3));self.assertEqual(tts,[])
         self.assertFalse(peer.session.game);self.assertFalse(peer.session.secrets)
+
+    async def test_intro_and_clue_reviewed_in_whole_context_before_playback(self):
+        first=candidate();first['sentences']=['我来出一道题。','它有长长的耳朵。']
+        ok=dict(allow=True,quality=True)
+        for last in (ok,dict(allow=False,quality=True),'error'):
+            peer,_,tts,counts=await self.scenario(first=first,reviews=[ok,ok,last])
+            self.assertEqual(counts,(1,1,3))
+            whole,*segments=peer.review_inputs
+            self.assertNotIn('opening_segment',whole)
+            for i,data in enumerate(segments):
+                self.assertEqual(data['opening_segment'],dict(sentences=first['sentences'],index=i))
+                self.assertEqual(data['segment'],first['sentences'][i]);self.assertFalse(data['context']['heard'])
+            self.assertEqual(tts,first['sentences'] if last==ok else [])
+            self.assertEqual(peer.session.secrets,first['secrets'] if last==ok else {})
+
+    async def test_advance_while_last_opening_segment_in_review(self):
+        first=candidate();first['sentences']=['我来出一道题。','它有长长的耳朵。']
+        peer,_,tts,counts=await self.scenario(first=first,reviews=[dict(allow=True,quality=True)],pause_last_review=True)
+        self.assertEqual(counts,(1,1,3));self.assertFalse(tts);self.assertEqual(peer.revision,1)
+        self.assertFalse(peer.session.game);self.assertFalse(peer.session.secrets)
+        self.assertFalse([e for e in peer.socket.events if e['type']=='failure'])
 
     async def test_guesser_never_gets_setter_regeneration(self):
         first=candidate();first['guess_role']='guesser';first['secrets']={}

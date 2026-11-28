@@ -17,6 +17,7 @@ from uuid import uuid4
 
 from backend.v2.session import Identity, Session
 from backend.v2.budget import ResponseBudget
+from backend.v2 import animal_cards
 from backend.v2.stream_asr import RawASRLease
 from backend.v2.safety import SafetyFault, local_help
 from backend.v2.review import ReviewDecision,QualityFault
@@ -101,11 +102,13 @@ def decode(raw):
 
 
 class VoicePeer:
-    def __init__(self, socket, providers, policy, *, clock=time.monotonic, stream_asr=False):
+    def __init__(self, socket, providers, policy, *, clock=time.monotonic, stream_asr=False, animal_cards_enabled=False):
         self.socket, self.providers, self.policy = socket, providers, policy
         self.session = Session(clock)
         self.epoch, self.sequence = 0, -1
         self.capture = bytearray()
+        self.animal_cards_enabled=animal_cards_enabled is True
+        self.card_owner=None
         self.stream_asr = stream_asr is True  # opt-in server capability; no wire field
         self.stream_wake = None
         self.stream_prewake_capture = None
@@ -1176,7 +1179,7 @@ class VoicePeer:
             # Replays remain rejected by exact pending-front ID and task sequence.
             self.session.revealed.intersection_update(s.name for s in self.session.pending)
 
-    async def review(self, operation, text, *, query='', phase='whole',pending_guess=None):
+    async def review(self, operation, text, *, query='', phase='whole',pending_guess=None,opening_segment=None):
         # Re-project current authoritative scope with this response's input,
         # never replace played history with an unapproved proposal.
         operation.ensure()
@@ -1187,6 +1190,7 @@ class VoicePeer:
             if context.get('game',{}).get('mode')=='guess' or pending_guess is not None:
                 context['_review_turn']={'input':query,'phase':phase}
             if pending_guess is not None:context['_pending_guess']=deepcopy(pending_guess)
+            if opening_segment is not None:context['_opening_segment']=opening_segment
             verdict = await self.owned(operation, function, text, context)
         except SafetyFault:
             stage_timing.mark(phase+'_end',self,operation,outcome='safety_denied')
@@ -1306,6 +1310,7 @@ class VoicePeer:
             # adaptation belongs to M05; no unrestricted model-proposed facts enter it.
             await self.compact_memory(epoch, operation)
             state = None
+            card=None
             ending=False
             image_effect=None; answer_public=False
             stage = 'input_policy'
@@ -1320,10 +1325,14 @@ class VoicePeer:
                 # FACTS consumes only this immutable input text, never context.
                 # Existing private sessions (including shared re-planning) keep
                 # serial extraction; publication remains at the original gate.
-                if not self.session.private_mode:
+                if self.animal_cards_enabled:
+                    card=animal_cards.propose(text,self.session,self.card_owner)
+                    if card is not None:operation.revision=response_revision
+                card_topic=self.session.topic
+                if card is None and not self.session.private_mode:
                     fact_prefetch = asyncio.create_task(prefetch_facts())
                     self.track_retired(fact_prefetch)
-                plan = await self.read_request(operation, 'plan', text, context)
+                plan = card[1] if card is not None else await self.read_request(operation, 'plan', text, context)
                 self.last_guess_normalization=plan.get('_guess_normalization')
                 if epoch != self.epoch or not self.session._output_live():
                     return
@@ -1376,7 +1385,7 @@ class VoicePeer:
                 if epoch != self.epoch or not self.session._output_live():
                     return
                 stage = 'facts'
-                if ending:
+                if ending or card is not None:
                     if not await retire_prefetch():raise WireError('fact prefetch close timeout')
                     facts = []
                 elif fact_prefetch is not None:
@@ -1391,6 +1400,7 @@ class VoicePeer:
                 accepted=True if ending else self.session.record_input(text, facts)
                 stage_timing.mark('fact_commit',self,operation,count=len(facts) if accepted is not False else 0,outcome='failed' if accepted is False else 'ok')
                 if accepted is False:
+                    card=None
                     # A real storage bound is a normal conversational branch,
                     # not a provider failure or a license to invent recollection.
                     plan.update(sentences=['我这会儿记不全前面的细节，请再告诉我这次最重要的事，我们接着玩。'],anchors={},tools=[])
@@ -1403,7 +1413,7 @@ class VoicePeer:
                 stage = 'safety'
                 pending_guess=self.pending_guess_candidate(plan)
                 try:
-                    await self.review(operation, ''.join(plan['sentences']), query=text or '',pending_guess=pending_guess)
+                    if card is None:await self.review(operation, ''.join(plan['sentences']), query=text or '',pending_guess=pending_guess)
                 except QualityFault:
                     attempt=dict(initial_whole_quality_rejected=True,attempted=False,replacement_whole_approved=False)
                     self.last_guess_quality_repair=attempt
@@ -1418,6 +1428,18 @@ class VoicePeer:
                     pending_guess=self.pending_guess_candidate(plan)
                     await self.review(operation, ''.join(plan['sentences']), query=text or '',pending_guess=pending_guess)
                     attempt['replacement_whole_approved']=True
+                # Review the fresh riddle as a unit before exposing its first PCM.
+                # Subsequent turns still project their actually played history.
+                opening_preflight=(pending_guess is not None and self.session.game.get('mode')!='guess'
+                                   and len(plan['sentences'])>1)
+                if opening_preflight:
+                    for index,sentence in enumerate(plan['sentences']):
+                        if self.revision!=response_revision:raise StaleOperation()
+                        if not self.policy.segment(sentence):raise SafetyFault('content_blocked')
+                        await self.review(operation,sentence,query=text or '',phase='segment',pending_guess=pending_guess,
+                                          opening_segment=dict(sentences=list(plan['sentences']),index=index))
+                    operation.ensure()
+                    if self.revision!=response_revision:raise StaleOperation()
                 state = {k: plan[k] for k in ('mode', 'rules', 'roles', 'secrets')}
                 if plan['mode']=='guess' and 'guess_role' in plan:state['guess_role']=plan['guess_role']
                 if state['mode']=='story':
@@ -1469,7 +1491,7 @@ class VoicePeer:
                     async def items():
                         nonlocal stage
                         for sentence in plan['sentences']:
-                            if len(plan['sentences']) > 1:
+                            if len(plan['sentences']) > 1 and not opening_preflight:
                                 stage='safety'
                                 await self.review(operation, sentence, query=text or '', phase='segment',pending_guess=pending_guess)
                             yield sentence
@@ -1519,6 +1541,8 @@ class VoicePeer:
                     raise WireError('revoked')
                 await self.owned(operation, self.changed.wait)
             operation.ensure()
+            if card is not None and self.session.topic==card_topic+1 and self.session.response_confirmed:
+                self.card_owner=(self.session.session,self.session.topic,card[0])
             if ending:
                 ended=dict(session=self.session.session,turn=self.session.turn,revision=self.revision)
                 self.session.clear()
