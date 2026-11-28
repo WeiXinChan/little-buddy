@@ -56,7 +56,7 @@ internal object AndroidPinDiagnostic {
                         PinDiagnostic.RuntimeStage.CAPTURE_RELEASE,
                         PinDiagnostic.RuntimeStage.WORKER_JOINED -> "operation=${event.operation.name} cancelled=${event.cancelled} allowed=${event.allowed} stop_requested=${event.stopRequested} native_released=${event.nativeReleased} worker_joined=${event.workerJoined}"
                         PinDiagnostic.RuntimeStage.FAILURE_UI_APPLY,PinDiagnostic.RuntimeStage.FAILURE_UI_RETIRED -> "current_transport=${event.currentTransport} current_capture=${event.currentCapture}"
-                        PinDiagnostic.RuntimeStage.CLIENT_FAIL -> "pump=${event.pump.name}"
+                        PinDiagnostic.RuntimeStage.CLIENT_FAIL -> "pump=${event.pump.name} recovery_eligible=${event.recoveryEligible}"
                         PinDiagnostic.RuntimeStage.CAPTURE_BUFFER -> "requested_native_frames=${event.requestedNativeFrames} actual_native_frames=${event.actualNativeFrames} credited_native_frames=${event.creditedNativeFrames}"
                         PinDiagnostic.RuntimeStage.CAPTURE_OPERATION -> "operation=${event.operation.name} duration_ns=${event.operationNs} cancelled=${event.cancelled} allowed=${event.allowed} stop_requested=${event.stopRequested} native_released=${event.nativeReleased}"
                         PinDiagnostic.RuntimeStage.WAKE_ACCEPTED -> "wake_frame=${event.wakeFrame} read_frame=${event.readFrame} wake_relative_ms=${event.wakeRelativeMs} lag_ms=${event.wakeLagMs}"

@@ -5,6 +5,9 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SessionTerminationTest {
+    @Test fun recoveryCandidatesDoNotIncludeAuthenticationQuotaOrUnknown() {
+        assertEquals(setOf(ServerFailure.VOICE,ServerFailure.TIMEOUT),ServerFailure.entries.filter{it.wakeRecoveryCandidate}.toSet())
+    }
     @Test fun onlyNormalReasonsEndCurrentScope() {
         for(reason in listOf("conversation_ended","session_expired"))
             assertTrue(SessionTermination.accepts(reason,true,true,false,true))

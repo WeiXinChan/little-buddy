@@ -433,7 +433,7 @@ class V2VoiceActivity : Activity() {
                     else -> "连接暂不可用。"
                 }
                 if (status == "listening" && voice?.isAwake == true) budget?.begin()
-            }, { images?.inputChanged() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showTechnicalFailure(lastFailure,(recoveryGrant==null || !recovery.hasEpisode()) && serverFailure==ServerFailure.VOICE) } },
+            }, { images?.inputChanged() }, { _, _ -> error("unsupported visual effect") }, { runOnUiThread { if (ticket == transportRevision) showTechnicalFailure(lastFailure,(recoveryGrant==null || !recovery.hasEpisode()) && serverFailure?.wakeRecoveryCandidate==true) } },
                 playbackSettings = settings,
                 localHelp = { runOnUiThread { if (ticket == transportRevision) showLocalHelp() } },
                 management = { entry -> runOnUiThread { if (ticket == transportRevision) requestParentManagement(entry) } },

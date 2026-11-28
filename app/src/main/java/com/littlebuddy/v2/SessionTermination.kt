@@ -4,6 +4,7 @@ package com.littlebuddy.v2
 internal enum class ServerFailure(val localCode:String) {
     TIMEOUT("server_timeout"), QUOTA("server_quota"), VOICE("server_voice"),
     SAFETY("server_safety"), AUTH("server_auth"), UNAVAILABLE("server_unavailable"), UNKNOWN("server_unknown");
+    val wakeRecoveryCandidate:Boolean get()=this==VOICE || this==TIMEOUT
     companion object {
         fun classify(code:String)=when(code) {
             "timeout"->TIMEOUT; "quota"->QUOTA; "voice"->VOICE; "safety"->SAFETY
