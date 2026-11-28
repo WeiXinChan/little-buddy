@@ -117,6 +117,7 @@ class VoicePeer:
         self.awaiting_input = False
         self.generation = None
         self.response_scope = None
+        self.generation_cancel_deadlines = {}
         self.recognition = None
         self.recognition_handoff = None
         self.next_probe = None
@@ -667,11 +668,15 @@ class VoicePeer:
 
     async def cancel_generation_task(self,task):
         if task is not None:
-            scope = self.generation_scopes.get(task)
-            if scope is not None:
-                scope.cancelled = True
-            task.cancel()
-            done, _ = await asyncio.wait({task}, timeout=.5)
+            deadline=self.generation_cancel_deadlines.get(task)
+            if deadline is None:
+                deadline=asyncio.get_running_loop().time()+.5
+                self.generation_cancel_deadlines[task]=deadline
+                task.add_done_callback(lambda done:self.generation_cancel_deadlines.pop(done,None))
+                scope = self.generation_scopes.get(task)
+                if scope is not None:scope.cancelled = True
+                task.cancel()
+            done, _ = await asyncio.wait({task}, timeout=max(0,deadline-asyncio.get_running_loop().time()))
             if not done:
                 # Never reuse an unconfirmed provider resource. Connection closes;
                 # caller/service owns eventual shutdown, no unbounded new attempts.
@@ -983,7 +988,8 @@ class VoicePeer:
             # Observe that same task within the original .5s, never grant another .5s.
             if generation is not None and not generation.done():
                 try:
-                    done,_=await asyncio.wait({generation},timeout=max(0,.5-(asyncio.get_running_loop().time()-close_started)))
+                    deadline=self.generation_cancel_deadlines.get(generation,close_started+.5)
+                    done,_=await asyncio.wait({generation},timeout=max(0,deadline-asyncio.get_running_loop().time()))
                 except asyncio.CancelledError:done=set()
                 if not done:
                     self.quarantined=True;self.track_retired(generation)
@@ -1219,8 +1225,9 @@ class VoicePeer:
             return bool(done)
         try:
             operation.ensure()
+            if self.generation is owner:
+                self.response_scope=(self.session,self.session.connection,self.session.turn,epoch,response_revision)
             if response_revision != self.revision:raise StaleOperation()
-            self.response_scope=(self.session,self.session.connection,self.session.turn,epoch,response_revision)
             while self.session.player is None:
                 self.changed.clear()
                 if not self.session._output_live():

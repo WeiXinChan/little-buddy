@@ -149,6 +149,28 @@ class SupersededOutput(unittest.IsolatedAsyncioTestCase):
         self.confirmed_old=True
         await self.test_old_output_deadline_cannot_expire_fresh_input()
 
+    async def test_new_input_before_response_worker_starts_keeps_original_owner(self):
+        start=asyncio.Event();original=self.peer._respond
+        async def delayed(text,epoch,operation):
+            await start.wait();return await original(text,epoch,operation)
+        self.peer._respond=delayed
+        await self.probe(1,110);await self.until('endpoint')
+        await self.send('seal',revision=1);decision=await self.until('decision')
+        self.epoch+=1;self.seq=0;await self.send('stop',intent=decision['intent'])
+        await self.until('open');await self.send('bind',player='not-started-output');await self.until('bound')
+        self.model.block=True;await self.probe(2,122.346)
+        async with asyncio.timeout(1):
+            while self.model.endpoint_calls<2:await asyncio.sleep(0)
+        deadline=self.peer.input_budget.deadline
+        old=self.peer.generation;start.set();await asyncio.wait_for(asyncio.shield(old),1)
+        self.assertEqual(self.peer.response_scope[4],1)
+        self.clock.now=125;await self.send('heartbeat');await self.heartbeat_processed(140)
+        await asyncio.sleep(.15)
+        self.assertFalse([e for e in self.wire.events if e['type']=='failure'])
+        self.assertEqual(self.peer.input_budget.deadline,deadline)
+        self.model.release.set();await self.until('endpoint')
+        await self.send('seal',revision=2);await self.finish_reply();self.assertEqual(self.peer.session.turn,3)
+
     async def test_current_quality_rejection_has_exact_scope_and_zero_audio(self):
         from backend.v2.review import ReviewDecision
         async def rejected(*args,**kwargs):return ReviewDecision(True,False)
@@ -168,3 +190,26 @@ class SupersededOutput(unittest.IsolatedAsyncioTestCase):
 class StreamingSupersededOutput(SupersededOutput):
     @staticmethod
     def peer_type(*args,**kwargs):return VoicePeer(*args,**kwargs,stream_asr=True)
+
+class SharedCancellation(unittest.IsolatedAsyncioTestCase):
+    async def test_concurrent_retirement_and_stop_share_one_half_second(self):
+        from backend.v2.voice import WireError
+        peer=VoicePeer(protocol.Wire(),object(),object(),clock=protocol.Clock())
+        entered=asyncio.Event();release=asyncio.Event();cancels=[]
+        async def stubborn():
+            try:await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancels.append(1);entered.set()
+                try:await release.wait()
+                except asyncio.CancelledError:cancels.append(1);await release.wait()
+        old=asyncio.create_task(stubborn());await asyncio.sleep(0)
+        start=asyncio.get_running_loop().time()
+        first=asyncio.create_task(peer.cancel_generation_task(old));await entered.wait()
+        await asyncio.sleep(.15)
+        second=asyncio.create_task(peer.cancel_generation_task(old))
+        results=await asyncio.gather(first,second,return_exceptions=True)
+        elapsed=asyncio.get_running_loop().time()-start
+        self.assertTrue(all(isinstance(r,WireError) for r in results))
+        self.assertLess(elapsed,.65);self.assertEqual(cancels,[1]);self.assertTrue(peer.quarantined)
+        release.set();await old;await asyncio.sleep(0)
+        self.assertFalse(peer.generation_cancel_deadlines)
