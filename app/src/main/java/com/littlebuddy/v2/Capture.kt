@@ -110,7 +110,7 @@ internal class Capture(private val assets: AssetManager, private val owner: Hand
             operation=PinDiagnostic.CaptureOperation.NATIVE_READ
             nativeReadCalls++
             try {
-                val count=native.read(target,0,target.size,AudioRecord.READ_NON_BLOCKING)
+                val count=measured(PinDiagnostic.CaptureOperation.NATIVE_READ){native.read(target,0,target.size,AudioRecord.READ_NON_BLOCKING)}
                 lastNativeReadCount=count
                 if(count>0)nativeReturnedSamples=Math.addExact(nativeReturnedSamples,count.toLong())
                 return count

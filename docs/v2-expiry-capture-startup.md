@@ -20,7 +20,7 @@ Existing CAPTURE_CLOCK_DETAIL gains fixed numeric context fields (no new per-rea
 - last_native_read_count: most recent returned count, -1 until a call returns.
 - prefix_cached_samples_total: historical accepted-to-cache startup count, retained after cache clearing for evidence; NOT currently retained PCM.
 
-NATIVE_START is a fixed operation enum. EXPIRY_CAPTURE_RETRY is a fixed runtime event on the failed physical recorder scope; a following new CAPTURE_START has a fresh capture ticket. Existing RELEASE/WORKER_JOINED evidence still proves the previous lease ended. Original256-row/15min cap remains. Collectors must add these enum/field names without reading raw log content.
+NATIVE_START is a fixed operation enum. Existing operation_before_ns/operation_after_ns/last_operation now also record the actual last native read (not merely the last model operation); only slow reads use the already bounded operation trace. EXPIRY_CAPTURE_RETRY is a fixed runtime event on the failed physical recorder scope; a following new CAPTURE_START has a fresh capture ticket. Existing RELEASE/WORKER_JOINED evidence still proves the previous lease ended. Original256-row/15min cap remains. Collectors must add these enum/field names without reading raw log content.
 
 ## Evidence and limits
 
