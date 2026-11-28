@@ -377,13 +377,16 @@ allow只判断内容安全/隐私/危险指导/依赖/虚假能力；quality判�
         result=deepcopy(raw);result['sentences']=texts;result['anchors']=anchors
         return result
 
+    async def repair_guess_feedback(self,text,context):
+        return await self.plan(text,context,_feedback=True)
+
     async def repair_initial_guess(self,text,context):
         # The VoicePeer reserves the one shared read retry before this call.
         if context.get('private') or context.get('unrevealed') or context.get('game',{}).get('mode')=='guess':
             raise ModelError('initial guess repair not allowed')
         return await self.plan(text,context,_initial_guess_repair=True)
 
-    async def plan(self, text, context, *, _repair=False, _repair_limit=None, _format_repair=None, _initial_guess_repair=False):
+    async def plan(self, text, context, *, _repair=False, _repair_limit=None, _format_repair=None, _initial_guess_repair=False, _feedback=False):
         if _initial_guess_repair and (_repair or _format_repair is not None or context.get('private') or
                 context.get('unrevealed') or context.get('game',{}).get('mode')=='guess'):
             raise ModelError('initial guess repair not allowed')
@@ -465,7 +468,7 @@ memory.capacity_limited时坦诚记忆范围有限，围绕当前输入继续，
 description只用于generate_image，缺字段兼容目录名称生成；缺服务/审核/预算时不可用，不声称工具执行成功。
 图只会在最后一句完整播放后揭晓；猜谜未公开答案时不显示答案图，只有明确说出答案后才可揭图。
 轮流猜描述要保留答案直到明确结束该题；不是每一轮都换答案。
-现实即时危险应离开玩法给简短现实求助，action用leave、mode用chat、rules/roles/secrets/tools清空，不能继续危险剧情。"""+IMMEDIATE_DANGER_POLICY+GUESS_CONSISTENCY+ASSOCIATION_CONTINUITY+(INITIAL_GUESS_REPAIR if _initial_guess_repair else '')+(PLAN_FORMAT_REPAIR_GUIDE if _format_repair else ''),
+现实即时危险应离开玩法给简短现实求助，action用leave、mode用chat、rules/roles/secrets/tools清空，不能继续危险剧情。"""+IMMEDIATE_DANGER_POLICY+GUESS_CONSISTENCY+ASSOCIATION_CONTINUITY+("本次重新生成同题反馈。沿用原角色、规则和谜底。明确猜中才确认，猜错给相符的新线索且不泄底，含糊时简短澄清。不要换题或调用工具。" if _feedback else "")+(INITIAL_GUESS_REPAIR if _initial_guess_repair else '')+(PLAN_FORMAT_REPAIR_GUIDE if _format_repair else ''),
                                   dict(text=text or '只叫了瓦力，请提出一次自然邀请。', context=deepcopy(context),server_constraints=control), schemas.PLAN_FORMAT_REPAIR if _format_repair else schemas.PLAN)
         if _format_repair:plan=self.compile_format_repair(plan)
         if isinstance(plan, dict):
