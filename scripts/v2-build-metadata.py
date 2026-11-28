@@ -23,12 +23,13 @@ def generate(output, pin_init_diagnostics=False, private_device_preset=False, co
     config=json.loads((ROOT/'app/v2-release.json').read_text())
     assert set(config)=={'format','version_code','version_name','application_id','protocol_contract','source_base'}
     assert len(config['source_base'])==40 and all(c in '0123456789abcdef' for c in config['source_base'])
-    assert config['format']==1 and config['version_code']==34 and config['version_name']=='2.0.0-rc9.nopin.clarify1'
+    assert config['format']==1 and config['version_code']==35 and config['version_name']=='2.0.0-rc9.nopin.recovery1'
     assert config['application_id']=='com.littlebuddy.sim.v2' and config['protocol_contract']==CONTRACT
     if private_device_preset: config['version_name'] += '.integrated1.device1'
     resource_raw,pngs=_snapshot.resource_files(ROOT)
     manifest=hashlib.sha256(resource_raw).hexdigest()
     assert manifest==RC9_RESOURCES_MANIFEST, 'RC9 reviewed resource manifest required'
+    _snapshot.service_failure_files(ROOT)
     _snapshot.clarification_files(ROOT) # missing/unreviewed placeholder cannot become a candidate
     inventory=source_inventory(ROOT)
     _native.validate_source(ROOT)

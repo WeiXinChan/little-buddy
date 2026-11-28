@@ -9,6 +9,10 @@ from backend.v2.runtime import settings
 from backend.v2.files import read_checked,disable_core_dumps
 from backend.dashscope import ProviderError,SpeechTaskError
 TEXT='我没听清，可以再说一遍吗？'
+PURPOSES={'clarification':(TEXT,'clarification.pcm'),'service-failure':('刚才没能回答，你可以再叫我一次。','service-failure.pcm')}
+def material(purpose):
+    if purpose not in PURPOSES:raise GuardError('fixed_purpose_only')
+    return PURPOSES[purpose]
 MODEL='cosyvoice-v3-flash';VOICE='longanyang';RATE=24000;MAX_BYTES=RATE*2*6
 SOURCE='19215a5de3f8ac2e1ca43639e510e32735530085'
 PRODUCTION=('backend/dashscope.py','backend/timing.py','backend/v2/speech.py','backend/v2/runtime.py','backend/v2/files.py')
@@ -38,17 +42,18 @@ def private_output(path):
     path.mkdir(mode=0o700) # parent must already exist; never create a public tree
     if stat.S_IMODE(path.stat().st_mode)!=0o700:raise GuardError('private_directory')
 
-def plan():
-    return dict(production_source=SOURCE,model=MODEL,voice=VOICE,text=TEXT,text_sha256=digest(TEXT.encode()),
-                planned_unicode_characters=len(TEXT),format='pcm_s16le',channels=1,sample_rate=RATE,
+def plan(purpose="clarification"):
+    text,filename=material(purpose)
+    return dict(production_source=SOURCE,model=MODEL,voice=VOICE,purpose=purpose,filename=filename,text=text,text_sha256=digest(text.encode()),
+                planned_unicode_characters=len(text),format='pcm_s16le',channels=1,sample_rate=RATE,
                 caps=dict(tts=1,asr=0,text_models=0,image=0,max_pcm_bytes=MAX_BYTES,worker_seconds=15,parent_seconds=20),
                 automatic_retry=False,fallback=False,quota_live_verified=False,bill_verified=False,price=None,
                 usage_policy='task_finished_characters_else_max_observed_cumulative_not_sum',
                 material='fixed_system_prompt_not_user_content',apk_approved=False)
 
 class AssetSpeech(V2Speech):
-    def __init__(self,*args,checkpoint=None,**kwargs):
-        super().__init__(*args,**kwargs);self.attempts=0;self.finished=False;self.usage_max=None;self.usage_final=None;self.checkpoint=checkpoint
+    def __init__(self,*args,checkpoint=None,purpose="clarification",**kwargs):
+        self.fixed_text=material(purpose)[0];super().__init__(*args,**kwargs);self.attempts=0;self.finished=False;self.usage_max=None;self.usage_final=None;self.checkpoint=checkpoint
     @asynccontextmanager
     async def speech_socket(self):
         if self.attempts>=1:raise GuardError('single_tts_cap')
@@ -56,7 +61,7 @@ class AssetSpeech(V2Speech):
         if self.checkpoint:self.checkpoint()
         async with super().speech_socket() as socket:yield socket
     def synthesize(self,text,rate):
-        if text!=TEXT or rate!=RATE:raise GuardError('fixed_material_only')
+        if text!=self.fixed_text or rate!=RATE:raise GuardError('fixed_material_only')
         return super().synthesize(text,rate)
     def recognize(self,*args):raise GuardError('asr_forbidden')
     async def audio(self,task):
@@ -104,24 +109,25 @@ def parent_guard(pid,start):
     if pid!=os.getppid() or process_start(pid)!=start or group_identity(pid)!=group_identity():raise GuardError('parent_binding')
     return True
 
-async def generate(out,tool_source):
+async def generate(out,tool_source,purpose="clarification"):
+    text,filename=material(purpose)
     disable_core_dumps();source_guard(tool_source);config=load_config()
-    report=plan();report.update(tool_source=tool_source,tool_sha256=digest(Path(__file__).read_bytes()),terminal='in_progress',tts_attempts=0,usage_characters=None,cleanup=dict(confirmed=False,pending=None))
+    report=plan(purpose);report.update(tool_source=tool_source,tool_sha256=digest(Path(__file__).read_bytes()),terminal='in_progress',tts_attempts=0,usage_characters=None,cleanup=dict(confirmed=False,pending=None))
     save(out/'result.json',report);speech=None;pcm=bytearray();started=time.monotonic()
     try:
         key=read_checked('/etc/little-buddy-v2/dashscope-api-key','provider_key',limit=4097).rstrip('\r\n')
-        speech=AssetSpeech(None,key=key,**config)
+        speech=AssetSpeech(None,key=key,purpose=purpose,**config)
         def charged():
             report['tts_attempts']=speech.attempts;report['calls']={'tts':speech.attempts,'asr':0,'llm':0,'image':0};save(out/'result.json',report)
         speech.checkpoint=charged
         async with asyncio.timeout(15):
-            async with speech.synthesize(TEXT,RATE) as chunks:
+            async with speech.synthesize(text,RATE) as chunks:
                 async for chunk in chunks:
                     if not isinstance(chunk,bytes) or len(pcm)+len(chunk)>MAX_BYTES:raise GuardError('pcm_capacity')
                     pcm.extend(chunk)
         if not speech.finished or not pcm or len(pcm)%2 or not any(pcm):raise GuardError('invalid_pcm')
         if speech.release_failed or speech.last_release is None or not speech.last_release['confirmed'] or any(not t.done() for t in speech.release_tasks):raise GuardError('release_unconfirmed')
-        fd=os.open(out/'clarification.pcm',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        fd=os.open(out/filename,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
         with os.fdopen(fd,'wb') as f:f.write(pcm)
         report.update(terminal='asset_generated_not_auditioned',pcm_sha256=digest(pcm),pcm_bytes=len(pcm),samples=len(pcm)//2,duration_seconds=len(pcm)/(RATE*2))
     except BaseException as error:
@@ -143,13 +149,14 @@ async def generate(out,tool_source):
         pcm.clear()
     return 0 if report['terminal']=='asset_generated_not_auditioned' and report['cleanup']['confirmed'] else 1
 
-def validate_result(out,source):
+def validate_result(out,source,purpose="clarification"):
+    text,filename=material(purpose)
     try:
         path=out/'result.json';info=path.lstat()
         if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode)!=0o600 or info.st_size>16384:return False,False,None
         raw=path.read_bytes();r=json.loads(raw)
         base=(r.get('tool_source')==source and r.get('model')==MODEL and r.get('voice')==VOICE and
-              r.get('text')==TEXT and r.get('production_source')==SOURCE and r.get('caps')==plan()['caps'] and
+              r.get('purpose')==purpose and r.get('filename')==filename and r.get('text')==text and r.get('production_source')==SOURCE and r.get('caps')==plan(purpose)['caps'] and
               r.get('tool_sha256')==digest(Path(__file__).read_bytes()) and type(r.get('task_finished')) is bool and
               r.get('calls')==dict(tts=r.get('tts_attempts'),asr=0,llm=0,image=0) and
               all(type(v) is int for v in r.get('calls',{}).values()) and type(r.get('tts_attempts')) is int and 0<=r['tts_attempts']<=1 and
@@ -158,7 +165,7 @@ def validate_result(out,source):
         if not base:return False,False,digest(raw)
         cleanup=r['cleanup']['confirmed'] and type(r['cleanup'].get('pending')) is int and r['cleanup']['pending']==0
         if r['terminal']=='asset_generated_not_auditioned':
-            pcm=out/'clarification.pcm';pinfo=pcm.lstat()
+            pcm=out/filename;pinfo=pcm.lstat()
             valid=(stat.S_ISREG(pinfo.st_mode) and stat.S_IMODE(pinfo.st_mode)==0o600 and 0<pinfo.st_size<=MAX_BYTES and pinfo.st_size%2==0)
             if not valid:return False,False,digest(raw)
             audio=pcm.read_bytes()
@@ -172,7 +179,7 @@ def validate_result(out,source):
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__);mode=parser.add_mutually_exclusive_group()
     mode.add_argument('--prepare',action='store_true');mode.add_argument('--execute',action='store_true');mode.add_argument('--admission-smoke',action='store_true')
-    parser.add_argument('--tool-source');parser.add_argument('--output',type=Path);parser.add_argument('--worker',action='store_true',help=argparse.SUPPRESS)
+    parser.add_argument('--purpose',choices=tuple(PURPOSES),default='clarification');parser.add_argument('--tool-source');parser.add_argument('--output',type=Path);parser.add_argument('--worker',action='store_true',help=argparse.SUPPRESS)
     parser.add_argument('--parent-pid',type=int,help=argparse.SUPPRESS);parser.add_argument('--parent-start',help=argparse.SUPPRESS)
     args=parser.parse_args(argv)
     if not args.prepare and not args.execute and not args.admission_smoke:print('disabled');return 0
@@ -181,17 +188,20 @@ def main(argv=None):
     if not args.admission_smoke:load_config()
     out=args.output.absolute()
     if args.prepare:
-        private_output(out);save(out/'prepare.json',dict(plan(),production_model_voice_confirmed=True,tool_source=args.tool_source,tool_sha256=digest(Path(__file__).read_bytes()),actual_calls=0));return 0
+        private_output(out);save(out/'prepare.json',dict(plan(args.purpose),production_model_voice_confirmed=True,tool_source=args.tool_source,tool_sha256=digest(Path(__file__).read_bytes()),actual_calls=0));return 0
     admission=supervisor_guard()
     if args.worker:
+        intent=json.loads((out/"purpose.json").read_text())
+        if intent!={"purpose":args.purpose,"tool_source":args.tool_source}:raise GuardError("purpose_mismatch")
         parent_guard(args.parent_pid,args.parent_start)
         if out.is_symlink() or stat.S_IMODE(out.stat().st_mode)!=0o700 or (out/'result.json').exists():raise GuardError('one_worker_only')
         if args.admission_smoke:
             save(out/'admission.json',dict(admission,tool_source=args.tool_source,parent_bound=True,calls=dict(tts=0,asr=0,llm=0,image=0),terminal='admission_only_no_provider'))
             return 0
-        return asyncio.run(generate(out,args.tool_source))
+        return asyncio.run(generate(out,args.tool_source,args.purpose))
     private_output(out)
-    child=subprocess.Popen([sys.executable,'-I','-B',str(Path(__file__).resolve()),'--admission-smoke' if args.admission_smoke else '--execute','--worker','--parent-pid',str(os.getpid()),'--parent-start',process_start(os.getpid()),'--tool-source',args.tool_source,'--output',str(out)],start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    save(out/"purpose.json",dict(purpose=args.purpose,tool_source=args.tool_source))
+    child=subprocess.Popen([sys.executable,'-I','-B',str(Path(__file__).resolve()),'--admission-smoke' if args.admission_smoke else '--execute','--worker','--parent-pid',str(os.getpid()),'--parent-start',process_start(os.getpid()),'--purpose',args.purpose,'--tool-source',args.tool_source,'--output',str(out)],start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     forced=False
     try:code=child.wait(timeout=20)
     except subprocess.TimeoutExpired:
@@ -205,14 +215,14 @@ def main(argv=None):
         except (OSError,ValueError):valid=False
         save(out/'supervisor.json',dict(admission,worker_exit=code,forced_exit=forced,artifact_valid=valid,parent_bound=valid,automatic_retry=False,calls=dict(tts=0,asr=0,llm=0,image=0)))
         return code or int(forced or not valid)
-    valid,cleanup,sha=validate_result(out,args.tool_source)
+    valid,cleanup,sha=validate_result(out,args.tool_source,args.purpose)
     save(out/'supervisor.json',dict(worker_exit=code,forced_exit=forced,automatic_retry=False,artifact_valid=valid,result_sha256=sha,cleanup_confirmed=cleanup and not forced))
     return code or int(forced or not valid or not cleanup)
 
 if __name__=='__main__':
     try:sys.exit(main())
     except GuardError as error:
-        allowed={'admission','source_mismatch','production_model_mismatch','output_exists','private_directory','build_supervisor_required','resource_limit_required','lock_directory','lock_identity','external_lock_not_held','parent_binding','one_worker_only'}
+        allowed={'purpose_mismatch','fixed_purpose_only','admission','source_mismatch','production_model_mismatch','output_exists','private_directory','build_supervisor_required','resource_limit_required','lock_directory','lock_identity','external_lock_not_held','parent_binding','one_worker_only'}
         value=error.args[0] if error.args and type(error.args[0]) is str and error.args[0] in allowed else 'unknown'
         print(json.dumps(dict(error='asset_admission_failed',detail=value)),file=sys.stderr);sys.exit(2)
     except Exception:print('asset_admission_failed',file=sys.stderr);sys.exit(2)
