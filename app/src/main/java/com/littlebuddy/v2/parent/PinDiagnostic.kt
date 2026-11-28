@@ -151,15 +151,17 @@ internal object ConfigurationDiagnostic {
 internal class ConfigurationFailure(val stage:ConfigurationDiagnostic.Stage,val reason:ConfigurationDiagnostic.Reason):
     IllegalStateException("configuration stage failed")
 
-/** Reserve configuration evidence inside the original total cap, never on top of it. */
+/** Independent phase/terminal/operation reservations INSIDE the original256-row cap. */
 internal class ConfigurationEventBudget(configurationOnly:Boolean) {
-    private val general=AtomicInteger(if(configurationOnly)112 else 208)
+    private val general=AtomicInteger(if(configurationOnly)64 else 160)
     private val configuration=if(configurationOnly)AtomicInteger(96) else null
     private fun admit(counter:AtomicInteger)=counter.getAndUpdate { if(it>0)it-1 else 0 }>0
     private val critical=AtomicInteger(16)
     private val operation=AtomicInteger(32)
+    private val phase=AtomicInteger(48)
     fun critical()=admit(critical)
     fun operation()=admit(operation)
+    fun phase()=admit(phase)
     fun general()=admit(general)
     fun configuration()=admit(configuration?:general)
 }

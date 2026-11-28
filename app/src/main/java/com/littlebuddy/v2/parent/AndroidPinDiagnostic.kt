@@ -22,7 +22,7 @@ internal object AndroidPinDiagnostic {
                     if (item == null) LockSupport.parkNanos(100_000_000)
                     else try { Log.i("V2PinInitDiag", item) } catch (_: Throwable) { }
                 }
-                ConfigurationDiagnostic.install(null); PinDiagnostic.install(null); PinDiagnostic.installRuntime(null); com.littlebuddy.v2.CaptureClockDiagnostic.install(null); queue.clear()
+                ConfigurationDiagnostic.install(null); PinDiagnostic.install(null); PinDiagnostic.installRuntime(null); com.littlebuddy.v2.ClientPhasePort.install(null); com.littlebuddy.v2.CaptureClockDiagnostic.install(null); queue.clear()
             }, "v2-pin-diag").apply { isDaemon = true }
             writer.start()
             com.littlebuddy.v2.CaptureClockDiagnostic.install { error ->
@@ -41,7 +41,8 @@ internal object AndroidPinDiagnostic {
             PinDiagnostic.installRuntime { event ->
                 val admitted=when(event.stage) {
                     PinDiagnostic.RuntimeStage.WAKE_ACCEPTED,PinDiagnostic.RuntimeStage.CAPTURE_FAILURE,
-                    PinDiagnostic.RuntimeStage.WORKER_JOINED -> budget.critical()
+                    PinDiagnostic.RuntimeStage.WORKER_JOINED,PinDiagnostic.RuntimeStage.CAPTURE_RELEASE,
+                    PinDiagnostic.RuntimeStage.CAPTURE_STOP_END -> budget.critical()
                     PinDiagnostic.RuntimeStage.CAPTURE_OPERATION -> budget.operation()
                     else -> budget.general()
                 }
@@ -63,6 +64,11 @@ internal object AndroidPinDiagnostic {
                     queue.offer("mono_ms=${System.nanoTime()/1_000_000} stage=RUNTIME_${event.stage.name} source=${event.source.name} activity=${c.activity} transport=${c.transport} capture=${c.capture} scope_known=${c.activity>0} wire=${event.wire.name} point=${event.point.name} $detail")
                 }
             }
+            com.littlebuddy.v2.ClientPhasePort.install { e ->
+                if(budget.phase()) {
+                    queue.offer(e.format(System.nanoTime()/1_000_000))
+                }
+            }
             ConfigurationDiagnostic.install { event ->
                 if(budget.configuration()) queue.offer("mono_ms=${System.nanoTime()/1_000_000} stage=CONFIG_DETAIL attempt=${event.attempt} phase=${event.stage.name} reason=${event.reason.name}")
             }
@@ -70,6 +76,6 @@ internal object AndroidPinDiagnostic {
                 if (budget.general())
                     queue.offer("flow=$seq mono_ms=$ms stage=${stage.name} reason=${reason.name}")
             }
-        } catch (_: Throwable) { ConfigurationDiagnostic.install(null); PinDiagnostic.install(null); PinDiagnostic.installRuntime(null); com.littlebuddy.v2.CaptureClockDiagnostic.install(null) }
+        } catch (_: Throwable) { ConfigurationDiagnostic.install(null); PinDiagnostic.install(null); PinDiagnostic.installRuntime(null); com.littlebuddy.v2.ClientPhasePort.install(null); com.littlebuddy.v2.CaptureClockDiagnostic.install(null) }
     }
 }
