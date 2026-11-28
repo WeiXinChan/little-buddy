@@ -12,6 +12,7 @@ from scripts.v2_multiturn_probe import run_case,peer_failure
 from tests.v2 import test_m05 as fixtures
 
 class Contracts(unittest.IsolatedAsyncioTestCase):
+    model_name='deepseek-v4.1-flash-1017'
     async def make(self,proposal=None,allow=True,wait_facts=False):
         facts_ready=asyncio.Event()
         calls=[];proposal=deepcopy(proposal or fixtures.plan())
@@ -22,10 +23,10 @@ class Contracts(unittest.IsolatedAsyncioTestCase):
             value=({'facts':[]} if '提取孩子' in instruction else {'allow':allow,'quality':True} if '审核下一个' in instruction else
                    {'keep':[]} if '只返回JSON {"keep"' in instruction else
                    {'completion':'complete','meaning':'new_turn'} if 'completion:' in instruction else proposal)
-            return httpx.Response(200,json={'choices':[{'message':{'content':json.dumps(value,ensure_ascii=False)}}],
+            return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(value,ensure_ascii=False)}}],
                                           'usage':{'prompt_tokens':10,'completion_tokens':2}})
         http=httpx.AsyncClient(transport=httpx.MockTransport(response));self.addAsyncCleanup(http.aclose)
-        model=DashScopeModel(DashScope(http,workspace='synthetic',region='cn-beijing',key='SYNTHETIC',asr='fake',llm='deepseek-v4.1-flash-1017',tts='fake',voice='fake'))
+        model=DashScopeModel(DashScope(http,workspace='synthetic',region='cn-beijing',key='SYNTHETIC',asr='fake',llm=self.model_name,tts='fake',voice='fake'))
         return UnifiedProviders(fixtures.Speech(),model),calls
 
     async def test_every_json_object_stage_sees_canonical_schema_once_and_single_value_examples(self):
@@ -37,7 +38,11 @@ class Contracts(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(instruction.count('输出契约JSON Schema：'),1)
             self.assertEqual(json.loads(instruction.split('输出契约JSON Schema：',1)[1]),schema)
             self.assertEqual(body['response_format'],{'type':'json_object'})
-            self.assertFalse(body['enable_thinking']);self.assertEqual(body['max_tokens'],1400)
+            if self.model_name=='qwen3.8-omni-flash':
+                self.assertEqual(body['reasoning_effort'],'none');self.assertEqual(body['modalities'],['text'])
+                self.assertNotIn('enable_thinking',body)
+            else:self.assertFalse(body['enable_thinking'])
+            self.assertEqual(body['max_tokens'],1400)
         instruction=calls[1]['messages'][0]['content']
         self.assertIn('下标从0开始',instruction);self.assertIn('实际len(sentences)',instruction)
         self.assertIn('不创建answer.current',instruction);self.assertNotIn('continue|change',instruction)

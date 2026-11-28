@@ -1,6 +1,7 @@
 """Explicit V2 operator selections; candidates are never an automatic fallback chain."""
 TEXT_MODEL = 'deepseek-v4.1-flash-1017'
-TEXT_MODELS = frozenset({TEXT_MODEL, 'deepseek-v4.1-flash', 'qwen4-max'})
+OMNI_TEXT_MODEL = 'qwen3.8-omni-flash'
+TEXT_MODELS = frozenset({TEXT_MODEL, OMNI_TEXT_MODEL, 'deepseek-v4.1-flash', 'qwen4-max'})
 IMAGE_REVIEW_MODEL = 'qwen4-max'
 SCHEMA_MODELS = frozenset({'qwen4-max'})
 
