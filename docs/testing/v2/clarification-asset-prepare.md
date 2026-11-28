@@ -8,7 +8,7 @@ API复用 `backend/dashscope.py:276–296` 与 V2Speech：同一既有workspace 
 
 官方契约：[客户端事件](https://help.aliyun.com/en/model-studio/cosyvoice-client-events)、[服务端事件](https://help.aliyun.com/en/model-studio/cosyvoice-server-events)。usage.characters是任务累计值，取task-finished有效终值，缺失取此前有效最大累计值，不相加；未知null。必须先经过原SpeechTask.task_id校验，再读取usage；错误任务/失败不得生成可用素材。只保留数值usage，不保存provider body、转写、URL、token或异常message。
 
-硬上限：TTS尝试1（socket I/O前预扣并落固定计数）、ASR/LLM/image均0，无fallback/retry。数据最多288000bytes，即6秒24k/16bit/mono；这只是机械容量上限，不宣称语音语义/声学已合格。操作timeout15秒，取消后的原V2资源确认退出仍受0.5秒边界；外层20秒watchdog，必要TERM/KILL各最多1秒回收，forced exit绝不当cleanup已确认。父/子继承同一heavy.lock FD9并核cgroup/2GB边界，不新建常驻服务。无自动重跑；输出目录已存在即拒绝。
+硬上限：TTS尝试1（socket I/O前预扣并落固定计数）、ASR/LLM/image均0，无fallback/retry。数据最多288000bytes，即6秒24k/16bit/mono；这只是机械容量上限，不宣称语音语义/声学已合格。操作timeout15秒，取消后的原V2资源确认退出仍受0.5秒边界；外层20秒watchdog，必要TERM/KILL各最多1秒回收，forced exit绝不当cleanup已确认。父/子核同一实际little-buddy-build cgroup及memory.max=2GB/memory.swap.max=0；独立nonblocking锁探针必须确认外部heavy.lock已被持有（若探针自己能取得则释放自己的probe锁并拒绝，不动外部owner）。不假设systemd-run继承FD9，子进程另核父PID/starttime/cgroup/同源pin，不新建常驻服务。无自动重跑；输出目录已存在即拒绝。
 
 输出目录0700、文件0600：成功有clarification.pcm、result.json及supervisor.json；失败可保留partial.pcm，不能入APK。记录原PCM SHA256、bytes/samples/duration、文本SHA、采样格式、模型/音色、生产和工具source、工具SHA、实际尝试、累计usage、退出与清理证明。supervisor同时记录result.json的SHA，可独立核对元数据。只在task-finished+真实资源退出确认+完整非空偶数字节PCM通过时标asset_generated_not_auditioned，仍apk_approved=false。固定素材不含家庭内容，但不自动公开；root试听/字词及长度核对后才交Android打包，后续本地播放无需每次云调用。
 
@@ -27,3 +27,5 @@ sudo -n scripts/with-build-lock python3 -I -B scripts/v2_clarification_asset.py 
 ```
 
 不能复用prepare目录作为execute目录，不自动将素材提交Git/复制APK，不改后端wire/服务或Android工作树。
+
+root零云发现旧FD9 admission在真实systemd-run内不可用，旧prepare/17绿与阻断保留；已修真实cgroup+外部忙锁admission。新增--admission-smoke仅检父子监督与源码/资源，不读配置/凭据、不调用generate或network。必须在原with-build-lock下跑真实smoke后交审，不能拿mock替代。

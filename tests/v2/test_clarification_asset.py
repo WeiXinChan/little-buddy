@@ -84,6 +84,17 @@ class Asset(unittest.IsolatedAsyncioTestCase):
             report['cleanup']['pending']=1;tool.save(out/'result.json',report)
             self.assertEqual(tool.validate_result(out,'fixed')[:2],(False,False))
             self.assertEqual((out/'result.json').stat().st_mode&0o777,0o600)
+    def test_parent_binding_rejects_other_pid_or_reused_start(self):
+        with self.assertRaises(tool.GuardError):tool.parent_guard(-1,'0')
+        with patch.object(tool,'process_start',return_value='22'):
+            with self.assertRaises(tool.GuardError):tool.parent_guard(os.getppid(),'21')
+    def test_smoke_does_not_load_credentials_or_call_generate(self):
+        # Actual wrapper counterpart executes in a separate real systemd cgroup.
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)/'run';out.mkdir(mode=0o700)
+            with patch.object(tool,'source_guard'),patch.object(tool,'supervisor_guard',return_value={'build_cgroup':True}),patch.object(tool,'parent_guard'),patch.object(tool,'load_config',side_effect=AssertionError('no config')),patch.object(tool,'generate',side_effect=AssertionError('no provider')):
+                self.assertEqual(tool.main(['--admission-smoke','--worker','--tool-source','fixed','--output',str(out),'--parent-pid',str(os.getppid()),'--parent-start','fixed']),0)
+            value=json.loads((out/'admission.json').read_text());self.assertEqual(value['calls'],dict(tts=0,asr=0,llm=0,image=0))
     def test_production_source_files_pin_original_git_objects(self):
         # Tool commit is provided after freeze; production identity is independent.
         import subprocess

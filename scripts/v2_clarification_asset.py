@@ -1,5 +1,5 @@
 """One fixed system-prompt asset, disabled by default. Never a user-audio tool."""
-import argparse,asyncio,hashlib,json,os,signal,stat,subprocess,sys,time
+import argparse,asyncio,hashlib,json,os,signal,stat,subprocess,sys,time,re
 from pathlib import Path
 from contextlib import asynccontextmanager
 ROOT=Path(__file__).resolve().parents[1]
@@ -71,13 +71,38 @@ class AssetSpeech(V2Speech):
             if event=='task-finished':self.finished=True;return
         raise ProviderError('unfinished synthesis')
 
+def group_identity(pid='self'):
+    raw=Path(f'/proc/{pid}/cgroup').read_text()
+    parts=raw.strip().split(':',2)
+    if len(parts)!=3 or parts[:2]!=['0',''] or not re.fullmatch(r'/system.slice/little-buddy-build-[0-9a-f-]+\.service',parts[2]):raise GuardError('build_supervisor_required')
+    return parts[2]
+
+def process_start(pid):
+    return Path(f'/proc/{pid}/stat').read_text().rsplit(')',1)[1].split()[19]
+
 def supervisor_guard():
-    # Both parent and worker must inherit the same held global lock description.
-    expected=os.stat('/var/lock/little-buddy/heavy.lock');actual=os.fstat(9)
-    if (expected.st_dev,expected.st_ino)!=(actual.st_dev,actual.st_ino):raise GuardError('lock_required')
+    # systemd-run deliberately does not inherit the wrapper's arbitrary lock FD.
+    group=group_identity();control=Path('/sys/fs/cgroup')/group.lstrip('/')
+    if (control/'memory.max').read_text().strip()!='2147483648' or (control/'memory.swap.max').read_text().strip()!='0':raise GuardError('resource_limit_required')
+    directory=Path('/var/lock/little-buddy');lock=directory/'heavy.lock'
+    info=directory.lstat()
+    if not stat.S_ISDIR(info.st_mode) or (info.st_uid,info.st_gid,stat.S_IMODE(info.st_mode))!=(0,0,0o755):raise GuardError('lock_directory')
+    fd=os.open(lock,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
     import fcntl
-    fcntl.flock(9,fcntl.LOCK_EX|fcntl.LOCK_NB)
-    if 'little-buddy-build-' not in Path('/proc/self/cgroup').read_text():raise GuardError('build_supervisor_required')
+    try:
+        info=os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or (info.st_uid,info.st_gid,stat.S_IMODE(info.st_mode))!=(0,0,0o644):raise GuardError('lock_identity')
+        try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:pass # Existing external wrapper still owns its lock.
+        else:
+            fcntl.flock(fd,fcntl.LOCK_UN) # Only our independent probe, never another owner's descriptor.
+            raise GuardError('external_lock_not_held')
+    finally:os.close(fd)
+    return dict(build_cgroup=True,memory_max=2147483648,memory_swap_max=0,heavy_lock_busy=True)
+
+def parent_guard(pid,start):
+    if pid!=os.getppid() or process_start(pid)!=start or group_identity(pid)!=group_identity():raise GuardError('parent_binding')
+    return True
 
 async def generate(out,tool_source):
     disable_core_dumps();source_guard(tool_source);config=load_config()
@@ -146,27 +171,40 @@ def validate_result(out,source):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__);mode=parser.add_mutually_exclusive_group()
-    mode.add_argument('--prepare',action='store_true');mode.add_argument('--execute',action='store_true')
+    mode.add_argument('--prepare',action='store_true');mode.add_argument('--execute',action='store_true');mode.add_argument('--admission-smoke',action='store_true')
     parser.add_argument('--tool-source');parser.add_argument('--output',type=Path);parser.add_argument('--worker',action='store_true',help=argparse.SUPPRESS)
+    parser.add_argument('--parent-pid',type=int,help=argparse.SUPPRESS);parser.add_argument('--parent-start',help=argparse.SUPPRESS)
     args=parser.parse_args(argv)
-    if not args.prepare and not args.execute:print('disabled');return 0
+    if not args.prepare and not args.execute and not args.admission_smoke:print('disabled');return 0
     if args.output is None or not args.tool_source:raise GuardError('admission')
-    source_guard(args.tool_source);load_config()
+    source_guard(args.tool_source)
+    if not args.admission_smoke:load_config()
     out=args.output.absolute()
     if args.prepare:
         private_output(out);save(out/'prepare.json',dict(plan(),production_model_voice_confirmed=True,tool_source=args.tool_source,tool_sha256=digest(Path(__file__).read_bytes()),actual_calls=0));return 0
-    supervisor_guard()
+    admission=supervisor_guard()
     if args.worker:
+        parent_guard(args.parent_pid,args.parent_start)
         if out.is_symlink() or stat.S_IMODE(out.stat().st_mode)!=0o700 or (out/'result.json').exists():raise GuardError('one_worker_only')
+        if args.admission_smoke:
+            save(out/'admission.json',dict(admission,tool_source=args.tool_source,parent_bound=True,calls=dict(tts=0,asr=0,llm=0,image=0),terminal='admission_only_no_provider'))
+            return 0
         return asyncio.run(generate(out,args.tool_source))
     private_output(out)
-    child=subprocess.Popen([sys.executable,'-I','-B',str(Path(__file__).resolve()),'--execute','--worker','--tool-source',args.tool_source,'--output',str(out)],pass_fds=(9,),start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    child=subprocess.Popen([sys.executable,'-I','-B',str(Path(__file__).resolve()),'--admission-smoke' if args.admission_smoke else '--execute','--worker','--parent-pid',str(os.getpid()),'--parent-start',process_start(os.getpid()),'--tool-source',args.tool_source,'--output',str(out)],start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     forced=False
     try:code=child.wait(timeout=20)
     except subprocess.TimeoutExpired:
         forced=True;os.killpg(child.pid,signal.SIGTERM)
         try:code=child.wait(timeout=1)
         except subprocess.TimeoutExpired:os.killpg(child.pid,signal.SIGKILL);code=child.wait(timeout=1)
+    if args.admission_smoke:
+        try:
+            row=json.loads((out/'admission.json').read_text())
+            valid=(row==dict(admission,tool_source=args.tool_source,parent_bound=True,calls=dict(tts=0,asr=0,llm=0,image=0),terminal='admission_only_no_provider'))
+        except (OSError,ValueError):valid=False
+        save(out/'supervisor.json',dict(admission,worker_exit=code,forced_exit=forced,artifact_valid=valid,parent_bound=valid,automatic_retry=False,calls=dict(tts=0,asr=0,llm=0,image=0)))
+        return code or int(forced or not valid)
     valid,cleanup,sha=validate_result(out,args.tool_source)
     save(out/'supervisor.json',dict(worker_exit=code,forced_exit=forced,automatic_retry=False,artifact_valid=valid,result_sha256=sha,cleanup_confirmed=cleanup and not forced))
     return code or int(forced or not valid or not cleanup)
