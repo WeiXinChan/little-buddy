@@ -34,6 +34,10 @@ async def serve_checked(args,prepared,*,stop=None,ready=None):
     from backend.v2.image_runtime import configured_images
     from backend.v2.feedback_receiver import configured_feedback
     disable_core_dumps()
+    observation=None
+    if getattr(args,'observe_failures',False):
+        from backend.v2.failure_observer import FailureWindow,journal_sink
+        observation=FailureWindow(journal_sink)
     stop=stop or asyncio.Event()
     loop=asyncio.get_running_loop();installed=[]
     try:
@@ -46,7 +50,7 @@ async def serve_checked(args,prepared,*,stop=None,ready=None):
                        configured_feedback(getattr(prepared,'feedback',None),prepared.token) as feedback:
                 bundle=UnifiedProviders(speech,DashScopeModel(speech),dynamic_images=images)
                 async with voice_server('127.0.0.1',args.port,prepared.tls,prepared.token,bundle,
-                                        CompanionPolicy(),expires_at=prepared.expires_at,feedback=feedback) as server:
+                                        CompanionPolicy(),expires_at=prepared.expires_at,feedback=feedback,failure_observation=observation) as server:
                     notify_ready()
                     event('ready_loopback')
                     if ready is not None:ready.set_result(server.sockets[0].getsockname()[1])
@@ -61,6 +65,7 @@ def parser():
     for name in ('cert','key','token-file','device-scope','ca-file','tls-name','service-env',
                  'credential-directory','apk-contract'):
         result.add_argument('--'+name,required=True)
+    result.add_argument('--observe-failures',action='store_true',help='Opt-in V2 namespace metadata: 15 minutes, at most 4 peers/16 failures; no content')
     result.add_argument('--port',type=int,default=19483)
     result.add_argument('--check',action='store_true',help='Offline only; never listens or calls providers')
     result.add_argument('--image-config',help='Explicit protected image configuration; omitted means disabled')
